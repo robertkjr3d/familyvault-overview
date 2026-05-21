@@ -1,0 +1,45 @@
+Issues:  
+
+
+General:
+Interface: 
+- on iPad editing property the pop up form is too big is bigger than the screen. the first letters on left all cut off (E in edit, A in address etc cutoff) actually left side is fine but the right side X close button is cut off when pop up first opens. I guess the pop up box is too big. I can move it left and right.
+- In address edit bar, Pressing enter saves the record instead of going to next line
+- Under action- it would be good if Leslie to follow up then it would go to the dashboard alert list of tasks for Leslie, an overall list of task by date and urgency, with also an option to group by who supposed to take the action 
+- I realized that it’s possible “own home” also have task to do, but right now even if set to “review” it won’t show up 
+
+Property: 
+- + 
+- Purchase date: scrolling the year on Mac is not smooth buggy, iPad is fine.  But i am forced to pick a date I can’t leave it blank. Clicking reset doesn’t make blank. Also, on iPad, the bar height is taller and uneven different from other entry bars. 
+- Current estimated value: if there is a button to ask AI to auto fill. 
+- Rate ends- mouse doesn’t become white hand pointer over the calendar icon. 
+- What is “other cost label” there is already an other cost (monthly) 
+- Notes: I realize that when talking to people I type as fast as I can and so it ends up being a big paragraph of text as u can see in my Google sheets. it would be nice if I type or pasted a whole paragraph and there’s a button or something that I can click to auto summarize in concise. 
+- Notes- I can’t delete the notes I’ve saved
+- Maybe when I collapse the card again there can be an icon that shows there is notes or documents for that item. Right now I won’t know unless I uncollapse, scroll down to notes and then uncollapse notes. A bit tedious. Maybe in the main card view if u agree should have a note icon I can click it and a pop up of the note content shows up or straight away navigate to the notes section opened. 
+- 
+
+Insurance
+- Drop down- would u recommend any other drop down items based on market? Right now uncollapse shows start end. Anything else? For example some insurance premium is pay 75k once a year for 3 years then done with premium payment, currently the edit form inadequate to capture. 
+- Also no notes feature (see property above)
+
+Loan
+- I think like above good to have loan rate schedule and notes and documents as small icons that show up on the card if there is something filled for that section. 
+- Loan start date the bar is taller same interface issue as earlier when start date can’t leave blank as well, also there should be an option for “today” and what is “reset”? 
+- I realized that current loan balance can be diff from est balance that is auto calculated cuz when repricing often need repay down certain amount of $. So current balance will be lower… so what do u suggest? Remove that est balance or leave it? 
+
+Investment 
+- no way to set an alert. 
+- Also I want to put eg gold bars, Leslie to watch gold bar prices and sell when high, then it should go to a reminder list on dashboard that all can see, but also Leslie can see at one glance what he has to keep track of. 
+- Maybe current value can put (est) since investments tend to change value often? Idk I’m not an investor pls help
+
+Savings
+- drop downs I realized all the date bars are bigger need to standardize
+- Same, action by who option cuz I realized sometimes who own that item may not be the person watching or maintaining or taking follow up actions on it. Idk how to manage this without clutter on dashboard. Having two names on same item might be confusing
+
+Health
+- the cards are all auto uncollapsed
+Inventory
+- when click the folder the popup like above edit forms too big the x close button is cut off. 
+- The picture when pop up is also way too big, have to scroll down to see the items
+- As my dad said, the search bar is not immediately observable 

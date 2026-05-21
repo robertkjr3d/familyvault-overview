@@ -108,6 +108,16 @@ export function RecordFormSheet({
     }
   }
 
+  // Prevent Enter key from accidentally submitting form in text inputs
+  function handleFormKeyDown(e: React.KeyboardEvent<HTMLFormElement>) {
+    if (e.key === "Enter") {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag !== "TEXTAREA" && tag !== "BUTTON") {
+        e.preventDefault();
+      }
+    }
+  }
+
   // Group fields by section (or "" for ungrouped)
   const sections: { title: string; fields: FieldDef[] }[] = [];
   for (const f of cfg.fields) {
@@ -119,12 +129,15 @@ export function RecordFormSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto rounded-t-2xl px-4 pb-2 pt-3">
+      <SheetContent
+        side="bottom"
+        className="max-h-[92vh] w-full max-w-full overflow-x-hidden overflow-y-auto rounded-t-2xl px-4 pb-2 pt-3"
+      >
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted-foreground/30" />
         <SheetHeader>
-          <SheetTitle className="text-base">{isEdit ? `Edit ${cfg.label}` : `Add ${cfg.label}`}</SheetTitle>
+          <SheetTitle className="text-base pr-8">{isEdit ? `Edit ${cfg.label}` : `Add ${cfg.label}`}</SheetTitle>
         </SheetHeader>
-        <form onSubmit={submit} className="mt-4 space-y-4 pb-4">
+        <form onSubmit={submit} onKeyDown={handleFormKeyDown} className="mt-4 space-y-4 pb-4">
           {sections.map((sec, idx) => (
             <div key={idx} className="space-y-3">
               {sec.title && (
@@ -243,7 +256,14 @@ function FieldInput({ f, value, onChange, members, currency }: {
     return <Input inputMode="decimal" value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder={f.placeholder} />;
   }
   if (f.type === "date") {
-    return <Input type="date" value={value ?? ""} onChange={(e) => onChange(e.target.value)} />;
+    return (
+      <Input
+        type="date"
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-9 w-full"
+      />
+    );
   }
   return <Input value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder={f.placeholder} />;
 }

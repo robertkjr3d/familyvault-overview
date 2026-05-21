@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -10,7 +10,6 @@ import { useQueryClient } from "@tanstack/react-query";
  * Silent auto-save notes editor.
  * - Saves automatically 1s after the user stops typing.
  * - Shows a subtle "Saved ✓" indicator for 2s after a save.
- * - No "auto-saves on blur" or other developer copy.
  */
 export function NotesEditor({
   table, queryKey, id, value,
@@ -32,7 +31,7 @@ export function NotesEditor({
 
   async function commit(next: string) {
     if (next === lastSavedRef.current) return;
-    const { error } = await supabase.from(table as any).update({ notes: next }).eq("id", id);
+    const { error } = await supabase.from(table as any).update({ notes: next || null }).eq("id", id);
     if (error) {
       toast.error(error.message);
       return;
@@ -48,6 +47,14 @@ export function NotesEditor({
     setText(next);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => commit(next), 1000);
+  }
+
+  function clearNotes() {
+    if (!text) return;
+    if (!confirm("Clear all notes for this item?")) return;
+    setText("");
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    void commit("");
   }
 
   function summarise() {
@@ -86,7 +93,18 @@ export function NotesEditor({
           Saved ✓
         </span>
       </div>
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-between gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={clearNotes}
+          disabled={!text}
+          className="text-urgent hover:bg-urgent/10 hover:text-urgent"
+        >
+          <Trash2 className="mr-1 h-3.5 w-3.5" />
+          Clear notes
+        </Button>
         <Button type="button" size="sm" variant="outline" onClick={summarise} disabled={!text || summarising}>
           <Sparkles className="mr-1 h-3.5 w-3.5" />
           {summarising ? "Summarising…" : "Summarise"}

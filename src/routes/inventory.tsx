@@ -100,10 +100,11 @@ function InventoryPage() {
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search items…"
+            placeholder="Search all items…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-9 h-11 text-base border-2 focus:border-primary"
+            autoComplete="off"
           />
         </div>
         {q && (
@@ -357,7 +358,7 @@ function FolderSheet({
 
   return (
     <Sheet open onOpenChange={(v) => !v && onClose()}>
-      <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto rounded-t-2xl">
+      <SheetContent side="bottom" className="max-h-[90vh] w-full max-w-full overflow-x-hidden overflow-y-auto rounded-t-2xl">
         <SheetHeader>
           <SheetTitle className="flex items-center justify-between pr-8">
             <span>{folder.name}</span>
@@ -378,7 +379,7 @@ function FolderSheet({
         </SheetHeader>
 
         {folder.photo_url && (
-          <img src={folder.photo_url} alt="" className="mt-3 aspect-video w-full rounded-xl object-cover" />
+          <img src={folder.photo_url} alt="" className="mt-3 h-36 w-full rounded-xl object-cover" />
         )}
 
         <div className="mt-4 space-y-2">
