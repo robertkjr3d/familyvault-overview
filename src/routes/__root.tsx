@@ -109,7 +109,10 @@ function SignInScreen() {
     setLoading(true);
     setError(null);
 
-    const redirectTo = typeof window !== "undefined" ? window.location.origin : undefined;
+    const configuredRedirect = import.meta.env.VITE_SUPABASE_AUTH_REDIRECT_URL?.trim();
+    const redirectTo =
+      configuredRedirect ||
+      (typeof window !== "undefined" ? window.location.origin : undefined);
     const { error: signInError } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: redirectTo },
