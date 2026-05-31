@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Bell } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { Bell, Share2 } from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToday } from "@/lib/today";
 import { AlertsSheet } from "./AlertsSheet";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { useAppStore } from "@/lib/store";
+import { toast } from "sonner";
 import {
   Select,
   SelectContent,
@@ -14,11 +15,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export function AppHeader() {
   const { simulated, today } = useToday();
   const { user } = useAuthSession();
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareEmail, setShareEmail] = useState("");
+  const [shareRole, setShareRole] = useState<"member" | "viewer">("member");
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const setActiveHouseholdId = useAppStore((s) => s.setActiveHouseholdId);
 
@@ -43,6 +56,11 @@ export function AppHeader() {
   const households = memberships
     .map((m) => ({ id: m.household_id, name: m.households?.name ?? "Household", role: m.role }))
     .filter((h, i, arr) => arr.findIndex((x) => x.id === h.id) === i);
+
+  const selectedHouseholdId = activeHouseholdId ?? households[0]?.id ?? null;
+  const selectedHousehold = households.find((h) => h.id === selectedHouseholdId) ?? null;
+  const selectedMembership = memberships.find((m) => m.household_id === selectedHouseholdId);
+  const canShareActiveHousehold = selectedMembership?.role === "owner";
 
   useEffect(() => {
     if (!activeHouseholdId && households.length > 0) {
@@ -69,6 +87,43 @@ export function AppHeader() {
     },
     refetchInterval: 30_000,
   });
+
+  const shareMutation = useMutation({
+    mutationFn: async ({ email, role }: { email: string; role: "member" | "viewer" }) => {
+      if (!selectedHouseholdId) {
+        throw new Error("Select a household first.");
+      }
+
+      const { data, error } = await supabase.rpc("share_household_by_email", {
+        p_household_id: selectedHouseholdId,
+        p_email: email,
+        p_role: role,
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Shared access updated.");
+      setShareEmail("");
+      setShareRole("member");
+      setShareOpen(false);
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : "Unable to share access.";
+      toast.error(message);
+    },
+  });
+
+  function onShareSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const normalized = shareEmail.trim().toLowerCase();
+    if (!normalized) {
+      toast.error("Enter an email address.");
+      return;
+    }
+    shareMutation.mutate({ email: normalized, role: shareRole });
+  }
 
   return (
     <>
@@ -121,6 +176,16 @@ export function AppHeader() {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setShareOpen(true)}
+              disabled={!selectedHouseholdId || !canShareActiveHousehold}
+              title={canShareActiveHousehold ? "Share household access" : "Only owners can share"}
+            >
+              <Share2 className="mr-1 h-4 w-4" /> Share
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => {
                 void supabase.auth.signOut();
               }}
@@ -131,6 +196,50 @@ export function AppHeader() {
         </div>
       </header>
       <AlertsSheet open={alertsOpen} onOpenChange={setAlertsOpen} />
+
+      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Share by Email</DialogTitle>
+            <DialogDescription>
+              Add an existing account to {selectedHousehold?.name ?? "this household"}. They must sign in at least once before you can share access.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form className="space-y-3" onSubmit={onShareSubmit}>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Email</label>
+              <Input
+                type="email"
+                placeholder="name@example.com"
+                value={shareEmail}
+                onChange={(e) => setShareEmail(e.target.value)}
+                autoComplete="email"
+                required
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Access level</label>
+              <Select value={shareRole} onValueChange={(value: "member" | "viewer") => setShareRole(value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="member">Member</SelectItem>
+                  <SelectItem value="viewer">Viewer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <DialogFooter>
+              <Button type="submit" disabled={shareMutation.isPending || !canShareActiveHousehold}>
+                {shareMutation.isPending ? "Sharing..." : "Share access"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
