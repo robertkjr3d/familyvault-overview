@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bell, Share2 } from "lucide-react";
+import { Bell, Crown, Share2 } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToday } from "@/lib/today";
@@ -24,7 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { sendHouseholdInvite } from "@/lib/householdInvites";
+import { sendHouseholdInvite, transferHouseholdOwnership } from "@/lib/householdInvites";
 
 export function AppHeader() {
   const { simulated, today } = useToday();
@@ -33,6 +33,7 @@ export function AppHeader() {
   const [shareOpen, setShareOpen] = useState(false);
   const [shareEmail, setShareEmail] = useState("");
   const [shareRole, setShareRole] = useState<"member" | "viewer">("member");
+  const [transferEmail, setTransferEmail] = useState("");
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const setActiveHouseholdId = useAppStore((s) => s.setActiveHouseholdId);
 
@@ -117,6 +118,32 @@ export function AppHeader() {
     },
   });
 
+  const transferOwnershipMutation = useMutation({
+    mutationFn: async ({ email }: { email: string }) => {
+      if (!selectedHouseholdId) {
+        throw new Error("Select a household first.");
+      }
+
+      const result = await transferHouseholdOwnership({
+        data: {
+          householdId: selectedHouseholdId,
+          email,
+        },
+      });
+
+      return result;
+    },
+    onSuccess: () => {
+      toast.success("Ownership transferred.");
+      setTransferEmail("");
+      setShareOpen(false);
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : "Unable to transfer ownership.";
+      toast.error(message);
+    },
+  });
+
   function onShareSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const normalized = shareEmail.trim().toLowerCase();
@@ -125,6 +152,16 @@ export function AppHeader() {
       return;
     }
     shareMutation.mutate({ email: normalized, role: shareRole });
+  }
+
+  function onTransferSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const normalized = transferEmail.trim().toLowerCase();
+    if (!normalized) {
+      toast.error("Enter an email address.");
+      return;
+    }
+    transferOwnershipMutation.mutate({ email: normalized });
   }
 
   return (
@@ -237,6 +274,36 @@ export function AppHeader() {
             <DialogFooter>
               <Button type="submit" disabled={shareMutation.isPending || !canShareActiveHousehold}>
                 {shareMutation.isPending ? "Sharing..." : "Share access"}
+              </Button>
+            </DialogFooter>
+          </form>
+
+          <div className="my-2 border-t border-border" />
+
+          <form className="space-y-3" onSubmit={onTransferSubmit}>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Transfer ownership to email</label>
+              <Input
+                type="email"
+                placeholder="owner@example.com"
+                value={transferEmail}
+                onChange={(e) => setTransferEmail(e.target.value)}
+                autoComplete="email"
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Target must already be a member of this household. You will be downgraded to member.
+              </p>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="submit"
+                variant="destructive"
+                disabled={transferOwnershipMutation.isPending || !canShareActiveHousehold}
+              >
+                <Crown className="mr-1 h-4 w-4" />
+                {transferOwnershipMutation.isPending ? "Transferring..." : "Transfer ownership"}
               </Button>
             </DialogFooter>
           </form>

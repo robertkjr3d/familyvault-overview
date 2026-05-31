@@ -13,6 +13,11 @@ const acceptPayloadSchema = z.object({
   token: z.string().min(16),
 });
 
+const transferOwnershipPayloadSchema = z.object({
+  householdId: z.string().uuid(),
+  email: z.string().email(),
+});
+
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
@@ -143,4 +148,19 @@ export const acceptHouseholdInvite = createServerFn({ method: "POST" })
     if (completeError) throw completeError;
 
     return { householdId: invite.household_id as string };
+  });
+
+export const transferHouseholdOwnership = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(transferOwnershipPayloadSchema)
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+
+    const { error } = await supabase.rpc("transfer_household_ownership_by_email", {
+      p_household_id: data.householdId,
+      p_email: normalizeEmail(data.email),
+    });
+
+    if (error) throw error;
+    return { ok: true };
   });
