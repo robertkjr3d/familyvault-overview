@@ -16,6 +16,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthSession } from "@/hooks/useAuthSession";
+import { acceptHouseholdInvite } from "@/lib/householdInvites";
+import { useAppStore } from "@/lib/store";
+import { toast } from "sonner";
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
@@ -65,6 +68,44 @@ function RootShell({ children }: { children: React.ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const { initialized, session } = useAuthSession();
+  const setActiveHouseholdId = useAppStore((s) => s.setActiveHouseholdId);
+
+  useEffect(() => {
+    if (!session?.user?.id || typeof window === "undefined") {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const inviteToken = params.get("invite");
+    if (!inviteToken) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void acceptHouseholdInvite({ data: { token: inviteToken } })
+      .then((result) => {
+        if (cancelled) return;
+        if (result?.householdId) {
+          setActiveHouseholdId(result.householdId);
+        }
+        toast.success("Invitation accepted.");
+
+        params.delete("invite");
+        const nextQuery = params.toString();
+        const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash}`;
+        window.history.replaceState({}, "", nextUrl);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : "Unable to accept invite.";
+        toast.error(message);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id, setActiveHouseholdId]);
 
   if (!initialized) {
     return (
@@ -103,6 +144,7 @@ function SignInScreen() {
   const [loading, setLoading] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const inviteMode = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("invite");
 
   async function sendMagicLink(e: FormEvent) {
     e.preventDefault();
@@ -135,7 +177,9 @@ function SignInScreen() {
         </div>
         <h1 className="mt-1 text-2xl font-bold tracking-tight">Sign in</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Enter your email and we will send a secure magic link.
+          {inviteMode
+            ? "You are accepting a household invite. Enter the invited email to continue."
+            : "Enter your email and we will send a secure magic link."}
         </p>
 
         <form onSubmit={sendMagicLink} className="mt-5 space-y-3">

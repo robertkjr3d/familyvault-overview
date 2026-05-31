@@ -24,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { sendHouseholdInvite } from "@/lib/householdInvites";
 
 export function AppHeader() {
   const { simulated, today } = useToday();
@@ -94,17 +95,18 @@ export function AppHeader() {
         throw new Error("Select a household first.");
       }
 
-      const { data, error } = await supabase.rpc("share_household_by_email", {
-        p_household_id: selectedHouseholdId,
-        p_email: email,
-        p_role: role,
+      const result = await sendHouseholdInvite({
+        data: {
+          householdId: selectedHouseholdId,
+          email,
+          role,
+        },
       });
 
-      if (error) throw error;
-      return data;
+      return result;
     },
     onSuccess: () => {
-      toast.success("Shared access updated.");
+      toast.success("Invitation email sent.");
       setShareEmail("");
       setShareRole("member");
       setShareOpen(false);
@@ -202,7 +204,7 @@ export function AppHeader() {
           <DialogHeader>
             <DialogTitle>Share by Email</DialogTitle>
             <DialogDescription>
-              Add an existing account to {selectedHousehold?.name ?? "this household"}. They must sign in at least once before you can share access.
+              Send an invite link for {selectedHousehold?.name ?? "this household"}. The recipient can accept directly from their email.
             </DialogDescription>
           </DialogHeader>
 
