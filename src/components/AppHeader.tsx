@@ -69,6 +69,7 @@ export function AppHeader() {
       setActiveHouseholdId(households[0].id);
     }
   }, [activeHouseholdId, households, setActiveHouseholdId]);
+
   const { data: settings } = useQuery({
     queryKey: ["app_settings"],
     queryFn: async () => {
@@ -76,6 +77,7 @@ export function AppHeader() {
       return data;
     },
   });
+
   const { data: alertCount = 0 } = useQuery({
     queryKey: ["alert-count"],
     queryFn: async () => {
@@ -87,7 +89,7 @@ export function AppHeader() {
       }
       return count;
     },
-    refetchInterval: 30_000,
+    refetchInterval: 5_000,
   });
 
   const shareMutation = useMutation({
@@ -164,6 +166,13 @@ export function AppHeader() {
     transferOwnershipMutation.mutate({ email: normalized });
   }
 
+  // Real date — always today's actual date, never the simulated test date
+  const realDateLabel = new Date().toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+
   return (
     <>
       {simulated && (
@@ -181,6 +190,11 @@ export function AppHeader() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            {/* Today's real date — always visible, even in test mode */}
+            <span className="shrink-0 select-none text-[11px] font-medium tabular-nums text-muted-foreground">
+              {realDateLabel}
+            </span>
+
             {households.length > 0 && (
               <div className="w-36">
                 <Select value={activeHouseholdId ?? households[0].id} onValueChange={setActiveHouseholdId}>
