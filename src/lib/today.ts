@@ -16,7 +16,6 @@ export function useToday(): { today: Date; simulated: boolean } {
         .maybeSingle();
       return data;
     },
-    staleTime: 30_000,
   });
   if (data?.simulated_date) return { today: parseISO(data.simulated_date), simulated: true };
   return { today: new Date(), simulated: false };
