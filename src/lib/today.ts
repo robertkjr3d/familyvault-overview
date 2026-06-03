@@ -1,12 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { parseISO } from "date-fns";
+import { useAppStore } from "@/lib/store";
 
 export function useToday(): { today: Date; simulated: boolean } {
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const { data } = useQuery({
-    queryKey: ["app_settings"],
+    queryKey: ["app_settings", activeHouseholdId],
+    enabled: !!activeHouseholdId,
     queryFn: async () => {
-      const { data } = await supabase.from("app_settings").select("*").eq("id", 1).maybeSingle();
+      const { data } = await supabase
+        .from("app_settings")
+        .select("*")
+        .eq("household_id", activeHouseholdId!)
+        .maybeSingle();
       return data;
     },
     staleTime: 30_000,

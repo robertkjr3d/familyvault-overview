@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Bell, Crown, Share2 } from "lucide-react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToday } from "@/lib/today";
 import { AlertsSheet } from "./AlertsSheet";
@@ -29,6 +29,7 @@ import { sendHouseholdInvite, transferHouseholdOwnership } from "@/lib/household
 export function AppHeader() {
   const { simulated, today } = useToday();
   const { user } = useAuthSession();
+  const queryClient = useQueryClient();
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareEmail, setShareEmail] = useState("");
@@ -71,9 +72,14 @@ export function AppHeader() {
   }, [activeHouseholdId, households, setActiveHouseholdId]);
 
   const { data: settings } = useQuery({
-    queryKey: ["app_settings"],
+    queryKey: ["app_settings", selectedHouseholdId],
+    enabled: !!selectedHouseholdId,
     queryFn: async () => {
-      const { data } = await supabase.from("app_settings").select("*").eq("id", 1).maybeSingle();
+      const { data } = await supabase
+        .from("app_settings")
+        .select("*")
+        .eq("household_id", selectedHouseholdId!)
+        .maybeSingle();
       return data;
     },
   });
@@ -139,6 +145,7 @@ export function AppHeader() {
       toast.success("Ownership transferred.");
       setTransferEmail("");
       setShareOpen(false);
+      void queryClient.invalidateQueries({ queryKey: ["household-memberships", user?.id] });
     },
     onError: (error: unknown) => {
       const message = error instanceof Error ? error.message : "Unable to transfer ownership.";
@@ -226,15 +233,17 @@ export function AppHeader() {
               )}
             </button>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShareOpen(true)}
-              disabled={!selectedHouseholdId || !canShareActiveHousehold}
-              title={canShareActiveHousehold ? "Share household access" : "Only owners can share"}
-            >
-              <Share2 className="mr-1 h-4 w-4" /> Share
-            </Button>
+            {canShareActiveHousehold && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShareOpen(true)}
+                disabled={!selectedHouseholdId}
+                title="Share household access"
+              >
+                <Share2 className="mr-1 h-4 w-4" /> Share
+              </Button>
+            )}
 
             <Button
               variant="outline"
