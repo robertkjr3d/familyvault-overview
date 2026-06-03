@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useMembers } from "@/hooks/useMembers";
+import { useAppStore } from "@/lib/store";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -36,10 +37,16 @@ function loadAlerts(): LSAlerts {
 function SettingsPage() {
   const qc = useQueryClient();
   const { data: members = [] } = useMembers();
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const { data: settings } = useQuery({
-    queryKey: ["app_settings"],
+    queryKey: ["app_settings", activeHouseholdId],
+    enabled: !!activeHouseholdId,
     queryFn: async () => {
-      const { data } = await supabase.from("app_settings").select("*").eq("id", 1).maybeSingle();
+      const { data } = await supabase
+        .from("app_settings")
+        .select("*")
+        .eq("household_id", activeHouseholdId!)
+        .maybeSingle();
       return data;
     },
   });
@@ -69,11 +76,23 @@ function SettingsPage() {
 
   const save = useMutation({
     mutationFn: async (patch: any) => {
-      const { error } = await supabase.from("app_settings").update(patch).eq("id", 1);
+      if (!activeHouseholdId) {
+        throw new Error("Select a household first.");
+      }
+
+      const { error } = await supabase
+        .from("app_settings")
+        .upsert(
+          {
+            household_id: activeHouseholdId,
+            ...patch,
+          },
+          { onConflict: "household_id" },
+        );
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["app_settings"] });
+      qc.invalidateQueries({ queryKey: ["app_settings", activeHouseholdId] });
       toast.success("Saved");
     },
   });
