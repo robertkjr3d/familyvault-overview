@@ -454,6 +454,108 @@ function FolderSheet({ folder, items, onClose }: { folder: Folder; items: Item[]
   );
 }
 
+/* ---------- Add Item Form ---------- */
+function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => void }) {
+  const qc = useQueryClient();
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("");
+  const [action, setAction] = useState("");
+  const [warranty, setWarranty] = useState("");
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function save() {
+    if (!name.trim()) { toast.error("Item name required"); return; }
+    setSaving(true);
+    try {
+      let photo_url: string | null = null;
+      if (photoFile) {
+        const path = `items/${Date.now()}-${photoFile.name}`;
+        const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, photoFile);
+        if (upErr) throw upErr;
+        photo_url = supabase.storage.from("inventory-photos").getPublicUrl(path).data.publicUrl;
+      }
+      const { data: ins, error } = await supabase
+        .from("inventory_items")
+        .insert({
+          folder_id: folderId,
+          name: name.trim(),
+          category: category.trim() || null,
+          action: action.trim() || null,
+          warranty_date: warranty || null,
+          photo_url,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+
+      if (warranty && ins) {
+        const remindAt = addDays(parseISO(warranty), -90);
+        await supabase.from("reminders").insert({
+          entity_type: "inventory",
+          entity_id: ins.id,
+          what: `Warranty expires for ${name.trim()}`,
+          remind_at: remindAt.toISOString(),
+        });
+      }
+
+      toast.success("Item added");
+      qc.invalidateQueries({ queryKey: ["inventory_items"] });
+      onDone();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="space-y-3 rounded-xl border border-border bg-background p-3">
+      <div className="space-y-1.5">
+        <Label className="text-xs">Item name *</Label>
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Europace Fan" />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">Category</Label>
+        <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Electronics" />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">Warranty date</Label>
+        <Input type="date" value={warranty} onChange={(e) => setWarranty(e.target.value)} className="w-full max-w-full" />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">Action / notes</Label>
+        <Textarea rows={2} value={action} onChange={(e) => setAction(e.target.value)} placeholder="e.g. Service every 2 years" />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">Photo (optional)</Label>
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)} />
+        {photoFile ? (
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
+            <Camera className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="flex-1 truncate text-xs">{photoFile.name}</span>
+            <button
+              type="button"
+              onClick={() => { setPhotoFile(null); if (fileRef.current) fileRef.current.value = ""; }}
+              className="rounded-full p-0.5 text-urgent hover:bg-urgent/10"
+              aria-label="Remove photo"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
+            <Camera className="mr-1 h-3.5 w-3.5" /> Add photo
+          </Button>
+        )}
+      </div>
+      <div className="flex gap-2">
+        <Button variant="outline" className="flex-1" onClick={onDone}>Cancel</Button>
+        <Button className="flex-1" onClick={save} disabled={saving}>{saving ? "Saving…" : "Add item"}</Button>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Edit Item Form ---------- */
 function EditItemForm({ item, onDone }: { item: Item; onDone: () => void }) {
   const qc = useQueryClient();
