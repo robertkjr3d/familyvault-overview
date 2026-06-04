@@ -89,7 +89,7 @@ function SavingsPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold tracking-tight">Savings</h1>
-      <MemberFilterBar />
+      <MemberFilterBar table="savings_accounts" />
       {groups.map((g) => (
         <section key={g}>
           <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">{g}</h2>
