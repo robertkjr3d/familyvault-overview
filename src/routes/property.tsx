@@ -67,7 +67,7 @@ function PropertyPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold tracking-tight">Property</h1>
-      <MemberFilterBar />
+      <MemberFilterBar table="properties" />
 
       <div className="space-y-3">
         {sortByStatus(investments).map((p: any) => (
