@@ -52,6 +52,11 @@ function SettingsPage() {
   });
   const [familyName, setFamilyName] = useState("");
   const [simDate, setSimDate] = useState("");
+
+  // Sync simDate from DB when settings first load
+  useEffect(() => {
+    if (settings?.simulated_date) setSimDate(settings.simulated_date);
+  }, [settings?.simulated_date]);
   const [theme, setTheme] = useState<"light" | "dark">(() =>
     typeof window !== "undefined" && document.documentElement.classList.contains("dark") ? "dark" : "light"
   );
@@ -224,15 +229,15 @@ function SettingsPage() {
         </p>
         <input
           type="date"
-          className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-          defaultValue={settings?.simulated_date ?? ""}
+          className="w-full max-w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+          value={simDate}
           onChange={(e) => setSimDate(e.target.value)}
         />
         <div className="mt-3 flex gap-2">
           <button className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"
-            onClick={() => save.mutate({ simulated_date: simDate || null })}>Apply</button>
+            onClick={() => { if (simDate) save.mutate({ simulated_date: simDate }); }}>Apply</button>
           <button className="rounded-lg border border-border px-3 py-2 text-xs font-semibold"
-            onClick={() => save.mutate({ simulated_date: null })}>Clear</button>
+            onClick={() => { setSimDate(""); save.mutate({ simulated_date: null }); }}>Clear</button>
         </div>
       </section>
 
