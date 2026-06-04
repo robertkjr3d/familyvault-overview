@@ -319,6 +319,7 @@ function AddFolderSheet({ open, onClose }: { open: boolean; onClose: () => void 
 function FolderSheet({ folder, items, onClose }: { folder: Folder; items: Item[]; onClose: () => void }) {
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
+  const [editingItem, setEditingItem] = useState<Item | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function delFolder() {
@@ -384,7 +385,7 @@ function FolderSheet({ folder, items, onClose }: { folder: Folder; items: Item[]
         />
 
         {folder.photo_url && (
-          <img src={folder.photo_url} alt="" className="mt-3 h-36 w-full rounded-xl object-cover" />
+          <img src={folder.photo_url} alt="" className="mt-3 w-full rounded-xl object-contain max-h-48" />
         )}
 
         <div className="mt-4 space-y-2">
@@ -405,27 +406,43 @@ function FolderSheet({ folder, items, onClose }: { folder: Folder; items: Item[]
 
           <ul className="space-y-2">
             {items.map((it) => (
-              <li key={it.id} className="flex items-start justify-between gap-2 rounded-lg border border-border bg-card p-3">
-                <div className="flex-1">
-                  <div className="text-sm font-semibold">{it.name}</div>
-                  {it.category && <div className="text-xs text-muted-foreground">{it.category}</div>}
-                  {it.action && <div className="mt-1 text-xs">{it.action}</div>}
-                  {it.warranty_date && (
-                    <div className="mt-1 text-[11px] text-muted-foreground">
-                      Warranty until {fmtDate(it.warranty_date)}
-                    </div>
+              <li key={it.id} className="rounded-lg border border-border bg-card p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold">{it.name}</div>
+                    {it.category && <div className="text-xs text-muted-foreground">{it.category}</div>}
+                    {it.action && <div className="mt-1 text-xs">{it.action}</div>}
+                    {it.warranty_date && (
+                      <div className="mt-1 text-[11px] text-muted-foreground">
+                        Warranty until {fmtDate(it.warranty_date)}
+                      </div>
+                    )}
+                  </div>
+                  {it.photo_url && (
+                    <img src={it.photo_url} alt="" className="h-14 w-14 rounded-md object-cover" />
                   )}
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setEditingItem(it)}
+                      className="rounded-md p-1 text-muted-foreground hover:bg-accent"
+                      aria-label="Edit item"
+                    >
+                      <span className="text-sm">✏️</span>
+                    </button>
+                    <button
+                      onClick={() => delItem(it.id)}
+                      className="rounded-md p-1 text-urgent hover:bg-urgent/10"
+                      aria-label="Delete item"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
-                {it.photo_url && (
-                  <img src={it.photo_url} alt="" className="h-14 w-14 rounded-md object-cover" />
+                {editingItem?.id === it.id && (
+                  <div className="mt-3 border-t border-border pt-3">
+                    <EditItemForm item={it} onDone={() => setEditingItem(null)} />
+                  </div>
                 )}
-                <button
-                  onClick={() => delItem(it.id)}
-                  className="rounded-md p-1 text-urgent hover:bg-urgent/10"
-                  aria-label="Delete item"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
               </li>
             ))}
           </ul>
@@ -437,65 +454,39 @@ function FolderSheet({ folder, items, onClose }: { folder: Folder; items: Item[]
   );
 }
 
-/* ---------- Add Item Form ---------- */
-function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => void }) {
+/* ---------- Edit Item Form ---------- */
+function EditItemForm({ item, onDone }: { item: Item; onDone: () => void }) {
   const qc = useQueryClient();
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState("");
-  const [action, setAction] = useState("");
-  const [warranty, setWarranty] = useState("");
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [name, setName] = useState(item.name);
+  const [category, setCategory] = useState(item.category ?? "");
+  const [action, setAction] = useState(item.action ?? "");
+  const [warranty, setWarranty] = useState(item.warranty_date ?? "");
   const [saving, setSaving] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   async function save() {
     if (!name.trim()) { toast.error("Item name required"); return; }
     setSaving(true);
-    try {
-      let photo_url: string | null = null;
-      if (photoFile) {
-        const path = `items/${Date.now()}-${photoFile.name}`;
-        const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, photoFile);
-        if (upErr) throw upErr;
-        photo_url = supabase.storage.from("inventory-photos").getPublicUrl(path).data.publicUrl;
-      }
-      const { data: ins, error } = await supabase
-        .from("inventory_items")
-        .insert({
-          folder_id: folderId,
-          name: name.trim(),
-          category: category.trim() || null,
-          action: action.trim() || null,
-          warranty_date: warranty || null,
-          photo_url,
-        })
-        .select()
-        .single();
-      if (error) throw error;
-
-      if (warranty && ins) {
-        const remindAt = addDays(parseISO(warranty), -90);
-        await supabase.from("reminders").insert({
-          entity_type: "inventory",
-          entity_id: ins.id,
-          what: `Warranty expires for ${name.trim()}`,
-          remind_at: remindAt.toISOString(),
-        });
-      }
-
-      toast.success("Item added");
-      qc.invalidateQueries({ queryKey: ["inventory_items"] });
-      onDone();
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally { setSaving(false); }
+    const { error } = await supabase
+      .from("inventory_items")
+      .update({
+        name: name.trim(),
+        category: category.trim() || null,
+        action: action.trim() || null,
+        warranty_date: warranty || null,
+      })
+      .eq("id", item.id);
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Item updated");
+    qc.invalidateQueries({ queryKey: ["inventory_items"] });
+    onDone();
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-border bg-background p-3">
+    <div className="space-y-3">
       <div className="space-y-1.5">
         <Label className="text-xs">Item name *</Label>
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Europace Fan" />
+        <Input value={name} onChange={(e) => setName(e.target.value)} />
       </div>
       <div className="space-y-1.5">
         <Label className="text-xs">Category</Label>
@@ -507,18 +498,11 @@ function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => voi
       </div>
       <div className="space-y-1.5">
         <Label className="text-xs">Action / notes</Label>
-        <Textarea rows={2} value={action} onChange={(e) => setAction(e.target.value)} placeholder="e.g. Service every 2 years" />
-      </div>
-      <div>
-        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)} />
-        <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
-          <Camera className="mr-1 h-3.5 w-3.5" />
-          {photoFile ? photoFile.name : "Add photo (optional)"}
-        </Button>
+        <Textarea rows={2} value={action} onChange={(e) => setAction(e.target.value)} />
       </div>
       <div className="flex gap-2">
         <Button variant="outline" className="flex-1" onClick={onDone}>Cancel</Button>
-        <Button className="flex-1" onClick={save} disabled={saving}>{saving ? "Saving…" : "Add item"}</Button>
+        <Button className="flex-1" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save changes"}</Button>
       </div>
     </div>
   );
