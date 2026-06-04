@@ -526,7 +526,7 @@ function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => voi
         <Label className="text-xs">Action / notes</Label>
         <Textarea rows={2} value={action} onChange={(e) => setAction(e.target.value)} placeholder="e.g. Service every 2 years" />
       </div>
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <Label className="text-xs">Photo (optional)</Label>
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)} />
         {photoFile ? (
