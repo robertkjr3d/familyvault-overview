@@ -39,7 +39,7 @@ function HealthPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold tracking-tight">Health</h1>
-      <MemberFilterBar />
+      <MemberFilterBar table="health_conditions" />
       {members.map((m) => {
         const conditions = items.filter((c: any) => c.member_id === m.id);
         if (conditions.length === 0) return null;
