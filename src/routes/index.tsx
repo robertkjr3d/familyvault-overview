@@ -323,7 +323,7 @@ function Dashboard() {
 
 function Kpi({ label, value, accent, big, sub }: { label: string; value: string; accent?: "good" | "bad" | "neutral" | "gold"; big?: boolean; sub?: string }) {
   const valueColor = accent === "good" ? "text-settled" : accent === "bad" ? "text-urgent" : accent === "gold" ? "text-primary" : "";
-  const borderTop = accent === "bad" ? "border-t-2 border-t-urgent" : accent === "gold" ? "border-primary/40" : "";
+  const borderTop = accent === "bad" ? "bg-urgent-soft/30 border-urgent/30" : accent === "gold" ? "border-primary/40" : "";
   return (
     <div className={`rounded-2xl border border-border bg-card p-3 ${borderTop}`}>
       <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
