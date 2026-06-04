@@ -39,7 +39,7 @@ function InvestmentsPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold tracking-tight">Investments</h1>
-      <MemberFilterBar />
+      <MemberFilterBar table="investments" />
       {items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
           <p className="text-sm text-muted-foreground">No investments yet.</p>
