@@ -51,7 +51,7 @@ function InsurancePage() {
       <p className="text-xs text-muted-foreground">
         {items.length} policies · {fmtMoney(totalAnnual)} / year total
       </p>
-      <MemberFilterBar />
+      <MemberFilterBar table="insurance_policies" />
 
       {items.length === 0 && (
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
