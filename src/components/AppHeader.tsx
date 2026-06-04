@@ -196,14 +196,14 @@ export function AppHeader() {
               <p className="mt-0.5 text-[11px] text-muted-foreground">{user.email}</p>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            {/* Today's real date — always visible, even in test mode */}
-            <span className="shrink-0 select-none text-[11px] font-medium tabular-nums text-muted-foreground">
+          <div className="flex items-center gap-1.5">
+            {/* Today's real date — hidden on mobile to save space */}
+            <span className="hidden sm:inline shrink-0 select-none text-[11px] font-medium tabular-nums text-muted-foreground">
               {realDateLabel}
             </span>
 
             {households.length > 0 && (
-              <div className="w-36">
+              <div className="w-28 sm:w-36">
                 <Select value={activeHouseholdId ?? households[0].id} onValueChange={setActiveHouseholdId}>
                   <SelectTrigger className="h-8 text-xs">
                     <SelectValue placeholder="Household" />
@@ -240,6 +240,7 @@ export function AppHeader() {
                 onClick={() => setShareOpen(true)}
                 disabled={!selectedHouseholdId}
                 title="Share household access"
+                className="hidden sm:flex"
               >
                 <Share2 className="mr-1 h-4 w-4" /> Share
               </Button>
@@ -251,8 +252,10 @@ export function AppHeader() {
               onClick={() => {
                 void supabase.auth.signOut();
               }}
+              className="px-2 sm:px-3"
             >
-              Sign out
+              <span className="hidden sm:inline">Sign out</span>
+              <span className="sm:hidden text-xs">Out</span>
             </Button>
           </div>
         </div>
