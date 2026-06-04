@@ -87,7 +87,7 @@ function Dashboard() {
   for (const p of insurance as any[]) {
     if (p.next_due_date) {
       const d = parseISO(p.next_due_date);
-      if (isAfter(d, today) && isBefore(d, horizon30)) {
+      if (isBefore(d, horizon30)) {
         upcoming.push({ date: p.next_due_date, label: p.name, amount: p.premium, member_id: p.member_id, href: "/insurance", recordId: p.id, daysLeft: daysUntil(p.next_due_date) });
       }
     }
@@ -97,7 +97,7 @@ function Dashboard() {
   for (const p of properties as any[]) {
     if (p.fixed_rate_end) {
       const d = parseISO(p.fixed_rate_end);
-      if (isAfter(d, today) && isBefore(d, horizon90)) {
+      if (isBefore(d, horizon90)) {
         upcoming.push({ date: p.fixed_rate_end, label: `${p.name} — fixed rate ends`, amount: null, member_id: p.member_id, href: "/property", recordId: p.id, daysLeft: daysUntil(p.fixed_rate_end) });
       }
     }
@@ -107,7 +107,7 @@ function Dashboard() {
   for (const l of loans as any[]) {
     if (l.reprice_date) {
       const d = parseISO(l.reprice_date);
-      if (isAfter(d, today) && isBefore(d, horizon90)) {
+      if (isBefore(d, horizon90)) {
         upcoming.push({ date: l.reprice_date, label: `${l.bank} loan — reprice`, amount: null, member_id: l.member_id, href: "/loans", recordId: l.id, daysLeft: daysUntil(l.reprice_date) });
       }
     }
@@ -117,7 +117,7 @@ function Dashboard() {
   for (const s of savings as any[]) {
     if (s.maturity_date) {
       const d = parseISO(s.maturity_date);
-      if (isAfter(d, today) && isBefore(d, horizon90)) {
+      if (isBefore(d, horizon90)) {
         upcoming.push({ date: s.maturity_date, label: `${s.institution} FD matures`, amount: s.balance, member_id: s.member_id, href: "/savings", recordId: s.id, daysLeft: daysUntil(s.maturity_date) });
       }
     }
@@ -223,8 +223,8 @@ function Dashboard() {
               return (
                 <li key={i}>
                   <Link to={u.href as any} hash={`record-${u.recordId}`} className="flex items-center gap-3 py-2.5 text-sm hover:bg-accent/40 -mx-2 px-2 rounded">
-                    <span className={`w-20 shrink-0 text-xs font-bold ${isUrgent ? "text-urgent" : "text-primary"}`}>
-                      {isUrgent ? `${u.daysLeft}d left` : fmtDate(u.date)}
+                    <span className={`w-20 shrink-0 text-xs font-bold ${u.daysLeft < 0 ? "text-urgent" : isUrgent ? "text-urgent" : "text-primary"}`}>
+                      {u.daysLeft < 0 ? `${Math.abs(u.daysLeft)}d overdue` : isUrgent ? `${u.daysLeft}d left` : fmtDate(u.date)}
                     </span>
                     <span className="flex-1 truncate">{u.label}</span>
                     <MemberTag memberId={u.member_id} />
