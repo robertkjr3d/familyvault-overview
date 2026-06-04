@@ -280,10 +280,19 @@ function AddFolderSheet({ open, onClose }: { open: boolean; onClose: () => void 
             <Label className="text-xs">Photo (optional)</Label>
             <div
               onClick={() => fileRef.current?.click()}
-              className="mt-1 flex h-32 w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/40"
+              className="mt-1 flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/40 min-h-[80px]"
             >
               {preview ? (
-                <img src={preview} alt="" className="h-full w-full object-cover" />
+              <div className="relative w-full">
+                <img src={preview} alt="" className="w-full h-auto object-contain max-h-48" />
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setPreview(null); setPhotoFile(null); }}
+                  className="absolute right-2 top-2 rounded-full bg-black/60 p-1 text-white"
+                >
+                  ✕
+                </button>
+              </div>
               ) : (
                 <div className="flex flex-col items-center gap-1 text-muted-foreground">
                   <Camera className="h-7 w-7" />
