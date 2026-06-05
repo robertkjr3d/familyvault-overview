@@ -7,13 +7,11 @@ import { MemberFilterBar } from "@/components/MemberFilterBar";
 import { MemberTag } from "@/components/MemberTag";
 import { StatusBadge } from "@/components/StatusToggle";
 import { useAppStore } from "@/lib/store";
-import { addDays, isAfter, isBefore, parseISO } from "date-fns";
+import { addDays, isBefore, parseISO } from "date-fns";
 import { LifetimeChart } from "@/components/LifetimeChart";
-import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Bell } from "lucide-react";
+import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { sortByStatus } from "@/lib/sort";
-import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
-import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
 import { fmtPct } from "@/lib/format";
 import { HashHighlight } from "@/components/HashHighlight";
 
@@ -26,8 +24,6 @@ function Dashboard() {
   const { today } = useToday();
   const memberFilter = useAppStore((s) => s.memberFilter);
   const [breakdownOpen, setBreakdownOpen] = useState(false);
-  const propStatus = useStatusMutation("properties", "properties");
-  const propDel = useDeleteMutation("properties", "properties");
 
   const { data } = useQuery({
     queryKey: ["dashboard", memberFilter],
@@ -71,10 +67,17 @@ function Dashboard() {
     loans.reduce((s: number, l: any) => s + (Number(l.monthly_payment) || 0), 0);
   const netCashFlow = monthlyIn - monthlyOut;
 
-  // Upcoming payments — next 30 days — all sources
-  const horizon30 = addDays(today, 30);
   const horizon90 = addDays(today, 90);
-  type Upcoming = { date: string; label: string; amount?: number | null; member_id?: string | null; href: string; recordId: string; daysLeft: number };
+
+  type Upcoming = {
+    date: string;
+    label: string;
+    amount?: number | null;
+    member_id?: string | null;
+    href: string;
+    recordId: string;
+    daysLeft: number;
+  };
 
   function daysUntil(dateStr: string) {
     const d = parseISO(dateStr);
@@ -83,17 +86,15 @@ function Dashboard() {
 
   const upcoming: Upcoming[] = [];
 
-  // Insurance premium due dates
   for (const p of insurance as any[]) {
     if (p.next_due_date) {
       const d = parseISO(p.next_due_date);
-      if (isBefore(d, horizon30)) {
+      if (isBefore(d, horizon90)) {
         upcoming.push({ date: p.next_due_date, label: p.name, amount: p.premium, member_id: p.member_id, href: "/insurance", recordId: p.id, daysLeft: daysUntil(p.next_due_date) });
       }
     }
   }
 
-  // Property fixed rate ends
   for (const p of properties as any[]) {
     if (p.fixed_rate_end) {
       const d = parseISO(p.fixed_rate_end);
@@ -103,7 +104,6 @@ function Dashboard() {
     }
   }
 
-  // Loan reprice dates
   for (const l of loans as any[]) {
     if (l.reprice_date) {
       const d = parseISO(l.reprice_date);
@@ -113,7 +113,6 @@ function Dashboard() {
     }
   }
 
-  // Savings FD maturity dates
   for (const s of savings as any[]) {
     if (s.maturity_date) {
       const d = parseISO(s.maturity_date);
@@ -125,33 +124,26 @@ function Dashboard() {
 
   upcoming.sort((a, b) => a.date.localeCompare(b.date));
 
-  // Priority + Review alerts
   const all: Array<{ kind: string; row: any; href: string; icon: any }> = [
     ...properties.map((r: any) => ({ kind: "Property", row: r, href: "/property", icon: Building2 })),
     ...loans.map((r: any) => ({ kind: "Loan", row: r, href: "/loans", icon: Landmark })),
     ...insurance.map((r: any) => ({ kind: "Insurance", row: r, href: "/insurance", icon: Shield })),
     ...investments.map((r: any) => ({ kind: "Invest", row: r, href: "/investments", icon: TrendingUp })),
   ];
+
   const urgent = all.filter((x) => x.row.status === "urgent");
   const review = all.filter((x) => x.row.status === "review");
-  const alertCount = urgent.length + review.length + upcoming.filter(u => u.daysLeft <= 7).length;
+
+  // Bell count: only overdue or due within 30 days
+  const upcomingAlerts = upcoming.filter((u) => u.daysLeft <= 30);
+  const alertCount = urgent.length + review.length + upcomingAlerts.filter((u) => u.daysLeft <= 7).length;
 
   const dueToday = upcoming.find((u) => u.date === today.toISOString().slice(0, 10));
 
-  // Property overview split
-  const propSorted = sortByStatus(properties);
-  const propRedAmber = propSorted.filter((p: any) => p.status !== "settled");
-  const propGreen = propSorted.filter((p: any) => p.status === "settled");
-
   return (
     <div className="space-y-5">
-
-     
-
-      {/* MEMBER FILTER — right at the top so everyone sees it immediately */}
       <MemberFilterBar />
 
-      {/* DUE TODAY BANNER */}
       {dueToday && (
         <Link to="/insurance" hash={`record-${dueToday.recordId}`} className="block rounded-2xl bg-review p-4 text-review-foreground">
           <div className="text-xs font-semibold uppercase">Due today</div>
@@ -172,7 +164,7 @@ function Dashboard() {
         />
       </div>
 
-      {/* Monthly cash flow line */}
+      {/* MONTHLY CASH FLOW LINE */}
       <div className="text-center text-sm font-semibold">
         <span className="text-muted-foreground">Monthly Cash Flow: </span>
         <span className={netCashFlow >= 0 ? "text-settled" : "text-urgent"}>
@@ -208,10 +200,16 @@ function Dashboard() {
         )}
       </section>
 
-      {/* DUE IN NEXT 30 DAYS */}
+      {/* NEEDS ATTENTION */}
+      {urgent.length > 0 && <PrioritySection title="Needs Attention" items={urgent} />}
+
+      {/* REVIEW NEEDED — moved above cash flow bars */}
+      {review.length > 0 && <PrioritySection title="Review Needed" items={review} muted showDate />}
+
+      {/* DUE IN NEXT 90 DAYS */}
       <section className="rounded-2xl border border-border bg-card p-4">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-bold tracking-tight">Due in the Next 30 Days</h2>
+          <h2 className="text-sm font-bold tracking-tight">Due in the Next 90 Days</h2>
           <span className="text-xs text-muted-foreground">{upcoming.length} item{upcoming.length === 1 ? "" : "s"}</span>
         </div>
         {upcoming.length === 0 ? (
@@ -249,67 +247,6 @@ function Dashboard() {
           </div>
         </div>
       </section>
-
-      {/* NEEDS ATTENTION */}
-      {urgent.length > 0 && <PrioritySection title="Needs Attention" items={urgent} />}
-
-      {/* REVIEW NEEDED */}
-      {review.length > 0 && <PrioritySection title="Review Needed" items={review} muted showDate />}
-
-      {/* PROPERTY OVERVIEW */}
-      {properties.length > 0 && (
-        <section className="rounded-2xl border border-border bg-card p-4">
-          <h2 className="mb-3 text-sm font-bold">Property Overview</h2>
-          <div className="space-y-3">
-            {propRedAmber.map((p: any) => (
-              <HashHighlight key={p.id} id={`record-${p.id}`}>
-                <RecordCard
-                  title={p.name}
-                  subtitle={`${p.currency}`}
-                  memberId={p.member_id}
-                  status={p.status}
-                  onStatusChange={(s) => propStatus.mutate({ id: p.id, status: s })}
-                  action={p.strategy}
-                  onDelete={() => propDel.mutate(p.id)}
-                  rightMeta={
-                    <div className="text-right text-xs">
-                      <div className="font-bold">{fmtMoney(p.current_value, p.currency)}</div>
-                      {p.monthly_rent && <div className="text-muted-foreground">{fmtMoney(p.monthly_rent, p.currency)}/mo</div>}
-                    </div>
-                  }
-                >
-                  <Section title="Financials">
-                    <FieldRow label="Current value" value={fmtMoney(p.current_value, p.currency)} />
-                    <FieldRow label="Mortgage balance" value={fmtMoney(p.mortgage_balance, p.currency)} />
-                    <FieldRow label="Interest rate" value={fmtPct(p.interest_rate)} />
-                    <FieldRow label="Fixed rate ends" value={fmtDate(p.fixed_rate_end)} />
-                  </Section>
-                </RecordCard>
-              </HashHighlight>
-            ))}
-            {propGreen.length > 0 && (
-              <details className="rounded-xl border border-settled-border bg-settled-tint/40 p-3">
-                <summary className="cursor-pointer text-xs font-semibold text-settled">
-                  {propGreen.length} settled {propGreen.length === 1 ? "property" : "properties"} ▾
-                </summary>
-                <div className="mt-3 space-y-2">
-                  {propGreen.map((p: any) => (
-                    <Link
-                      key={p.id}
-                      to="/property"
-                      hash={`record-${p.id}`}
-                      className="flex items-center justify-between rounded-lg bg-card/80 px-3 py-2 text-xs hover:bg-card"
-                    >
-                      <span className="font-medium">{p.name}</span>
-                      <span className="font-bold">{fmtMoney(p.current_value, p.currency)}</span>
-                    </Link>
-                  ))}
-                </div>
-              </details>
-            )}
-          </div>
-        </section>
-      )}
 
       {/* LIFETIME CHART */}
       <section className="rounded-2xl border border-border bg-card p-4">
