@@ -15,6 +15,7 @@ import { PROPERTY_PURPOSE_LABEL } from "@/lib/options";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { NotesEditor } from "@/components/loan/NotesEditor";
 import { DocumentsList } from "@/components/loan/DocumentsList";
+import { ReminderButton } from "@/components/loan/ReminderButton";
 
 export const Route = createFileRoute("/property")({
   component: PropertyPage,
@@ -178,6 +179,10 @@ function PropertyRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) => 
         <CollapsibleSection icon={<span>📎</span>} title="Documents">
           <DocumentsList entityType="property" entityId={p.id} />
         </CollapsibleSection>
+
+        <div className="flex justify-end pt-1">
+          <ReminderButton entityType="property" entityId={p.id} />
+        </div>
       </RecordCard>
       {edit.element}
     </HashHighlight>
