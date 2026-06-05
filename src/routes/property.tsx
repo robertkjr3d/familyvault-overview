@@ -13,7 +13,7 @@ import { HashHighlight } from "@/components/HashHighlight";
 import { useEditRecord } from "@/components/EditRecordButton";
 import { PROPERTY_PURPOSE_LABEL } from "@/lib/options";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
-import { NotesLog } from "@/components/NotesLog";
+import { NotesEditor } from "@/components/loan/NotesEditor";
 import { DocumentsList } from "@/components/loan/DocumentsList";
 
 export const Route = createFileRoute("/property")({
@@ -170,7 +170,7 @@ function PropertyRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) => 
         </Section>
 
         <CollapsibleSection icon={<span>📝</span>} title="Notes">
-          <NotesLog entityType="property" entityId={p.id} />
+          <NotesEditor table="properties" queryKey="properties" id={p.id} value={p.notes} />
         </CollapsibleSection>
         <CollapsibleSection icon={<span>🔄</span>} title="Add an Update">
           <HistoryLog entityType="property" entityId={p.id} />
