@@ -10,6 +10,10 @@ import { sortByStatus } from "@/lib/sort";
 import { fmtMoney, fmtPct } from "@/lib/format";
 import { HashHighlight } from "@/components/HashHighlight";
 import { useEditRecord } from "@/components/EditRecordButton";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
+import { NotesEditor } from "@/components/loan/NotesEditor";
+import { HistoryLog } from "@/components/loan/HistoryLog";
+import { DocumentsList } from "@/components/loan/DocumentsList";
 
 export const Route = createFileRoute("/investments")({
   component: InvestmentsPage,
@@ -98,6 +102,23 @@ function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: an
           <FieldRow label="Current value" value={fmtMoney(inv.current_value)} />
           <FieldRow label="Projected return" value={fmtPct(inv.projected_return_pct)} />
         </Section>
+
+        <CollapsibleSection icon={<span>📝</span>} title="Notes">
+          <NotesEditor
+            table="investments"
+            queryKey="investments"
+            id={inv.id}
+            value={inv.notes}
+          />
+        </CollapsibleSection>
+
+        <CollapsibleSection icon={<span>🔄</span>} title="Add an Update">
+          <HistoryLog entityType="investment" entityId={inv.id} />
+        </CollapsibleSection>
+
+        <CollapsibleSection icon={<span>📎</span>} title="Documents">
+          <DocumentsList entityType="investment" entityId={inv.id} />
+        </CollapsibleSection>
       </RecordCard>
       {edit.element}
     </HashHighlight>
