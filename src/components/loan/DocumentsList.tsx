@@ -85,15 +85,13 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
     }
   }
 
-  async function openDoc(e: React.MouseEvent, doc: any) {
+  function openDoc(e: React.MouseEvent, doc: any) {
     if (doc.bucket === "external") {
       window.open(doc.path, "_blank", "noopener,noreferrer");
       return;
     }
-    const win = window.open("", "_blank", "noopener,noreferrer");
-    const { data } = await supabase.storage.from("vault-docs").createSignedUrl(doc.path, 3600);
-    const url = data?.signedUrl || supabase.storage.from("vault-docs").getPublicUrl(doc.path).data.publicUrl;
-    if (win) win.location.href = url;
+    const url = supabase.storage.from("vault-docs").getPublicUrl(doc.path).data.publicUrl;
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 
   async function del(id: string, doc: any) {
