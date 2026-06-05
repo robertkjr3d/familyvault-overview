@@ -15,6 +15,10 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useEditRecord } from "@/components/EditRecordButton";
 import { ReminderButton } from "@/components/loan/ReminderButton";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
+import { NotesEditor } from "@/components/loan/NotesEditor";
+import { HistoryLog } from "@/components/loan/HistoryLog";
+import { DocumentsList } from "@/components/loan/DocumentsList";
 
 export const Route = createFileRoute("/savings")({
   component: SavingsPage,
@@ -144,6 +148,7 @@ function SavingsRow({ a, onStatus, onDelete }: { a: any; onStatus: (s: any) => v
           <FieldRow label="Maturity" value={fmtDate(a.maturity_date)} />
           <FieldRow label="Last updated" value={fmtDate(a.last_updated)} />
         </Section>
+
         <div className="flex items-center justify-between gap-2 rounded-md border border-dashed border-border/60 px-3 py-2">
           <div className="text-xs">
             {isStale ? (
@@ -154,6 +159,24 @@ function SavingsRow({ a, onStatus, onDelete }: { a: any; onStatus: (s: any) => v
           </div>
           <UpdateBalanceInline id={a.id} current={a.balance} />
         </div>
+
+        <CollapsibleSection icon={<span>📝</span>} title="Notes">
+          <NotesEditor
+            table="savings_accounts"
+            queryKey="savings"
+            id={a.id}
+            value={a.notes}
+          />
+        </CollapsibleSection>
+
+        <CollapsibleSection icon={<span>🔄</span>} title="Add an Update">
+          <HistoryLog entityType="savings" entityId={a.id} />
+        </CollapsibleSection>
+
+        <CollapsibleSection icon={<span>📎</span>} title="Documents">
+          <DocumentsList entityType="savings" entityId={a.id} />
+        </CollapsibleSection>
+
         <div className="flex justify-end pt-1">
           <ReminderButton entityType="savings" entityId={a.id} />
         </div>
