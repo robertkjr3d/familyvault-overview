@@ -108,30 +108,33 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
   return (
     <div className="space-y-2">
       <ul className="space-y-1.5">
-        {docs.map((d: any) => (
-          <li key={d.id} className="group flex items-center justify-between rounded-md bg-muted/40 px-2 py-1.5 text-sm">
-            
-              href="#"
-              onClick={(e) => openDoc(e, d)}
-              className="flex flex-1 cursor-pointer items-center gap-2 truncate hover:underline"
-            >
-              {d.bucket === "external"
-                ? <Link className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                : <ExternalLink className="h-3.5 w-3.5 shrink-0" />}
-              <span className="truncate">{d.label || d.path.split("/").pop()}</span>
-              <span className="shrink-0 text-xs text-muted-foreground">
-                {format(new Date(d.uploaded_at), "dd MMM yyyy")}
-              </span>
-            </a>
-            <button
-              onClick={() => del(d.id, d)}
-              className="cursor-pointer rounded p-1 text-urgent opacity-0 transition hover:bg-urgent/10 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
-              aria-label="Delete document"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </li>
-        ))}
+        {docs.map((d: any) => {
+  const isExternal = d.bucket === "external";
+  return (
+    <li key={d.id} className="group flex items-center justify-between rounded-md bg-muted/40 px-2 py-1.5 text-sm">
+      
+        href="#"
+        onClick={(e) => openDoc(e, d)}
+        className="flex flex-1 cursor-pointer items-center gap-2 truncate hover:underline"
+      >
+        {isExternal
+          ? <Link className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          : <ExternalLink className="h-3.5 w-3.5 shrink-0" />}
+        <span className="truncate">{d.label || d.path.split("/").pop()}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {format(new Date(d.uploaded_at), "dd MMM yyyy")}
+        </span>
+      </a>
+      <button
+        onClick={() => del(d.id, d)}
+        className="cursor-pointer rounded p-1 text-urgent opacity-0 transition hover:bg-urgent/10 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
+        aria-label="Delete document"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </li>
+  );
+})}
         {docs.length === 0 && <li className="text-xs text-muted-foreground">No documents yet.</li>}
       </ul>
 
