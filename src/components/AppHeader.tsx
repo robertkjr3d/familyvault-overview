@@ -1,3 +1,4 @@
+import { addDays } from "date-fns";
 import { useEffect, useState } from "react";
 import { Bell, Crown, Share2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -87,12 +88,34 @@ export function AppHeader() {
   const { data: alertCount = 0 } = useQuery({
     queryKey: ["alert-count"],
     queryFn: async () => {
-      const tables = ["properties", "loans", "insurance_policies", "investments", "health_conditions"];
+      const today = new Date();
+      const horizonStr = addDays(today, 30).toISOString().slice(0, 10);
+      const todayStr = today.toISOString();
+
+      const dateFields: Array<{ table: string; field: string }> = [
+        { table: "insurance_policies", field: "next_due_date" },
+        { table: "insurance_policies", field: "end_date" },
+        { table: "properties",         field: "fixed_rate_end" },
+        { table: "loans",              field: "reprice_date" },
+        { table: "savings_accounts",   field: "maturity_date" },
+      ];
+
       let count = 0;
-      for (const t of tables) {
-        const { count: c } = await supabase.from(t as any).select("*", { count: "exact", head: true }).in("status", ["urgent", "review"]);
-        count += c ?? 0;
+      for (const { table, field } of dateFields) {
+        const { data } = await supabase
+          .from(table as any)
+          .select(field)
+          .lte(field, horizonStr);
+        count += (data ?? []).filter((r: any) => r[field] != null).length;
       }
+
+      const { data: reminders } = await supabase
+        .from("reminders")
+        .select("id")
+        .eq("dismissed", false)
+        .lte("remind_at", todayStr);
+      count += (reminders ?? []).length;
+
       return count;
     },
     refetchInterval: 5_000,
