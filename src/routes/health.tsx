@@ -10,8 +10,8 @@ import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
 import { sortByStatus } from "@/lib/sort";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { NotesEditor } from "@/components/loan/NotesEditor";
+import { HistoryLog } from "@/components/loan/HistoryLog";
 import { DocumentsList } from "@/components/loan/DocumentsList";
-import { FileText, Paperclip } from "lucide-react";
 import { useEditRecord } from "@/components/EditRecordButton";
 
 export const Route = createFileRoute("/health")({
@@ -101,10 +101,13 @@ function HealthRow({ c, onStatus, onDelete }: { c: any; onStatus: (s: any) => vo
             <p className="text-sm text-foreground/80">{c.details}</p>
           </Section>
         )}
-        <CollapsibleSection icon={<FileText className="h-4 w-4" />} title="Notes">
+        <CollapsibleSection icon={<span>📝</span>} title="Notes">
           <NotesEditor table="health_conditions" queryKey="health" id={c.id} value={c.notes} />
         </CollapsibleSection>
-        <CollapsibleSection icon={<Paperclip className="h-4 w-4" />} title="Documents">
+        <CollapsibleSection icon={<span>🔄</span>} title="Add an Update">
+          <HistoryLog entityType="health" entityId={c.id} />
+        </CollapsibleSection>
+        <CollapsibleSection icon={<span>📎</span>} title="Documents">
           <DocumentsList entityType="health" entityId={c.id} />
         </CollapsibleSection>
       </RecordCard>
