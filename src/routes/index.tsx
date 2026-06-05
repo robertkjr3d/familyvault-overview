@@ -136,7 +136,7 @@ function Dashboard() {
 
   // Bell count: only overdue or due within 30 days
   const upcomingAlerts = upcoming.filter((u) => u.daysLeft <= 30);
-  const alertCount = urgent.length + review.length + upcomingAlerts.filter((u) => u.daysLeft <= 7).length;
+  const alertCount = urgent.length + review.length + upcomingAlerts.length;
 
   const dueToday = upcoming.find((u) => u.date === today.toISOString().slice(0, 10));
 
@@ -203,9 +203,6 @@ function Dashboard() {
       {/* NEEDS ATTENTION */}
       {urgent.length > 0 && <PrioritySection title="Needs Attention" items={urgent} />}
 
-      {/* REVIEW NEEDED — moved above cash flow bars */}
-      {review.length > 0 && <PrioritySection title="Review Needed" items={review} muted showDate />}
-
       {/* DUE IN NEXT 90 DAYS */}
       <section className="rounded-2xl border border-border bg-card p-4">
         <div className="mb-3 flex items-center justify-between">
@@ -235,6 +232,9 @@ function Dashboard() {
           </ul>
         )}
       </section>
+
+      {/* REVIEW NEEDED */}
+      {review.length > 0 && <PrioritySection title="Review Needed" items={review} muted showDate />}
 
       {/* MONTHLY CASH FLOW BARS */}
       <section className="rounded-2xl border border-border bg-card p-4">
