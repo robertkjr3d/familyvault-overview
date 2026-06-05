@@ -1,3 +1,4 @@
+import { HistoryLog } from "@/components/loan/HistoryLog";
 import { AddRecordFab } from "@/components/AddRecordFab";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -170,6 +171,9 @@ function PropertyRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) => 
 
         <CollapsibleSection icon={<span>📝</span>} title="Notes">
           <NotesLog entityType="property" entityId={p.id} />
+        </CollapsibleSection>
+        <CollapsibleSection icon={<span>🔄</span>} title="Add an Update">
+          <HistoryLog entityType="property" entityId={p.id} />
         </CollapsibleSection>
         <CollapsibleSection icon={<span>📎</span>} title="Documents">
           <DocumentsList entityType="property" entityId={p.id} />
