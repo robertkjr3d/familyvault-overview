@@ -121,7 +121,7 @@ function LoanRow({ l, today, onStatus, onDelete }: { l: any; today: Date; onStat
           <NotesEditor table="loans" queryKey="loans" id={l.id} value={l.notes} />
         </CollapsibleSection>
 
-        <CollapsibleSection icon={<span>🕐</span>} title="History">
+        <CollapsibleSection icon={<span>🔄</span>} title="Add an Update">
           <HistoryLog entityType="loan" entityId={l.id} />
         </CollapsibleSection>
 
