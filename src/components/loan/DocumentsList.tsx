@@ -86,7 +86,6 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
   }
 
   async function openDoc(e: React.MouseEvent, doc: any) {
-    e.preventDefault();
     if (doc.bucket === "external") {
       window.open(doc.path, "_blank", "noopener,noreferrer");
       return;
@@ -108,7 +107,7 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
   return (
     <div className="space-y-2">
       <ul className="space-y-1.5">
-        {docs.map((d: any) => {
+       {docs.map((d: any) => {
           const isExternal = d.bucket === "external";
           const docIcon = isExternal
             ? <Link className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -116,18 +115,19 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
           const docLabel = d.label || d.path.split("/").pop();
           return (
             <li key={d.id} className="group flex items-center justify-between rounded-md bg-muted/40 px-2 py-1.5 text-sm">
-              
-                href="#"
+              <button
+                type="button"
                 onClick={(e) => openDoc(e, d)}
-                className="flex flex-1 cursor-pointer items-center gap-2 truncate hover:underline"
+                className="flex flex-1 cursor-pointer items-center gap-2 truncate hover:underline text-left"
               >
                 {docIcon}
                 <span className="truncate">{docLabel}</span>
                 <span className="shrink-0 text-xs text-muted-foreground">
                   {format(new Date(d.uploaded_at), "dd MMM yyyy")}
                 </span>
-              </a>
+              </button>
               <button
+                type="button"
                 onClick={() => del(d.id, d)}
                 className="cursor-pointer rounded p-1 text-urgent opacity-0 transition hover:bg-urgent/10 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
                 aria-label="Delete document"
