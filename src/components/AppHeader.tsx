@@ -110,11 +110,11 @@ export function AppHeader() {
       }
 
       const { data: reminders } = await supabase
-        .from("reminders")
-        .select("id")
-        .eq("dismissed", false)
-        .lte("remind_at", todayStr);
-      count += (reminders ?? []).length;
+  .from("reminders")
+  .select("id")
+  .eq("dismissed", false)
+  .lte("remind_at", horizonStr);
+count += (reminders ?? []).length;
 
       return count;
     },
