@@ -42,7 +42,7 @@ async function fetchDueSoonItems(today: Date): Promise<DueSoonItem[]> {
     supabase.from("properties").select("*").lte("fixed_rate_end", horizonStr).then((r) => r.data ?? []),
     supabase.from("loans").select("*").lte("reprice_date", horizonStr).then((r) => r.data ?? []),
     supabase.from("savings_accounts").select("*").lte("maturity_date", horizonStr).then((r) => r.data ?? []),
-    supabase.from("reminders").select("*").eq("dismissed", false).lte("remind_at", todayStr).then((r) => r.data ?? []),
+    supabase.from("reminders").select("*").eq("dismissed", false).lte("remind_at", horizonStr).then((r) => r.data ?? []),
   ]);
 
   for (const p of insurance) {
