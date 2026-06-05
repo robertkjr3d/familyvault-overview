@@ -79,7 +79,6 @@ export function BottomTabs() {
     );
   }
 
-  // Tablet / desktop: full bar
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-card/95 backdrop-blur">
       <ul className="mx-auto grid max-w-3xl grid-cols-9">
@@ -96,10 +95,12 @@ function TabItem({ t }: { t: Tab }) {
       <Link
         to={t.to}
         activeOptions={{ exact: t.to === "/" }}
-        className="flex flex-col items-center gap-0.5 py-2.5 text-[10px] text-muted-foreground transition-colors data-[status=active]:text-primary"
+        className="group relative flex flex-col items-center py-2 text-[10px] text-muted-foreground transition-colors data-[status=active]:text-primary"
       >
-        <Icon className="h-5 w-5" />
-        <span className="font-medium">{t.label}</span>
+        <span className="flex flex-col items-center gap-0.5 rounded-xl px-3 py-1 transition-colors group-data-[status=active]:bg-primary/10">
+          <Icon className="h-5 w-5" />
+          <span className="font-medium">{t.label}</span>
+        </span>
       </Link>
     </li>
   );
