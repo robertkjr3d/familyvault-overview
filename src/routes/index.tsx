@@ -7,7 +7,7 @@ import { MemberFilterBar } from "@/components/MemberFilterBar";
 import { MemberTag } from "@/components/MemberTag";
 import { StatusBadge } from "@/components/StatusToggle";
 import { useAppStore } from "@/lib/store";
-import { addDays, isBefore, parseISO } from "date-fns";
+import { addDays, isBefore, parseISO, isPast } from "date-fns";
 import { LifetimeChart } from "@/components/LifetimeChart";
 import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown } from "lucide-react";
 import { useState } from "react";
@@ -45,6 +45,18 @@ function Dashboard() {
         investments: invs.data ?? [],
         savings: savings.data ?? [],
       };
+    },
+  });
+const { data: remindersData } = useQuery({
+    queryKey: ["reminders-dashboard", memberFilter],
+    queryFn: async () => {
+      const horizonStr = addDays(new Date(), 90).toISOString().slice(0, 10);
+      const { data } = await supabase
+        .from("reminders")
+        .select("*")
+        .eq("dismissed", false)
+        .lte("remind_at", horizonStr);
+      return data ?? [];
     },
   });
 
@@ -119,6 +131,22 @@ function Dashboard() {
       if (isBefore(d, horizon90)) {
         upcoming.push({ date: s.maturity_date, label: `${s.institution} FD matures`, amount: s.balance, member_id: s.member_id, href: "/savings", recordId: s.id, daysLeft: daysUntil(s.maturity_date) });
       }
+    }
+  }
+
+  for (const r of remindersData ?? []) {
+    const dateStr = r.remind_at.slice(0, 10);
+    const d = parseISO(dateStr);
+    if (isBefore(d, horizon90)) {
+      upcoming.push({
+        date: dateStr,
+        label: r.what ?? "Reminder",
+        amount: null,
+        member_id: null,
+        href: "/",
+        recordId: r.id,
+        daysLeft: daysUntil(dateStr),
+      });
     }
   }
 
