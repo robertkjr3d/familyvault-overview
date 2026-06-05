@@ -40,7 +40,7 @@ export function ReminderButton({ entityType, entityId }: { entityType: string; e
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <Button size="sm" variant="outline">
-          <Bell className="mr-1 h-3.5 w-3.5 text-yellow-500" /> Set Reminder
+          <Bell className="mr-1 h-3.5 w-3.5 fill-yellow-500 text-yellow-500" /> Set Reminder
         </Button>
       </SheetTrigger>
       <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
