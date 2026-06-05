@@ -1,16 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Trash2 } from "lucide-react";
+import { Sparkles, Trash2, Bold, Italic, List } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import ReactMarkdown from "react-markdown";
 
-/**
- * Silent auto-save notes editor.
- * - Saves automatically 1s after the user stops typing.
- * - Shows a subtle "Saved ✓" indicator for 2s after a save.
- */
 export function NotesEditor({
   table, queryKey, id, value,
 }: {
@@ -19,10 +15,12 @@ export function NotesEditor({
   const [text, setText] = useState(value ?? "");
   const [justSaved, setJustSaved] = useState(false);
   const [summarising, setSummarising] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const qc = useQueryClient();
   const lastSavedRef = useRef(value ?? "");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setText(value ?? "");
@@ -64,7 +62,7 @@ export function NotesEditor({
         .split(/\n+/)
         .map((l) => l.trim())
         .filter(Boolean)
-        .map((l) => `• ${l.replace(/^[•\-\*]\s*/, "")}`)
+        .map((l) => `- ${l.replace(/^[•\-\*]\s*/, "")}`)
         .join("\n");
       setText(bullets);
       void commit(bullets);
@@ -73,26 +71,115 @@ export function NotesEditor({
     }, 300);
   }
 
+  function insertFormat(type: "bold" | "italic" | "bullet") {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const selected = text.slice(start, end);
+    let insertion = "";
+    let cursorOffset = 0;
+
+    if (type === "bold") {
+      insertion = `**${selected || "bold text"}**`;
+      cursorOffset = selected ? insertion.length : 2;
+    } else if (type === "italic") {
+      insertion = `*${selected || "italic text"}*`;
+      cursorOffset = selected ? insertion.length : 1;
+    } else if (type === "bullet") {
+      const lineStart = text.lastIndexOf("\n", start - 1) + 1;
+      const before = text.slice(0, lineStart);
+      const after = text.slice(lineStart);
+      const next = `- ${after}`;
+      const updated = before + next;
+      const fullNext = updated + text.slice(updated.length);
+      setText(fullNext);
+      void onChange(fullNext);
+      setTimeout(() => {
+        el.selectionStart = lineStart + 2;
+        el.selectionEnd = lineStart + 2;
+        el.focus();
+      }, 0);
+      return;
+    }
+
+    const next = text.slice(0, start) + insertion + text.slice(end);
+    setText(next);
+    void onChange(next);
+    setTimeout(() => {
+      el.selectionStart = start + cursorOffset;
+      el.selectionEnd = start + cursorOffset;
+      el.focus();
+    }, 0);
+  }
+
   return (
     <div className="space-y-2">
+      <div className="flex items-center gap-1 border-b border-border/40 pb-1.5">
+        <button
+          type="button"
+          onClick={() => insertFormat("bold")}
+          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          title="Bold"
+        >
+          <Bold className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => insertFormat("italic")}
+          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          title="Italic"
+        >
+          <Italic className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => insertFormat("bullet")}
+          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          title="Bullet"
+        >
+          <List className="h-3.5 w-3.5" />
+        </button>
+        <div className="ml-auto">
+          <button
+            type="button"
+            onClick={() => setPreviewing((p) => !p)}
+            className="rounded px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground border border-border/40"
+          >
+            {previewing ? "Edit" : "Preview"}
+          </button>
+        </div>
+      </div>
+
       <div className="relative">
-        <Textarea
-          value={text}
-          onChange={(e) => onChange(e.target.value)}
-          onBlur={() => {
-            if (debounceRef.current) clearTimeout(debounceRef.current);
-            void commit(text);
-          }}
-          rows={6}
-          placeholder="Detailed notes, background, advisor info…"
-          className="text-sm"
-        />
+        {previewing ? (
+          <div className="prose prose-sm min-h-[96px] max-w-none rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground">
+            {text
+              ? <ReactMarkdown>{text}</ReactMarkdown>
+              : <p className="text-muted-foreground italic">Nothing to preview.</p>
+            }
+          </div>
+        ) : (
+          <Textarea
+            ref={textareaRef}
+            value={text}
+            onChange={(e) => onChange(e.target.value)}
+            onBlur={() => {
+              if (debounceRef.current) clearTimeout(debounceRef.current);
+              void commit(text);
+            }}
+            rows={6}
+            placeholder="Detailed notes, background, advisor info…"
+            className="text-sm"
+          />
+        )}
         <span
           className={`pointer-events-none absolute right-2 top-2 text-[11px] text-muted-foreground transition-opacity duration-300 ${justSaved ? "opacity-100" : "opacity-0"}`}
         >
           Saved ✓
         </span>
       </div>
+
       <div className="flex items-center justify-between gap-2">
         <Button
           type="button"
