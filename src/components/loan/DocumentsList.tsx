@@ -90,9 +90,10 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
       window.open(doc.path, "_blank", "noopener,noreferrer");
       return;
     }
+    const win = window.open("", "_blank", "noopener,noreferrer");
     const { data } = await supabase.storage.from("vault-docs").createSignedUrl(doc.path, 3600);
     const url = data?.signedUrl || supabase.storage.from("vault-docs").getPublicUrl(doc.path).data.publicUrl;
-    window.open(url, "_blank", "noopener,noreferrer");
+    if (win) win.location.href = url;
   }
 
   async function del(id: string, doc: any) {
