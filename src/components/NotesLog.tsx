@@ -85,7 +85,7 @@ export function NotesLog({ entityType, entityId }: { entityType: string; entityI
               </div>
               <button
                 onClick={() => del(e.id)}
-                className="cursor-pointer rounded p-1 text-muted-foreground opacity-0 transition hover:bg-urgent/10 hover:text-urgent group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
+                className="cursor-pointer rounded p-1 text-urgent opacity-0 transition hover:bg-urgent/10 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
                 aria-label="Delete note"
               >
                 <Trash2 className="h-3.5 w-3.5" />
