@@ -13,7 +13,8 @@ import { useEditRecord } from "@/components/EditRecordButton";
 import { freqLabel } from "@/lib/options";
 import { DocumentsList } from "@/components/loan/DocumentsList";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
-import { FileText } from "lucide-react";
+import { HistoryLog } from "@/components/loan/HistoryLog";
+import { NotesEditor } from "@/components/loan/NotesEditor";
 
 export const Route = createFileRoute("/insurance")({
   component: InsurancePage,
@@ -106,11 +107,22 @@ function InsuranceRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) =>
           <FieldRow label="End" value={fmtDate(p.end_date)} />
           <FieldRow label="Next due" value={fmtDate(p.next_due_date)} />
         </Section>
-        <CollapsibleSection icon={<FileText className="h-4 w-4" />} title="Documents">
+
+        <CollapsibleSection icon={<span>📝</span>} title="Notes">
+          <NotesEditor
+            table="insurance_policies"
+            queryKey="insurance"
+            id={p.id}
+            value={p.notes}
+          />
+        </CollapsibleSection>
+
+        <CollapsibleSection icon={<span>🔄</span>} title="Add an Update">
+          <HistoryLog entityType="insurance" entityId={p.id} />
+        </CollapsibleSection>
+
+        <CollapsibleSection icon={<span>📎</span>} title="Documents">
           <DocumentsList entityType="insurance" entityId={p.id} />
-          <p className="mt-2 text-[11px] italic text-muted-foreground">
-            AI document reading coming soon — it will auto-fill your policy details.
-          </p>
         </CollapsibleSection>
       </RecordCard>
       {edit.element}
