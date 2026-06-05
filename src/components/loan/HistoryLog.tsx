@@ -63,7 +63,7 @@ export function HistoryLog({ entityType, entityId }: { entityType: string; entit
             </div>
             <button
               onClick={() => del(e.id)}
-              className="cursor-pointer rounded p-1 text-muted-foreground opacity-0 transition hover:bg-urgent/10 hover:text-urgent group-hover:opacity-100"
+              className="cursor-pointer rounded p-1 text-muted-foreground opacity-0 transition hover:bg-urgent/10 hover:text-urgent group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
               aria-label="Delete update"
             >
               <Trash2 className="h-3.5 w-3.5" />
