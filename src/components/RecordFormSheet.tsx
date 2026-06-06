@@ -10,8 +10,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { recordConfigs, type FieldDef, type SelectOption } from "@/lib/recordConfigs";
 import { MoneyInput } from "./MoneyInput";
-import { X } from "lucide-react";
+import { X, Bell } from "lucide-react";
 import { addDays, parseISO } from "date-fns";
+
+const ALERT_FIELDS = new Set(["next_due_date", "end_date", "fixed_rate_end", "reprice_date", "maturity_date"]);
 
 export function RecordFormSheet({
   configKey, open, onOpenChange, initial, recordId,
@@ -146,8 +148,11 @@ export function RecordFormSheet({
               {sec.fields.map((f) => (
                 <div key={f.key} className="space-y-1.5">
                   <Label htmlFor={f.key} className="text-xs">
-                    {f.label}
-                    {f.required && <span className="text-urgent"> *</span>}
+                    <span className="flex items-center gap-1">
+                      {f.label}
+                      {ALERT_FIELDS.has(f.key) && <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" />}
+                      {f.required && <span className="text-urgent"> *</span>}
+                    </span>
                   </Label>
                   <FieldInput
                     f={f}
