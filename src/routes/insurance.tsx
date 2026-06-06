@@ -83,12 +83,11 @@ function InsurancePage() {
   );
 }
 
-function AlertLabel({ text, date }: { text: string; date?: string | null }) {
-  const isAlert = date != null && new Date(date) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+function AlertLabel({ text }: { text: string }) {
   return (
     <span className="flex items-center gap-1">
       {text}
-      {isAlert && <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" />}
+      <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" />
     </span>
   );
 }
@@ -117,8 +116,8 @@ function InsuranceRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) =>
           <FieldRow label="Policy #" value={p.policy_number} />
           <FieldRow label="Sum assured" value={fmtMoney(p.sum_assured)} />
           <FieldRow label="Start" value={fmtDate(p.start_date)} />
-          <FieldRow label={<AlertLabel text="End" date={p.end_date} />} value={fmtDate(p.end_date)} />
-          <FieldRow label={<AlertLabel text="Next due" date={p.next_due_date} />} value={fmtDate(p.next_due_date)} />
+          <FieldRow label={<AlertLabel text="End" />} value={fmtDate(p.end_date)} />
+          <FieldRow label={<AlertLabel text="Next due" />} value={fmtDate(p.next_due_date)} />
         </Section>
 
         <CollapsibleSection icon={<span>📝</span>} title="Notes">
