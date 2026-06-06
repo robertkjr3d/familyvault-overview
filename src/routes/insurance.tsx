@@ -106,8 +106,8 @@ function InsuranceRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) =>
           <FieldRow label="Policy #" value={p.policy_number} />
           <FieldRow label="Sum assured" value={fmtMoney(p.sum_assured)} />
           <FieldRow label="Start" value={fmtDate(p.start_date)} />
-          <FieldRow label="End" value={fmtDate(p.end_date)} />
-          <FieldRow label="Next due" value={fmtDate(p.next_due_date)} />
+          <FieldRow label={<AlertLabel text="End" date={p.end_date} />} value={fmtDate(p.end_date)} />
+          <FieldRow label={<AlertLabel text="Next due" date={p.next_due_date} />} value={fmtDate(p.next_due_date)} />
         </Section>
 
         <CollapsibleSection icon={<span>📝</span>} title="Notes">
