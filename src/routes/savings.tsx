@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useEditRecord } from "@/components/EditRecordButton";
 import { ReminderButton } from "@/components/loan/ReminderButton";
+import { RemindersList } from "@/components/loan/RemindersList";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { NotesEditor } from "@/components/loan/NotesEditor";
 import { HistoryLog } from "@/components/loan/HistoryLog";
@@ -177,6 +178,7 @@ function SavingsRow({ a, onStatus, onDelete }: { a: any; onStatus: (s: any) => v
           <DocumentsList entityType="savings" entityId={a.id} />
         </CollapsibleSection>
 
+        <RemindersList entityType="savings" entityId={a.id} />
         <div className="flex justify-end pt-1">
           <ReminderButton entityType="savings" entityId={a.id} />
         </div>
