@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo, useRef, useState } from "react";
-import { Camera, Plus, Search, Trash2, ChevronDown, Folder as FolderIcon } from "lucide-react";
+import { Camera, Plus, Search, Trash2, ChevronDown, Folder as FolderIcon, X } from "lucide-react";
 import { ReminderButton } from "@/components/loan/ReminderButton";
 import { RemindersList } from "@/components/loan/RemindersList";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -522,7 +522,14 @@ function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => voi
       </div>
       <div className="space-y-1.5">
         <Label className="text-xs">Warranty date</Label>
-        <Input type="date" value={warranty} onChange={(e) => setWarranty(e.target.value)} className="w-full max-w-full" />
+        <div className="relative flex items-center">
+          <Input type="date" value={warranty} onChange={(e) => setWarranty(e.target.value)} className="h-7 w-full pr-8" />
+          {warranty && (
+            <button type="button" onClick={() => setWarranty("")} className="absolute right-2 flex items-center justify-center text-muted-foreground hover:text-foreground" aria-label="Clear date">
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
       <div className="space-y-1.5">
         <Label className="text-xs">Action / notes</Label>
@@ -593,8 +600,15 @@ function EditItemForm({ item, onDone }: { item: Item; onDone: () => void }) {
         <Input value={name} onChange={(e) => setName(e.target.value)} />
       </div>
       <div className="space-y-1.5">
-        <Label className="text-xs">Category</Label>
-        <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Electronics" />
+        <Label className="text-xs">Warranty date</Label>
+        <div className="relative flex items-center">
+          <Input type="date" value={warranty} onChange={(e) => setWarranty(e.target.value)} className="h-7 w-full pr-8" />
+          {warranty && (
+            <button type="button" onClick={() => setWarranty("")} className="absolute right-2 flex items-center justify-center text-muted-foreground hover:text-foreground" aria-label="Clear date">
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
       <div className="space-y-1.5">
         <Label className="text-xs">Warranty date</Label>
