@@ -116,12 +116,11 @@ function SavingsPage() {
   );
 }
 
-function AlertLabel({ text, date }: { text: string; date?: string | null }) {
-  const isAlert = date != null && new Date(date) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+function AlertLabel({ text }: { text: string }) {
   return (
     <span className="flex items-center gap-1">
       {text}
-      {isAlert && <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" />}
+      <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" />
     </span>
   );
 }
@@ -157,7 +156,7 @@ function SavingsRow({ a, onStatus, onDelete }: { a: any; onStatus: (s: any) => v
         <Section title="Account">
           <FieldRow label="Balance" value={fmtMoney(a.balance)} />
           <FieldRow label="Interest rate" value={fmtPct(a.interest_rate)} />
-          <FieldRow label={<AlertLabel text="Maturity" date={a.maturity_date} />} value={fmtDate(a.maturity_date)} />
+          <FieldRow label={<AlertLabel text="Maturity" />} value={fmtDate(a.maturity_date)} />
           <FieldRow label="Last updated" value={fmtDate(a.last_updated)} />
         </Section>
 
