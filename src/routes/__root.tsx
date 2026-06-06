@@ -133,7 +133,7 @@ function RootComponent() {
           <Outlet />
         </main>
         <BottomTabs />
-        <Toaster position="bottom-right" richColors closeButton />
+        <Toaster position="bottom-right" richColors closeButton offset={{ bottom: 80 }} />
       </div>
     </QueryClientProvider>
   );
