@@ -28,6 +28,18 @@ type DueSoonItem = {
   kind: string;
 };
 
+function reminderHref(entityType: string | null | undefined): string {
+  switch (entityType) {
+    case "loan":       return "/loans";
+    case "property":   return "/property";
+    case "insurance":  return "/insurance";
+    case "savings":    return "/savings";
+    case "investment": return "/investments";
+    case "health":     return "/health";
+    case "inventory":  return "/inventory";
+    default:           return "/";
+  }
+}
 async function fetchDueSoonItems(today: Date): Promise<DueSoonItem[]> {
   const horizonStr = addDays(today, 30).toISOString().slice(0, 10);
   const todayStr = today.toISOString();
@@ -60,7 +72,9 @@ async function fetchDueSoonItems(today: Date): Promise<DueSoonItem[]> {
   }
   for (const r of reminders) {
     const dateStr = r.remind_at.slice(0, 10);
-    items.push({ label: r.what ?? "Reminder", date: dateStr, daysLeft: daysUntil(dateStr), amount: null, href: "/", recordId: r.id, member_id: null, icon: Bell, kind: "Reminder" });
+    const href = reminderHref(r.entity_type);
+    const recordId = r.entity_id ?? r.id;
+    items.push({ label: r.what ?? "Reminder", date: dateStr, daysLeft: daysUntil(dateStr), amount: null, href, recordId, member_id: null, icon: Bell, kind: "Reminder" });
   }
 
   return items.sort((a, b) => a.date.localeCompare(b.date));
