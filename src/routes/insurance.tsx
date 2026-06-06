@@ -15,6 +15,7 @@ import { DocumentsList } from "@/components/loan/DocumentsList";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { HistoryLog } from "@/components/loan/HistoryLog";
 import { NotesEditor } from "@/components/loan/NotesEditor";
+import { ReminderButton } from "@/components/loan/ReminderButton";
 
 export const Route = createFileRoute("/insurance")({
   component: InsurancePage,
@@ -124,6 +125,10 @@ function InsuranceRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) =>
         <CollapsibleSection icon={<span>📎</span>} title="Documents">
           <DocumentsList entityType="insurance" entityId={p.id} />
         </CollapsibleSection>
+
+        <div className="flex justify-end pt-1">
+          <ReminderButton entityType="insurance" entityId={p.id} />
+        </div>
       </RecordCard>
       {edit.element}
     </HashHighlight>
