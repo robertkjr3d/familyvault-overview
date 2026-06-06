@@ -63,12 +63,11 @@ function LoansPage() {
   );
 }
 
-function AlertLabel({ text, date }: { text: string; date?: string | null }) {
-  const isAlert = date != null && new Date(date) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+function AlertLabel({ text }: { text: string }) {
   return (
     <span className="flex items-center gap-1">
       {text}
-      {isAlert && <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" />}
+      <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" />
     </span>
   );
 }
@@ -115,7 +114,7 @@ function LoanRow({ l, today, onStatus, onDelete }: { l: any; today: Date; onStat
           <FieldRow label="Loan start" value={fmtDate(l.start_date)} />
           <FieldRow label="Term (years)" value={l.term_years ?? "—"} />
           <FieldRow label="Current rate" value={l.rate_label || fmtPct(l.rate)} />
-          <FieldRow label={<AlertLabel text="Reprice date" date={l.reprice_date} />} value={fmtDate(l.reprice_date)} />
+          <FieldRow label={<AlertLabel text="Reprice date" />} value={fmtDate(l.reprice_date)} />
           <FieldRow
             label="Est. monthly repayment"
             value={calcPmt ? <span className="font-bold text-primary">{fmtMoney(calcPmt)}</span> : "—"}
