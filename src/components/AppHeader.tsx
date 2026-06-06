@@ -32,7 +32,8 @@ export function AppHeader() {
   const { user } = useAuthSession();
   const queryClient = useQueryClient();
   const [alertsOpen, setAlertsOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
+  const shareOpen = useAppStore((s) => s.shareOpen);
+  const setShareOpen = useAppStore((s) => s.setShareOpen);
   const [shareEmail, setShareEmail] = useState("");
   const [shareRole, setShareRole] = useState<"member" | "viewer">("member");
   const [transferEmail, setTransferEmail] = useState("");
