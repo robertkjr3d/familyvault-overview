@@ -133,7 +133,7 @@ function RootComponent() {
           <Outlet />
         </main>
         <BottomTabs />
-        <Toaster position="top-center" richColors closeButton />
+        <Toaster position="bottom-right" richColors closeButton />
       </div>
     </QueryClientProvider>
   );
