@@ -1,5 +1,6 @@
 import { HistoryLog } from "@/components/loan/HistoryLog";
 import { AddRecordFab } from "@/components/AddRecordFab";
+import { Bell } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
