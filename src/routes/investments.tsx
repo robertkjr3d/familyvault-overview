@@ -15,6 +15,7 @@ import { NotesEditor } from "@/components/loan/NotesEditor";
 import { HistoryLog } from "@/components/loan/HistoryLog";
 import { DocumentsList } from "@/components/loan/DocumentsList";
 import { ReminderButton } from "@/components/loan/ReminderButton";
+import { RemindersList } from "@/components/loan/RemindersList";
 
 export const Route = createFileRoute("/investments")({
   component: InvestmentsPage,
@@ -121,6 +122,7 @@ function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: an
           <DocumentsList entityType="investment" entityId={inv.id} />
         </CollapsibleSection>
 
+        <RemindersList entityType="investment" entityId={inv.id} />
         <div className="flex justify-end pt-1">
           <ReminderButton entityType="investment" entityId={inv.id} />
         </div>
