@@ -38,6 +38,7 @@ function SettingsPage() {
   const qc = useQueryClient();
   const { data: members = [] } = useMembers();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
+  const setShareOpen = useAppStore((s) => s.setShareOpen);
   const { data: settings } = useQuery({
     queryKey: ["app_settings", activeHouseholdId],
     enabled: !!activeHouseholdId,
@@ -259,6 +260,12 @@ function SettingsPage() {
         <h2 className="mb-3 text-sm font-bold">Account</h2>
         <div className="flex flex-col gap-2">
           <button
+            onClick={() => setShareOpen(true)}
+            className="rounded-lg border border-border px-3 py-2 text-sm font-semibold"
+          >
+            Share household access
+          </button>
+          <button
             onClick={() => void supabase.auth.signOut()}
             className="rounded-lg border border-urgent/40 px-3 py-2 text-sm font-semibold text-urgent"
           >
@@ -266,7 +273,6 @@ function SettingsPage() {
           </button>
         </div>
       </section>
-
       {/* About */}
       <section className="rounded-2xl border border-border bg-card p-4 text-sm">
         <h2 className="mb-2 text-sm font-bold">About</h2>
