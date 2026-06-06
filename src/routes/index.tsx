@@ -79,6 +79,18 @@ const { data: remindersData } = useQuery({
     loans.reduce((s: number, l: any) => s + (Number(l.monthly_payment) || 0), 0);
   const netCashFlow = monthlyIn - monthlyOut;
 
+  function reminderHref(entityType: string | null | undefined): string {
+    switch (entityType) {
+      case "loan":       return "/loans";
+      case "property":   return "/property";
+      case "insurance":  return "/insurance";
+      case "savings":    return "/savings";
+      case "investment": return "/investments";
+      case "health":     return "/health";
+      case "inventory":  return "/inventory";
+      default:           return "/";
+    }
+  }
   const horizon90 = addDays(today, 90);
 
   type Upcoming = {
@@ -138,13 +150,15 @@ const { data: remindersData } = useQuery({
     const dateStr = r.remind_at.slice(0, 10);
     const d = parseISO(dateStr);
     if (isBefore(d, horizon90)) {
+      const href = reminderHref(r.entity_type);
+      const recordId = r.entity_id ?? r.id;
       upcoming.push({
         date: dateStr,
         label: r.what ?? "Reminder",
         amount: null,
         member_id: null,
-        href: "/",
-        recordId: r.id,
+        href,
+        recordId,
         daysLeft: daysUntil(dateStr),
       });
     }
