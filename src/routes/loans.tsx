@@ -15,6 +15,7 @@ import { HistoryLog } from "@/components/loan/HistoryLog";
 import { DocumentsList } from "@/components/loan/DocumentsList";
 import { RateSchedule } from "@/components/loan/RateSchedule";
 import { ReminderButton } from "@/components/loan/ReminderButton";
+import { RemindersList } from "@/components/loan/RemindersList";
 import { monthlyPayment, remainingBalance, monthsSince } from "@/lib/loanMath";
 import { useToday } from "@/lib/today";
 import { useEditRecord } from "@/components/EditRecordButton";
@@ -129,6 +130,7 @@ function LoanRow({ l, today, onStatus, onDelete }: { l: any; today: Date; onStat
           <DocumentsList entityType="loan" entityId={l.id} />
         </CollapsibleSection>
 
+        <RemindersList entityType="loan" entityId={l.id} />
         <div className="flex justify-end pt-1">
           <ReminderButton entityType="loan" entityId={l.id} />
         </div>
