@@ -268,18 +268,6 @@ count += (reminders ?? []).length;
                 <Share2 className="mr-1 h-4 w-4" /> Share
               </Button>
             )}
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                void supabase.auth.signOut();
-              }}
-              className="px-2 sm:px-3"
-            >
-              <span className="hidden sm:inline">Sign out</span>
-              <span className="sm:hidden text-xs">Out</span>
-            </Button>
           </div>
         </div>
       </header>
