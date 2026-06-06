@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMemo, useRef, useState } from "react";
 import { Camera, Plus, Search, Trash2, ChevronDown, Folder as FolderIcon } from "lucide-react";
 import { ReminderButton } from "@/components/loan/ReminderButton";
+import { RemindersList } from "@/components/loan/RemindersList";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -603,6 +604,7 @@ function EditItemForm({ item, onDone }: { item: Item; onDone: () => void }) {
         <Label className="text-xs">Action / notes</Label>
         <Textarea rows={2} value={action} onChange={(e) => setAction(e.target.value)} />
       </div>
+      <RemindersList entityType="inventory" entityId={item.id} />
       <div className="flex justify-end pt-1">
         <ReminderButton entityType="inventory" entityId={item.id} />
       </div>
