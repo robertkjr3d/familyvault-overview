@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo, useRef, useState } from "react";
 import { Camera, Plus, Search, Trash2, ChevronDown, Folder as FolderIcon } from "lucide-react";
+import { ReminderButton } from "@/components/loan/ReminderButton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -602,6 +603,10 @@ function EditItemForm({ item, onDone }: { item: Item; onDone: () => void }) {
         <Label className="text-xs">Action / notes</Label>
         <Textarea rows={2} value={action} onChange={(e) => setAction(e.target.value)} />
       </div>
+      <div className="flex justify-end pt-1">
+        <ReminderButton entityType="inventory" entityId={item.id} />
+      </div>
+
       <div className="flex gap-2">
         <Button variant="outline" className="flex-1" onClick={onDone}>Cancel</Button>
         <Button className="flex-1" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save changes"}</Button>
