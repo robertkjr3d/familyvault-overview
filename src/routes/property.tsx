@@ -16,6 +16,7 @@ import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { NotesEditor } from "@/components/loan/NotesEditor";
 import { DocumentsList } from "@/components/loan/DocumentsList";
 import { ReminderButton } from "@/components/loan/ReminderButton";
+import { RemindersList } from "@/components/loan/RemindersList";
 
 export const Route = createFileRoute("/property")({
   component: PropertyPage,
@@ -180,6 +181,7 @@ function PropertyRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) => 
           <DocumentsList entityType="property" entityId={p.id} />
         </CollapsibleSection>
 
+        <RemindersList entityType="property" entityId={p.id} />
         <div className="flex justify-end pt-1">
           <ReminderButton entityType="property" entityId={p.id} />
         </div>
