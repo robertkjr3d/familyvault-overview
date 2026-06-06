@@ -254,6 +254,19 @@ function SettingsPage() {
         </div>
       </section>
 
+      {/* Account */}
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="mb-3 text-sm font-bold">Account</h2>
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={() => void supabase.auth.signOut()}
+            className="rounded-lg border border-urgent/40 px-3 py-2 text-sm font-semibold text-urgent"
+          >
+            Sign out
+          </button>
+        </div>
+      </section>
+
       {/* About */}
       <section className="rounded-2xl border border-border bg-card p-4 text-sm">
         <h2 className="mb-2 text-sm font-bold">About</h2>
