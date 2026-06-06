@@ -146,7 +146,7 @@ function SavingsRow({ a, onStatus, onDelete }: { a: any; onStatus: (s: any) => v
         <Section title="Account">
           <FieldRow label="Balance" value={fmtMoney(a.balance)} />
           <FieldRow label="Interest rate" value={fmtPct(a.interest_rate)} />
-          <FieldRow label="Maturity" value={fmtDate(a.maturity_date)} />
+          <FieldRow label={<AlertLabel text="Maturity" date={a.maturity_date} />} value={fmtDate(a.maturity_date)} />
           <FieldRow label="Last updated" value={fmtDate(a.last_updated)} />
         </Section>
 
