@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bell } from "lucide-react";
+import { Bell, X } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,17 +7,18 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+
 export function ReminderButton({ entityType, entityId }: { entityType: string; entityId: string }) {
   const [open, setOpen] = useState(false);
   const [what, setWhat] = useState("");
   const [date, setDate] = useState("");
-  const [time, setTime] = useState("09:00");
   const [saving, setSaving] = useState(false);
   const qc = useQueryClient();
+
   async function save() {
     if (!what || !date) return toast.error("What and date are required");
     setSaving(true);
-    const remindAt = new Date(`${date}T${time}:00`).toISOString();
+    const remindAt = new Date(`${date}T12:00:00`).toISOString();
     const { error } = await supabase.from("reminders").insert({
       entity_type: entityType,
       entity_id: entityId,
@@ -31,8 +32,10 @@ export function ReminderButton({ entityType, entityId }: { entityType: string; e
     qc.invalidateQueries({ queryKey: ["reminders"] });
     qc.invalidateQueries({ queryKey: ["alert-count"] });
     setOpen(false);
-    setWhat(""); setDate(""); setTime("09:00");
+    setWhat("");
+    setDate("");
   }
+
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
@@ -51,11 +54,19 @@ export function ReminderButton({ entityType, entityId }: { entityType: string; e
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Date</Label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full max-w-full" />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Time</Label>
-            <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full max-w-full" />
+            <div className="relative flex items-center">
+              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-7 w-full pr-8" />
+              {date && (
+                <button
+                  type="button"
+                  onClick={() => setDate("")}
+                  className="absolute right-2 flex items-center justify-center text-muted-foreground hover:text-foreground"
+                  aria-label="Clear date"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
           <div className="flex gap-2 pt-2">
             <Button variant="outline" className="flex-1" onClick={() => setOpen(false)}>Cancel</Button>
