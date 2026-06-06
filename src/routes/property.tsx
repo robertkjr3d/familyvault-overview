@@ -104,12 +104,11 @@ function PropertyPage() {
   );
 }
 
-function AlertLabel({ text, date }: { text: string; date?: string | null }) {
-  const isAlert = date != null && new Date(date) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+function AlertLabel({ text }: { text: string }) {
   return (
     <span className="flex items-center gap-1">
       {text}
-      {isAlert && <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" />}
+      <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" />
     </span>
   );
 }
@@ -162,7 +161,7 @@ function PropertyRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) => 
           <FieldRow label="Monthly payment" value={fmtMoney(p.monthly_payment, p.currency)} />
           <FieldRow label="Interest rate" value={fmtPct(p.interest_rate)} />
           <FieldRow label="Rate type" value={p.rate_type ?? "—"} />
-         <FieldRow label={<AlertLabel text="Rate ends / Reprice" date={p.fixed_rate_end} />} value={fmtDate(p.fixed_rate_end)} />
+         <FieldRow label={<AlertLabel text="Rate ends / Reprice" />} value={fmtDate(p.fixed_rate_end)} />
           <FieldRow label="Monthly rent" value={fmtMoney(p.monthly_rent, p.currency)} />
         </Section>
 
