@@ -1,4 +1,5 @@
 import { AddRecordFab } from "@/components/AddRecordFab";
+import { Bell } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
