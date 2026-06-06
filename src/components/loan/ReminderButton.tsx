@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-
 export function ReminderButton({ entityType, entityId }: { entityType: string; entityId: string }) {
   const [open, setOpen] = useState(false);
   const [what, setWhat] = useState("");
@@ -15,7 +14,6 @@ export function ReminderButton({ entityType, entityId }: { entityType: string; e
   const [time, setTime] = useState("09:00");
   const [saving, setSaving] = useState(false);
   const qc = useQueryClient();
-
   async function save() {
     if (!what || !date) return toast.error("What and date are required");
     setSaving(true);
@@ -35,7 +33,6 @@ export function ReminderButton({ entityType, entityId }: { entityType: string; e
     setOpen(false);
     setWhat(""); setDate(""); setTime("09:00");
   }
-
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
