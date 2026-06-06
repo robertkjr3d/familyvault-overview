@@ -8,6 +8,8 @@ type AppStore = {
   setMemberFilter: (m: MemberFilter) => void;
   activeHouseholdId: string | null;
   setActiveHouseholdId: (id: string | null) => void;
+  shareOpen: boolean;
+  setShareOpen: (v: boolean) => void;
 };
 
 export const useAppStore = create<AppStore>()(
@@ -17,6 +19,8 @@ export const useAppStore = create<AppStore>()(
       setMemberFilter: (memberFilter) => set({ memberFilter }),
       activeHouseholdId: null,
       setActiveHouseholdId: (activeHouseholdId) => set({ activeHouseholdId }),
+      shareOpen: false,
+      setShareOpen: (shareOpen) => set({ shareOpen }),
     }),
     { name: "familyvault-ui" },
   ),
