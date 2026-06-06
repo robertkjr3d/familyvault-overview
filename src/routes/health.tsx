@@ -13,6 +13,7 @@ import { NotesEditor } from "@/components/loan/NotesEditor";
 import { HistoryLog } from "@/components/loan/HistoryLog";
 import { DocumentsList } from "@/components/loan/DocumentsList";
 import { useEditRecord } from "@/components/EditRecordButton";
+import { ReminderButton } from "@/components/loan/ReminderButton";
 
 export const Route = createFileRoute("/health")({
   component: HealthPage,
@@ -110,6 +111,10 @@ function HealthRow({ c, onStatus, onDelete }: { c: any; onStatus: (s: any) => vo
         <CollapsibleSection icon={<span>📎</span>} title="Documents">
           <DocumentsList entityType="health" entityId={c.id} />
         </CollapsibleSection>
+
+        <div className="flex justify-end pt-1">
+          <ReminderButton entityType="health" entityId={c.id} />
+        </div>
       </RecordCard>
       {edit.element}
     </>
