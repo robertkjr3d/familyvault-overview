@@ -151,7 +151,7 @@ function PropertyRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) => 
           <FieldRow label="Monthly payment" value={fmtMoney(p.monthly_payment, p.currency)} />
           <FieldRow label="Interest rate" value={fmtPct(p.interest_rate)} />
           <FieldRow label="Rate type" value={p.rate_type ?? "—"} />
-          <FieldRow label="Rate ends / Reprice" value={fmtDate(p.fixed_rate_end)} />
+         <FieldRow label={<AlertLabel text="Rate ends / Reprice" date={p.fixed_rate_end} />} value={fmtDate(p.fixed_rate_end)} />
           <FieldRow label="Monthly rent" value={fmtMoney(p.monthly_rent, p.currency)} />
         </Section>
 
