@@ -611,10 +611,6 @@ function EditItemForm({ item, onDone }: { item: Item; onDone: () => void }) {
         </div>
       </div>
       <div className="space-y-1.5">
-        <Label className="text-xs">Warranty date</Label>
-        <Input type="date" value={warranty} onChange={(e) => setWarranty(e.target.value)} className="w-full max-w-full" />
-      </div>
-      <div className="space-y-1.5">
         <Label className="text-xs">Action / notes</Label>
         <Textarea rows={2} value={action} onChange={(e) => setAction(e.target.value)} />
       </div>
