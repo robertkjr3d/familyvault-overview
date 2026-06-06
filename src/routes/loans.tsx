@@ -104,7 +104,7 @@ function LoanRow({ l, today, onStatus, onDelete }: { l: any; today: Date; onStat
           <FieldRow label="Loan start" value={fmtDate(l.start_date)} />
           <FieldRow label="Term (years)" value={l.term_years ?? "—"} />
           <FieldRow label="Current rate" value={l.rate_label || fmtPct(l.rate)} />
-          <FieldRow label="Reprice date" value={fmtDate(l.reprice_date)} />
+          <FieldRow label={<AlertLabel text="Reprice date" date={l.reprice_date} />} value={fmtDate(l.reprice_date)} />
           <FieldRow
             label="Est. monthly repayment"
             value={calcPmt ? <span className="font-bold text-primary">{fmtMoney(calcPmt)}</span> : "—"}
