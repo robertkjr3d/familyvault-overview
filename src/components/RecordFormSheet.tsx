@@ -261,13 +261,26 @@ function FieldInput({ f, value, onChange, members, currency }: {
     return <Input inputMode="decimal" value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder={f.placeholder} />;
   }
   if (f.type === "date") {
+    const hasDate = value !== "" && value !== null && value !== undefined;
     return (
-      <Input
-        type="date"
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-9 w-full"
-      />
+      <div className="relative flex items-center">
+        <Input
+          type="date"
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-9 w-full pr-8"
+        />
+        {hasDate && (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            className="absolute right-2 flex items-center justify-center text-muted-foreground hover:text-foreground"
+            aria-label="Clear date"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
     );
   }
   return <Input value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder={f.placeholder} />;
