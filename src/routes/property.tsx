@@ -103,6 +103,16 @@ function PropertyPage() {
   );
 }
 
+function AlertLabel({ text, date }: { text: string; date?: string | null }) {
+  const isAlert = date != null && new Date(date) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  return (
+    <span className="flex items-center gap-1">
+      {text}
+      {isAlert && <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" />}
+    </span>
+  );
+}
+
 function PropertyRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) => void; onDelete: () => void }) {
   const edit = useEditRecord("properties", p);
   const costs = totalCosts(p);
