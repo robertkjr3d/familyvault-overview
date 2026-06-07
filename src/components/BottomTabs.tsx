@@ -29,6 +29,8 @@ const MOBILE_MORE: Tab[] = [
 
 
 const ALL_TABS: Tab[] = [...MOBILE_PRIMARY, ...MOBILE_MORE];
+// Note: desktop grid is col-9, adding Other Assets makes 10 tabs total — update grid below
+
 
 export function BottomTabs() {
   const isMobile = useIsMobile();
@@ -84,7 +86,7 @@ export function BottomTabs() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-card/95 backdrop-blur">
-      <ul className="mx-auto grid max-w-3xl grid-cols-9">
+      <ul className="mx-auto grid max-w-3xl grid-cols-10">
         {ALL_TABS.map((t) => <TabItem key={t.to} t={t} />)}
       </ul>
     </nav>
