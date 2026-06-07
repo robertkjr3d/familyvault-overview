@@ -23,13 +23,28 @@ export const Route = createFileRoute("/")({
 function Dashboard() {
   const { today } = useToday();
   const memberFilter = useAppStore((s) => s.memberFilter);
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const [breakdownOpen, setBreakdownOpen] = useState(false);
 
   const { data } = useQuery({
-    queryKey: ["dashboard", memberFilter],
+    queryKey: ["dashboard", memberFilter, activeHouseholdId],
+    enabled: !!activeHouseholdId,
     queryFn: async () => {
-      const filter = (q: any) =>
-        memberFilter === "all" ? q : q.eq("member_id", memberFilter);
+      if (!activeHouseholdId) {
+        return {
+          properties: [],
+          loans: [],
+          insurance: [],
+          investments: [],
+          savings: [],
+        };
+      }
+
+      const filter = (q: any) => {
+        let scoped = q.eq("household_id", activeHouseholdId);
+        if (memberFilter !== "all") scoped = scoped.eq("member_id", memberFilter);
+        return scoped;
+      };
 
       const [props, loans, insurance, invs, savings] = await Promise.all([
         filter(supabase.from("properties").select("*")),
@@ -48,12 +63,15 @@ function Dashboard() {
     },
   });
 const { data: remindersData } = useQuery({
-    queryKey: ["reminders-dashboard", memberFilter],
+    queryKey: ["reminders-dashboard", memberFilter, activeHouseholdId],
+    enabled: !!activeHouseholdId,
     queryFn: async () => {
+      if (!activeHouseholdId) return [];
       const horizonStr = addDays(new Date(), 90).toISOString().slice(0, 10);
       const { data } = await supabase
         .from("reminders")
         .select("*")
+        .eq("household_id", activeHouseholdId)
         .eq("dismissed", false)
         .lte("remind_at", horizonStr);
       return data ?? [];

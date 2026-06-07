@@ -6,9 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Upload, Link, ExternalLink, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { useAppStore } from "@/lib/store";
 
 export function DocumentsList({ entityType, entityId }: { entityType: string; entityId: string }) {
   const qc = useQueryClient();
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const [uploading, setUploading] = useState(false);
   const [mode, setMode] = useState<"upload" | "link">("upload");
   const [linkUrl, setLinkUrl] = useState("");
@@ -33,9 +35,13 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!activeHouseholdId) {
+      toast.error("Select a household first.");
+      return;
+    }
     setUploading(true);
     try {
-      const path = `${entityType}/${entityId}/${Date.now()}-${file.name}`;
+      const path = `${activeHouseholdId}/${entityType}/${entityId}/${Date.now()}-${file.name}`;
       const { error: upErr } = await supabase.storage.from("vault-docs").upload(path, file);
       if (upErr) throw upErr;
       const { error: insErr } = await supabase.from("record_documents").insert({

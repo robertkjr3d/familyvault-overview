@@ -51,13 +51,16 @@ function parseTargetPct(strategy: string | null | undefined): number | null {
 
 function PropertyPage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("properties", "properties");
   const del = useDeleteMutation("properties", "properties");
 
   const { data: properties = [] } = useQuery({
-    queryKey: ["properties", memberFilter],
+    queryKey: ["properties", memberFilter, activeHouseholdId],
+    enabled: !!activeHouseholdId,
     queryFn: async () => {
-      let q = supabase.from("properties").select("*");
+      if (!activeHouseholdId) return [];
+      let q = supabase.from("properties").select("*").eq("household_id", activeHouseholdId);
       if (memberFilter !== "all") q = q.eq("member_id", memberFilter);
       const { data, error } = await q;
       if (error) throw error;

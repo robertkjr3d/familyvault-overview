@@ -24,13 +24,16 @@ export const Route = createFileRoute("/investments")({
 
 function InvestmentsPage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("investments", "investments");
   const del = useDeleteMutation("investments", "investments");
 
   const { data: items = [] } = useQuery({
-    queryKey: ["investments", memberFilter],
+    queryKey: ["investments", memberFilter, activeHouseholdId],
+    enabled: !!activeHouseholdId,
     queryFn: async () => {
-      let q = supabase.from("investments").select("*");
+      if (!activeHouseholdId) return [];
+      let q = supabase.from("investments").select("*").eq("household_id", activeHouseholdId);
       if (memberFilter !== "all") q = q.eq("member_id", memberFilter);
       const { data, error } = await q;
       if (error) throw error;

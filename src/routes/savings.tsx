@@ -76,13 +76,16 @@ function UpdateBalanceInline({ id, current }: { id: string; current: number | nu
 
 function SavingsPage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("savings_accounts", "savings");
   const del = useDeleteMutation("savings_accounts", "savings");
 
   const { data: items = [] } = useQuery({
-    queryKey: ["savings", memberFilter],
+    queryKey: ["savings", memberFilter, activeHouseholdId],
+    enabled: !!activeHouseholdId,
     queryFn: async () => {
-      let q = supabase.from("savings_accounts").select("*");
+      if (!activeHouseholdId) return [];
+      let q = supabase.from("savings_accounts").select("*").eq("household_id", activeHouseholdId);
       if (memberFilter !== "all") q = q.eq("member_id", memberFilter);
       const { data, error } = await q;
       if (error) throw error;

@@ -28,14 +28,17 @@ export const Route = createFileRoute("/loans")({
 
 function LoansPage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("loans", "loans");
   const del = useDeleteMutation("loans", "loans");
   const { today } = useToday();
 
   const { data: loans = [] } = useQuery({
-    queryKey: ["loans", memberFilter],
+    queryKey: ["loans", memberFilter, activeHouseholdId],
+    enabled: !!activeHouseholdId,
     queryFn: async () => {
-      let q = supabase.from("loans").select("*");
+      if (!activeHouseholdId) return [];
+      let q = supabase.from("loans").select("*").eq("household_id", activeHouseholdId);
       if (memberFilter !== "all") q = q.eq("member_id", memberFilter);
       const { data, error } = await q;
       if (error) throw error;

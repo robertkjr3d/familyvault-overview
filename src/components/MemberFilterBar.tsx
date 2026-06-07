@@ -13,16 +13,16 @@ export function MemberFilterBar({
   table?: string;
 }) {
   const { data: members = [] } = useMembers();
-  const { memberFilter, setMemberFilter } = useAppStore();
+  const { memberFilter, setMemberFilter, activeHouseholdId } = useAppStore();
 
   // Lightweight count query — only member_id column, only runs when table prop provided.
   // queryKey starts with [table] so it auto-invalidates when the page's main data changes.
   const { data: countRows = [] } = useQuery({
-    queryKey: [table, "member-counts"],
-    enabled: !!table,
+    queryKey: [table, "member-counts", activeHouseholdId],
+    enabled: !!table && !!activeHouseholdId,
     queryFn: async () => {
-      if (!table) return [];
-      const { data } = await supabase.from(table as any).select("member_id");
+      if (!table || !activeHouseholdId) return [];
+      const { data } = await supabase.from(table as any).select("member_id").eq("household_id", activeHouseholdId);
       return data ?? [];
     },
   });

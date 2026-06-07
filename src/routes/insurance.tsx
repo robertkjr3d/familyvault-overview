@@ -26,13 +26,16 @@ export const Route = createFileRoute("/insurance")({
 
 function InsurancePage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("insurance_policies", "insurance");
   const del = useDeleteMutation("insurance_policies", "insurance");
 
   const { data: items = [] } = useQuery({
-    queryKey: ["insurance", memberFilter],
+    queryKey: ["insurance", memberFilter, activeHouseholdId],
+    enabled: !!activeHouseholdId,
     queryFn: async () => {
-      let q = supabase.from("insurance_policies").select("*");
+      if (!activeHouseholdId) return [];
+      let q = supabase.from("insurance_policies").select("*").eq("household_id", activeHouseholdId);
       if (memberFilter !== "all") q = q.eq("member_id", memberFilter);
       const { data, error } = await q;
       if (error) throw error;

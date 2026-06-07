@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SavingsRouteImport } from './routes/savings'
 import { Route as PropertyRouteImport } from './routes/property'
+import { Route as OtherAssetsRouteImport } from './routes/other-assets'
 import { Route as LoansRouteImport } from './routes/loans'
 import { Route as InvestmentsRouteImport } from './routes/investments'
 import { Route as InventoryRouteImport } from './routes/inventory'
@@ -32,6 +33,11 @@ const SavingsRoute = SavingsRouteImport.update({
 const PropertyRoute = PropertyRouteImport.update({
   id: '/property',
   path: '/property',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OtherAssetsRoute = OtherAssetsRouteImport.update({
+  id: '/other-assets',
+  path: '/other-assets',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoansRoute = LoansRouteImport.update({
@@ -72,6 +78,7 @@ export interface FileRoutesByFullPath {
   '/inventory': typeof InventoryRoute
   '/investments': typeof InvestmentsRoute
   '/loans': typeof LoansRoute
+  '/other-assets': typeof OtherAssetsRoute
   '/property': typeof PropertyRoute
   '/savings': typeof SavingsRoute
   '/settings': typeof SettingsRoute
@@ -83,6 +90,7 @@ export interface FileRoutesByTo {
   '/inventory': typeof InventoryRoute
   '/investments': typeof InvestmentsRoute
   '/loans': typeof LoansRoute
+  '/other-assets': typeof OtherAssetsRoute
   '/property': typeof PropertyRoute
   '/savings': typeof SavingsRoute
   '/settings': typeof SettingsRoute
@@ -95,6 +103,7 @@ export interface FileRoutesById {
   '/inventory': typeof InventoryRoute
   '/investments': typeof InvestmentsRoute
   '/loans': typeof LoansRoute
+  '/other-assets': typeof OtherAssetsRoute
   '/property': typeof PropertyRoute
   '/savings': typeof SavingsRoute
   '/settings': typeof SettingsRoute
@@ -108,6 +117,7 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/investments'
     | '/loans'
+    | '/other-assets'
     | '/property'
     | '/savings'
     | '/settings'
@@ -119,6 +129,7 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/investments'
     | '/loans'
+    | '/other-assets'
     | '/property'
     | '/savings'
     | '/settings'
@@ -130,6 +141,7 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/investments'
     | '/loans'
+    | '/other-assets'
     | '/property'
     | '/savings'
     | '/settings'
@@ -142,6 +154,7 @@ export interface RootRouteChildren {
   InventoryRoute: typeof InventoryRoute
   InvestmentsRoute: typeof InvestmentsRoute
   LoansRoute: typeof LoansRoute
+  OtherAssetsRoute: typeof OtherAssetsRoute
   PropertyRoute: typeof PropertyRoute
   SavingsRoute: typeof SavingsRoute
   SettingsRoute: typeof SettingsRoute
@@ -168,6 +181,13 @@ declare module '@tanstack/react-router' {
       path: '/property'
       fullPath: '/property'
       preLoaderRoute: typeof PropertyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/other-assets': {
+      id: '/other-assets'
+      path: '/other-assets'
+      fullPath: '/other-assets'
+      preLoaderRoute: typeof OtherAssetsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/loans': {
@@ -222,6 +242,7 @@ const rootRouteChildren: RootRouteChildren = {
   InventoryRoute: InventoryRoute,
   InvestmentsRoute: InvestmentsRoute,
   LoansRoute: LoansRoute,
+  OtherAssetsRoute: OtherAssetsRoute,
   PropertyRoute: PropertyRoute,
   SavingsRoute: SavingsRoute,
   SettingsRoute: SettingsRoute,

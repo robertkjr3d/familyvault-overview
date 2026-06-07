@@ -12,6 +12,7 @@ import { recordConfigs, type FieldDef, type SelectOption } from "@/lib/recordCon
 import { MoneyInput } from "./MoneyInput";
 import { X, Bell } from "lucide-react";
 import { addDays, parseISO } from "date-fns";
+import { useAppStore } from "@/lib/store";
 
 const ALERT_FIELDS = new Set(["next_due_date", "end_date", "fixed_rate_end", "reprice_date", "maturity_date"]);
 
@@ -30,6 +31,7 @@ export function RecordFormSheet({
   const [submitting, setSubmitting] = useState(false);
   const { data: members = [] } = useMembers();
   const qc = useQueryClient();
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
 
   useEffect(() => {
     if (open) setValues(seed(cfg.fields, initial));
@@ -43,6 +45,12 @@ export function RecordFormSheet({
     e.preventDefault();
     setSubmitting(true);
     try {
+      if (!isEdit && !activeHouseholdId) {
+        toast.error("Select a household first.");
+        setSubmitting(false);
+        return;
+      }
+
       const payload: Record<string, any> = {};
       for (const f of cfg.fields) {
         let v = values[f.key];
@@ -69,6 +77,10 @@ export function RecordFormSheet({
         payload.group_name = payload.maturity_date ? "Fixed Deposits" : "Bank Accounts";
       }
 
+      if (!isEdit && activeHouseholdId) {
+        payload.household_id = activeHouseholdId;
+      }
+
       for (const f of cfg.fields) {
         if (f.required && (payload[f.key] === undefined || payload[f.key] === "" || payload[f.key] === null)) {
           toast.error(`${f.label} is required`);
@@ -91,6 +103,7 @@ export function RecordFormSheet({
         try {
           const remindAt = addDays(parseISO(payload.maturity_date), -30);
           await supabase.from("reminders").insert({
+            household_id: activeHouseholdId,
             entity_type: "savings",
             entity_id: savedId,
             what: `FD Maturing — ${payload.institution ?? ""} matures on ${payload.maturity_date}.`,

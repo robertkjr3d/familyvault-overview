@@ -24,13 +24,16 @@ export const Route = createFileRoute("/other-assets")({
 
 function OtherAssetsPage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("other_assets", "other_assets");
   const del = useDeleteMutation("other_assets", "other_assets");
 
   const { data: items = [] } = useQuery({
-    queryKey: ["other_assets", memberFilter],
+    queryKey: ["other_assets", memberFilter, activeHouseholdId],
+    enabled: !!activeHouseholdId,
     queryFn: async () => {
-      let q = supabase.from("other_assets").select("*");
+      if (!activeHouseholdId) return [];
+      let q = supabase.from("other_assets").select("*").eq("household_id", activeHouseholdId);
       if (memberFilter !== "all") q = q.eq("member_id", memberFilter);
       const { data, error } = await q;
       if (error) throw error;

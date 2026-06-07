@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { fmtDate } from "@/lib/format";
 import { addDays, parseISO } from "date-fns";
+import { useAppStore } from "@/lib/store";
 
 export const Route = createFileRoute("/inventory")({
   component: InventoryPage,
@@ -32,17 +33,21 @@ type Item = {
 
 function InventoryPage() {
   const qc = useQueryClient();
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const [search, setSearch] = useState("");
   const [openFolder, setOpenFolder] = useState<Folder | null>(null);
   const [showAddFolder, setShowAddFolder] = useState(false);
   const [showGoBag, setShowGoBag] = useState(false);
 
   const { data: folders = [] } = useQuery({
-    queryKey: ["folders"],
+    queryKey: ["folders", activeHouseholdId],
+    enabled: !!activeHouseholdId,
     queryFn: async () => {
+      if (!activeHouseholdId) return [];
       const { data } = await supabase
         .from("inventory_folders")
         .select("*")
+        .eq("household_id", activeHouseholdId)
         .is("parent_id", null)
         .order("sort_order");
       return (data ?? []) as Folder[];
@@ -50,17 +55,21 @@ function InventoryPage() {
   });
 
   const { data: allItems = [] } = useQuery({
-    queryKey: ["inventory_items"],
+    queryKey: ["inventory_items", activeHouseholdId],
+    enabled: !!activeHouseholdId,
     queryFn: async () => {
-      const { data } = await supabase.from("inventory_items").select("*").order("name");
+      if (!activeHouseholdId) return [];
+      const { data } = await supabase.from("inventory_items").select("*").eq("household_id", activeHouseholdId).order("name");
       return (data ?? []) as Item[];
     },
   });
 
   const { data: gobag = [] } = useQuery({
-    queryKey: ["gobag"],
+    queryKey: ["gobag", activeHouseholdId],
+    enabled: !!activeHouseholdId,
     queryFn: async () => {
-      const { data } = await supabase.from("gobag_items").select("*").order("sort_order");
+      if (!activeHouseholdId) return [];
+      const { data } = await supabase.from("gobag_items").select("*").eq("household_id", activeHouseholdId).order("sort_order");
       return data ?? [];
     },
   });
@@ -231,6 +240,7 @@ function InventoryPage() {
 /* ---------- Add Folder ---------- */
 function AddFolderSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const qc = useQueryClient();
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const [name, setName] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -244,16 +254,22 @@ function AddFolderSheet({ open, onClose }: { open: boolean; onClose: () => void 
 
   async function save() {
     if (!name.trim()) { toast.error("Name this location"); return; }
+    if (!activeHouseholdId) { toast.error("Select a household first."); return; }
     setSaving(true);
     try {
       let photo_url: string | null = null;
       if (photoFile) {
-        const path = `folders/${Date.now()}-${photoFile.name}`;
+        const path = `${activeHouseholdId}/folders/${Date.now()}-${photoFile.name}`;
         const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, photoFile);
         if (upErr) throw upErr;
         photo_url = supabase.storage.from("inventory-photos").getPublicUrl(path).data.publicUrl;
       }
-      const { error } = await supabase.from("inventory_folders").insert({ name: name.trim(), photo_url, parent_id: null });
+      const { error } = await supabase.from("inventory_folders").insert({
+        household_id: activeHouseholdId,
+        name: name.trim(),
+        photo_url,
+        parent_id: null,
+      });
       if (error) throw error;
       toast.success("Location added");
       qc.invalidateQueries({ queryKey: ["folders"] });
@@ -320,6 +336,7 @@ function AddFolderSheet({ open, onClose }: { open: boolean; onClose: () => void 
 /* ---------- Folder Detail ---------- */
 function FolderSheet({ folder, items, onClose }: { folder: Folder; items: Item[]; onClose: () => void }) {
   const qc = useQueryClient();
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const [adding, setAdding] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -335,7 +352,11 @@ function FolderSheet({ folder, items, onClose }: { folder: Folder; items: Item[]
   }
 
   async function changePhoto(f: File) {
-    const path = `folders/${Date.now()}-${f.name}`;
+    if (!activeHouseholdId) {
+      toast.error("Select a household first.");
+      return;
+    }
+    const path = `${activeHouseholdId}/folders/${Date.now()}-${f.name}`;
     const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, f);
     if (upErr) { toast.error(upErr.message); return; }
     const photo_url = supabase.storage.from("inventory-photos").getPublicUrl(path).data.publicUrl;
@@ -459,6 +480,7 @@ function FolderSheet({ folder, items, onClose }: { folder: Folder; items: Item[]
 /* ---------- Add Item Form ---------- */
 function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => void }) {
   const qc = useQueryClient();
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [action, setAction] = useState("");
@@ -469,11 +491,12 @@ function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => voi
 
   async function save() {
     if (!name.trim()) { toast.error("Item name required"); return; }
+    if (!activeHouseholdId) { toast.error("Select a household first."); return; }
     setSaving(true);
     try {
       let photo_url: string | null = null;
       if (photoFile) {
-        const path = `items/${Date.now()}-${photoFile.name}`;
+        const path = `${activeHouseholdId}/items/${Date.now()}-${photoFile.name}`;
         const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, photoFile);
         if (upErr) throw upErr;
         photo_url = supabase.storage.from("inventory-photos").getPublicUrl(path).data.publicUrl;
