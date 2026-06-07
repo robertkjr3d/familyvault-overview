@@ -2,9 +2,10 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   Home, Building2, Shield, Landmark, MoreHorizontal,
-  TrendingUp, PiggyBank, Heart, Package, Settings as SettingsIcon,
+  TrendingUp, PiggyBank, Heart, Package, Settings as SettingsIcon, Gem,
   type LucideIcon,
 } from "lucide-react";
+
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -18,12 +19,14 @@ const MOBILE_PRIMARY: Tab[] = [
 ];
 
 const MOBILE_MORE: Tab[] = [
-  { to: "/investments", label: "Investments", icon: TrendingUp },
-  { to: "/savings",     label: "Savings",     icon: PiggyBank },
-  { to: "/health",      label: "Health",      icon: Heart },
-  { to: "/inventory",   label: "Inventory",   icon: Package },
-  { to: "/settings",    label: "Settings",    icon: SettingsIcon },
+  { to: "/investments",  label: "Investments",  icon: TrendingUp },
+  { to: "/savings",      label: "Savings",      icon: PiggyBank },
+  { to: "/health",       label: "Health",       icon: Heart },
+  { to: "/inventory",    label: "Inventory",    icon: Package },
+  { to: "/other-assets", label: "Other Assets", icon: Gem },
+  { to: "/settings",     label: "Settings",     icon: SettingsIcon },
 ];
+
 
 const ALL_TABS: Tab[] = [...MOBILE_PRIMARY, ...MOBILE_MORE];
 
