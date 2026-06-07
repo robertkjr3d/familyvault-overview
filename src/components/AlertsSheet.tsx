@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Building2, Shield, Landmark, TrendingUp, Heart, PiggyBank, Bell, ChevronRight } from "lucide-react";
+import { Building2, Shield, Landmark, TrendingUp, Heart, PiggyBank, Bell, ChevronRight, Gem } from "lucide-react";
 import { MemberTag } from "./MemberTag";
 import { addDays, parseISO } from "date-fns";
 import { fmtDate, fmtMoney } from "@/lib/format";
@@ -13,7 +13,8 @@ const SOURCES = [
   { table: "loans",              href: "/loans",       kind: "Loan",      icon: Landmark,   title: (r: any) => `${r.bank} · ${r.purpose ?? ""}` },
   { table: "insurance_policies", href: "/insurance",   kind: "Insurance", icon: Shield,     title: (r: any) => r.name },
   { table: "investments",        href: "/investments", kind: "Invest",    icon: TrendingUp, title: (r: any) => r.name },
-  { table: "health_conditions",  href: "/health",      kind: "Health",    icon: Heart,      title: (r: any) => r.name },
+  { table: "health_conditions",  href: "/health",        kind: "Health",  icon: Heart, title: (r: any) => r.name },
+  { table: "other_assets",       href: "/other-assets",  kind: "Asset",   icon: Gem,   title: (r: any) => r.name },
 ] as const;
 
 type DueSoonItem = {
@@ -37,6 +38,7 @@ function reminderHref(entityType: string | null | undefined): string {
     case "investment": return "/investments";
     case "health":     return "/health";
     case "inventory":  return "/inventory";
+    case "other_asset": return "/other-assets";
     default:           return "/";
   }
 }
