@@ -22,8 +22,8 @@ const MOBILE_MORE: Tab[] = [
   { to: "/investments",  label: "Investments",  icon: TrendingUp },
   { to: "/savings",      label: "Savings",      icon: PiggyBank },
   { to: "/health",       label: "Health",       icon: Heart },
-  { to: "/inventory",    label: "Inventory",    icon: Package },
-  { to: "/other-assets", label: "Other Assets", icon: Gem },
+  { to: "/inventory",    label: "Inventory",    icon: Package },  
+  { to: "/other-assets", label: "Assets", icon: Gem },
   { to: "/settings",     label: "Settings",     icon: SettingsIcon },
 ];
 
