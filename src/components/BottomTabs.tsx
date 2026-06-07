@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import {
   Home, Building2, Shield, Landmark, MoreHorizontal,
   TrendingUp, PiggyBank, Heart, Package, Settings as SettingsIcon, Gem,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -19,6 +20,7 @@ const MOBILE_PRIMARY: Tab[] = [
 ];
 
 const MOBILE_MORE: Tab[] = [
+  { to: "/members",      label: "Members",      icon: Users },
   { to: "/investments",  label: "Investments",  icon: TrendingUp },
   { to: "/savings",      label: "Savings",      icon: PiggyBank },
   { to: "/health",       label: "Health",       icon: Heart },
@@ -29,7 +31,7 @@ const MOBILE_MORE: Tab[] = [
 
 
 const ALL_TABS: Tab[] = [...MOBILE_PRIMARY, ...MOBILE_MORE];
-// Note: desktop grid is col-9, adding Other Assets makes 10 tabs total — update grid below
+// Desktop shows all tabs.
 
 
 export function BottomTabs() {
@@ -86,7 +88,7 @@ export function BottomTabs() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-card/95 backdrop-blur">
-      <ul className="mx-auto grid max-w-3xl grid-cols-10">
+      <ul className="mx-auto grid max-w-3xl grid-cols-11">
         {ALL_TABS.map((t) => <TabItem key={t.to} t={t} />)}
       </ul>
     </nav>
