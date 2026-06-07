@@ -154,7 +154,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
     ],
   },
 
-  gobag_items: {
+    gobag_items: {
     table: "gobag_items",
     queryKey: "gobag",
     label: "Go-Bag Item",
@@ -162,4 +162,19 @@ export const recordConfigs: Record<string, RecordConfig> = {
       { key: "label", label: "Item", type: "text", required: true, placeholder: "e.g. Passports" },
     ],
   },
+
+  other_assets: {
+    table: "other_assets",
+    queryKey: "other_assets",
+    label: "Asset",
+    fields: [
+      { key: "name", label: "Asset name", type: "text", required: true, placeholder: "e.g. Steinway Piano" },
+      { key: "category", label: "Category", type: "select", options: ["Vehicle", "Jewellery", "Instrument", "Art", "Collectible", "Other"], required: true, default: "Other" },
+      { key: "member_id", label: "Owner", type: "member" },
+      { key: "estimated_value", label: "Estimated value (SGD)", type: "number", money: true },
+      { key: "last_updated", label: "Value as of", type: "date" },
+      { key: "action", label: "Action / notes", type: "text", placeholder: "e.g. Get revalued in 2027" },
+    ],
+  },
 };
+
