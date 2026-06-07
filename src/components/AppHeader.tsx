@@ -219,10 +219,13 @@ count += (reminders ?? []).length;
             {user?.email && (
               <p className="mt-0.5 text-[11px] text-muted-foreground">{user.email}</p>
             )}
+            <p className="mt-0.5 text-[11px] font-medium tabular-nums text-muted-foreground sm:hidden">
+              {realDateLabel}
+            </p>
           </div>
           <div className="flex items-center gap-1.5">
             {/* Today's real date — hidden on mobile to save space */}
-            <span className="hidden sm:inline shrink-0 select-none text-[11px] font-medium tabular-nums text-muted-foreground">
+            <span className="hidden shrink-0 select-none text-[11px] font-medium tabular-nums text-muted-foreground sm:inline">
               {realDateLabel}
             </span>
 
