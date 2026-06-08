@@ -240,9 +240,10 @@ function Dashboard() {
     await invalidateAll();
 
     toast.success("Marked as done.", {
-      action: {
-        label: "Undo",
-        onClick: async () => {
+  duration: 5000,
+  action: {
+    label: "Undo",
+    onClick: async () => {
           await supabase
             .from("dismissed_dashboard_items")
             .delete()
