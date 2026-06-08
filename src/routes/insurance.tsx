@@ -108,6 +108,7 @@ function InsuranceRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) =>
         action={p.action}
         onEdit={edit.open}
         onDelete={onDelete}
+        hasNotes={!!p.notes}
         rightMeta={
           <div className="text-right text-xs">
             <div className="text-muted-foreground">Premium</div>
