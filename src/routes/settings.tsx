@@ -255,6 +255,9 @@ function SettingsPage() {
         </div>
       </section>
 
+      {/* Dismissed History */}
+      <DismissedHistory householdId={activeHouseholdId} />
+
       {/* Account */}
       <section className="rounded-2xl border border-border bg-card p-4">
         <h2 className="mb-3 text-sm font-bold">Account</h2>
@@ -284,5 +287,79 @@ function SettingsPage() {
         </p>
       </section>
     </div>
+  );
+}
+
+function DismissedHistory({ householdId }: { householdId: string | null }) {
+  const qc = useQueryClient();
+  const [expanded, setExpanded] = useState(false);
+
+  const { data: history = [] } = useQuery({
+    queryKey: ["dismissed-dashboard", householdId],
+    enabled: !!householdId,
+    queryFn: async () => {
+      if (!householdId) return [];
+      const { data } = await supabase
+        .from("dismissed_dashboard_items")
+        .select("*")
+        .eq("household_id", householdId)
+        .order("dismissed_at", { ascending: false });
+      return data ?? [];
+    },
+  });
+
+  async function clearHistory() {
+    if (!householdId) return;
+    if (!confirm("Clear all dismissed history? Items will reappear in your dashboard and alerts.")) return;
+    await supabase
+      .from("dismissed_dashboard_items")
+      .delete()
+      .eq("household_id", householdId);
+    await qc.invalidateQueries({ queryKey: ["dismissed-dashboard", householdId] });
+    await qc.invalidateQueries({ queryKey: ["alert-count", householdId] });
+    toast.success("History cleared — items restored to dashboard.");
+  }
+
+  return (
+    <section className="rounded-2xl border border-border bg-card p-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-bold">Dismissed Items History</h2>
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="text-xs font-semibold text-primary"
+        >
+          {expanded ? "Hide" : `Show (${history.length})`}
+        </button>
+      </div>
+      {expanded && (
+        <div className="mt-3">
+          {history.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">No dismissed items yet.</p>
+          ) : (
+            <>
+              <ul className="divide-y divide-border">
+                {history.map((item: any) => {
+                  const dismissedOn = new Date(item.dismissed_at).toLocaleDateString("en-GB", {
+                    day: "numeric", month: "short", year: "numeric",
+                  });
+                  return (
+                    <li key={item.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                      <span className="flex-1 truncate">{item.label}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">Done {dismissedOn}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <button
+                onClick={clearHistory}
+                className="mt-4 w-full rounded-lg border border-urgent/40 px-3 py-2 text-sm font-semibold text-urgent"
+              >
+                Clear history
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
