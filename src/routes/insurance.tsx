@@ -118,6 +118,7 @@ function InsuranceRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) =>
       >
         <Section title="Policy">
           <FieldRow label="Policy #" value={p.policy_number} />
+          <FieldRow label="Coverage" value={p.coverage} />
           <FieldRow label="Sum assured" value={fmtMoney(p.sum_assured)} />
           <FieldRow label="Start" value={fmtDate(p.start_date)} />
           <FieldRow label={<AlertLabel text="End" />} value={fmtDate(p.end_date)} />
