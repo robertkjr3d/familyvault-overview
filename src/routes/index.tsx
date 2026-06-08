@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToday } from "@/lib/today";
 import { fmtMoney, fmtDate, fmtMonth } from "@/lib/format";
@@ -7,13 +7,13 @@ import { MemberFilterBar } from "@/components/MemberFilterBar";
 import { MemberTag } from "@/components/MemberTag";
 import { StatusBadge } from "@/components/StatusToggle";
 import { useAppStore } from "@/lib/store";
-import { addDays, isBefore, parseISO, isPast } from "date-fns";
+import { addDays, isBefore, parseISO } from "date-fns";
 import { LifetimeChart } from "@/components/LifetimeChart";
-import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown } from "lucide-react";
+import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check } from "lucide-react";
 import { useState } from "react";
-import { sortByStatus } from "@/lib/sort";
 import { fmtPct } from "@/lib/format";
 import { HashHighlight } from "@/components/HashHighlight";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -25,27 +25,22 @@ function Dashboard() {
   const memberFilter = useAppStore((s) => s.memberFilter);
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [dismissing, setDismissing] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const { data } = useQuery({
     queryKey: ["dashboard", memberFilter, activeHouseholdId],
     enabled: !!activeHouseholdId,
     queryFn: async () => {
       if (!activeHouseholdId) {
-        return {
-          properties: [],
-          loans: [],
-          insurance: [],
-          investments: [],
-          savings: [],
-        };
+        return { properties: [], loans: [], insurance: [], investments: [], savings: [] };
       }
-
       const filter = (q: any) => {
         let scoped = q.eq("household_id", activeHouseholdId);
         if (memberFilter !== "all") scoped = scoped.eq("member_id", memberFilter);
         return scoped;
       };
-
       const [props, loans, insurance, invs, savings] = await Promise.all([
         filter(supabase.from("properties").select("*")),
         filter(supabase.from("loans").select("*")),
@@ -62,7 +57,8 @@ function Dashboard() {
       };
     },
   });
-const { data: remindersData } = useQuery({
+
+  const { data: remindersData } = useQuery({
     queryKey: ["reminders-dashboard", memberFilter, activeHouseholdId],
     enabled: !!activeHouseholdId,
     queryFn: async () => {
@@ -77,6 +73,23 @@ const { data: remindersData } = useQuery({
       return data ?? [];
     },
   });
+
+  const { data: dismissedData } = useQuery({
+    queryKey: ["dismissed-dashboard", activeHouseholdId],
+    enabled: !!activeHouseholdId,
+    queryFn: async () => {
+      if (!activeHouseholdId) return [];
+      const { data } = await supabase
+        .from("dismissed_dashboard_items")
+        .select("record_id, source_type")
+        .eq("household_id", activeHouseholdId);
+      return data ?? [];
+    },
+  });
+
+  const dismissedKeys = new Set(
+    (dismissedData ?? []).map((d: any) => `${d.source_type}::${d.record_id}`)
+  );
 
   const properties = data?.properties ?? [];
   const loans = data?.loans ?? [];
@@ -109,6 +122,7 @@ const { data: remindersData } = useQuery({
       default:           return "/";
     }
   }
+
   const horizon90 = addDays(today, 90);
 
   type Upcoming = {
@@ -118,6 +132,7 @@ const { data: remindersData } = useQuery({
     member_id?: string | null;
     href: string;
     recordId: string;
+    sourceType: string;
     daysLeft: number;
   };
 
@@ -126,13 +141,13 @@ const { data: remindersData } = useQuery({
     return Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   }
 
-  const upcoming: Upcoming[] = [];
+  const allUpcoming: Upcoming[] = [];
 
   for (const p of insurance as any[]) {
     if (p.next_due_date) {
       const d = parseISO(p.next_due_date);
       if (isBefore(d, horizon90)) {
-        upcoming.push({ date: p.next_due_date, label: p.name, amount: p.premium, member_id: p.member_id, href: "/insurance", recordId: p.id, daysLeft: daysUntil(p.next_due_date) });
+        allUpcoming.push({ date: p.next_due_date, label: p.name, amount: p.premium, member_id: p.member_id, href: "/insurance", recordId: p.id, sourceType: "insurance_next_due", daysLeft: daysUntil(p.next_due_date) });
       }
     }
   }
@@ -141,7 +156,7 @@ const { data: remindersData } = useQuery({
     if (p.fixed_rate_end) {
       const d = parseISO(p.fixed_rate_end);
       if (isBefore(d, horizon90)) {
-        upcoming.push({ date: p.fixed_rate_end, label: `${p.name} — fixed rate ends`, amount: null, member_id: p.member_id, href: "/property", recordId: p.id, daysLeft: daysUntil(p.fixed_rate_end) });
+        allUpcoming.push({ date: p.fixed_rate_end, label: `${p.name} — fixed rate ends`, amount: null, member_id: p.member_id, href: "/property", recordId: p.id, sourceType: "property_fixed_rate", daysLeft: daysUntil(p.fixed_rate_end) });
       }
     }
   }
@@ -150,7 +165,7 @@ const { data: remindersData } = useQuery({
     if (l.reprice_date) {
       const d = parseISO(l.reprice_date);
       if (isBefore(d, horizon90)) {
-        upcoming.push({ date: l.reprice_date, label: `${l.bank} loan — reprice`, amount: null, member_id: l.member_id, href: "/loans", recordId: l.id, daysLeft: daysUntil(l.reprice_date) });
+        allUpcoming.push({ date: l.reprice_date, label: `${l.bank} loan — reprice`, amount: null, member_id: l.member_id, href: "/loans", recordId: l.id, sourceType: "loan_reprice", daysLeft: daysUntil(l.reprice_date) });
       }
     }
   }
@@ -159,7 +174,7 @@ const { data: remindersData } = useQuery({
     if (s.maturity_date) {
       const d = parseISO(s.maturity_date);
       if (isBefore(d, horizon90)) {
-        upcoming.push({ date: s.maturity_date, label: `${s.institution} FD matures`, amount: s.balance, member_id: s.member_id, href: "/savings", recordId: s.id, daysLeft: daysUntil(s.maturity_date) });
+        allUpcoming.push({ date: s.maturity_date, label: `${s.institution} FD matures`, amount: s.balance, member_id: s.member_id, href: "/savings", recordId: s.id, sourceType: "savings_maturity", daysLeft: daysUntil(s.maturity_date) });
       }
     }
   }
@@ -170,19 +185,44 @@ const { data: remindersData } = useQuery({
     if (isBefore(d, horizon90)) {
       const href = reminderHref(r.entity_type);
       const recordId = r.entity_id ?? r.id;
-      upcoming.push({
+      allUpcoming.push({
         date: dateStr,
         label: r.what ?? "Reminder",
         amount: null,
         member_id: null,
         href,
         recordId,
+        sourceType: "reminder",
         daysLeft: daysUntil(dateStr),
       });
     }
   }
 
-  upcoming.sort((a, b) => a.date.localeCompare(b.date));
+  allUpcoming.sort((a, b) => a.date.localeCompare(b.date));
+
+  const upcoming = allUpcoming.filter(
+    (u) => !dismissedKeys.has(`${u.sourceType}::${u.recordId}`)
+  );
+
+  async function dismissItem(u: Upcoming) {
+    if (!activeHouseholdId) return;
+    const key = `${u.sourceType}::${u.recordId}`;
+    setDismissing(key);
+    const { error } = await supabase.from("dismissed_dashboard_items").insert({
+      household_id: activeHouseholdId,
+      source_type: u.sourceType,
+      record_id: u.recordId,
+      label: u.label,
+    });
+    setDismissing(null);
+    if (error) {
+      toast.error("Could not dismiss item.");
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: ["dismissed-dashboard", activeHouseholdId] });
+    await queryClient.invalidateQueries({ queryKey: ["reminders-dashboard", memberFilter, activeHouseholdId] });
+    toast.success("Marked as done.");
+  }
 
   const all: Array<{ kind: string; row: any; href: string; icon: any }> = [
     ...properties.map((r: any) => ({ kind: "Property", row: r, href: "/property", icon: Building2 })),
@@ -194,7 +234,6 @@ const { data: remindersData } = useQuery({
   const urgent = all.filter((x) => x.row.status === "urgent");
   const review = all.filter((x) => x.row.status === "review");
 
-  // Bell count: only overdue or due within 30 days
   const upcomingAlerts = upcoming.filter((u) => u.daysLeft <= 30);
   const alertCount = urgent.length + review.length + upcomingAlerts.length;
 
@@ -267,25 +306,56 @@ const { data: remindersData } = useQuery({
       <section className="rounded-2xl border border-border bg-card p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-bold tracking-tight">Due in the Next 90 Days</h2>
-          <span className="text-xs text-muted-foreground">{upcoming.length} item{upcoming.length === 1 ? "" : "s"}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{upcoming.length} item{upcoming.length === 1 ? "" : "s"}</span>
+            {upcoming.length > 0 && (
+              <button
+                onClick={() => setEditMode((v) => !v)}
+                className="text-xs font-semibold text-primary"
+              >
+                {editMode ? "Done" : "Edit"}
+              </button>
+            )}
+          </div>
         </div>
+        {editMode && (
+          <p className="mb-2 text-xs text-muted-foreground">Tap ✓ to mark an item as done and remove it from this list.</p>
+        )}
         {upcoming.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">Nothing due soon ✓</p>
         ) : (
           <ul className="divide-y divide-border">
             {upcoming.slice(0, 8).map((u, i) => {
               const isUrgent = u.daysLeft <= 7;
+              const itemKey = `${u.sourceType}::${u.recordId}`;
+              const isDismissing = dismissing === itemKey;
+              const dateClass = u.daysLeft < 0 ? "text-urgent" : isUrgent ? "text-urgent" : "text-primary";
+              const dateLabel = u.daysLeft < 0 ? `${Math.abs(u.daysLeft)}d overdue` : isUrgent ? `${u.daysLeft}d left` : fmtDate(u.date);
               return (
-                <li key={i}>
-                  <Link to={u.href as any} hash={`record-${u.recordId}`} className="flex items-center gap-3 py-2.5 text-sm hover:bg-accent/40 -mx-2 px-2 rounded">
-                    <span className={`w-20 shrink-0 text-xs font-bold ${u.daysLeft < 0 ? "text-urgent" : isUrgent ? "text-urgent" : "text-primary"}`}>
-                      {u.daysLeft < 0 ? `${Math.abs(u.daysLeft)}d overdue` : isUrgent ? `${u.daysLeft}d left` : fmtDate(u.date)}
-                    </span>
-                    <span className="flex-1 truncate">{u.label}</span>
-                    <MemberTag memberId={u.member_id} />
-                    {u.amount != null && <span className="font-semibold">{fmtMoney(u.amount)}</span>}
-                    <ChevronRight className="h-4 w-4 text-primary" />
-                  </Link>
+                <li key={i} className="flex items-center gap-3 py-2.5 text-sm -mx-2 px-2">
+                  {editMode ? (
+                    <>
+                      <span className={`w-20 shrink-0 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
+                      <span className="flex-1 truncate">{u.label}</span>
+                      <MemberTag memberId={u.member_id} />
+                      {u.amount != null && <span className="font-semibold">{fmtMoney(u.amount)}</span>}
+                      <button
+                        onClick={() => dismissItem(u)}
+                        disabled={isDismissing}
+                        className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-settled text-settled disabled:opacity-40"
+                      >
+                        <Check className="h-4 w-4" />
+                      </button>
+                    </>
+                  ) : (
+                    <Link to={u.href as any} hash={`record-${u.recordId}`} className="flex flex-1 items-center gap-3 hover:bg-accent/40 rounded">
+                      <span className={`w-20 shrink-0 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
+                      <span className="flex-1 truncate">{u.label}</span>
+                      <MemberTag memberId={u.member_id} />
+                      {u.amount != null && <span className="font-semibold">{fmtMoney(u.amount)}</span>}
+                      <ChevronRight className="h-4 w-4 text-primary" />
+                    </Link>
+                  )}
                 </li>
               );
             })}
