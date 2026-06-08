@@ -81,7 +81,7 @@ function Dashboard() {
       if (!activeHouseholdId) return [];
       const { data } = await supabase
         .from("dismissed_dashboard_items")
-        .select("record_id, source_type")
+        .select("id, record_id, source_type")
         .eq("household_id", activeHouseholdId);
       return data ?? [];
     },
@@ -204,24 +204,53 @@ function Dashboard() {
     (u) => !dismissedKeys.has(`${u.sourceType}::${u.recordId}`)
   );
 
+  async function invalidateAll() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["dismissed-dashboard", activeHouseholdId] }),
+      queryClient.invalidateQueries({ queryKey: ["reminders-dashboard", memberFilter, activeHouseholdId] }),
+      queryClient.invalidateQueries({ queryKey: ["alert-count"] }),
+    ]);
+  }
+
   async function dismissItem(u: Upcoming) {
     if (!activeHouseholdId) return;
     const key = `${u.sourceType}::${u.recordId}`;
+    if (dismissing === key) return;
     setDismissing(key);
-    const { error } = await supabase.from("dismissed_dashboard_items").insert({
-      household_id: activeHouseholdId,
-      source_type: u.sourceType,
-      record_id: u.recordId,
-      label: u.label,
-    });
+
+    const { data: inserted, error } = await supabase
+      .from("dismissed_dashboard_items")
+      .insert({
+        household_id: activeHouseholdId,
+        source_type: u.sourceType,
+        record_id: u.recordId,
+        label: u.label,
+      })
+      .select("id")
+      .single();
+
     setDismissing(null);
-    if (error) {
-      toast.error("Could not dismiss item.");
+
+    if (error || !inserted) {
+      toast.error("Could not mark as done.");
       return;
     }
-    await queryClient.invalidateQueries({ queryKey: ["dismissed-dashboard", activeHouseholdId] });
-    await queryClient.invalidateQueries({ queryKey: ["reminders-dashboard", memberFilter, activeHouseholdId] });
-    toast.success("Marked as done.");
+
+    const insertedId = inserted.id;
+    await invalidateAll();
+
+    toast.success("Marked as done.", {
+      action: {
+        label: "Undo",
+        onClick: async () => {
+          await supabase
+            .from("dismissed_dashboard_items")
+            .delete()
+            .eq("id", insertedId);
+          await invalidateAll();
+        },
+      },
+    });
   }
 
   const all: Array<{ kind: string; row: any; href: string; icon: any }> = [
@@ -341,8 +370,7 @@ function Dashboard() {
                       {u.amount != null && <span className="font-semibold">{fmtMoney(u.amount)}</span>}
                       <button
                         onClick={() => dismissItem(u)}
-                        disabled={isDismissing}
-                        className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-settled text-settled disabled:opacity-40"
+                        className={`ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${isDismissing ? "border-muted text-muted-foreground" : "border-settled text-settled"}`}
                       >
                         <Check className="h-4 w-4" />
                       </button>
