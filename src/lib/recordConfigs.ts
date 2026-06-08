@@ -95,19 +95,31 @@ export const recordConfigs: Record<string, RecordConfig> = {
     queryKey: "insurance",
     label: "Insurance Policy",
     fields: [
-      { key: "name", label: "Policy name", type: "text", required: true },
-      { key: "category", label: "Category", type: "select", options: INSURANCE_CATEGORIES, required: true },
-      { key: "provider", label: "Provider", type: "text" },
-      { key: "member_id", label: "Insured", type: "member" },
-      { key: "policy_number", label: "Policy number", type: "text" },
-      { key: "premium", label: "Premium", type: "number", money: true },
-      { key: "frequency", label: "Frequency", type: "select", options: INSURANCE_FREQ, default: "annual" },
-      { key: "sum_assured", label: "Sum assured", type: "number", money: true },
-      { key: "start_date", label: "Policy start date", type: "date" },
-      { key: "end_date", label: "Policy end date", type: "date" },
-      { key: "next_due_date", label: "Next premium due", type: "date" },
-     { key: "coverage", label: "Coverage", type: "text", placeholder: "e.g. Hospitalisation & Surgical, Critical Illness" },
-      { key: "action", label: "Action", type: "text", placeholder: "e.g. Renew before Mar 2027" },
+      // 📋 Policy Details
+      { key: "name", label: "Policy name", type: "text", required: true, section: "📋 Policy Details" },
+      { key: "category", label: "Category", type: "select", options: INSURANCE_CATEGORIES, required: true, section: "📋 Policy Details" },
+      { key: "provider", label: "Provider", type: "text", section: "📋 Policy Details" },
+      { key: "member_id", label: "Insured", type: "member", section: "📋 Policy Details" },
+      { key: "policy_number", label: "Policy number", type: "text", section: "📋 Policy Details" },
+      { key: "coverage", label: "Coverage", type: "text", placeholder: "e.g. Hospitalisation & Surgical, Critical Illness", section: "📋 Policy Details" },
+      { key: "currency", label: "Currency", type: "select", options: CURRENCIES, default: "SGD", section: "📋 Policy Details" },
+
+      // 💳 Premium
+      { key: "premium", label: "Premium amount", type: "number", money: true, section: "💳 Premium" },
+      { key: "frequency", label: "Premium frequency", type: "select", options: INSURANCE_FREQ, default: "annual", section: "💳 Premium" },
+      { key: "start_date", label: "Premium start date", type: "date", section: "💳 Premium" },
+      { key: "end_date", label: "Premium end date", type: "date", section: "💳 Premium" },
+      { key: "next_due_date", label: "Next premium due", type: "date", section: "💳 Premium" },
+
+      // 💰 Payout
+      { key: "sum_assured", label: "Sum assured", type: "number", money: true, section: "💰 Payout" },
+      { key: "payout_amount", label: "Payout amount (est.)", type: "number", money: true, section: "💰 Payout" },
+      { key: "payout_start_date", label: "Payout start date", type: "date", section: "💰 Payout" },
+      { key: "payout_frequency", label: "Payout frequency", type: "select", options: INSURANCE_FREQ, section: "💰 Payout" },
+      { key: "payout_end_date", label: "Payout end date", type: "date", section: "💰 Payout" },
+
+      // 🎯 Action
+      { key: "action", label: "Action", type: "text", placeholder: "e.g. Renew before Mar 2027", section: "🎯 Action" },
     ],
   },
 
