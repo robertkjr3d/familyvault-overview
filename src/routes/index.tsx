@@ -391,7 +391,7 @@ function Dashboard() {
               );
             })}
           </ul>
-        {upcoming.length > 8 && (
+          {upcoming.length > 8 && (
             <button
               onClick={() => setShowAllUpcoming((v) => !v)}
               className="mt-2 flex w-full items-center justify-center gap-1 py-2 text-xs font-semibold text-primary"
