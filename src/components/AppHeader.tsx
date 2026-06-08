@@ -87,35 +87,53 @@ export function AppHeader() {
   });
 
   const { data: alertCount = 0 } = useQuery({
-    queryKey: ["alert-count"],
+    queryKey: ["alert-count", selectedHouseholdId],
+    enabled: !!selectedHouseholdId,
     queryFn: async () => {
       const today = new Date();
       const horizonStr = addDays(today, 30).toISOString().slice(0, 10);
-      const todayStr = today.toISOString();
 
-      const dateFields: Array<{ table: string; field: string }> = [
-        { table: "insurance_policies", field: "next_due_date" },
-        { table: "insurance_policies", field: "end_date" },
-        { table: "properties",         field: "fixed_rate_end" },
-        { table: "loans",              field: "reprice_date" },
-        { table: "savings_accounts",   field: "maturity_date" },
+      const dateFields: Array<{ table: string; field: string; sourceType: string }> = [
+        { table: "insurance_policies", field: "next_due_date", sourceType: "insurance_next_due" },
+        { table: "insurance_policies", field: "end_date",      sourceType: "insurance_end" },
+        { table: "properties",         field: "fixed_rate_end", sourceType: "property_fixed_rate" },
+        { table: "loans",              field: "reprice_date",  sourceType: "loan_reprice" },
+        { table: "savings_accounts",   field: "maturity_date", sourceType: "savings_maturity" },
       ];
 
+      const { data: dismissed } = await supabase
+        .from("dismissed_dashboard_items")
+        .select("record_id, source_type")
+        .eq("household_id", selectedHouseholdId!);
+
+      const dismissedKeys = new Set(
+        (dismissed ?? []).map((d: any) => `${d.source_type}::${d.record_id}`)
+      );
+
       let count = 0;
-      for (const { table, field } of dateFields) {
+      for (const { table, field, sourceType } of dateFields) {
         const { data } = await supabase
           .from(table as any)
-          .select(field)
+          .select(`id, ${field}`)
+          .eq("household_id", selectedHouseholdId!)
           .lte(field, horizonStr);
-        count += (data ?? []).filter((r: any) => r[field] != null).length;
+        const undismissed = (data ?? []).filter(
+          (r: any) => r[field] != null && !dismissedKeys.has(`${sourceType}::${r.id}`)
+        );
+        count += undismissed.length;
       }
 
       const { data: reminders } = await supabase
-  .from("reminders")
-  .select("id")
-  .eq("dismissed", false)
-  .lte("remind_at", horizonStr);
-count += (reminders ?? []).length;
+        .from("reminders")
+        .select("id, entity_id")
+        .eq("household_id", selectedHouseholdId!)
+        .eq("dismissed", false)
+        .lte("remind_at", horizonStr);
+      const undismissedReminders = (reminders ?? []).filter((r: any) => {
+        const recordId = r.entity_id ?? r.id;
+        return !dismissedKeys.has(`reminder::${recordId}`);
+      });
+      count += undismissedReminders.length;
 
       return count;
     },
