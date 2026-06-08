@@ -143,8 +143,14 @@ function PropertyRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) => 
         onDelete={onDelete}
         rightMeta={
           <div className="text-right text-xs">
+            <div className="text-muted-foreground">Value (est.)</div>
             <div className="font-bold">{fmtMoney(p.current_value, p.currency)}</div>
-            {p.monthly_rent && <div className="text-muted-foreground">{fmtMoney(p.monthly_rent, p.currency)}/mo</div>}
+            {p.monthly_rent && (
+              <>
+                <div className="mt-1 text-muted-foreground">Rental</div>
+                <div className="font-semibold">{fmtMoney(p.monthly_rent, p.currency)}/mo</div>
+              </>
+            )}
           </div>
         }
       >
