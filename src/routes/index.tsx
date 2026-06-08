@@ -464,12 +464,12 @@ function CashFlowBars({ inflow, outflow }: { inflow: number; outflow: number }) 
   const max = Math.max(inflow, outflow, 1);
   return (
     <div className="space-y-2">
-      <div>
-        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Inflows</span><span className="font-semibold">{fmtMoney(inflow)}</span></div>
+     <div>
+        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Income</span><span className="font-semibold">{fmtMoney(inflow)}</span></div>
         <div className="mt-1 h-3 overflow-hidden rounded-full bg-muted"><div className="h-full bg-settled" style={{ width: `${(inflow / max) * 100}%` }} /></div>
       </div>
       <div>
-        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Outflows</span><span className="font-semibold">{fmtMoney(outflow)}</span></div>
+        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Expenses</span><span className="font-semibold">{fmtMoney(outflow)}</span></div>
         <div className="mt-1 h-3 overflow-hidden rounded-full bg-muted"><div className="h-full bg-urgent" style={{ width: `${(outflow / max) * 100}%` }} /></div>
       </div>
     </div>
