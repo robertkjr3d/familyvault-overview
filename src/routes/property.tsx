@@ -142,6 +142,7 @@ function PropertyRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) => 
         onEdit={edit.open}
         onDelete={onDelete}
         hasNotes={!!p.notes}
+        updatedAt={p.updated_at}
         rightMeta={
           <div className="text-right text-xs">
             <div className="text-muted-foreground">Value (est.)</div>
