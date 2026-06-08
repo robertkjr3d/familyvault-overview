@@ -7,19 +7,21 @@ import { Building2, Shield, Landmark, TrendingUp, Heart, PiggyBank, Bell, Chevro
 import { MemberTag } from "./MemberTag";
 import { addDays, parseISO } from "date-fns";
 import { fmtDate, fmtMoney } from "@/lib/format";
+import { useAppStore } from "@/lib/store";
 
 const SOURCES = [
   { table: "properties",         href: "/property",    kind: "Property",  icon: Building2,  title: (r: any) => r.name },
   { table: "loans",              href: "/loans",       kind: "Loan",      icon: Landmark,   title: (r: any) => `${r.bank} · ${r.purpose ?? ""}` },
   { table: "insurance_policies", href: "/insurance",   kind: "Insurance", icon: Shield,     title: (r: any) => r.name },
   { table: "investments",        href: "/investments", kind: "Invest",    icon: TrendingUp, title: (r: any) => r.name },
-  { table: "health_conditions",  href: "/health",        kind: "Health",  icon: Heart, title: (r: any) => r.name },
-  { table: "other_assets",       href: "/other-assets",  kind: "Asset",   icon: Gem,   title: (r: any) => r.name },
+  { table: "health_conditions",  href: "/health",      kind: "Health",    icon: Heart,      title: (r: any) => r.name },
+  { table: "other_assets",       href: "/other-assets", kind: "Asset",   icon: Gem,        title: (r: any) => r.name },
 ] as const;
 
 type DueSoonItem = {
   label: string;
   date: string;
+  sourceType: string;
   daysLeft: number;
   amount?: number | null;
   href: string;
@@ -31,52 +33,69 @@ type DueSoonItem = {
 
 function reminderHref(entityType: string | null | undefined): string {
   switch (entityType) {
-    case "loan":       return "/loans";
-    case "property":   return "/property";
-    case "insurance":  return "/insurance";
-    case "savings":    return "/savings";
-    case "investment": return "/investments";
-    case "health":     return "/health";
-    case "inventory":  return "/inventory";
+    case "loan":        return "/loans";
+    case "property":    return "/property";
+    case "insurance":   return "/insurance";
+    case "savings":     return "/savings";
+    case "investment":  return "/investments";
+    case "health":      return "/health";
+    case "inventory":   return "/inventory";
     case "other_asset": return "/other-assets";
-    default:           return "/";
+    default:            return "/";
   }
 }
-async function fetchDueSoonItems(today: Date): Promise<DueSoonItem[]> {
+
+async function fetchDueSoonItems(today: Date, householdId: string): Promise<DueSoonItem[]> {
   const horizonStr = addDays(today, 30).toISOString().slice(0, 10);
-  const todayStr = today.toISOString();
   const items: DueSoonItem[] = [];
 
   function daysUntil(dateStr: string) {
     return Math.ceil((parseISO(dateStr).getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   }
 
-  const [insurance, properties, loans, savings, reminders] = await Promise.all([
-    supabase.from("insurance_policies").select("*").lte("next_due_date", horizonStr).then((r) => r.data ?? []),
-    supabase.from("properties").select("*").lte("fixed_rate_end", horizonStr).then((r) => r.data ?? []),
-    supabase.from("loans").select("*").lte("reprice_date", horizonStr).then((r) => r.data ?? []),
-    supabase.from("savings_accounts").select("*").lte("maturity_date", horizonStr).then((r) => r.data ?? []),
-    supabase.from("reminders").select("*").eq("dismissed", false).lte("remind_at", horizonStr).then((r) => r.data ?? []),
+  const [insurance, properties, loans, savings, reminders, dismissed] = await Promise.all([
+    supabase.from("insurance_policies").select("*").eq("household_id", householdId).lte("next_due_date", horizonStr).then((r) => r.data ?? []),
+    supabase.from("properties").select("*").eq("household_id", householdId).lte("fixed_rate_end", horizonStr).then((r) => r.data ?? []),
+    supabase.from("loans").select("*").eq("household_id", householdId).lte("reprice_date", horizonStr).then((r) => r.data ?? []),
+    supabase.from("savings_accounts").select("*").eq("household_id", householdId).lte("maturity_date", horizonStr).then((r) => r.data ?? []),
+    supabase.from("reminders").select("*").eq("household_id", householdId).eq("dismissed", false).lte("remind_at", horizonStr).then((r) => r.data ?? []),
+    supabase.from("dismissed_dashboard_items").select("record_id, source_type, dismissed_date").eq("household_id", householdId).then((r) => r.data ?? []),
   ]);
 
+  const dismissedKeys = new Set(
+    dismissed.map((d: any) => `${d.source_type}::${d.record_id}::${d.dismissed_date}`)
+  );
+
   for (const p of insurance) {
-    if (p.next_due_date) items.push({ label: p.name, date: p.next_due_date, daysLeft: daysUntil(p.next_due_date), amount: p.premium, href: "/insurance", recordId: p.id, member_id: p.member_id, icon: Shield, kind: "Insurance" });
-    if (p.end_date && p.end_date <= horizonStr) items.push({ label: `${p.name} — policy ends`, date: p.end_date, daysLeft: daysUntil(p.end_date), amount: null, href: "/insurance", recordId: p.id, member_id: p.member_id, icon: Shield, kind: "Insurance" });
+    if (p.next_due_date && !dismissedKeys.has(`insurance_next_due::${p.id}::${p.next_due_date}`)) {
+      items.push({ label: p.name, date: p.next_due_date, sourceType: "insurance_next_due", daysLeft: daysUntil(p.next_due_date), amount: p.premium, href: "/insurance", recordId: p.id, member_id: p.member_id, icon: Shield, kind: "Insurance" });
+    }
+    if (p.end_date && p.end_date <= horizonStr && !dismissedKeys.has(`insurance_end::${p.id}::${p.end_date}`)) {
+      items.push({ label: `${p.name} — policy ends`, date: p.end_date, sourceType: "insurance_end", daysLeft: daysUntil(p.end_date), amount: null, href: "/insurance", recordId: p.id, member_id: p.member_id, icon: Shield, kind: "Insurance" });
+    }
   }
   for (const p of properties) {
-    if (p.fixed_rate_end) items.push({ label: `${p.name} — fixed rate ends`, date: p.fixed_rate_end, daysLeft: daysUntil(p.fixed_rate_end), amount: null, href: "/property", recordId: p.id, member_id: p.member_id, icon: Building2, kind: "Property" });
+    if (p.fixed_rate_end && !dismissedKeys.has(`property_fixed_rate::${p.id}::${p.fixed_rate_end}`)) {
+      items.push({ label: `${p.name} — fixed rate ends`, date: p.fixed_rate_end, sourceType: "property_fixed_rate", daysLeft: daysUntil(p.fixed_rate_end), amount: null, href: "/property", recordId: p.id, member_id: p.member_id, icon: Building2, kind: "Property" });
+    }
   }
   for (const l of loans) {
-    if (l.reprice_date) items.push({ label: `${l.bank} loan — reprice`, date: l.reprice_date, daysLeft: daysUntil(l.reprice_date), amount: null, href: "/loans", recordId: l.id, member_id: l.member_id, icon: Landmark, kind: "Loan" });
+    if (l.reprice_date && !dismissedKeys.has(`loan_reprice::${l.id}::${l.reprice_date}`)) {
+      items.push({ label: `${l.bank} loan — reprice`, date: l.reprice_date, sourceType: "loan_reprice", daysLeft: daysUntil(l.reprice_date), amount: null, href: "/loans", recordId: l.id, member_id: l.member_id, icon: Landmark, kind: "Loan" });
+    }
   }
   for (const s of savings) {
-    if (s.maturity_date) items.push({ label: `${s.institution} FD matures`, date: s.maturity_date, daysLeft: daysUntil(s.maturity_date), amount: s.balance, href: "/savings", recordId: s.id, member_id: s.member_id, icon: PiggyBank, kind: "Savings" });
+    if (s.maturity_date && !dismissedKeys.has(`savings_maturity::${s.id}::${s.maturity_date}`)) {
+      items.push({ label: `${s.institution} FD matures`, date: s.maturity_date, sourceType: "savings_maturity", daysLeft: daysUntil(s.maturity_date), amount: s.balance, href: "/savings", recordId: s.id, member_id: s.member_id, icon: PiggyBank, kind: "Savings" });
+    }
   }
   for (const r of reminders) {
     const dateStr = r.remind_at.slice(0, 10);
     const href = reminderHref(r.entity_type);
     const recordId = r.entity_id ?? r.id;
-    items.push({ label: r.what ?? "Reminder", date: dateStr, daysLeft: daysUntil(dateStr), amount: null, href, recordId, member_id: null, icon: Bell, kind: "Reminder" });
+    if (!dismissedKeys.has(`reminder::${recordId}::${dateStr}`)) {
+      items.push({ label: r.what ?? "Reminder", date: dateStr, sourceType: "reminder", daysLeft: daysUntil(dateStr), amount: null, href, recordId, member_id: null, icon: Bell, kind: "Reminder" });
+    }
   }
 
   return items.sort((a, b) => a.date.localeCompare(b.date));
@@ -84,10 +103,11 @@ async function fetchDueSoonItems(today: Date): Promise<DueSoonItem[]> {
 
 export function AlertsSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const today = new Date();
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
 
   const { data } = useQuery({
-    queryKey: ["alerts-all"],
-    enabled: open,
+    queryKey: ["alerts-all", activeHouseholdId],
+    enabled: open && !!activeHouseholdId,
     queryFn: async () => {
       const [statusResults, dueSoon] = await Promise.all([
         Promise.all(
@@ -95,11 +115,12 @@ export function AlertsSheet({ open, onOpenChange }: { open: boolean; onOpenChang
             const { data } = await supabase
               .from(s.table as any)
               .select("*")
+              .eq("household_id", activeHouseholdId!)
               .in("status", ["urgent", "review"]);
             return (data ?? []).map((row: any) => ({ row, src: s }));
           }),
         ),
-        fetchDueSoonItems(today),
+        fetchDueSoonItems(today, activeHouseholdId!),
       ]);
       const allStatus = statusResults.flat();
       return { allStatus, dueSoon };
