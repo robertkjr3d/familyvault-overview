@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ChevronDown, Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, Pencil, Trash2, FileText } from "lucide-react";
 import { StatusToggle, type Status } from "./StatusToggle";
 import { MemberTag } from "./MemberTag";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,7 @@ type Props = {
   defaultOpen?: boolean;
   highlight?: boolean;
   persistKey?: string;
+  hasNotes?: boolean;
 };
 
 const tintBg: Record<Status, string> = {
@@ -36,7 +37,7 @@ function readPersisted(key: string | undefined, def: boolean): boolean {
 
 export function RecordCard({
   title, subtitle, memberId, status, onStatusChange, action, rightMeta, children,
-  onEdit, onDelete, defaultOpen = false, highlight, persistKey,
+  onEdit, onDelete, defaultOpen = false, highlight, persistKey, hasNotes,
 }: Props) {
   const [open, setOpen] = useState(() => readPersisted(persistKey, defaultOpen));
 
@@ -92,6 +93,9 @@ export function RecordCard({
         </div>
         <div className="flex flex-col items-end gap-2 pt-7">
           {rightMeta}
+          {hasNotes && (
+            <FileText className="h-3 w-3 text-primary opacity-70" />
+          )}
           <ChevronDown
             className={cn("h-4 w-4 text-muted-foreground transition", open && "rotate-180")}
           />
