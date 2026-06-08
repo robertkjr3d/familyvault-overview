@@ -103,7 +103,8 @@ function LoanRow({ l, today, onStatus, onDelete }: { l: any; today: Date; onStat
         hasNotes={!!l.notes}
         rightMeta={
           <div className="text-right text-xs">
-            <div className="font-bold">{fmtMoney(l.balance)}</div>
+            <div className="text-muted-foreground">Balance</div>
+            <div className="font-bold">{fmtMoney(l.balance)} <span className="text-[10px] font-normal text-muted-foreground">(est.)</span></div>
             {(l.monthly_payment || calcPmt) && (
               <div className="text-muted-foreground">
                 {fmtMoney(l.monthly_payment || calcPmt)}/mo
