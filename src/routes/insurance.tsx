@@ -119,11 +119,20 @@ function InsuranceRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) =>
         <Section title="Policy">
           <FieldRow label="Policy #" value={p.policy_number} />
           <FieldRow label="Coverage" value={p.coverage} />
-          <FieldRow label="Sum assured" value={fmtMoney(p.sum_assured)} />
+          <FieldRow label="Currency" value={p.currency} />
+          <FieldRow label="Sum assured" value={fmtMoney(p.sum_assured, p.currency)} />
           <FieldRow label="Start" value={fmtDate(p.start_date)} />
           <FieldRow label={<AlertLabel text="End" />} value={fmtDate(p.end_date)} />
           <FieldRow label={<AlertLabel text="Next due" />} value={fmtDate(p.next_due_date)} />
         </Section>
+        {(p.payout_amount || p.payout_start_date || p.payout_end_date) && (
+          <Section title="Payout">
+            {p.payout_amount && <FieldRow label="Payout amount (est.)" value={fmtMoney(p.payout_amount, p.currency)} />}
+            {p.payout_start_date && <FieldRow label="Payout start" value={fmtDate(p.payout_start_date)} />}
+            {p.payout_frequency && <FieldRow label="Payout frequency" value={freqLabel(p.payout_frequency)} />}
+            {p.payout_end_date && <FieldRow label="Payout end" value={fmtDate(p.payout_end_date)} />}
+          </Section>
+        )}
 
         <CollapsibleSection icon={<span>📝</span>} title="Notes">
           <NotesEditor
