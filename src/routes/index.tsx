@@ -27,6 +27,7 @@ function Dashboard() {
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [dismissing, setDismissing] = useState<string | null>(null);
+  const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const queryClient = useQueryClient();
 
   const { data } = useQuery({
@@ -356,7 +357,7 @@ function Dashboard() {
           <p className="py-6 text-center text-sm text-muted-foreground">Nothing due soon ✓</p>
         ) : (
           <ul className="divide-y divide-border">
-            {upcoming.slice(0, 8).map((u, i) => {
+            {(showAllUpcoming ? upcoming : upcoming.slice(0, 8)).map((u, i) => {
               const isUrgent = u.daysLeft <= 7;
               const itemKey = `${u.sourceType}::${u.recordId}`;
               const isDismissing = dismissing === itemKey;
@@ -390,6 +391,14 @@ function Dashboard() {
               );
             })}
           </ul>
+        {upcoming.length > 8 && (
+            <button
+              onClick={() => setShowAllUpcoming((v) => !v)}
+              className="mt-2 flex w-full items-center justify-center gap-1 py-2 text-xs font-semibold text-primary"
+            >
+              {showAllUpcoming ? "Show less ↑" : `Show ${upcoming.length - 8} more ↓`}
+            </button>
+          )}
         )}
       </section>
 
