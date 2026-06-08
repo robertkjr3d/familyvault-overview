@@ -143,6 +143,7 @@ function SavingsRow({ a, onStatus, onDelete }: { a: any; onStatus: (s: any) => v
         action={a.note}
         onEdit={edit.open}
         onDelete={onDelete}
+        hasNotes={!!a.notes}
         rightMeta={
           <div className="text-right text-xs">
             <div className="font-bold">{fmtMoney(a.balance)}</div>
