@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ChevronDown, Pencil, Trash2, FileText } from "lucide-react";
+import { ChevronDown, Pencil, Trash2 } from "lucide-react";
 import { StatusToggle, type Status } from "./StatusToggle";
 import { MemberTag } from "./MemberTag";
 import { cn } from "@/lib/utils";
@@ -93,9 +93,6 @@ export function RecordCard({
         </div>
         <div className="flex flex-col items-end gap-2 pt-7">
           {rightMeta}
-          {hasNotes && (
-            <FileText className="h-3 w-3 text-primary opacity-70" />
-          )}
           <ChevronDown
             className={cn("h-4 w-4 text-muted-foreground transition", open && "rotate-180")}
           />
@@ -104,6 +101,7 @@ export function RecordCard({
 
       <div className="flex items-center justify-between gap-2 border-t border-border/40 px-4 py-2">
         <StatusToggle value={status} onChange={onStatusChange} />
+        {hasNotes && <span className="text-xs" title="Has notes">📝</span>}
       </div>
 
       {open && children && (
