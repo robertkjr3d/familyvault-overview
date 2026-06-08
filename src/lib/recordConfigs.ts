@@ -105,6 +105,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
       { key: "start_date", label: "Policy start date", type: "date" },
       { key: "end_date", label: "Policy end date", type: "date" },
       { key: "next_due_date", label: "Next premium due", type: "date" },
+     { key: "coverage", label: "Coverage", type: "text", placeholder: "e.g. Hospitalisation & Surgical, Critical Illness" },
       { key: "action", label: "Action", type: "text", placeholder: "e.g. Renew before Mar 2027" },
     ],
   },
