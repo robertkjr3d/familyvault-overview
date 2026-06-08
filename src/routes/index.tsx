@@ -151,6 +151,12 @@ function Dashboard() {
         allUpcoming.push({ date: p.next_due_date, label: p.name, amount: p.premium, member_id: p.member_id, href: "/insurance", recordId: p.id, sourceType: "insurance_next_due", daysLeft: daysUntil(p.next_due_date) });
       }
     }
+    if (p.end_date) {
+      const d = parseISO(p.end_date);
+      if (isBefore(d, horizon90)) {
+        allUpcoming.push({ date: p.end_date, label: `${p.name} — policy ends`, amount: null, member_id: p.member_id, href: "/insurance", recordId: p.id, sourceType: "insurance_end", daysLeft: daysUntil(p.end_date) });
+      }
+    }
   }
 
   for (const p of properties as any[]) {
