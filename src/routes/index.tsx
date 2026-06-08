@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/StatusToggle";
 import { useAppStore } from "@/lib/store";
 import { addDays, isBefore, parseISO } from "date-fns";
 import { LifetimeChart } from "@/components/LifetimeChart";
-import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check } from "lucide-react";
+import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check, Bell, PiggyBank } from "lucide-react";
 import { useState } from "react";
 import { fmtPct } from "@/lib/format";
 import { HashHighlight } from "@/components/HashHighlight";
@@ -135,6 +135,7 @@ function Dashboard() {
     recordId: string;
     sourceType: string;
     daysLeft: number;
+    icon: any;
   };
 
   function daysUntil(dateStr: string) {
@@ -148,13 +149,13 @@ function Dashboard() {
     if (p.next_due_date) {
       const d = parseISO(p.next_due_date);
       if (isBefore(d, horizon90)) {
-        allUpcoming.push({ date: p.next_due_date, label: p.name, amount: p.premium, member_id: p.member_id, href: "/insurance", recordId: p.id, sourceType: "insurance_next_due", daysLeft: daysUntil(p.next_due_date) });
+        allUpcoming.push({ date: p.next_due_date, label: p.name, amount: p.premium, member_id: p.member_id, href: "/insurance", recordId: p.id, sourceType: "insurance_next_due", daysLeft: daysUntil(p.next_due_date), icon: Shield });
       }
     }
     if (p.end_date) {
       const d = parseISO(p.end_date);
       if (isBefore(d, horizon90)) {
-        allUpcoming.push({ date: p.end_date, label: `${p.name} — policy ends`, amount: null, member_id: p.member_id, href: "/insurance", recordId: p.id, sourceType: "insurance_end", daysLeft: daysUntil(p.end_date) });
+        allUpcoming.push({ date: p.end_date, label: `${p.name} — policy ends`, amount: null, member_id: p.member_id, href: "/insurance", recordId: p.id, sourceType: "insurance_end", daysLeft: daysUntil(p.end_date), icon: Shield });
       }
     }
   }
@@ -163,7 +164,7 @@ function Dashboard() {
     if (p.fixed_rate_end) {
       const d = parseISO(p.fixed_rate_end);
       if (isBefore(d, horizon90)) {
-        allUpcoming.push({ date: p.fixed_rate_end, label: `${p.name} — fixed rate ends`, amount: null, member_id: p.member_id, href: "/property", recordId: p.id, sourceType: "property_fixed_rate", daysLeft: daysUntil(p.fixed_rate_end) });
+        allUpcoming.push({ date: p.fixed_rate_end, label: `${p.name} — fixed rate ends`, amount: null, member_id: p.member_id, href: "/property", recordId: p.id, sourceType: "property_fixed_rate", daysLeft: daysUntil(p.fixed_rate_end), icon: Building2 });
       }
     }
   }
@@ -172,7 +173,7 @@ function Dashboard() {
     if (l.reprice_date) {
       const d = parseISO(l.reprice_date);
       if (isBefore(d, horizon90)) {
-        allUpcoming.push({ date: l.reprice_date, label: `${l.bank} loan — reprice`, amount: null, member_id: l.member_id, href: "/loans", recordId: l.id, sourceType: "loan_reprice", daysLeft: daysUntil(l.reprice_date) });
+        allUpcoming.push({ date: l.reprice_date, label: `${l.bank} loan — reprice`, amount: null, member_id: l.member_id, href: "/loans", recordId: l.id, sourceType: "loan_reprice", daysLeft: daysUntil(l.reprice_date), icon: Landmark });
       }
     }
   }
@@ -181,7 +182,7 @@ function Dashboard() {
     if (s.maturity_date) {
       const d = parseISO(s.maturity_date);
       if (isBefore(d, horizon90)) {
-        allUpcoming.push({ date: s.maturity_date, label: `${s.institution} FD matures`, amount: s.balance, member_id: s.member_id, href: "/savings", recordId: s.id, sourceType: "savings_maturity", daysLeft: daysUntil(s.maturity_date) });
+        allUpcoming.push({ date: s.maturity_date, label: `${s.institution} FD matures`, amount: s.balance, member_id: s.member_id, href: "/savings", recordId: s.id, sourceType: "savings_maturity", daysLeft: daysUntil(s.maturity_date), icon: PiggyBank });
       }
     }
   }
@@ -201,6 +202,7 @@ function Dashboard() {
         recordId,
         sourceType: "reminder",
         daysLeft: daysUntil(dateStr),
+        icon: Bell,
       });
     }
   }
@@ -375,9 +377,10 @@ function Dashboard() {
                   {editMode ? (
                     <>
                       <span className={`w-20 shrink-0 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
-                      <span className="flex-1 truncate">{u.label}</span>
+                      <u.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate">{u.label}</span>
                       <MemberTag memberId={u.member_id} />
-                      {u.amount != null && <span className="font-semibold">{fmtMoney(u.amount)}</span>}
+                      {u.amount != null && <span className="shrink-0 font-semibold">{fmtMoney(u.amount)}</span>}
                       <button
                         onClick={() => dismissItem(u)}
                         className={`ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${isDismissing ? "border-muted text-muted-foreground" : "border-settled text-settled"}`}
@@ -388,10 +391,11 @@ function Dashboard() {
                   ) : (
                     <Link to={u.href as any} hash={`record-${u.recordId}`} className="flex flex-1 items-center gap-3 hover:bg-accent/40 rounded">
                       <span className={`w-20 shrink-0 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
-                      <span className="flex-1 truncate">{u.label}</span>
+                      <u.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate">{u.label}</span>
                       <MemberTag memberId={u.member_id} />
-                      {u.amount != null && <span className="font-semibold">{fmtMoney(u.amount)}</span>}
-                      <ChevronRight className="h-4 w-4 text-primary" />
+                      {u.amount != null && <span className="shrink-0 font-semibold">{fmtMoney(u.amount)}</span>}
+                      <ChevronRight className="h-4 w-4 shrink-0 text-primary" />
                     </Link>
                   )}
                 </li>
