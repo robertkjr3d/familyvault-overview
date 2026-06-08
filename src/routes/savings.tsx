@@ -146,7 +146,8 @@ function SavingsRow({ a, onStatus, onDelete }: { a: any; onStatus: (s: any) => v
         hasNotes={!!a.notes}
         rightMeta={
           <div className="text-right text-xs">
-            <div className="font-bold">{fmtMoney(a.balance)}</div>
+            <div className="text-muted-foreground">Balance</div>
+            <div className="font-bold">{fmtMoney(a.balance)} <span className="text-[10px] font-normal text-muted-foreground">(est.)</span></div>
             <div className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
               {isStale && (
                 <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: "hsl(38 95% 55%)" }} aria-label="Balance is stale" />
