@@ -110,8 +110,8 @@ function InsuranceRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) =>
         onDelete={onDelete}
         rightMeta={
           <div className="text-right text-xs">
-            <div className="font-bold">{fmtMoney(p.premium)}</div>
-            <div className="text-muted-foreground">/ {freqLabel(p.frequency)}</div>
+            <div className="text-muted-foreground">Premium</div>
+            <div className="font-bold">{fmtMoney(p.premium)}/{freqLabel(p.frequency)}</div>
           </div>
         }
       >
