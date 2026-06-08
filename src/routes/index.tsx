@@ -81,14 +81,14 @@ function Dashboard() {
       if (!activeHouseholdId) return [];
       const { data } = await supabase
         .from("dismissed_dashboard_items")
-        .select("id, record_id, source_type")
+        .select("id, record_id, source_type, dismissed_date")
         .eq("household_id", activeHouseholdId);
       return data ?? [];
     },
   });
 
   const dismissedKeys = new Set(
-    (dismissedData ?? []).map((d: any) => `${d.source_type}::${d.record_id}`)
+    (dismissedData ?? []).map((d: any) => `${d.source_type}::${d.record_id}::${d.dismissed_date}`)
   );
 
   const properties = data?.properties ?? [];
@@ -201,7 +201,7 @@ function Dashboard() {
   allUpcoming.sort((a, b) => a.date.localeCompare(b.date));
 
   const upcoming = allUpcoming.filter(
-    (u) => !dismissedKeys.has(`${u.sourceType}::${u.recordId}`)
+    (u) => !dismissedKeys.has(`${u.sourceType}::${u.recordId}::${u.date}`)
   );
 
   async function invalidateAll() {
@@ -225,6 +225,7 @@ function Dashboard() {
         source_type: u.sourceType,
         record_id: u.recordId,
         label: u.label,
+        dismissed_date: u.date,
       })
       .select("id")
       .single();
