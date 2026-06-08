@@ -133,7 +133,7 @@ function RootComponent() {
           <Outlet />
         </main>
         <BottomTabs />
-        <Toaster position="bottom-right" richColors closeButton offset={{ bottom: 80 }} />
+        <Toaster position="bottom-right" richColors closeButton offset={{ bottom: 80 }} duration={1000} />
       </div>
     </QueryClientProvider>
   );
