@@ -356,6 +356,7 @@ function Dashboard() {
         {upcoming.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">Nothing due soon ✓</p>
         ) : (
+          <>
           <ul className="divide-y divide-border">
             {(showAllUpcoming ? upcoming : upcoming.slice(0, 8)).map((u, i) => {
               const isUrgent = u.daysLeft <= 7;
@@ -399,6 +400,7 @@ function Dashboard() {
               {showAllUpcoming ? "Show less ↑" : `Show ${upcoming.length - 8} more ↓`}
             </button>
           )}
+          </>
         )}
       </section>
 
