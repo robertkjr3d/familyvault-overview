@@ -96,9 +96,11 @@ function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: an
         action={inv.strategy}
         onEdit={edit.open}
         onDelete={onDelete}
-        hasNotes={!!inv.notes}
+       hasNotes={!!inv.notes}
+        updatedAt={inv.updated_at}
         rightMeta={
           <div className="text-right text-xs">
+            <div className="text-muted-foreground">Value (est.)</div>
             <div className="font-bold">{fmtMoney(inv.current_value)}</div>
             <div className={gain >= 0 ? "text-settled" : "text-urgent"}>{fmtMoney(gain)}</div>
           </div>
