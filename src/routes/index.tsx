@@ -294,7 +294,7 @@ function Dashboard() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Kpi label="Total Assets" value={fmtMoney(totalAssets)} />
         <Kpi label="Total Liabilities" value={fmtMoney(totalLiabilities)} />
-        <Kpi label="Net Worth" value={fmtMoney(netWorth)} accent="gold" big />
+        <Kpi label="Net Worth" value={fmtMoney(netWorth)} accent="gold" big sub="SGD only · foreign currency excluded" />
         <Kpi
           label="Active Alerts"
           value={String(alertCount)}
