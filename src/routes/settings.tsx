@@ -317,13 +317,13 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
       .eq("household_id", householdId);
     await qc.invalidateQueries({ queryKey: ["dismissed-dashboard", householdId] });
     await qc.invalidateQueries({ queryKey: ["alert-count", householdId] });
-    toast.success("History cleared — items restored to dashboard.");
+    toast.success("History cleared — items restored to dashboard and alerts.");
   }
 
   return (
     <section className="rounded-2xl border border-border bg-card p-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold">Dismissed Items History</h2>
+        <h2 className="text-sm font-bold">Completed Items History</h2>
         <button
           onClick={() => setExpanded((v) => !v)}
           className="text-xs font-semibold text-primary"
