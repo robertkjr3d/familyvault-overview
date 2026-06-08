@@ -208,7 +208,7 @@ function Dashboard() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["dismissed-dashboard", activeHouseholdId] }),
       queryClient.invalidateQueries({ queryKey: ["reminders-dashboard", memberFilter, activeHouseholdId] }),
-      queryClient.invalidateQueries({ queryKey: ["alert-count"] }),
+      queryClient.invalidateQueries({ queryKey: ["alert-count", activeHouseholdId] }),
     ]);
   }
 
