@@ -373,7 +373,7 @@ function Dashboard() {
               const dateClass = u.daysLeft < 0 ? "text-urgent" : isUrgent ? "text-urgent" : "text-primary";
               const dateLabel = u.daysLeft < 0 ? `${Math.abs(u.daysLeft)}d overdue` : isUrgent ? `${u.daysLeft}d left` : fmtDate(u.date);
               return (
-                <li key={i} className="flex items-center gap-3 py-2.5 text-sm -mx-2 px-2">
+               <li key={i} className="flex min-w-0 items-center gap-3 py-2.5 text-sm -mx-2 px-2">
                   {editMode ? (
                     <>
                       <span className={`w-20 shrink-0 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
