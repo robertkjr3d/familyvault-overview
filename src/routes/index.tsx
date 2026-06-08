@@ -284,7 +284,7 @@ function Dashboard() {
       <MemberFilterBar />
 
       {dueToday && (
-        <Link to="/insurance" hash={`record-${dueToday.recordId}`} className="block rounded-2xl bg-review p-4 text-review-foreground">
+        <Link to={dueToday.href as any} hash={`record-${dueToday.recordId}`} className="block rounded-2xl bg-review p-4 text-review-foreground">
           <div className="text-xs font-semibold uppercase">Due today</div>
           <div className="mt-1 text-base font-bold">{dueToday.label} {dueToday.amount ? `· ${fmtMoney(dueToday.amount)}` : ""}</div>
         </Link>
