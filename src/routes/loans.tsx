@@ -100,6 +100,7 @@ function LoanRow({ l, today, onStatus, onDelete }: { l: any; today: Date; onStat
         action={actionLabel}
         onEdit={edit.open}
         onDelete={onDelete}
+        hasNotes={!!l.notes}
         rightMeta={
           <div className="text-right text-xs">
             <div className="font-bold">{fmtMoney(l.balance)}</div>
