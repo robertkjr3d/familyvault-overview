@@ -154,7 +154,10 @@ function SettingsPage() {
           Save
         </button>
         <div className="mt-4">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Members</div>
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Members</span>
+            <a href="/members" className="text-xs font-semibold text-primary">Manage →</a>
+          </div>
           <ul className="space-y-1.5">
             {members.map((m) => (
               <li key={m.id} className="flex items-center gap-3 rounded-lg bg-background/50 px-3 py-2 text-sm">
