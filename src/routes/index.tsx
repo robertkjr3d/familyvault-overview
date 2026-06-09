@@ -126,6 +126,7 @@ function Dashboard() {
   function insuranceMonthly(p: any): number {
     const premium = Number(p.premium) || 0;
     const freq = (p.frequency ?? "").toLowerCase();
+    if (freq === "one-off" || freq === "single") return 0;
     if (freq === "monthly") return premium;
     if (freq === "quarterly") return premium / 3;
     if (freq === "half-yearly" || freq === "semi-annual") return premium / 6;
@@ -480,9 +481,17 @@ function Dashboard() {
 
       {/* LIFETIME CHART */}
       <section className="rounded-2xl border border-border bg-card p-4">
-        <h2 className="mb-1 text-sm font-bold">Lifetime Cash Flow</h2>
-        <p className="mb-3 text-xs text-muted-foreground">Projected next 40 years across all records.</p>
-        <LifetimeChart properties={properties} loans={loans} insurance={insurance} />
+        <h2 className="mb-1 text-sm font-bold">Lifetime Net Worth</h2>
+        <p className="mb-3 text-xs text-muted-foreground">Projected trajectory based on your current records.</p>
+        <LifetimeChart
+          properties={properties}
+          loans={loans}
+          insurance={insurance}
+          savings={savings}
+          startingNetWorth={netWorth}
+          monthlyIncome={salaryIncome}
+          monthlyExpenses={baseExpenses}
+        />
       </section>
     </div>
   );
