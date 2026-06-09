@@ -59,6 +59,20 @@ function Dashboard() {
     },
   });
 
+  const { data: appSettings } = useQuery({
+    queryKey: ["app_settings", activeHouseholdId],
+    enabled: !!activeHouseholdId,
+    queryFn: async () => {
+      if (!activeHouseholdId) return null;
+      const { data } = await supabase
+        .from("app_settings")
+        .select("monthly_income, monthly_expenses, currency")
+        .eq("household_id", activeHouseholdId)
+        .maybeSingle();
+      return data;
+    },
+  });
+
   const { data: remindersData } = useQuery({
     queryKey: ["reminders-dashboard", memberFilter, activeHouseholdId],
     enabled: !!activeHouseholdId,
@@ -105,11 +119,28 @@ function Dashboard() {
   const totalLiabilities = loans.reduce((s: number, l: any) => s + (Number(l.balance) || 0), 0);
   const netWorth = totalAssets - totalLiabilities;
 
-  const monthlyIn = properties.reduce((s: number, p: any) => s + (Number(p.monthly_rent) || 0), 0);
-  const monthlyOut =
-    properties.reduce((s: number, p: any) => s + (Number(p.monthly_costs) || 0) + (Number(p.monthly_payment) || 0), 0) +
-    loans.reduce((s: number, l: any) => s + (Number(l.monthly_payment) || 0), 0);
+  const salaryIncome = Number(appSettings?.monthly_income) || 0;
+  const rentalIncome = properties.reduce((s: number, p: any) => s + (Number(p.monthly_rent) || 0), 0);
+  const monthlyIn = salaryIncome + rentalIncome;
+
+  function insuranceMonthly(p: any): number {
+    const premium = Number(p.premium) || 0;
+    const freq = (p.frequency ?? "").toLowerCase();
+    if (freq === "monthly") return premium;
+    if (freq === "quarterly") return premium / 3;
+    if (freq === "half-yearly" || freq === "semi-annual") return premium / 6;
+    if (freq === "annual" || freq === "yearly" || freq === "") return premium / 12;
+    return premium / 12;
+  }
+
+  const propertyOut = properties.reduce((s: number, p: any) => s + (Number(p.monthly_costs) || 0) + (Number(p.monthly_payment) || 0), 0);
+  const loanOut = loans.reduce((s: number, l: any) => s + (Number(l.monthly_payment) || 0), 0);
+  const insuranceOut = insurance.reduce((s: number, p: any) => s + insuranceMonthly(p), 0);
+  const baseExpenses = Number(appSettings?.monthly_expenses) || 0;
+  const monthlyOut = propertyOut + loanOut + insuranceOut + baseExpenses;
   const netCashFlow = monthlyIn - monthlyOut;
+
+  const showSettingsNudge = salaryIncome === 0 && baseExpenses === 0;
 
   function reminderHref(entityType: string | null | undefined): string {
     switch (entityType) {
@@ -120,8 +151,6 @@ function Dashboard() {
       case "investment": return "/investments";
       case "health":     return "/health";
       case "inventory":  return "/inventory";
-      case "other_assets":
-      case "other_asset": return "/other-assets";
       default:           return "/";
     }
   }
@@ -422,12 +451,30 @@ function Dashboard() {
       {/* MONTHLY CASH FLOW BARS */}
       <section className="rounded-2xl border border-border bg-card p-4">
         <h2 className="mb-3 text-sm font-bold">Monthly Cash Flow</h2>
-        <CashFlowBars inflow={monthlyIn} outflow={monthlyOut} />
+        <CashFlowBars
+          inflow={monthlyIn}
+          outflow={monthlyOut}
+          inflowBreakdown={[
+            { label: "Salary / income", value: salaryIncome },
+            { label: "Rental income", value: rentalIncome },
+          ]}
+          outflowBreakdown={[
+            { label: "Property costs", value: propertyOut },
+            { label: "Loan repayments", value: loanOut },
+            { label: "Insurance premiums", value: insuranceOut },
+            { label: "Other expenses", value: baseExpenses },
+          ]}
+        />
         <div className="mt-3 text-center">
           <div className="text-xs text-muted-foreground">Net</div>
           <div className={`text-2xl font-bold ${netCashFlow >= 0 ? "text-settled" : "text-urgent"}`}>
             {fmtMoney(netCashFlow)}
           </div>
+          {showSettingsNudge && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Add income &amp; expenses in <a href="/settings" className="font-semibold text-primary underline">Settings</a> for a complete picture.
+            </p>
+          )}
         </div>
       </section>
 
@@ -462,17 +509,59 @@ function BreakdownRow({ label, value, bold, className }: { label: string; value:
   );
 }
 
-function CashFlowBars({ inflow, outflow }: { inflow: number; outflow: number }) {
+type BreakdownItem = { label: string; value: number };
+
+function CashFlowBars({
+  inflow,
+  outflow,
+  inflowBreakdown = [],
+  outflowBreakdown = [],
+}: {
+  inflow: number;
+  outflow: number;
+  inflowBreakdown?: BreakdownItem[];
+  outflowBreakdown?: BreakdownItem[];
+}) {
   const max = Math.max(inflow, outflow, 1);
+  const activeInflow = inflowBreakdown.filter((i) => i.value > 0);
+  const activeOutflow = outflowBreakdown.filter((i) => i.value > 0);
   return (
-    <div className="space-y-2">
-     <div>
-        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Income</span><span className="font-semibold">{fmtMoney(inflow)}</span></div>
-        <div className="mt-1 h-3 overflow-hidden rounded-full bg-muted"><div className="h-full bg-settled" style={{ width: `${(inflow / max) * 100}%` }} /></div>
+    <div className="space-y-3">
+      <div>
+        <div className="flex justify-between text-xs">
+          <span className="text-muted-foreground">Income</span>
+          <span className="font-semibold">{fmtMoney(inflow)}</span>
+        </div>
+        <div className="mt-1 h-3 overflow-hidden rounded-full bg-muted">
+          <div className="h-full bg-settled" style={{ width: `${(inflow / max) * 100}%` }} />
+        </div>
+        {activeInflow.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+            {activeInflow.map((item) => (
+              <span key={item.label} className="text-[10px] text-muted-foreground">
+                {item.label}: <span className="font-medium text-foreground">{fmtMoney(item.value)}</span>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
       <div>
-        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Expenses</span><span className="font-semibold">{fmtMoney(outflow)}</span></div>
-        <div className="mt-1 h-3 overflow-hidden rounded-full bg-muted"><div className="h-full bg-urgent" style={{ width: `${(outflow / max) * 100}%` }} /></div>
+        <div className="flex justify-between text-xs">
+          <span className="text-muted-foreground">Expenses</span>
+          <span className="font-semibold">{fmtMoney(outflow)}</span>
+        </div>
+        <div className="mt-1 h-3 overflow-hidden rounded-full bg-muted">
+          <div className="h-full bg-urgent" style={{ width: `${(outflow / max) * 100}%` }} />
+        </div>
+        {activeOutflow.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+            {activeOutflow.map((item) => (
+              <span key={item.label} className="text-[10px] text-muted-foreground">
+                {item.label}: <span className="font-medium text-foreground">{fmtMoney(item.value)}</span>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
