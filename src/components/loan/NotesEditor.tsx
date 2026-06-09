@@ -127,7 +127,25 @@ export function NotesEditor({
     } else if (type === "italic") {
       document.execCommand("italic");
     } else {
-      document.execCommand("insertUnorderedList");
+      const ok = document.execCommand("insertUnorderedList");
+      if (!ok) {
+        const selection = document.getSelection();
+        if (!selection || selection.rangeCount === 0) return;
+        const range = selection.getRangeAt(0);
+        if (!el.contains(range.commonAncestorContainer)) return;
+
+        const selectedLines = selection
+          .toString()
+          .split(/\n+/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+
+        const listHtml = selectedLines.length
+          ? `<ul>${selectedLines.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>`
+          : "<ul><li><br></li></ul>";
+
+        document.execCommand("insertHTML", false, listHtml);
+      }
     }
 
     const next = sanitizeHtml(el.innerHTML);
@@ -239,7 +257,7 @@ export function NotesEditor({
             void commit(editorRef.current?.innerHTML ?? html);
             setFormatState({ bold: false, italic: false, bullet: false });
           }}
-          className="min-h-[132px] rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="min-h-[132px] rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1"
         />
         <span
           className={`pointer-events-none absolute right-2 top-2 text-[11px] text-muted-foreground transition-opacity duration-300 ${justSaved ? "opacity-100" : "opacity-0"}`}
