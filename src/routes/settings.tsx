@@ -53,11 +53,19 @@ function SettingsPage() {
   });
   const [familyName, setFamilyName] = useState("");
   const [simDate, setSimDate] = useState("");
+  const [monthlyIncome, setMonthlyIncome] = useState<string>("");
+  const [monthlyExpenses, setMonthlyExpenses] = useState<string>("");
 
   // Sync simDate from DB when settings first load
   useEffect(() => {
     if (settings?.simulated_date) setSimDate(settings.simulated_date);
   }, [settings?.simulated_date]);
+
+  // Sync income/expenses from DB when settings first load
+  useEffect(() => {
+    if (settings?.monthly_income != null) setMonthlyIncome(String(settings.monthly_income));
+    if (settings?.monthly_expenses != null) setMonthlyExpenses(String(settings.monthly_expenses));
+  }, [settings?.monthly_income, settings?.monthly_expenses]);
   const [theme, setTheme] = useState<"light" | "dark">(() =>
     typeof window !== "undefined" && document.documentElement.classList.contains("dark") ? "dark" : "light"
   );
@@ -168,6 +176,73 @@ function SettingsPage() {
             ))}
           </ul>
         </div>
+      </section>
+
+      {/* Household Finances */}
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="mb-1 text-sm font-bold">Household Finances</h2>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Used for cash flow calculations and lifetime projections. Combined household figures.
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground">
+              Monthly income ({settings?.currency ?? "SGD"})
+            </label>
+            <input
+              type="number"
+              min="0"
+              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+              placeholder="e.g. 12000"
+              value={monthlyIncome}
+              onChange={(e) => setMonthlyIncome(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground">
+              Monthly expenses ({settings?.currency ?? "SGD"})
+            </label>
+            <input
+              type="number"
+              min="0"
+              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+              placeholder="e.g. 6000"
+              value={monthlyExpenses}
+              onChange={(e) => setMonthlyExpenses(e.target.value)}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Exclude loan repayments and insurance premiums — those are tracked automatically.
+            </p>
+          </div>
+          {(() => {
+            const inc = parseFloat(monthlyIncome) || 0;
+            const exp = parseFloat(monthlyExpenses) || 0;
+            const surplus = inc - exp;
+            const surplusColor = surplus >= 0 ? "text-settled" : "text-urgent";
+            const show = inc > 0 || exp > 0;
+            if (!show) return null;
+            return (
+              <div className="rounded-lg bg-background/50 px-3 py-2 text-sm">
+                <span className="text-muted-foreground">Discretionary surplus: </span>
+                <span className={`font-semibold ${surplusColor}`}>
+                  {(settings?.currency ?? "SGD")} {surplus.toLocaleString()}
+                </span>
+                <span className="text-xs text-muted-foreground"> / month</span>
+              </div>
+            );
+          })()}
+        </div>
+        <button
+          className="mt-3 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+          onClick={() =>
+            save.mutate({
+              monthly_income: parseFloat(monthlyIncome) || 0,
+              monthly_expenses: parseFloat(monthlyExpenses) || 0,
+            })
+          }
+        >
+          Save
+        </button>
       </section>
 
       {/* Appearance */}
