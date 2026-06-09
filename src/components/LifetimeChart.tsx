@@ -24,8 +24,6 @@ type ChartPoint = {
   year: number;
   netWorth: number;
   annualNet: number;
-  propAppreciation: number;
-  investGrowth: number;
   events: string[];
 };
 
@@ -48,12 +46,12 @@ export function LifetimeChart({
   const startYear = today.getFullYear();
 
   const retirementYear = appSettings?.retirement_year ? Number(appSettings.retirement_year) : null;
-  const cpfPayoutAge = appSettings?.cpf_payout_age != null ? Number(appSettings.cpf_payout_age) : 65;
-  const cpfMonthlyPayout = appSettings?.cpf_monthly_payout != null ? Number(appSettings.cpf_monthly_payout) : 0;
-  const investmentGrowthRate = (appSettings?.investment_growth_rate != null ? Number(appSettings.investment_growth_rate) : 4) / 100;
-  const propertyAppreciationRate = (appSettings?.property_appreciation_rate != null ? Number(appSettings.property_appreciation_rate) : 2) / 100;
-  const inflationRate = (appSettings?.inflation_rate != null ? Number(appSettings.inflation_rate) : 2) / 100;
-  const planningHorizonAge = appSettings?.planning_horizon_age != null ? Number(appSettings.planning_horizon_age) : 85;
+  const cpfPayoutAge = Number(appSettings?.cpf_payout_age) || 65;
+  const cpfMonthlyPayout = Number(appSettings?.cpf_monthly_payout) || 0;
+  const investmentGrowthRate = (Number(appSettings?.investment_growth_rate) || 4) / 100;
+  const propertyAppreciationRate = (Number(appSettings?.property_appreciation_rate) || 2) / 100;
+  const inflationRate = (Number(appSettings?.inflation_rate) || 2) / 100;
+  const planningHorizonAge = Number(appSettings?.planning_horizon_age) || 85;
 
   // Derive oldest member's birth year for accurate horizon and CPF calculation
   const oldestBirthYear = members.length > 0
@@ -90,17 +88,15 @@ export function LifetimeChart({
 
   const data = useMemo<ChartPoint[]>(() => {
     let runningNetWorth = startingNetWorth;
+    // Track compounding values separately
+    let investmentPool = properties.reduce((s: number, p: any) => s, 0); // investments tracked via prop
+    const investmentStartValue = 0; // handled via annualIn growth below
 
     // Build per-property current values for appreciation
     const propValues: Record<string, number> = {};
     for (const p of properties) {
       propValues[p.id] = Number(p.current_value) || 0;
     }
-
-    // Investable assets pool — grows independently at investmentGrowthRate
-    // Use a rough starting value: net worth minus property values
-    const totalPropertyValue = properties.reduce((s: number, p: any) => s + (Number(p.current_value) || 0), 0);
-    let investablePool = Math.max(startingNetWorth - totalPropertyValue, 0);
 
     // Properties with a linked mortgage loan — exclude their monthly_payment (covered by loan)
     const mortgagedPropertyIds = new Set(
@@ -132,33 +128,39 @@ export function LifetimeChart({
       const inflatedExpenses = monthlyExpenses * 12 * Math.pow(1 + inflationRate, i);
       annualOut += inflatedExpenses;
 
-      let yearPropertyAppreciation = 0;
-
       // Property: rental income in, costs + mortgage out; value appreciates
       for (const p of properties) {
         if (p.monthly_rent) annualIn += Number(p.monthly_rent) * 12;
         const inflatedCosts = (Number(p.monthly_costs) || 0) * 12 * Math.pow(1 + inflationRate, i);
         annualOut += inflatedCosts;
-        const mortgageEnds = p.fixed_rate_end
-          ? new Date(p.fixed_rate_end).getFullYear() + 25
-          : startYear + 40;
+        const mortgageEndYear = p.mortgage_end_date
+          ? new Date(p.mortgage_end_date).getFullYear()
+          : null;
         const isMortgagedViaLoan = mortgagedPropertyIds.has(p.id);
-        if (p.monthly_payment && !isMortgagedViaLoan && y <= mortgageEnds) {
+        if (p.monthly_payment && !isMortgagedViaLoan && (mortgageEndYear === null || y <= mortgageEndYear)) {
           annualOut += Number(p.monthly_payment) * 12;
         }
-        // Property appreciation — grows property value, tracked separately from cash flows
+        // Property appreciation adds to net worth directly
         const appreciation = (propValues[p.id] || 0) * propertyAppreciationRate;
         propValues[p.id] = (propValues[p.id] || 0) + appreciation;
-        yearPropertyAppreciation += appreciation;
+        annualIn += appreciation;
+        if (i === 0 && propertyAppreciationRate > 0) {
+          // Don't spam events — just model silently
+        }
       }
 
-      // Loans: stop at rough payoff
+      // Loans: stop at loan_end_date if set, otherwise run indefinitely
       for (const l of loans) {
         if (!l.monthly_payment) continue;
-        const loanEnds = l.reprice_date
-          ? new Date(l.reprice_date).getFullYear() + 25
-          : startYear + 40;
-        if (y <= loanEnds) annualOut += Number(l.monthly_payment) * 12;
+        const loanEndYear = l.loan_end_date
+          ? new Date(l.loan_end_date).getFullYear()
+          : null;
+        if (loanEndYear === null || y <= loanEndYear) {
+          annualOut += Number(l.monthly_payment) * 12;
+        }
+        if (loanEndYear === y) {
+          events.push(`${l.bank ?? "Loan"} paid off`);
+        }
       }
 
       // Insurance: premiums out, payouts as events
@@ -203,23 +205,21 @@ export function LifetimeChart({
         events.push("Retirement — salary ends");
       }
 
-      // Investment growth on investable pool (separate from property)
-      const investmentGrowth = investablePool * investmentGrowthRate;
-      investablePool += investmentGrowth;
+      // Investment growth on running net worth proxy
+      // Model: a portion of net worth (non-property) grows at investmentGrowthRate
+      // Simple approach: add growth on positive running balance at growth rate
+      if (runningNetWorth > 0 && investmentGrowthRate > 0) {
+        const growth = runningNetWorth * investmentGrowthRate * 0.3; // 30% of NW assumed in investments
+        annualIn += growth;
+      }
 
-      // Annual cash flow net
       const annualNet = annualIn - annualOut;
-
-      // Net worth moves by: cash flow net + investment growth + property appreciation
-      // Property appreciation and investment growth are modelled separately to avoid double-compounding
-      runningNetWorth += annualNet + investmentGrowth + yearPropertyAppreciation;
+      runningNetWorth += annualNet;
 
       years.push({
         year: y,
         netWorth: Math.round(runningNetWorth),
         annualNet: Math.round(annualNet),
-        propAppreciation: Math.round(yearPropertyAppreciation),
-        investGrowth: Math.round(investmentGrowth),
         events,
       });
     }
@@ -247,8 +247,6 @@ export function LifetimeChart({
     const an = payload.find((p: any) => p.dataKey === "annualNet");
     const nwColor = nw && nw.value < 0 ? "font-semibold text-urgent" : "font-semibold text-settled";
     const anColor = an && an.value >= 0 ? "font-semibold text-settled" : "font-semibold text-urgent";
-    const showPropGrowth = point != null && point.propAppreciation > 0;
-    const showInvestGrowth = point != null && point.investGrowth > 0;
     return (
       <div className="rounded-xl border border-border bg-card p-3 text-xs shadow-lg max-w-[220px]">
         <div className="mb-1 font-bold">{label}</div>
@@ -260,20 +258,8 @@ export function LifetimeChart({
         )}
         {an && (
           <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">Cash flow net</span>
+            <span className="text-muted-foreground">Annual net</span>
             <span className={anColor}>{fmt(an.value)}</span>
-          </div>
-        )}
-        {showPropGrowth && (
-          <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">Property growth</span>
-            <span className="font-semibold text-settled">+{fmt(point!.propAppreciation)}</span>
-          </div>
-        )}
-        {showInvestGrowth && (
-          <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">Investment growth</span>
-            <span className="font-semibold text-settled">+{fmt(point!.investGrowth)}</span>
           </div>
         )}
         {point?.events.map((e, i) => (
