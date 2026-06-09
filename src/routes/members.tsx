@@ -21,6 +21,7 @@ type MemberRow = {
   color: string;
   emoji: string;
   sort_order: number;
+  birth_year: number | null;
 };
 
 const MEMBER_COLORS = [
@@ -32,6 +33,8 @@ const MEMBER_COLORS = [
   "hsl(12 76% 50%)",
 ];
 
+const THIS_YEAR = new Date().getFullYear();
+
 function MembersPage() {
   const qc = useQueryClient();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
@@ -42,6 +45,7 @@ function MembersPage() {
   const [newShortName, setNewShortName] = useState("");
   const [newEmoji, setNewEmoji] = useState("👤");
   const [newColor, setNewColor] = useState(MEMBER_COLORS[0]);
+  const [newBirthYear, setNewBirthYear] = useState<string>("");
   const [savingNew, setSavingNew] = useState(false);
 
   const [editing, setEditing] = useState<Record<string, Partial<MemberRow>>>({});
@@ -55,7 +59,7 @@ function MembersPage() {
       if (!activeHouseholdId) return [];
       const { data, error } = await supabase
         .from("members" as any)
-        .select("id, name, short_name, color, emoji, sort_order")
+        .select("id, name, short_name, color, emoji, sort_order, birth_year")
         .eq("household_id", activeHouseholdId)
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: true });
@@ -70,16 +74,10 @@ function MembersPage() {
   }, [members]);
 
   async function addMember() {
-    if (!activeHouseholdId) {
-      toast.error("Select a household first.");
-      return;
-    }
-
+    if (!activeHouseholdId) { toast.error("Select a household first."); return; }
     const name = newName.trim();
-    if (!name) {
-      toast.error("Member name is required.");
-      return;
-    }
+    if (!name) { toast.error("Member name is required."); return; }
+    const parsedBirthYear = newBirthYear ? parseInt(newBirthYear) : null;
 
     setSavingNew(true);
     try {
@@ -90,21 +88,17 @@ function MembersPage() {
         emoji: (newEmoji.trim() || "👤").slice(0, 2),
         color: newColor,
         sort_order: nextSortOrder,
+        birth_year: parsedBirthYear,
       };
-
       const { error } = await supabase.from("members" as any).insert(payload as any);
       if (error) throw error;
-
-      setNewName("");
-      setNewShortName("");
-      setNewEmoji("👤");
+      setNewName(""); setNewShortName(""); setNewEmoji("👤"); setNewBirthYear("");
       setNewColor(MEMBER_COLORS[(nextSortOrder + 1) % MEMBER_COLORS.length]);
       toast.success("Member added.");
       void qc.invalidateQueries({ queryKey: ["members"] });
       void qc.invalidateQueries({ queryKey: ["members-manage", activeHouseholdId] });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Unable to add member.";
-      toast.error(message);
+      toast.error(error instanceof Error ? error.message : "Unable to add member.");
     } finally {
       setSavingNew(false);
     }
@@ -113,11 +107,9 @@ function MembersPage() {
   async function saveMember(member: MemberRow) {
     const draft = editing[member.id] ?? {};
     const name = (draft.name ?? member.name).trim();
-
-    if (!name) {
-      toast.error("Member name is required.");
-      return;
-    }
+    if (!name) { toast.error("Member name is required."); return; }
+    const birthYearRaw = draft.birth_year ?? member.birth_year;
+    const parsedBirthYear = birthYearRaw ? Number(birthYearRaw) : null;
 
     setSavingId(member.id);
     try {
@@ -128,49 +120,34 @@ function MembersPage() {
           short_name: (draft.short_name ?? member.short_name ?? "").trim() || null,
           emoji: ((draft.emoji ?? member.emoji ?? "👤").trim() || "👤").slice(0, 2),
           color: draft.color ?? member.color,
+          birth_year: parsedBirthYear,
         } as any)
         .eq("id", member.id);
-
       if (error) throw error;
       toast.success("Member updated.");
-      setEditing((prev) => {
-        const next = { ...prev };
-        delete next[member.id];
-        return next;
-      });
+      setEditing((prev) => { const next = { ...prev }; delete next[member.id]; return next; });
       void qc.invalidateQueries({ queryKey: ["members"] });
       void qc.invalidateQueries({ queryKey: ["members-manage", activeHouseholdId] });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Unable to update member.";
-      toast.error(message);
+      toast.error(error instanceof Error ? error.message : "Unable to update member.");
     } finally {
       setSavingId(null);
     }
   }
 
   async function deleteMember(member: MemberRow) {
-    if (members.length <= 1) {
-      toast.error("At least one member is required in each household.");
-      return;
-    }
-
-    if (!confirm(`Delete member \"${member.name}\"?`)) return;
-
+    if (members.length <= 1) { toast.error("At least one member is required."); return; }
+    if (!confirm(`Delete member "${member.name}"?`)) return;
     setDeletingId(member.id);
     try {
       const { error } = await supabase.from("members" as any).delete().eq("id", member.id);
       if (error) throw error;
-
-      if (memberFilter === member.id) {
-        setMemberFilter("all");
-      }
-
+      if (memberFilter === member.id) setMemberFilter("all");
       toast.success("Member deleted.");
       void qc.invalidateQueries({ queryKey: ["members"] });
       void qc.invalidateQueries({ queryKey: ["members-manage", activeHouseholdId] });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Unable to delete member.";
-      toast.error(message);
+      toast.error(error instanceof Error ? error.message : "Unable to delete member.");
     } finally {
       setDeletingId(null);
     }
@@ -198,17 +175,25 @@ function MembersPage() {
                 <Input value={newShortName} onChange={(e) => setNewShortName(e.target.value)} placeholder="e.g. AL" />
               </div>
               <div className="space-y-1.5">
+                <Label className="text-xs">Birth year</Label>
+                <Input
+                  type="number" min="1920" max={THIS_YEAR}
+                  value={newBirthYear}
+                  onChange={(e) => setNewBirthYear(e.target.value)}
+                  placeholder="e.g. 1985"
+                />
+                <p className="text-[10px] text-muted-foreground">Used for CPF and retirement projections</p>
+              </div>
+              <div className="space-y-1.5">
                 <Label className="text-xs">Emoji</Label>
                 <Input value={newEmoji} onChange={(e) => setNewEmoji(e.target.value)} placeholder="👤" />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 sm:col-span-2">
                 <Label className="text-xs">Color</Label>
                 <div className="flex flex-wrap items-center gap-2">
                   {MEMBER_COLORS.map((c) => (
                     <button
-                      key={c}
-                      type="button"
-                      aria-label={`Pick color ${c}`}
+                      key={c} type="button" aria-label={`Pick color ${c}`}
                       onClick={() => setNewColor(c)}
                       className={`h-7 w-7 rounded-full border ${newColor === c ? "border-foreground" : "border-border"}`}
                       style={{ background: c }}
@@ -229,10 +214,11 @@ function MembersPage() {
                 No members yet.
               </div>
             )}
-
             {members.map((member) => {
               const draft = editing[member.id] ?? {};
               const currentColor = draft.color ?? member.color;
+              const currentBirthYear = draft.birth_year !== undefined ? draft.birth_year : member.birth_year;
+              const currentAge = currentBirthYear ? THIS_YEAR - Number(currentBirthYear) : null;
 
               return (
                 <div key={member.id} className="space-y-3 rounded-xl border border-border bg-card p-4">
@@ -241,52 +227,42 @@ function MembersPage() {
                       <Label className="text-xs">Name</Label>
                       <Input
                         value={draft.name ?? member.name}
-                        onChange={(e) =>
-                          setEditing((prev) => ({
-                            ...prev,
-                            [member.id]: { ...prev[member.id], name: e.target.value },
-                          }))
-                        }
+                        onChange={(e) => setEditing((prev) => ({ ...prev, [member.id]: { ...prev[member.id], name: e.target.value } }))}
                       />
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-xs">Short name</Label>
                       <Input
                         value={draft.short_name ?? member.short_name ?? ""}
-                        onChange={(e) =>
-                          setEditing((prev) => ({
-                            ...prev,
-                            [member.id]: { ...prev[member.id], short_name: e.target.value },
-                          }))
-                        }
+                        onChange={(e) => setEditing((prev) => ({ ...prev, [member.id]: { ...prev[member.id], short_name: e.target.value } }))}
                       />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">
+                        Birth year {currentAge !== null && <span className="text-muted-foreground">(age {currentAge})</span>}
+                      </Label>
+                      <Input
+                        type="number" min="1920" max={THIS_YEAR}
+                        value={currentBirthYear ?? ""}
+                        onChange={(e) => setEditing((prev) => ({ ...prev, [member.id]: { ...prev[member.id], birth_year: e.target.value ? parseInt(e.target.value) : null } }))}
+                        placeholder="e.g. 1985"
+                      />
+                      <p className="text-[10px] text-muted-foreground">Used for CPF and retirement projections</p>
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-xs">Emoji</Label>
                       <Input
                         value={draft.emoji ?? member.emoji}
-                        onChange={(e) =>
-                          setEditing((prev) => ({
-                            ...prev,
-                            [member.id]: { ...prev[member.id], emoji: e.target.value },
-                          }))
-                        }
+                        onChange={(e) => setEditing((prev) => ({ ...prev, [member.id]: { ...prev[member.id], emoji: e.target.value } }))}
                       />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 sm:col-span-2">
                       <Label className="text-xs">Color</Label>
                       <div className="flex flex-wrap items-center gap-2">
                         {MEMBER_COLORS.map((c) => (
                           <button
-                            key={`${member.id}-${c}`}
-                            type="button"
-                            aria-label={`Pick color ${c}`}
-                            onClick={() =>
-                              setEditing((prev) => ({
-                                ...prev,
-                                [member.id]: { ...prev[member.id], color: c },
-                              }))
-                            }
+                            key={`${member.id}-${c}`} type="button" aria-label={`Pick color ${c}`}
+                            onClick={() => setEditing((prev) => ({ ...prev, [member.id]: { ...prev[member.id], color: c } }))}
                             className={`h-7 w-7 rounded-full border ${currentColor === c ? "border-foreground" : "border-border"}`}
                             style={{ background: c }}
                           />
@@ -294,15 +270,13 @@ function MembersPage() {
                       </div>
                     </div>
                   </div>
-
                   <div className="flex items-center gap-2">
                     <Button onClick={() => saveMember(member)} disabled={savingId === member.id}>
                       <Save className="mr-1.5 h-4 w-4" />
                       {savingId === member.id ? "Saving..." : "Save"}
                     </Button>
                     <Button
-                      variant="outline"
-                      className="text-urgent"
+                      variant="outline" className="text-urgent"
                       onClick={() => deleteMember(member)}
                       disabled={deletingId === member.id || savingId === member.id}
                     >
