@@ -24,6 +24,8 @@ type ChartPoint = {
   year: number;
   netWorth: number;
   annualNet: number;
+  propAppreciation: number;
+  investGrowth: number;
   events: string[];
 };
 
@@ -37,6 +39,20 @@ function insuranceAnnual(ins: any): number {
   return premium;
 }
 
+function propertyTotalCosts(p: any): number {
+  const itemised = ["cost_management", "cost_property_tax", "cost_fire_insurance", "cost_maintenance", "cost_other"]
+    .reduce((s, k) => s + (Number(p[k]) || 0), 0);
+  return itemised || (Number(p.monthly_costs) || 0);
+}
+
+function fmt(v: number): string {
+  const abs = Math.abs(v);
+  const sign = v < 0 ? "-" : "";
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(0)}k`;
+  return `${sign}$${abs.toFixed(0)}`;
+}
+
 export function LifetimeChart({
   properties, loans, insurance, savings, members,
   startingNetWorth, monthlyIncome, monthlyExpenses, appSettings,
@@ -45,27 +61,29 @@ export function LifetimeChart({
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const startYear = today.getFullYear();
 
-  const retirementYear = appSettings?.retirement_year ? Number(appSettings.retirement_year) : null;
-  const cpfPayoutAge = Number(appSettings?.cpf_payout_age) || 65;
-  const cpfMonthlyPayout = Number(appSettings?.cpf_monthly_payout) || 0;
-  const investmentGrowthRate = (Number(appSettings?.investment_growth_rate) || 4) / 100;
-  const propertyAppreciationRate = (Number(appSettings?.property_appreciation_rate) || 2) / 100;
-  const inflationRate = (Number(appSettings?.inflation_rate) || 2) / 100;
-  const planningHorizonAge = Number(appSettings?.planning_horizon_age) || 85;
+  // Read settings — use != null so 0 is respected, not treated as falsy
+  const retirementYear = appSettings?.retirement_year != null ? Number(appSettings.retirement_year) : null;
+  const cpfPayoutAge = appSettings?.cpf_payout_age != null ? Number(appSettings.cpf_payout_age) : 65;
+  const cpfMonthlyPayout = appSettings?.cpf_monthly_payout != null ? Number(appSettings.cpf_monthly_payout) : 0;
+  const investmentGrowthRate = (appSettings?.investment_growth_rate != null ? Number(appSettings.investment_growth_rate) : 4) / 100;
+  const propertyAppreciationRate = (appSettings?.property_appreciation_rate != null ? Number(appSettings.property_appreciation_rate) : 2) / 100;
+  const inflationRate = (appSettings?.inflation_rate != null ? Number(appSettings.inflation_rate) : 2) / 100;
+  const planningHorizonAge = appSettings?.planning_horizon_age != null ? Number(appSettings.planning_horizon_age) : 85;
 
   // Derive oldest member's birth year for accurate horizon and CPF calculation
-  const oldestBirthYear = members.length > 0
-    ? Math.min(...members.filter((m) => m.birth_year).map((m) => Number(m.birth_year)))
+  const membersWithAge = members.filter((m) => m.birth_year);
+  const oldestBirthYear = membersWithAge.length > 0
+    ? Math.min(...membersWithAge.map((m) => Number(m.birth_year)))
     : null;
   const oldestCurrentAge = oldestBirthYear ? startYear - oldestBirthYear : null;
 
-  // Planning horizon: project to planningHorizonAge from oldest member's current age
+  // Planning horizon in years from oldest member's current age
   const horizonYears = oldestCurrentAge
     ? Math.max(planningHorizonAge - oldestCurrentAge + 1, 30)
     : 40;
   const clampedHorizon = Math.min(Math.max(horizonYears, 30), 70);
 
-  // CPF payout start year: derived from oldest member's birth year + cpfPayoutAge
+  // CPF payout start year from oldest member's birth year
   const cpfStartYear = oldestBirthYear
     ? oldestBirthYear + cpfPayoutAge
     : retirementYear
@@ -88,17 +106,18 @@ export function LifetimeChart({
 
   const data = useMemo<ChartPoint[]>(() => {
     let runningNetWorth = startingNetWorth;
-    // Track compounding values separately
-    let investmentPool = properties.reduce((s: number, p: any) => s, 0); // investments tracked via prop
-    const investmentStartValue = 0; // handled via annualIn growth below
 
-    // Build per-property current values for appreciation
+    // Per-property value tracking for appreciation
     const propValues: Record<string, number> = {};
     for (const p of properties) {
       propValues[p.id] = Number(p.current_value) || 0;
     }
 
-    // Properties with a linked mortgage loan — exclude their monthly_payment (covered by loan)
+    // Investable pool: net worth minus property values, grows independently
+    const totalPropertyValue = properties.reduce((s: number, p: any) => s + (Number(p.current_value) || 0), 0);
+    let investablePool = Math.max(startingNetWorth - totalPropertyValue, 0);
+
+    // Properties linked to a loan — skip their monthly_payment (counted via loan)
     const mortgagedPropertyIds = new Set(
       loans.filter((l: any) => l.property_id).map((l: any) => l.property_id)
     );
@@ -111,45 +130,49 @@ export function LifetimeChart({
       let annualOut = 0;
       const events: string[] = [];
 
-      // Salary income — stops at retirement year
-      const salaryActive = !retirementYear || y < retirementYear;
+      // Salary — stops at retirement year
+      const salaryActive = retirementYear === null || y < retirementYear;
       if (salaryActive) {
-        // Inflate expenses each year, keep salary flat (conservative)
         annualIn += monthlyIncome * 12;
       }
 
-      // CPF payout starts at cpfStartYear
-      if (cpfStartYear && y >= cpfStartYear && cpfMonthlyPayout > 0) {
+      // CPF LIFE payout
+      if (cpfStartYear !== null && y >= cpfStartYear && cpfMonthlyPayout > 0) {
         annualIn += cpfMonthlyPayout * 12;
         if (y === cpfStartYear) events.push(`CPF LIFE begins +${fmt(cpfMonthlyPayout * 12)}/yr`);
       }
 
-      // Base expenses — inflate annually
-      const inflatedExpenses = monthlyExpenses * 12 * Math.pow(1 + inflationRate, i);
-      annualOut += inflatedExpenses;
+      // Base household expenses — inflate annually
+      annualOut += monthlyExpenses * 12 * Math.pow(1 + inflationRate, i);
 
-      // Property: rental income in, costs + mortgage out; value appreciates
+      // Properties
+      let yearPropertyAppreciation = 0;
       for (const p of properties) {
-        if (p.monthly_rent) annualIn += Number(p.monthly_rent) * 12;
-        const inflatedCosts = (Number(p.monthly_costs) || 0) * 12 * Math.pow(1 + inflationRate, i);
-        annualOut += inflatedCosts;
-        const mortgageEndYear = p.mortgage_end_date
-          ? new Date(p.mortgage_end_date).getFullYear()
-          : null;
+        // Rental income
+        annualIn += (Number(p.monthly_rent) || 0) * 12;
+
+        // Costs — use itemised fields, fall back to monthly_costs
+        const costs = propertyTotalCosts(p);
+        annualOut += costs * 12 * Math.pow(1 + inflationRate, i);
+
+        // Mortgage — skip if linked loan covers it, stop at mortgage_end_date
         const isMortgagedViaLoan = mortgagedPropertyIds.has(p.id);
-        if (p.monthly_payment && !isMortgagedViaLoan && (mortgageEndYear === null || y <= mortgageEndYear)) {
-          annualOut += Number(p.monthly_payment) * 12;
+        if (!isMortgagedViaLoan && p.monthly_payment) {
+          const mortgageEndYear = p.mortgage_end_date
+            ? new Date(p.mortgage_end_date).getFullYear()
+            : null;
+          if (mortgageEndYear === null || y <= mortgageEndYear) {
+            annualOut += Number(p.monthly_payment) * 12;
+          }
         }
-        // Property appreciation adds to net worth directly
+
+        // Property appreciation — tracked separately, does not feed investablePool
         const appreciation = (propValues[p.id] || 0) * propertyAppreciationRate;
-        propValues[p.id] = (propValues[p.id] || 0) + appreciation;
-        annualIn += appreciation;
-        if (i === 0 && propertyAppreciationRate > 0) {
-          // Don't spam events — just model silently
-        }
+        propValues[p.id] += appreciation;
+        yearPropertyAppreciation += appreciation;
       }
 
-      // Loans: stop at loan_end_date if set, otherwise run indefinitely
+      // Loans — stop at loan_end_date if set, otherwise run indefinitely
       for (const l of loans) {
         if (!l.monthly_payment) continue;
         const loanEndYear = l.loan_end_date
@@ -163,7 +186,7 @@ export function LifetimeChart({
         }
       }
 
-      // Insurance: premiums out, payouts as events
+      // Insurance premiums and payouts
       for (const ins of insurance) {
         const insStart = ins.start_date ? new Date(ins.start_date).getFullYear() : startYear;
         const insEnd = ins.end_date ? new Date(ins.end_date).getFullYear() : startYear + 40;
@@ -175,7 +198,7 @@ export function LifetimeChart({
         }
       }
 
-      // FD / savings maturity
+      // FD / savings maturities
       for (const s of savings) {
         if (!s.maturity_date) continue;
         const matYear = new Date(s.maturity_date).getFullYear();
@@ -200,26 +223,27 @@ export function LifetimeChart({
         }
       }
 
-      // Retirement year marker
-      if (retirementYear && y === retirementYear) {
+      // Retirement marker
+      if (retirementYear !== null && y === retirementYear) {
         events.push("Retirement — salary ends");
       }
 
-      // Investment growth on running net worth proxy
-      // Model: a portion of net worth (non-property) grows at investmentGrowthRate
-      // Simple approach: add growth on positive running balance at growth rate
-      if (runningNetWorth > 0 && investmentGrowthRate > 0) {
-        const growth = runningNetWorth * investmentGrowthRate * 0.3; // 30% of NW assumed in investments
-        annualIn += growth;
-      }
+      // Investment growth on investable pool — completely separate from property
+      const investmentGrowth = investablePool * investmentGrowthRate;
+      investablePool += investmentGrowth;
 
+      // Cash flow net (excludes appreciation and investment growth)
       const annualNet = annualIn - annualOut;
-      runningNetWorth += annualNet;
+
+      // Net worth: cash flow + investment growth + property appreciation
+      runningNetWorth += annualNet + investmentGrowth + yearPropertyAppreciation;
 
       years.push({
         year: y,
         netWorth: Math.round(runningNetWorth),
         annualNet: Math.round(annualNet),
+        propAppreciation: Math.round(yearPropertyAppreciation),
+        investGrowth: Math.round(investmentGrowth),
         events,
       });
     }
@@ -230,23 +254,26 @@ export function LifetimeChart({
     startingNetWorth, monthlyIncome, monthlyExpenses,
     retirementYear, cpfStartYear, cpfMonthlyPayout,
     investmentGrowthRate, propertyAppreciationRate, inflationRate,
-    inflationRate, clampedHorizon, startYear,
+    clampedHorizon, startYear,
   ]);
 
-  // Shortfall detection
-  const shortfallYear = data.find((d) => d.netWorth < 0);
+  const shortfallYear = data.find((d) => d.netWorth < 0) ?? null;
   const minNetWorth = Math.min(...data.map((d) => d.netWorth));
   const maxNetWorth = Math.max(...data.map((d) => d.netWorth));
   const eventYears = data.filter((d) => d.events.length > 0);
   const hasIncome = monthlyIncome > 0;
+  const domainMin = Math.min(minNetWorth * 1.1, minNetWorth - 50000, 0);
+  const domainMax = maxNetWorth * 1.05;
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
-    const point = data.find((d) => d.year === label);
+    const point = data.find((d) => d.year === label) ?? null;
     const nw = payload.find((p: any) => p.dataKey === "netWorth");
     const an = payload.find((p: any) => p.dataKey === "annualNet");
     const nwColor = nw && nw.value < 0 ? "font-semibold text-urgent" : "font-semibold text-settled";
     const anColor = an && an.value >= 0 ? "font-semibold text-settled" : "font-semibold text-urgent";
+    const showPropGrowth = point !== null && point.propAppreciation > 0;
+    const showInvestGrowth = point !== null && point.investGrowth > 0;
     return (
       <div className="rounded-xl border border-border bg-card p-3 text-xs shadow-lg max-w-[220px]">
         <div className="mb-1 font-bold">{label}</div>
@@ -258,34 +285,40 @@ export function LifetimeChart({
         )}
         {an && (
           <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">Annual net</span>
+            <span className="text-muted-foreground">Cash flow net</span>
             <span className={anColor}>{fmt(an.value)}</span>
           </div>
         )}
-        {point?.events.map((e, i) => (
-          <div key={i} className="mt-1 rounded bg-primary/10 px-1.5 py-0.5 text-primary font-medium break-words">{e}</div>
+        {showPropGrowth && (
+          <div className="flex justify-between gap-4">
+            <span className="text-muted-foreground">Property growth</span>
+            <span className="font-semibold text-settled">+{fmt(point!.propAppreciation)}</span>
+          </div>
+        )}
+        {showInvestGrowth && (
+          <div className="flex justify-between gap-4">
+            <span className="text-muted-foreground">Investment growth</span>
+            <span className="font-semibold text-settled">+{fmt(point!.investGrowth)}</span>
+          </div>
+        )}
+        {point?.events.map((e, idx) => (
+          <div key={idx} className="mt-1 rounded bg-primary/10 px-1.5 py-0.5 text-primary font-medium break-words">{e}</div>
         ))}
       </div>
     );
   };
 
-  const domainMin = Math.min(minNetWorth * 1.1, minNetWorth - 50000, 0);
-  const domainMax = maxNetWorth * 1.05;
-
   return (
     <div className="space-y-2">
-      {/* Shortfall alert */}
       {shortfallYear && (
         <div className="rounded-xl border border-urgent/40 bg-urgent-soft/30 px-4 py-3 text-sm">
           <span className="font-bold text-urgent">⚠ Projected shortfall in {shortfallYear.year}</span>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Based on current projections, net worth turns negative in {shortfallYear.year}.
+            Net worth turns negative in {shortfallYear.year} based on current projections.
             Consider adjusting income, expenses, or retirement date.
           </p>
         </div>
       )}
-
-      {/* No income warning */}
       {!hasIncome && (
         <p className="rounded-lg bg-review-soft/40 px-3 py-2 text-xs text-muted-foreground">
           ⚠ No salary income set — add it in{" "}
@@ -293,24 +326,15 @@ export function LifetimeChart({
           for an accurate projection.
         </p>
       )}
-
-      {/* Chart */}
       <div className="h-80 w-full">
         <ResponsiveContainer>
           <ComposedChart data={data} margin={{ top: 30, right: 16, bottom: 0, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
             <XAxis dataKey="year" tick={{ fontSize: 10 }} interval={4} />
-            <YAxis
-              tick={{ fontSize: 10 }}
-              tickFormatter={fmt}
-              domain={[domainMin, domainMax]}
-              width={56}
-            />
+            <YAxis tick={{ fontSize: 10 }} tickFormatter={fmt} domain={[domainMin, domainMax]} width={56} />
             <Tooltip content={<CustomTooltip />} />
-            {/* Zero line */}
             <ReferenceLine y={0} stroke="oklch(0.50 0.04 250 / 0.6)" strokeDasharray="4 4" />
-            {/* Retirement marker */}
-            {retirementYear && (
+            {retirementYear !== null && (
               <ReferenceLine
                 x={retirementYear}
                 stroke="oklch(0.62 0.10 195 / 0.7)"
@@ -318,8 +342,7 @@ export function LifetimeChart({
                 label={{ value: "Retire", position: "insideTopLeft", fontSize: 9, fill: "oklch(0.62 0.10 195)", dy: -18 }}
               />
             )}
-            {/* Shortfall marker */}
-            {shortfallYear && (
+            {shortfallYear !== null && (
               <ReferenceLine
                 x={shortfallYear.year}
                 stroke="oklch(0.60 0.22 25 / 0.8)"
@@ -327,7 +350,6 @@ export function LifetimeChart({
                 label={{ value: "Shortfall", position: "insideTopLeft", fontSize: 9, fill: "oklch(0.60 0.22 25)", dy: -18 }}
               />
             )}
-            {/* Event markers — gold dotted lines with abbreviated labels */}
             {eventYears
               .filter((d) => d.year !== retirementYear && d.year !== shortfallYear?.year)
               .map((d) => {
@@ -342,31 +364,19 @@ export function LifetimeChart({
                   />
                 );
               })}
-            {/* Annual net as subtle area */}
             <Area
-              type="monotone"
-              dataKey="annualNet"
-              name="Annual net"
-              stroke="oklch(0.62 0.13 155 / 0.4)"
-              fill="oklch(0.62 0.13 155 / 0.06)"
-              strokeWidth={1}
-              dot={false}
+              type="monotone" dataKey="annualNet" name="Annual net"
+              stroke="oklch(0.62 0.13 155 / 0.4)" fill="oklch(0.62 0.13 155 / 0.06)"
+              strokeWidth={1} dot={false}
             />
-            {/* Net worth — the main line */}
             <Line
-              type="monotone"
-              dataKey="netWorth"
-              name="Net worth"
-              stroke="oklch(0.72 0.13 80)"
-              strokeWidth={2.5}
-              dot={false}
-              activeDot={{ r: 4 }}
+              type="monotone" dataKey="netWorth" name="Net worth"
+              stroke="oklch(0.72 0.13 80)" strokeWidth={2.5}
+              dot={false} activeDot={{ r: 4 }}
             />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-
-      {/* Event legend */}
       {eventYears.length > 0 && (
         <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
           {eventYears.map((d) =>
@@ -378,19 +388,9 @@ export function LifetimeChart({
           )}
         </div>
       )}
-
       <p className="text-[10px] text-muted-foreground">
-        Projection only · inflation-adjusted expenses · property &amp; investment growth modelled at assumed rates ·
-        foreign currency excluded · not financial advice
+        Projection only · inflation-adjusted expenses · property &amp; investment growth modelled at assumed rates · foreign currency excluded · not financial advice
       </p>
     </div>
   );
-}
-
-function fmt(v: number): string {
-  const abs = Math.abs(v);
-  const sign = v < 0 ? "-" : "";
-  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(0)}k`;
-  return `${sign}$${abs.toFixed(0)}`;
 }
