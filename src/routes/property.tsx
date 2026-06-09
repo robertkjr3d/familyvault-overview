@@ -173,6 +173,7 @@ function PropertyRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) => 
           <FieldRow label="Interest rate" value={fmtPct(p.interest_rate)} />
           <FieldRow label="Rate type" value={p.rate_type ?? "—"} />
          <FieldRow label={<AlertLabel text="Rate ends / Reprice" />} value={fmtDate(p.fixed_rate_end)} />
+          <FieldRow label="Mortgage end date" value={p.mortgage_end_date ? fmtDate(p.mortgage_end_date) : <span className="text-muted-foreground text-xs">Not set — chart assumes ongoing</span>} />
           <FieldRow label="Monthly rent" value={fmtMoney(p.monthly_rent, p.currency)} />
         </Section>
 
