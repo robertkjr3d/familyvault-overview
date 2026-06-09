@@ -13,6 +13,7 @@ import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Che
 import { useState } from "react";
 import { fmtPct } from "@/lib/format";
 import { HashHighlight } from "@/components/HashHighlight";
+import { useMembers } from "@/hooks/useMembers";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/")({
@@ -24,6 +25,7 @@ function Dashboard() {
   const { today } = useToday();
   const memberFilter = useAppStore((s) => s.memberFilter);
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
+  const { data: members = [] } = useMembers();
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [dismissing, setDismissing] = useState<string | null>(null);
@@ -134,7 +136,15 @@ function Dashboard() {
     return premium / 12;
   }
 
-  const propertyOut = properties.reduce((s: number, p: any) => s + (Number(p.monthly_costs) || 0) + (Number(p.monthly_payment) || 0), 0);
+  // Properties with a linked mortgage loan should not double-count monthly_payment
+  const mortgagedPropertyIds = new Set(
+    loans.filter((l: any) => l.property_id).map((l: any) => l.property_id)
+  );
+  const propertyOut = properties.reduce((s: number, p: any) => {
+    const costs = Number(p.monthly_costs) || 0;
+    const mortgage = mortgagedPropertyIds.has(p.id) ? 0 : (Number(p.monthly_payment) || 0);
+    return s + costs + mortgage;
+  }, 0);
   const loanOut = loans.reduce((s: number, l: any) => s + (Number(l.monthly_payment) || 0), 0);
   const insuranceOut = insurance.reduce((s: number, p: any) => s + insuranceMonthly(p), 0);
   const baseExpenses = Number(appSettings?.monthly_expenses) || 0;
@@ -488,6 +498,7 @@ function Dashboard() {
           loans={loans}
           insurance={insurance}
           savings={savings}
+          members={members}
           startingNetWorth={netWorth}
           monthlyIncome={salaryIncome}
           monthlyExpenses={baseExpenses}
