@@ -338,9 +338,9 @@ function SettingsPage() {
             retirement_year: parseInt(retirementYear) || null,
             cpf_payout_age: parseInt(cpfPayoutAge) || 65,
             cpf_monthly_payout: parseFloat(cpfMonthlyPayout) || 0,
-            investment_growth_rate: parseFloat(investmentGrowthRate) || 4,
-            property_appreciation_rate: parseFloat(propertyAppreciationRate) || 2,
-            inflation_rate: parseFloat(inflationRate) || 2,
+            investment_growth_rate: investmentGrowthRate === "" ? 4 : parseFloat(investmentGrowthRate),
+            property_appreciation_rate: propertyAppreciationRate === "" ? 2 : parseFloat(propertyAppreciationRate),
+            inflation_rate: inflationRate === "" ? 2 : parseFloat(inflationRate),
             planning_horizon_age: parseInt(planningHorizonAge) || 85,
           })}
         >
