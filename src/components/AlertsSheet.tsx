@@ -40,6 +40,7 @@ function reminderHref(entityType: string | null | undefined): string {
     case "investment":  return "/investments";
     case "health":      return "/health";
     case "inventory":   return "/inventory";
+    case "other_assets":
     case "other_asset": return "/other-assets";
     default:            return "/";
   }
