@@ -51,6 +51,7 @@ export function NotesEditor({
   const [html, setHtml] = useState(toEditorHtml(value));
   const [justSaved, setJustSaved] = useState(false);
   const [summarising, setSummarising] = useState(false);
+  const [formatState, setFormatState] = useState({ bold: false, italic: false, bullet: false });
   const qc = useQueryClient();
   const lastSavedRef = useRef(toEditorHtml(value));
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -118,7 +119,9 @@ export function NotesEditor({
     const el = editorRef.current;
     if (!el) return;
 
-    el.focus();
+    if (document.activeElement !== el) {
+      el.focus();
+    }
     if (type === "bold") {
       document.execCommand("bold");
     } else if (type === "italic") {
@@ -129,6 +132,32 @@ export function NotesEditor({
 
     const next = sanitizeHtml(el.innerHTML);
     onChange(next);
+    refreshFormatState();
+  }
+
+  function refreshFormatState() {
+    if (!editorRef.current) return;
+    const selection = document.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      setFormatState({ bold: false, italic: false, bullet: false });
+      return;
+    }
+
+    const anchorNode = selection.anchorNode;
+    if (anchorNode && !editorRef.current.contains(anchorNode)) {
+      setFormatState({ bold: false, italic: false, bullet: false });
+      return;
+    }
+
+    try {
+      setFormatState({
+        bold: document.queryCommandState("bold"),
+        italic: document.queryCommandState("italic"),
+        bullet: document.queryCommandState("insertUnorderedList"),
+      });
+    } catch {
+      setFormatState({ bold: false, italic: false, bullet: false });
+    }
   }
 
   const isEmpty = !htmlToPlainText(html);
@@ -147,9 +176,16 @@ export function NotesEditor({
     };
   }, []);
 
+  useEffect(() => {
+    const onSelectionChange = () => refreshFormatState();
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => document.removeEventListener("selectionchange", onSelectionChange);
+  }, []);
+
   function onEditorInput() {
     if (!editorRef.current) return;
     onChange(sanitizeHtml(editorRef.current.innerHTML));
+    refreshFormatState();
   }
 
   return (
@@ -157,24 +193,27 @@ export function NotesEditor({
       <div className="flex items-center gap-1 border-b border-border/40 pb-1.5">
         <button
           type="button"
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => insertFormat("bold")}
-          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          className={`rounded p-1 hover:bg-muted hover:text-foreground ${formatState.bold ? "bg-muted text-foreground" : "text-muted-foreground"}`}
           title="Bold"
         >
           <Bold className="h-3.5 w-3.5" />
         </button>
         <button
           type="button"
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => insertFormat("italic")}
-          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          className={`rounded p-1 hover:bg-muted hover:text-foreground ${formatState.italic ? "bg-muted text-foreground" : "text-muted-foreground"}`}
           title="Italic"
         >
           <Italic className="h-3.5 w-3.5" />
         </button>
         <button
           type="button"
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => insertFormat("bullet")}
-          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          className={`rounded p-1 hover:bg-muted hover:text-foreground ${formatState.bullet ? "bg-muted text-foreground" : "text-muted-foreground"}`}
           title="Bullet list"
         >
           <List className="h-3.5 w-3.5" />
@@ -192,9 +231,13 @@ export function NotesEditor({
           contentEditable
           suppressContentEditableWarning
           onInput={onEditorInput}
+          onFocus={refreshFormatState}
+          onKeyUp={refreshFormatState}
+          onMouseUp={refreshFormatState}
           onBlur={() => {
             if (debounceRef.current) clearTimeout(debounceRef.current);
             void commit(editorRef.current?.innerHTML ?? html);
+            setFormatState({ bold: false, italic: false, bullet: false });
           }}
           className="min-h-[132px] rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         />
