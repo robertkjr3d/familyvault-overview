@@ -491,6 +491,7 @@ function Dashboard() {
           startingNetWorth={netWorth}
           monthlyIncome={salaryIncome}
           monthlyExpenses={baseExpenses}
+          appSettings={appSettings}
         />
       </section>
     </div>
