@@ -13,6 +13,7 @@ type Props = {
   loans: any[];
   insurance: any[];
   savings: any[];
+  members: any[];
   startingNetWorth: number;
   monthlyIncome: number;
   monthlyExpenses: number;
@@ -37,7 +38,7 @@ function insuranceAnnual(ins: any): number {
 }
 
 export function LifetimeChart({
-  properties, loans, insurance, savings,
+  properties, loans, insurance, savings, members,
   startingNetWorth, monthlyIncome, monthlyExpenses, appSettings,
 }: Props) {
   const { today } = useToday();
@@ -52,15 +53,22 @@ export function LifetimeChart({
   const inflationRate = (Number(appSettings?.inflation_rate) || 2) / 100;
   const planningHorizonAge = Number(appSettings?.planning_horizon_age) || 85;
 
-  // Derive planning horizon in years from oldest member's birth year if available
-  // Fall back to fixed 40 years if no retirement year set
-  const horizonYears = retirementYear
-    ? Math.max(planningHorizonAge - (startYear - (retirementYear - 65)) + 5, 40)
+  // Derive oldest member's birth year for accurate horizon and CPF calculation
+  const oldestBirthYear = members.length > 0
+    ? Math.min(...members.filter((m) => m.birth_year).map((m) => Number(m.birth_year)))
+    : null;
+  const oldestCurrentAge = oldestBirthYear ? startYear - oldestBirthYear : null;
+
+  // Planning horizon: project to planningHorizonAge from oldest member's current age
+  const horizonYears = oldestCurrentAge
+    ? Math.max(planningHorizonAge - oldestCurrentAge + 1, 30)
     : 40;
   const clampedHorizon = Math.min(Math.max(horizonYears, 30), 70);
 
-  // CPF payout start year = retirement year - (retirement age assumed 65) + cpfPayoutAge
-  const cpfStartYear = retirementYear
+  // CPF payout start year: derived from oldest member's birth year + cpfPayoutAge
+  const cpfStartYear = oldestBirthYear
+    ? oldestBirthYear + cpfPayoutAge
+    : retirementYear
     ? retirementYear - 65 + cpfPayoutAge
     : null;
 
@@ -90,8 +98,10 @@ export function LifetimeChart({
       propValues[p.id] = Number(p.current_value) || 0;
     }
 
-    // Build investment pool starting value (passed via appSettings separately — use savings+investments rough proxy)
-    // We track net worth directly so appreciation shows up in the running balance
+    // Properties with a linked mortgage loan — exclude their monthly_payment (covered by loan)
+    const mortgagedPropertyIds = new Set(
+      loans.filter((l: any) => l.property_id).map((l: any) => l.property_id)
+    );
 
     const years: ChartPoint[] = [];
 
@@ -126,7 +136,8 @@ export function LifetimeChart({
         const mortgageEnds = p.fixed_rate_end
           ? new Date(p.fixed_rate_end).getFullYear() + 25
           : startYear + 40;
-        if (p.monthly_payment && y <= mortgageEnds) {
+        const isMortgagedViaLoan = mortgagedPropertyIds.has(p.id);
+        if (p.monthly_payment && !isMortgagedViaLoan && y <= mortgageEnds) {
           annualOut += Number(p.monthly_payment) * 12;
         }
         // Property appreciation adds to net worth directly
@@ -279,9 +290,9 @@ export function LifetimeChart({
       )}
 
       {/* Chart */}
-      <div className="h-72 w-full">
+      <div className="h-80 w-full">
         <ResponsiveContainer>
-          <ComposedChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+          <ComposedChart data={data} margin={{ top: 30, right: 16, bottom: 0, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
             <XAxis dataKey="year" tick={{ fontSize: 10 }} interval={4} />
             <YAxis
@@ -299,7 +310,7 @@ export function LifetimeChart({
                 x={retirementYear}
                 stroke="oklch(0.62 0.10 195 / 0.7)"
                 strokeDasharray="4 4"
-                label={{ value: "Retire", position: "top", fontSize: 9, fill: "oklch(0.62 0.10 195)" }}
+                label={{ value: "Retire", position: "insideTopLeft", fontSize: 9, fill: "oklch(0.62 0.10 195)", dy: -18 }}
               />
             )}
             {/* Shortfall marker */}
@@ -308,20 +319,24 @@ export function LifetimeChart({
                 x={shortfallYear.year}
                 stroke="oklch(0.60 0.22 25 / 0.8)"
                 strokeWidth={2}
-                label={{ value: "Shortfall", position: "top", fontSize: 9, fill: "oklch(0.60 0.22 25)" }}
+                label={{ value: "Shortfall", position: "insideTopLeft", fontSize: 9, fill: "oklch(0.60 0.22 25)", dy: -18 }}
               />
             )}
-            {/* Event markers */}
+            {/* Event markers — gold dotted lines with abbreviated labels */}
             {eventYears
-              .filter((d) => d.year !== retirementYear)
-              .map((d) => (
-                <ReferenceLine
-                  key={d.year}
-                  x={d.year}
-                  stroke="oklch(0.72 0.13 80 / 0.5)"
-                  strokeDasharray="3 3"
-                />
-              ))}
+              .filter((d) => d.year !== retirementYear && d.year !== shortfallYear?.year)
+              .map((d) => {
+                const shortLabel = d.events[0]?.split(" ")[0] ?? "";
+                return (
+                  <ReferenceLine
+                    key={d.year}
+                    x={d.year}
+                    stroke="oklch(0.72 0.13 80 / 0.6)"
+                    strokeDasharray="3 3"
+                    label={{ value: shortLabel, position: "insideTopLeft", fontSize: 8, fill: "oklch(0.72 0.13 80)", dy: -18 }}
+                  />
+                );
+              })}
             {/* Annual net as subtle area */}
             <Area
               type="monotone"
