@@ -140,8 +140,13 @@ function Dashboard() {
   const mortgagedPropertyIds = new Set(
     loans.filter((l: any) => l.property_id).map((l: any) => l.property_id)
   );
+  function propertyTotalCosts(p: any): number {
+    const itemised = ["cost_management", "cost_property_tax", "cost_fire_insurance", "cost_maintenance", "cost_other"]
+      .reduce((s, k) => s + (Number(p[k]) || 0), 0);
+    return itemised || (Number(p.monthly_costs) || 0);
+  }
   const propertyOut = properties.reduce((s: number, p: any) => {
-    const costs = Number(p.monthly_costs) || 0;
+    const costs = propertyTotalCosts(p);
     const mortgage = mortgagedPropertyIds.has(p.id) ? 0 : (Number(p.monthly_payment) || 0);
     return s + costs + mortgage;
   }, 0);
@@ -152,15 +157,6 @@ function Dashboard() {
   const netCashFlow = monthlyIn - monthlyOut;
 
   const showSettingsNudge = salaryIncome === 0 && baseExpenses === 0;
-
-  const chartAnchorMember = members
-    .filter((m: any) => m.birth_year)
-    .sort((a: any, b: any) => Number(a.birth_year) - Number(b.birth_year))[0] ?? null;
-  const chartAnchorAge = chartAnchorMember ? today.getFullYear() - Number(chartAnchorMember.birth_year) : null;
-  const planningHorizonAge = Number(appSettings?.planning_horizon_age) || 85;
-  const chartHorizonYear = chartAnchorMember
-    ? Number(chartAnchorMember.birth_year) + planningHorizonAge
-    : today.getFullYear() + 40;
 
   function reminderHref(entityType: string | null | undefined): string {
     switch (entityType) {
@@ -501,11 +497,7 @@ function Dashboard() {
       {/* LIFETIME CHART */}
       <section className="rounded-2xl border border-border bg-card p-4">
         <h2 className="mb-1 text-sm font-bold">Lifetime Net Worth</h2>
-        <p className="mb-3 text-xs text-muted-foreground">
-          {chartAnchorMember
-            ? `Projected to ${chartHorizonYear} · anchored to ${chartAnchorMember.name} (age ${chartAnchorAge}, born ${chartAnchorMember.birth_year})`
-            : "Projected trajectory based on your current records · add birth years in Members for accurate horizon"}
-        </p>
+        <p className="mb-3 text-xs text-muted-foreground">Projected trajectory based on your current records.</p>
         <LifetimeChart
           properties={properties}
           loans={loans}
