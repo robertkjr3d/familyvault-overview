@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useMembers } from "@/hooks/useMembers";
 import { useAppStore } from "@/lib/store";
+import { Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -39,6 +40,7 @@ function SettingsPage() {
   const { data: members = [] } = useMembers();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const setShareOpen = useAppStore((s) => s.setShareOpen);
+
   const { data: settings } = useQuery({
     queryKey: ["app_settings", activeHouseholdId],
     enabled: !!activeHouseholdId,
@@ -51,21 +53,19 @@ function SettingsPage() {
       return data;
     },
   });
+
   const [familyName, setFamilyName] = useState("");
   const [simDate, setSimDate] = useState("");
   const [monthlyIncome, setMonthlyIncome] = useState<string>("");
   const [monthlyExpenses, setMonthlyExpenses] = useState<string>("");
+  const [retirementYear, setRetirementYear] = useState<string>("");
+  const [cpfPayoutAge, setCpfPayoutAge] = useState<string>("65");
+  const [cpfMonthlyPayout, setCpfMonthlyPayout] = useState<string>("");
+  const [investmentGrowthRate, setInvestmentGrowthRate] = useState<string>("4");
+  const [propertyAppreciationRate, setPropertyAppreciationRate] = useState<string>("2");
+  const [inflationRate, setInflationRate] = useState<string>("2");
+  const [planningHorizonAge, setPlanningHorizonAge] = useState<string>("85");
 
-  // Sync simDate from DB when settings first load
-  useEffect(() => {
-    if (settings?.simulated_date) setSimDate(settings.simulated_date);
-  }, [settings?.simulated_date]);
-
-  // Sync income/expenses from DB when settings first load
-  useEffect(() => {
-    if (settings?.monthly_income != null) setMonthlyIncome(String(settings.monthly_income));
-    if (settings?.monthly_expenses != null) setMonthlyExpenses(String(settings.monthly_expenses));
-  }, [settings?.monthly_income, settings?.monthly_expenses]);
   const [theme, setTheme] = useState<"light" | "dark">(() =>
     typeof window !== "undefined" && document.documentElement.classList.contains("dark") ? "dark" : "light"
   );
@@ -73,6 +73,27 @@ function SettingsPage() {
     (typeof window !== "undefined" && localStorage.getItem("fv:accent")) || ACCENT_PRESETS[0].value
   );
   const [alerts, setAlerts] = useState<LSAlerts>(loadAlerts);
+
+  useEffect(() => {
+    if (settings?.simulated_date) setSimDate(settings.simulated_date);
+  }, [settings?.simulated_date]);
+
+  useEffect(() => {
+    if (settings?.monthly_income != null) setMonthlyIncome(String(settings.monthly_income));
+    if (settings?.monthly_expenses != null) setMonthlyExpenses(String(settings.monthly_expenses));
+    if (settings?.retirement_year != null) setRetirementYear(String(settings.retirement_year));
+    if (settings?.cpf_payout_age != null) setCpfPayoutAge(String(settings.cpf_payout_age));
+    if (settings?.cpf_monthly_payout != null) setCpfMonthlyPayout(String(settings.cpf_monthly_payout));
+    if (settings?.investment_growth_rate != null) setInvestmentGrowthRate(String(settings.investment_growth_rate));
+    if (settings?.property_appreciation_rate != null) setPropertyAppreciationRate(String(settings.property_appreciation_rate));
+    if (settings?.inflation_rate != null) setInflationRate(String(settings.inflation_rate));
+    if (settings?.planning_horizon_age != null) setPlanningHorizonAge(String(settings.planning_horizon_age));
+  }, [
+    settings?.monthly_income, settings?.monthly_expenses,
+    settings?.retirement_year, settings?.cpf_payout_age, settings?.cpf_monthly_payout,
+    settings?.investment_growth_rate, settings?.property_appreciation_rate,
+    settings?.inflation_rate, settings?.planning_horizon_age,
+  ]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -90,19 +111,10 @@ function SettingsPage() {
 
   const save = useMutation({
     mutationFn: async (patch: any) => {
-      if (!activeHouseholdId) {
-        throw new Error("Select a household first.");
-      }
-
+      if (!activeHouseholdId) throw new Error("Select a household first.");
       const { error } = await supabase
         .from("app_settings")
-        .upsert(
-          {
-            household_id: activeHouseholdId,
-            ...patch,
-          },
-          { onConflict: "household_id" },
-        );
+        .upsert({ household_id: activeHouseholdId, ...patch }, { onConflict: "household_id" });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -141,6 +153,13 @@ function SettingsPage() {
     a.click();
     URL.revokeObjectURL(url);
   }
+
+  const currency = settings?.currency ?? "SGD";
+  const inc = parseFloat(monthlyIncome) || 0;
+  const exp = parseFloat(monthlyExpenses) || 0;
+  const surplus = inc - exp;
+  const surplusColor = surplus >= 0 ? "text-settled" : "text-urgent";
+  const showSurplus = inc > 0 || exp > 0;
 
   return (
     <div className="space-y-5 pb-6">
@@ -182,16 +201,13 @@ function SettingsPage() {
       <section className="rounded-2xl border border-border bg-card p-4">
         <h2 className="mb-1 text-sm font-bold">Household Finances</h2>
         <p className="mb-3 text-xs text-muted-foreground">
-          Used for cash flow calculations and lifetime projections. Combined household figures.
+          Combined household figures used for cash flow and lifetime projections.
         </p>
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">
-              Monthly income ({settings?.currency ?? "SGD"})
-            </label>
+            <label className="block text-xs font-medium text-muted-foreground">Monthly income ({currency})</label>
             <input
-              type="number"
-              min="0"
+              type="number" min="0"
               className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
               placeholder="e.g. 12000"
               value={monthlyIncome}
@@ -199,12 +215,9 @@ function SettingsPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">
-              Monthly expenses ({settings?.currency ?? "SGD"})
-            </label>
+            <label className="block text-xs font-medium text-muted-foreground">Monthly expenses ({currency})</label>
             <input
-              type="number"
-              min="0"
+              type="number" min="0"
               className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
               placeholder="e.g. 6000"
               value={monthlyExpenses}
@@ -214,36 +227,129 @@ function SettingsPage() {
               Exclude loan repayments and insurance premiums — those are tracked automatically.
             </p>
           </div>
-          {(() => {
-            const inc = parseFloat(monthlyIncome) || 0;
-            const exp = parseFloat(monthlyExpenses) || 0;
-            const surplus = inc - exp;
-            const surplusColor = surplus >= 0 ? "text-settled" : "text-urgent";
-            const show = inc > 0 || exp > 0;
-            if (!show) return null;
-            return (
-              <div className="rounded-lg bg-background/50 px-3 py-2 text-sm">
-                <span className="text-muted-foreground">Discretionary surplus: </span>
-                <span className={`font-semibold ${surplusColor}`}>
-                  {(settings?.currency ?? "SGD")} {surplus.toLocaleString()}
-                </span>
-                <span className="text-xs text-muted-foreground"> / month</span>
-              </div>
-            );
-          })()}
+          {showSurplus && (
+            <div className="rounded-lg bg-background/50 px-3 py-2 text-sm">
+              <span className="text-muted-foreground">Discretionary surplus: </span>
+              <span className={`font-semibold ${surplusColor}`}>{currency} {surplus.toLocaleString()}</span>
+              <span className="text-xs text-muted-foreground"> / month</span>
+            </div>
+          )}
         </div>
         <button
           className="mt-3 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
-          onClick={() =>
-            save.mutate({
-              monthly_income: parseFloat(monthlyIncome) || 0,
-              monthly_expenses: parseFloat(monthlyExpenses) || 0,
-            })
-          }
+          onClick={() => save.mutate({
+            monthly_income: parseFloat(monthlyIncome) || 0,
+            monthly_expenses: parseFloat(monthlyExpenses) || 0,
+          })}
         >
           Save
         </button>
       </section>
+
+      {/* Projection Assumptions */}
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="mb-1 text-sm font-bold">Projection Assumptions</h2>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Used only for the Lifetime Net Worth chart. All rates are annual percentages.
+        </p>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground">Retirement year</label>
+              <input
+                type="number" min="2024" max="2100"
+                className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                placeholder="e.g. 2045"
+                value={retirementYear}
+                onChange={(e) => setRetirementYear(e.target.value)}
+              />
+              <p className="mt-0.5 text-[10px] text-muted-foreground">Salary stops this year</p>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground">Planning horizon (age)</label>
+              <input
+                type="number" min="60" max="120"
+                className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                placeholder="85"
+                value={planningHorizonAge}
+                onChange={(e) => setPlanningHorizonAge(e.target.value)}
+              />
+              <p className="mt-0.5 text-[10px] text-muted-foreground">Chart projects to this age</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground">CPF payout age</label>
+              <input
+                type="number" min="55" max="75"
+                className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                placeholder="65"
+                value={cpfPayoutAge}
+                onChange={(e) => setCpfPayoutAge(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground">CPF monthly payout ({currency})</label>
+              <input
+                type="number" min="0"
+                className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                placeholder="e.g. 1500"
+                value={cpfMonthlyPayout}
+                onChange={(e) => setCpfMonthlyPayout(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground">Investment growth (%)</label>
+              <input
+                type="number" min="0" max="30" step="0.5"
+                className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                placeholder="4"
+                value={investmentGrowthRate}
+                onChange={(e) => setInvestmentGrowthRate(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground">Property growth (%)</label>
+              <input
+                type="number" min="0" max="20" step="0.5"
+                className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                placeholder="2"
+                value={propertyAppreciationRate}
+                onChange={(e) => setPropertyAppreciationRate(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground">Inflation (%)</label>
+              <input
+                type="number" min="0" max="20" step="0.5"
+                className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                placeholder="2"
+                value={inflationRate}
+                onChange={(e) => setInflationRate(e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+        <button
+          className="mt-3 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+          onClick={() => save.mutate({
+            retirement_year: parseInt(retirementYear) || null,
+            cpf_payout_age: parseInt(cpfPayoutAge) || 65,
+            cpf_monthly_payout: parseFloat(cpfMonthlyPayout) || 0,
+            investment_growth_rate: parseFloat(investmentGrowthRate) || 4,
+            property_appreciation_rate: parseFloat(propertyAppreciationRate) || 2,
+            inflation_rate: parseFloat(inflationRate) || 2,
+            planning_horizon_age: parseInt(planningHorizonAge) || 85,
+          })}
+        >
+          Save
+        </button>
+      </section>
+
+      {/* Planned Events */}
+      <PlannedEvents householdId={activeHouseholdId} currency={currency} />
 
       {/* Appearance */}
       <section className="rounded-2xl border border-border bg-card p-4">
@@ -354,6 +460,7 @@ function SettingsPage() {
           </button>
         </div>
       </section>
+
       {/* About */}
       <section className="rounded-2xl border border-border bg-card p-4 text-sm">
         <h2 className="mb-2 text-sm font-bold">About</h2>
@@ -367,6 +474,151 @@ function SettingsPage() {
     </div>
   );
 }
+
+// ── Planned Events ────────────────────────────────────────────────────────────
+
+type PlannedEvent = {
+  id: string;
+  label: string;
+  year: number;
+  amount: number;
+  type: "inflow" | "outflow";
+};
+
+function PlannedEvents({ householdId, currency }: { householdId: string | null; currency: string }) {
+  const qc = useQueryClient();
+  const [label, setLabel] = useState("");
+  const [year, setYear] = useState<string>("");
+  const [amount, setAmount] = useState<string>("");
+  const [type, setType] = useState<"inflow" | "outflow">("outflow");
+  const [adding, setAdding] = useState(false);
+
+  const { data: events = [] } = useQuery({
+    queryKey: ["planned_events", householdId],
+    enabled: !!householdId,
+    queryFn: async () => {
+      if (!householdId) return [];
+      const { data } = await supabase
+        .from("planned_cashflow_events" as any)
+        .select("*")
+        .eq("household_id", householdId)
+        .order("year", { ascending: true });
+      return (data ?? []) as PlannedEvent[];
+    },
+  });
+
+  async function addEvent() {
+    if (!householdId || !label || !year || !amount) return;
+    setAdding(true);
+    const { error } = await supabase
+      .from("planned_cashflow_events" as any)
+      .insert({
+        household_id: householdId,
+        label,
+        year: parseInt(year),
+        amount: parseFloat(amount),
+        type,
+      });
+    setAdding(false);
+    if (error) { toast.error("Could not save event."); return; }
+    setLabel(""); setYear(""); setAmount(""); setType("outflow");
+    qc.invalidateQueries({ queryKey: ["planned_events", householdId] });
+    qc.invalidateQueries({ queryKey: ["planned_events_chart", householdId] });
+    toast.success("Event added");
+  }
+
+  async function deleteEvent(id: string) {
+    await supabase.from("planned_cashflow_events" as any).delete().eq("id", id);
+    qc.invalidateQueries({ queryKey: ["planned_events", householdId] });
+    qc.invalidateQueries({ queryKey: ["planned_events_chart", householdId] });
+  }
+
+  const currentYear = new Date().getFullYear();
+
+  return (
+    <section className="rounded-2xl border border-border bg-card p-4">
+      <h2 className="mb-1 text-sm font-bold">Planned Events</h2>
+      <p className="mb-3 text-xs text-muted-foreground">
+        One-off future inflows or outflows — renovations, education fees, inheritances, windfalls.
+      </p>
+
+      {/* Add form */}
+      <div className="space-y-2 rounded-xl bg-background/50 p-3">
+        <input
+          className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+          placeholder="Label, e.g. University fees, Home renovation"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+        />
+        <div className="grid grid-cols-3 gap-2">
+          <input
+            type="number"
+            min={currentYear} max="2100"
+            className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            placeholder="Year"
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+          />
+          <input
+            type="number" min="0"
+            className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            placeholder={`Amount (${currency})`}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
+          <select
+            className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            value={type}
+            onChange={(e) => setType(e.target.value as "inflow" | "outflow")}
+          >
+            <option value="outflow">Outflow ↓</option>
+            <option value="inflow">Inflow ↑</option>
+          </select>
+        </div>
+        <button
+          className="w-full rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+          onClick={addEvent}
+          disabled={adding || !label || !year || !amount}
+        >
+          {adding ? "Adding…" : "Add event"}
+        </button>
+      </div>
+
+      {/* Event list */}
+      {events.length > 0 && (
+        <ul className="mt-3 divide-y divide-border">
+          {events.map((e) => {
+            const typeColor = e.type === "inflow" ? "text-settled" : "text-urgent";
+            const typeSign = e.type === "inflow" ? "+" : "−";
+            return (
+              <li key={e.id} className="flex items-center gap-3 py-2 text-sm">
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium truncate">{e.label}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">{e.year}</span>
+                </div>
+                <span className={`shrink-0 font-semibold ${typeColor}`}>
+                  {typeSign}{currency} {Number(e.amount).toLocaleString()}
+                </span>
+                <button
+                  onClick={() => deleteEvent(e.id)}
+                  className="shrink-0 text-urgent opacity-70 hover:opacity-100"
+                  aria-label="Delete"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {events.length === 0 && (
+        <p className="mt-3 text-center text-xs text-muted-foreground">No planned events yet.</p>
+      )}
+    </section>
+  );
+}
+
+// ── Dismissed History ─────────────────────────────────────────────────────────
 
 function DismissedHistory({ householdId }: { householdId: string | null }) {
   const qc = useQueryClient();
@@ -389,29 +641,25 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
   async function clearHistory() {
     if (!householdId) return;
     if (!confirm("Clear all dismissed history? Items will reappear in your dashboard and alerts.")) return;
-    await supabase
-      .from("dismissed_dashboard_items")
-      .delete()
-      .eq("household_id", householdId);
+    await supabase.from("dismissed_dashboard_items").delete().eq("household_id", householdId);
     await qc.invalidateQueries({ queryKey: ["dismissed-dashboard", householdId] });
     await qc.invalidateQueries({ queryKey: ["alert-count", householdId] });
     toast.success("History cleared — items restored to dashboard and alerts.");
   }
 
+  const historyCount = history.length;
+
   return (
     <section className="rounded-2xl border border-border bg-card p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-bold">Completed Items History</h2>
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className="text-xs font-semibold text-primary"
-        >
-          {expanded ? "Hide" : `Show (${history.length})`}
+        <button onClick={() => setExpanded((v) => !v)} className="text-xs font-semibold text-primary">
+          {expanded ? "Hide" : `Show (${historyCount})`}
         </button>
       </div>
       {expanded && (
         <div className="mt-3">
-          {history.length === 0 ? (
+          {historyCount === 0 ? (
             <p className="py-4 text-center text-sm text-muted-foreground">No dismissed items yet.</p>
           ) : (
             <>
