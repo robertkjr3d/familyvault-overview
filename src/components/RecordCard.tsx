@@ -20,6 +20,7 @@ type Props = {
   persistKey?: string;
   hasNotes?: boolean;
   updatedAt?: string | null;
+  createdAt?: string | null;
 };
 
 const tintBg: Record<Status, string> = {
@@ -38,7 +39,7 @@ function readPersisted(key: string | undefined, def: boolean): boolean {
 
 export function RecordCard({
   title, subtitle, memberId, status, onStatusChange, action, rightMeta, children,
-  onEdit, onDelete, defaultOpen = false, highlight, persistKey, hasNotes, updatedAt,
+  onEdit, onDelete, defaultOpen = false, highlight, persistKey, hasNotes, updatedAt, createdAt,
 }: Props) {
   const [open, setOpen] = useState(() => readPersisted(persistKey, defaultOpen));
 
@@ -103,11 +104,16 @@ export function RecordCard({
       >
         <StatusToggle value={status} onChange={onStatusChange} />
         <div className="flex items-center gap-2">
-          {updatedAt && (
-            <span className="text-[10px] text-muted-foreground">
-              {new Date(updatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-            </span>
-          )}
+          {updatedAt && (() => {
+            const updMs = new Date(updatedAt).getTime();
+            const creMs = createdAt ? new Date(createdAt).getTime() : updMs;
+            const wasEdited = updMs - creMs > 60000;
+            const label = wasEdited ? "Updated" : "Added";
+            const dateStr = new Date(updatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
+            return (
+              <span className="text-[10px] text-muted-foreground">{label} {dateStr}</span>
+            );
+          })()}
           {hasNotes && <span className="text-sm" title="Has notes">📝</span>}
           <ChevronDown
             className={cn("h-4 w-4 text-muted-foreground transition", open && "rotate-180")}
