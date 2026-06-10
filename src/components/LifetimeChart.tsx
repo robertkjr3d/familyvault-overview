@@ -191,10 +191,24 @@ export function LifetimeChart({
         const insStart = ins.start_date ? new Date(ins.start_date).getFullYear() : startYear;
         const insEnd = ins.end_date ? new Date(ins.end_date).getFullYear() : startYear + 40;
         if (y >= insStart && y <= insEnd) annualOut += insuranceAnnual(ins);
-        if (ins.payout_year && Number(ins.payout_year) === y && ins.expected_payout) {
-          const payout = Number(ins.expected_payout);
-          annualIn += payout;
-          events.push(`${ins.name ?? "Insurance"} payout +${fmt(payout)}`);
+        if (ins.payout_amount && ins.payout_start_date) {
+          const payoutStartYear = new Date(ins.payout_start_date).getFullYear();
+          const payoutEndYear = ins.payout_end_date ? new Date(ins.payout_end_date).getFullYear() : payoutStartYear;
+          const pFreq = (ins.payout_frequency || "one-off").toLowerCase();
+          const isRecurring = pFreq.includes("month") || pFreq.includes("annual") || pFreq.includes("year") || pFreq.includes("quart") || pFreq.includes("semi") || pFreq.includes("half");
+          const annualPayoutAmt = isRecurring
+            ? pFreq.includes("month") ? Number(ins.payout_amount) * 12
+            : pFreq.includes("quart") ? Number(ins.payout_amount) * 4
+            : pFreq.includes("semi") || pFreq.includes("half") ? Number(ins.payout_amount) * 2
+            : Number(ins.payout_amount)
+            : Number(ins.payout_amount);
+          if (isRecurring && y >= payoutStartYear && y <= payoutEndYear) {
+            annualIn += annualPayoutAmt;
+            if (y === payoutStartYear) events.push(`${ins.name ?? "Insurance"} payout begins +${fmt(annualPayoutAmt)}/yr`);
+          } else if (!isRecurring && y === payoutStartYear) {
+            annualIn += annualPayoutAmt;
+            events.push(`${ins.name ?? "Insurance"} payout +${fmt(annualPayoutAmt)}`);
+          }
         }
       }
 
