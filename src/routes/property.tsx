@@ -157,6 +157,7 @@ function PropertyRow({ p, loans, onStatus, onDelete }: { p: any; loans: any[]; o
         onDelete={onDelete}
         hasNotes={!!p.notes}
         updatedAt={p.updated_at}
+        createdAt={p.created_at}
         rightMeta={
           <div className="text-right text-xs">
             <div className="text-muted-foreground">Value (est.)</div>
