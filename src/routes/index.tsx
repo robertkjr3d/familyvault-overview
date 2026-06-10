@@ -352,9 +352,9 @@ function Dashboard() {
   const healthChecks = [
     (() => {
       if (salaryIncome === 0 && baseExpenses === 0) return { label: "Cash flow", status: "incomplete", detail: "Set income and expenses in Settings", href: "/settings" };
-      if (netCashFlow > 0) return { label: "Cash flow", status: "pass", detail: `+${fmtMoney(netCashFlow)} monthly surplus`, href: "/" };
-      if (netCashFlow >= -(monthlyOut * 0.1)) return { label: "Cash flow", status: "warning", detail: "Near break-even — monitor closely", href: "/" };
-      return { label: "Cash flow", status: "fail", detail: `${fmtMoney(netCashFlow)} monthly deficit`, href: "/" };
+      if (netCashFlow > 0) return { label: "Cash flow", status: "pass", detail: `+${fmtMoney(netCashFlow)} monthly surplus`, href: "/#cash-flow" };
+      if (netCashFlow >= -(monthlyOut * 0.1)) return { label: "Cash flow", status: "warning", detail: "Near break-even — monitor closely", href: "/#cash-flow" };
+      return { label: "Cash flow", status: "fail", detail: `${fmtMoney(netCashFlow)} monthly deficit`, href: "/#cash-flow" };
     })(),
     (() => {
       if (baseExpenses === 0) return { label: "Emergency fund", status: "incomplete", detail: "Set monthly expenses in Settings to calculate", href: "/settings" };
@@ -377,8 +377,8 @@ function Dashboard() {
       return { label: "Debt ratio", status: "fail", detail: `${pct}% of assets — high debt load`, href: "/loans" };
     })(),
     (() => {
-      if (urgent.length === 0) return { label: "Urgent alerts", status: "pass", detail: "No urgent items", href: "/" };
-      return { label: "Urgent alerts", status: "fail", detail: `${urgent.length} item${urgent.length === 1 ? "" : "s"} need attention`, href: "/" };
+      if (urgent.length === 0) return { label: "Urgent alerts", status: "pass", detail: "No urgent items", href: "/#needs-attention" };
+      return { label: "Urgent alerts", status: "fail", detail: `${urgent.length} item${urgent.length === 1 ? "" : "s"} need attention`, href: "/#needs-attention" };
     })(),
   ] as { label: string; status: "pass" | "warning" | "fail" | "incomplete"; detail: string; href: string }[];
 
@@ -446,7 +446,9 @@ function Dashboard() {
       </section>
 
       {/* NEEDS ATTENTION */}
-      {urgent.length > 0 && <PrioritySection title="Needs Attention" items={urgent} />}
+      <div id="needs-attention">
+        {urgent.length > 0 && <PrioritySection title="Needs Attention" items={urgent} />}
+      </div>
 
       {/* DUE IN NEXT 90 DAYS */}
       <section className="rounded-2xl border border-border bg-card p-4">
@@ -524,7 +526,7 @@ function Dashboard() {
       {review.length > 0 && <PrioritySection title="Review Needed" items={review} muted showDate />}
 
       {/* MONTHLY CASH FLOW BARS */}
-      <section className="rounded-2xl border border-border bg-card p-4">
+      <section id="cash-flow" className="rounded-2xl border border-border bg-card p-4">
         <h2 className="mb-3 text-sm font-bold">Monthly Cash Flow</h2>
         <CashFlowBars
           inflow={monthlyIn}
