@@ -81,6 +81,7 @@ function HealthRow({ c, onStatus, onDelete }: { c: any; onStatus: (s: any) => vo
         onDelete={onDelete}
         hasNotes={!!c.notes}
         updatedAt={c.updated_at}
+        createdAt={c.created_at}
       >
         {(c.supplements?.length || 0) > 0 && (
           <Section title="Take">
