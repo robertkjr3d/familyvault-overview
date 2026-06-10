@@ -86,6 +86,10 @@ function InvestmentsPage() {
 function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: any) => void; onDelete: () => void }) {
   const edit = useEditRecord("investments", inv);
   const gain = (inv.current_value || 0) - (inv.cost_basis || 0);
+  const daysSinceUpdate = inv.updated_at
+    ? Math.floor((Date.now() - new Date(inv.updated_at).getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+  const isStale = daysSinceUpdate !== null && daysSinceUpdate > 90;
   return (
     <HashHighlight id={`record-${inv.id}`}>
       <RecordCard
@@ -107,6 +111,11 @@ function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: an
           </div>
         }
       >
+        {isStale && (
+          <div className="rounded-lg border border-review/40 bg-review-soft/30 px-3 py-2 text-xs text-muted-foreground">
+            ⚠ Current value was last updated {daysSinceUpdate} days ago — consider refreshing this estimate.
+          </div>
+        )}
         <Section title="Holding">
           <FieldRow label="Amount invested" value={fmtMoney(inv.cost_basis)} />
           <FieldRow label="Current value (est.)" value={fmtMoney(inv.current_value)} />
