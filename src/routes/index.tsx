@@ -326,6 +326,17 @@ function Dashboard() {
 
   const dueToday = upcoming.find((u) => u.date === today.toISOString().slice(0, 10));
 
+  // Insurance adequacy
+  const activeInsurance = insurance.filter((p: any) => p.status !== "inactive");
+  const totalSumAssured = activeInsurance.reduce((s: number, p: any) => s + (Number(p.sum_assured) || 0), 0);
+  const policiesWithNoSumAssured = activeInsurance.filter((p: any) => !p.sum_assured).length;
+  const incomeReplacementNeed = salaryIncome * 120;
+  const coverageRatio = incomeReplacementNeed > 0 ? totalSumAssured / incomeReplacementNeed : null;
+  const adequacyStatus =
+    incomeReplacementNeed === 0 ? "unset" :
+    totalSumAssured === 0 ? "none" :
+    coverageRatio !== null && coverageRatio >= 1 ? "covered" : "partial";
+
   return (
     <div className="space-y-5">
       <MemberFilterBar />
@@ -494,6 +505,16 @@ function Dashboard() {
         </div>
       </section>
 
+      {/* INSURANCE ADEQUACY */}
+      <InsuranceAdequacyCard
+        totalSumAssured={totalSumAssured}
+        incomeReplacementNeed={incomeReplacementNeed}
+        coverageRatio={coverageRatio}
+        adequacyStatus={adequacyStatus}
+        policiesWithNoSumAssured={policiesWithNoSumAssured}
+        activePolicyCount={activeInsurance.length}
+      />
+
       {/* LIFETIME CHART */}
       <section className="rounded-2xl border border-border bg-card p-4">
         <h2 className="mb-1 text-sm font-bold">Lifetime Net Worth</h2>
@@ -598,6 +619,82 @@ function reviewDateInfo(kind: string, row: any): { prefix: string; date: string 
   if (kind === "Loan" && row.reprice_date) return { prefix: "Reprice by", date: fmtMonth(row.reprice_date) };
   if (kind === "Insurance" && row.next_due_date) return { prefix: "Renew by", date: fmtMonth(row.next_due_date) };
   return null;
+}
+
+function InsuranceAdequacyCard({
+  totalSumAssured,
+  incomeReplacementNeed,
+  coverageRatio,
+  adequacyStatus,
+  policiesWithNoSumAssured,
+  activePolicyCount,
+}: {
+  totalSumAssured: number;
+  incomeReplacementNeed: number;
+  coverageRatio: number | null;
+  adequacyStatus: "covered" | "partial" | "none" | "unset";
+  policiesWithNoSumAssured: number;
+  activePolicyCount: number;
+}) {
+  const statusConfig = {
+    covered:  { label: "Adequately covered",  bar: "bg-settled",  text: "text-settled",  border: "border-settled/30  bg-settled/5" },
+    partial:  { label: "Partially covered",   bar: "bg-review",   text: "text-review",   border: "border-review/30   bg-review/5" },
+    none:     { label: "No cover recorded",   bar: "bg-urgent",   text: "text-urgent",   border: "border-urgent/30   bg-urgent-soft/20" },
+    unset:    { label: "Income not set",      bar: "bg-muted",    text: "text-muted-foreground", border: "border-border bg-card" },
+  };
+  const cfg = statusConfig[adequacyStatus];
+  const pct = coverageRatio != null ? Math.min(coverageRatio * 100, 100) : 0;
+
+  return (
+    <section className={`rounded-2xl border p-4 ${cfg.border}`}>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-bold">Insurance Adequacy</h2>
+        <Link to="/insurance" className="text-xs font-semibold text-primary">View policies →</Link>
+      </div>
+
+      {adequacyStatus === "unset" ? (
+        <p className="text-xs text-muted-foreground">
+          Set your monthly income in{" "}
+          <a href="/settings" className="font-semibold text-primary underline">Settings</a>{" "}
+          to calculate coverage need.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Sum Assured</div>
+              <div className="mt-0.5 text-lg font-bold">{fmtMoney(totalSumAssured)}</div>
+              {policiesWithNoSumAssured > 0 && (
+                <div className="text-[10px] text-muted-foreground">{policiesWithNoSumAssured} polic{policiesWithNoSumAssured === 1 ? "y" : "ies"} missing sum assured</div>
+              )}
+            </div>
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">10-Year Income Need</div>
+              <div className="mt-0.5 text-lg font-bold">{fmtMoney(incomeReplacementNeed)}</div>
+              <div className="text-[10px] text-muted-foreground">Monthly income × 120</div>
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-1 flex items-center justify-between text-xs">
+              <span className={`font-semibold ${cfg.text}`}>{cfg.label}</span>
+              {coverageRatio != null && (
+                <span className="text-muted-foreground">{Math.round(coverageRatio * 100)}% covered</span>
+              )}
+            </div>
+            <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+              <div className={`h-full rounded-full transition-all ${cfg.bar}`} style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+
+          <p className="text-[10px] text-muted-foreground">
+            Based on {activePolicyCount} active polic{activePolicyCount === 1 ? "y" : "ies"}. Estimate only — excludes savings, CPF, and debt obligations.
+            <Link to="/insurance" className="ml-1 font-semibold text-primary">Add sum assured →</Link>
+          </p>
+        </div>
+      )}
+    </section>
+  );
 }
 
 function PrioritySection({ title, items, muted, showDate }: { title: string; items: any[]; muted?: boolean; showDate?: boolean }) {
