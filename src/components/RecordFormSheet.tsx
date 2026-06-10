@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useMembers } from "@/hooks/useMembers";
 import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { recordConfigs, type FieldDef, type SelectOption } from "@/lib/recordConfigs";
 import { MoneyInput } from "./MoneyInput";
@@ -32,6 +32,16 @@ export function RecordFormSheet({
   const { data: members = [] } = useMembers();
   const qc = useQueryClient();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
+
+  const { data: properties = [] } = useQuery({
+    queryKey: ["properties", activeHouseholdId],
+    enabled: !!activeHouseholdId,
+    queryFn: async () => {
+      if (!activeHouseholdId) return [];
+      const { data } = await supabase.from("properties").select("id, name").eq("household_id", activeHouseholdId);
+      return data ?? [];
+    },
+  });
 
   useEffect(() => {
     if (open) setValues(seed(cfg.fields, initial));
@@ -172,6 +182,7 @@ export function RecordFormSheet({
                     value={values[f.key]}
                     onChange={(v) => setVal(f.key, v)}
                     members={members}
+                    properties={properties}
                     currency={(f.currencyFrom && values[f.currencyFrom]) || "SGD"}
                   />
                 </div>
@@ -231,8 +242,8 @@ function ChipsInput({ value, onChange, placeholder }: { value: string[]; onChang
   );
 }
 
-function FieldInput({ f, value, onChange, members, currency }: {
-  f: FieldDef; value: any; onChange: (v: any) => void; members: any[]; currency: string;
+function FieldInput({ f, value, onChange, members, properties, currency }: {
+  f: FieldDef; value: any; onChange: (v: any) => void; members: any[]; properties: any[]; currency: string;
 }) {
   if (f.type === "chips") {
     const arr: string[] = Array.isArray(value) ? value : [];
@@ -252,6 +263,18 @@ function FieldInput({ f, value, onChange, members, currency }: {
         {f.options?.map((o) => (
           <option key={optValue(o)} value={optValue(o)}>{optLabel(o)}</option>
         ))}
+      </select>
+    );
+  }
+  if (f.type === "property_select") {
+    return (
+      <select
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value || null)}
+        className="h-9 w-full cursor-pointer rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
+      >
+        <option value="">— None (not a mortgage) —</option>
+        {properties.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select>
     );
   }
