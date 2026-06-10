@@ -55,6 +55,16 @@ function PropertyPage() {
   const status = useStatusMutation("properties", "properties");
   const del = useDeleteMutation("properties", "properties");
 
+  const { data: loans = [] } = useQuery({
+    queryKey: ["loans", activeHouseholdId],
+    enabled: !!activeHouseholdId,
+    queryFn: async () => {
+      if (!activeHouseholdId) return [];
+      const { data } = await supabase.from("loans").select("id, property_id, monthly_payment, bank").eq("household_id", activeHouseholdId);
+      return data ?? [];
+    },
+  });
+
   const { data: properties = [] } = useQuery({
     queryKey: ["properties", memberFilter, activeHouseholdId],
     enabled: !!activeHouseholdId,
