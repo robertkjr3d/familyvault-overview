@@ -348,6 +348,43 @@ function Dashboard() {
     totalSumAssured === 0 ? "none" :
     coverageRatio !== null && coverageRatio >= 1 ? "covered" : "partial";
 
+  // Financial health checks
+  const healthChecks = [
+    (() => {
+      if (salaryIncome === 0 && baseExpenses === 0) return { label: "Cash flow", status: "incomplete", detail: "Set income and expenses in Settings", href: "/settings" };
+      if (netCashFlow > 0) return { label: "Cash flow", status: "pass", detail: `+${fmtMoney(netCashFlow)} monthly surplus`, href: "/" };
+      if (netCashFlow >= -(monthlyOut * 0.1)) return { label: "Cash flow", status: "warning", detail: "Near break-even — monitor closely", href: "/" };
+      return { label: "Cash flow", status: "fail", detail: `${fmtMoney(netCashFlow)} monthly deficit`, href: "/" };
+    })(),
+    (() => {
+      if (baseExpenses === 0) return { label: "Emergency fund", status: "incomplete", detail: "Set monthly expenses in Settings to calculate", href: "/settings" };
+      if (savingsValue >= monthlyOut * 3) return { label: "Emergency fund", status: "pass", detail: `${(savingsValue / monthlyOut).toFixed(1)} months of expenses covered`, href: "/savings" };
+      if (savingsValue >= monthlyOut) return { label: "Emergency fund", status: "warning", detail: `Only ${(savingsValue / monthlyOut).toFixed(1)} months covered — aim for 3+`, href: "/savings" };
+      return { label: "Emergency fund", status: "fail", detail: "Less than 1 month of expenses in savings", href: "/savings" };
+    })(),
+    (() => {
+      if (adequacyStatus === "unset") return { label: "Insurance coverage", status: "incomplete", detail: "Set monthly income in Settings to calculate", href: "/settings" };
+      if (adequacyStatus === "none") return { label: "Insurance coverage", status: "incomplete", detail: "No sum assured entered on policies", href: "/insurance" };
+      if (adequacyStatus === "covered") return { label: "Insurance coverage", status: "pass", detail: `${Math.round((coverageRatio ?? 0) * 100)}% of 10-year income need covered`, href: "/insurance" };
+      return { label: "Insurance coverage", status: "warning", detail: `Only ${Math.round((coverageRatio ?? 0) * 100)}% of 10-year income need covered`, href: "/insurance" };
+    })(),
+    (() => {
+      if (totalAssets === 0) return { label: "Debt ratio", status: "incomplete", detail: "No asset values recorded yet", href: "/property" };
+      const ratio = totalLiabilities / totalAssets;
+      const pct = Math.round(ratio * 100);
+      if (ratio < 0.4) return { label: "Debt ratio", status: "pass", detail: `${pct}% of assets — healthy`, href: "/loans" };
+      if (ratio < 0.6) return { label: "Debt ratio", status: "warning", detail: `${pct}% of assets — monitor debt levels`, href: "/loans" };
+      return { label: "Debt ratio", status: "fail", detail: `${pct}% of assets — high debt load`, href: "/loans" };
+    })(),
+    (() => {
+      if (urgent.length === 0) return { label: "Urgent alerts", status: "pass", detail: "No urgent items", href: "/" };
+      return { label: "Urgent alerts", status: "fail", detail: `${urgent.length} item${urgent.length === 1 ? "" : "s"} need attention`, href: "/" };
+    })(),
+  ] as { label: string; status: "pass" | "warning" | "fail" | "incomplete"; detail: string; href: string }[];
+
+  const passCount = healthChecks.filter((c) => c.status === "pass").length;
+  const totalScored = healthChecks.filter((c) => c.status !== "incomplete").length;
+
   return (
     <div className="space-y-5">
       <MemberFilterBar />
@@ -536,6 +573,9 @@ function Dashboard() {
         policiesWithNoSumAssured={policiesWithNoSumAssured}
         activePolicyCount={activeInsurance.length}
       />
+
+      {/* FINANCIAL HEALTH */}
+      <FinancialHealthCard checks={healthChecks} passCount={passCount} totalScored={totalScored} />
 
       {/* LIFETIME CHART */}
       <section className="rounded-2xl border border-border bg-card p-4">
@@ -777,6 +817,56 @@ function InsuranceAdequacyCard({
           </p>
         </div>
       )}
+    </section>
+  );
+}
+
+function FinancialHealthCard({ checks, passCount, totalScored }: {
+  checks: { label: string; status: "pass" | "warning" | "fail" | "incomplete"; detail: string; href: string }[];
+  passCount: number;
+  totalScored: number;
+}) {
+  const statusIcon = { pass: "✓", warning: "⚠", fail: "✗", incomplete: "—" };
+  const statusColor = {
+    pass: "text-settled",
+    warning: "text-review",
+    fail: "text-urgent",
+    incomplete: "text-muted-foreground",
+  };
+  const rowBorder = {
+    pass: "border-settled/20",
+    warning: "border-review/30",
+    fail: "border-urgent/30",
+    incomplete: "border-border",
+  };
+  const summaryColor = totalScored === 0 ? "text-muted-foreground" : passCount === totalScored ? "text-settled" : passCount >= totalScored * 0.6 ? "text-review" : "text-urgent";
+
+  return (
+    <section className="rounded-2xl border border-border bg-card p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-bold">Financial Health</h2>
+        {totalScored > 0 && (
+          <span className={`text-xs font-bold ${summaryColor}`}>{passCount}/{totalScored} checks passed</span>
+        )}
+      </div>
+      <div className="space-y-2">
+        {checks.map((c) => {
+          const icon = statusIcon[c.status];
+          const color = statusColor[c.status];
+          const border = rowBorder[c.status];
+          return (
+            <Link key={c.label} to={c.href as any} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 hover:bg-accent/30 ${border}`}>
+              <span className={`w-4 shrink-0 text-center text-sm font-bold ${color}`}>{icon}</span>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-semibold">{c.label}</div>
+                <div className="text-[10px] text-muted-foreground">{c.detail}</div>
+              </div>
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            </Link>
+          );
+        })}
+      </div>
+      <p className="mt-3 text-[10px] text-muted-foreground">Indicative only. Based on data entered. Not financial advice.</p>
     </section>
   );
 }
