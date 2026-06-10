@@ -97,6 +97,7 @@ function AssetRow({ asset, onStatus, onDelete }: { asset: any; onStatus: (s: any
         onDelete={onDelete}
         hasNotes={!!asset.notes}
         updatedAt={asset.updated_at}
+        createdAt={asset.created_at}
         rightMeta={
           asset.estimated_value ? (
             <div className="text-right text-xs">
