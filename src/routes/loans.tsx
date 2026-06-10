@@ -102,6 +102,7 @@ function LoanRow({ l, today, onStatus, onDelete }: { l: any; today: Date; onStat
         onDelete={onDelete}
         hasNotes={!!l.notes}
         updatedAt={l.updated_at}
+        createdAt={l.created_at}
         rightMeta={
           <div className="text-right text-xs">
             <div className="text-muted-foreground">Balance</div>
