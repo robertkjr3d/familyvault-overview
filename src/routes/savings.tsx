@@ -145,6 +145,7 @@ function SavingsRow({ a, onStatus, onDelete }: { a: any; onStatus: (s: any) => v
         onDelete={onDelete}
        hasNotes={!!a.notes}
         updatedAt={a.updated_at}
+        createdAt={a.created_at}
         rightMeta={
           <div className="text-right text-xs">
             <div className="text-muted-foreground">Balance</div>
