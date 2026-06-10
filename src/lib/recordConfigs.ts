@@ -53,6 +53,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
       { key: "interest_rate", label: "Interest rate %", type: "number", section: "🏦 Mortgage" },
       { key: "rate_type", label: "Rate type", type: "select", options: RATE_TYPES, section: "🏦 Mortgage" },
       { key: "fixed_rate_end", label: "Rate ends / Next reprice date", type: "date", section: "🏦 Mortgage" },
+      { key: "mortgage_end_date", label: "Mortgage end date", type: "date", section: "🏦 Mortgage" },
 
       // 🏠 Rental
       { key: "monthly_rent", label: "Monthly rent", type: "number", money: true, currencyFrom: "currency", section: "🏠 Rental" },
@@ -86,6 +87,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
       { key: "rate_label", label: "Rate label", type: "text", placeholder: "e.g. SORA + 0.8%" },
       { key: "monthly_payment", label: "Actual monthly payment", type: "number", money: true, placeholder: "Leave blank to auto-calculate" },
       { key: "reprice_date", label: "Reprice date", type: "date" },
+      { key: "loan_end_date", label: "Loan end date", type: "date" },
       { key: "action", label: "Action", type: "text", placeholder: "e.g. Ask UOB for repricing rate by May 2026" },
     ],
   },
