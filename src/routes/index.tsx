@@ -326,6 +326,16 @@ function Dashboard() {
 
   const dueToday = upcoming.find((u) => u.date === today.toISOString().slice(0, 10));
 
+  // Asset allocation
+  const sgdProperties = properties.filter((p: any) => !p.currency || p.currency === "SGD");
+  const allocProperty = sgdProperties.reduce((s: number, p: any) => s + (Number(p.current_value) || 0), 0);
+  const allocInvestments = investments.reduce((s: number, i: any) => s + (Number(i.current_value) || 0), 0);
+  const allocCash = savings.reduce((s: number, a: any) => s + (Number(a.balance) || 0), 0);
+  const allocTotal = allocProperty + allocInvestments + allocCash;
+  const allocPctProperty = allocTotal > 0 ? (allocProperty / allocTotal) * 100 : 0;
+  const allocPctInvestments = allocTotal > 0 ? (allocInvestments / allocTotal) * 100 : 0;
+  const allocPctCash = allocTotal > 0 ? (allocCash / allocTotal) * 100 : 0;
+
   // Insurance adequacy
   const activeInsurance = insurance.filter((p: any) => p.status !== "inactive");
   const totalSumAssured = activeInsurance.reduce((s: number, p: any) => s + (Number(p.sum_assured) || 0), 0);
@@ -505,6 +515,17 @@ function Dashboard() {
         </div>
       </section>
 
+      {/* ASSET ALLOCATION */}
+      <AssetAllocationCard
+        allocProperty={allocProperty}
+        allocInvestments={allocInvestments}
+        allocCash={allocCash}
+        allocTotal={allocTotal}
+        allocPctProperty={allocPctProperty}
+        allocPctInvestments={allocPctInvestments}
+        allocPctCash={allocPctCash}
+      />
+
       {/* INSURANCE ADEQUACY */}
       <InsuranceAdequacyCard
         totalSumAssured={totalSumAssured}
@@ -619,6 +640,68 @@ function reviewDateInfo(kind: string, row: any): { prefix: string; date: string 
   if (kind === "Loan" && row.reprice_date) return { prefix: "Reprice by", date: fmtMonth(row.reprice_date) };
   if (kind === "Insurance" && row.next_due_date) return { prefix: "Renew by", date: fmtMonth(row.next_due_date) };
   return null;
+}
+
+function AssetAllocationCard({
+  allocProperty, allocInvestments, allocCash, allocTotal,
+  allocPctProperty, allocPctInvestments, allocPctCash,
+}: {
+  allocProperty: number; allocInvestments: number; allocCash: number; allocTotal: number;
+  allocPctProperty: number; allocPctInvestments: number; allocPctCash: number;
+}) {
+  const isEmpty = allocTotal === 0;
+  const segments = [
+    { label: "Property", value: allocProperty, pct: allocPctProperty, color: "bg-primary" },
+    { label: "Investments", value: allocInvestments, pct: allocPctInvestments, color: "bg-settled" },
+    { label: "Cash & Savings", value: allocCash, pct: allocPctCash, color: "bg-review" },
+  ];
+  const activeSegments = segments.filter((s) => s.value > 0);
+
+  return (
+    <section className="rounded-2xl border border-border bg-card p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-bold">Asset Allocation</h2>
+        <span className="text-xs text-muted-foreground">SGD assets only</span>
+      </div>
+      {isEmpty ? (
+        <p className="py-2 text-xs text-muted-foreground">No asset values recorded yet. Add properties, investments, or savings to see your allocation.</p>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex h-4 w-full overflow-hidden rounded-full">
+            {segments.map((s) => {
+              const width = s.pct.toFixed(1);
+              const isActive = s.value > 0;
+              return isActive ? (
+                <div
+                  key={s.label}
+                  className={`h-full ${s.color} transition-all`}
+                  style={{ width: `${width}%` }}
+                />
+              ) : null;
+            })}
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {segments.map((s) => {
+              const pctDisplay = s.pct > 0 ? `${Math.round(s.pct)}%` : "—";
+              return (
+                <div key={s.label} className="space-y-0.5">
+                  <div className="flex items-center gap-1">
+                    <span className={`inline-block h-2 w-2 rounded-full ${s.color}`} />
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{s.label}</span>
+                  </div>
+                  <div className="text-sm font-bold">{pctDisplay}</div>
+                  <div className="text-[10px] text-muted-foreground">{fmtMoney(s.value)}</div>
+                </div>
+              );
+            })}
+          </div>
+          {activeSegments.length === 1 && (
+            <p className="text-[10px] text-muted-foreground">Only one asset class recorded — add investments or savings for a complete picture.</p>
+          )}
+        </div>
+      )}
+    </section>
+  );
 }
 
 function InsuranceAdequacyCard({
