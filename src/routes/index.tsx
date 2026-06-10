@@ -10,7 +10,7 @@ import { useAppStore } from "@/lib/store";
 import { addDays, isBefore, parseISO } from "date-fns";
 import { LifetimeChart } from "@/components/LifetimeChart";
 import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check, Bell, PiggyBank } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { fmtPct } from "@/lib/format";
 import { HashHighlight } from "@/components/HashHighlight";
 import { useMembers } from "@/hooks/useMembers";
@@ -31,6 +31,14 @@ function Dashboard() {
   const [dismissing, setDismissing] = useState<string | null>(null);
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const queryClient = useQueryClient();
+  const cashFlowRef = useRef<HTMLElement>(null);
+  const needsAttentionRef = useRef<HTMLDivElement>(null);
+
+  function scrollTo(ref: React.RefObject<HTMLElement | HTMLDivElement>) {
+    if (!ref.current) return;
+    const top = ref.current.getBoundingClientRect().top + window.scrollY - 72;
+    window.scrollTo({ top, behavior: "smooth" });
+  }
 
   const { data } = useQuery({
     queryKey: ["dashboard", memberFilter, activeHouseholdId],
@@ -352,9 +360,9 @@ function Dashboard() {
   const healthChecks = [
     (() => {
       if (salaryIncome === 0 && baseExpenses === 0) return { label: "Cash flow", status: "incomplete", detail: "Set income and expenses in Settings", href: "/settings" };
-      if (netCashFlow > 0) return { label: "Cash flow", status: "pass", detail: `+${fmtMoney(netCashFlow)} monthly surplus`, href: "/#cash-flow" };
-      if (netCashFlow >= -(monthlyOut * 0.1)) return { label: "Cash flow", status: "warning", detail: "Near break-even — monitor closely", href: "/#cash-flow" };
-      return { label: "Cash flow", status: "fail", detail: `${fmtMoney(netCashFlow)} monthly deficit`, href: "/#cash-flow" };
+      if (netCashFlow > 0) return { label: "Cash flow", status: "pass", detail: `+${fmtMoney(netCashFlow)} monthly surplus`, href: "cash-flow" };
+      if (netCashFlow >= -(monthlyOut * 0.1)) return { label: "Cash flow", status: "warning", detail: "Near break-even — monitor closely", href: "cash-flow" };
+      return { label: "Cash flow", status: "fail", detail: `${fmtMoney(netCashFlow)} monthly deficit`, href: "cash-flow" };
     })(),
     (() => {
       if (baseExpenses === 0) return { label: "Emergency fund", status: "incomplete", detail: "Set monthly expenses in Settings to calculate", href: "/settings" };
@@ -377,8 +385,8 @@ function Dashboard() {
       return { label: "Debt ratio", status: "fail", detail: `${pct}% of assets — high debt load`, href: "/loans" };
     })(),
     (() => {
-      if (urgent.length === 0) return { label: "Urgent alerts", status: "pass", detail: "No urgent items", href: "/#needs-attention" };
-      return { label: "Urgent alerts", status: "fail", detail: `${urgent.length} item${urgent.length === 1 ? "" : "s"} need attention`, href: "/#needs-attention" };
+      if (urgent.length === 0) return { label: "Urgent alerts", status: "pass", detail: "No urgent items", href: "needs-attention" };
+      return { label: "Urgent alerts", status: "fail", detail: `${urgent.length} item${urgent.length === 1 ? "" : "s"} need attention`, href: "needs-attention" };
     })(),
   ] as { label: string; status: "pass" | "warning" | "fail" | "incomplete"; detail: string; href: string }[];
 
@@ -446,7 +454,7 @@ function Dashboard() {
       </section>
 
       {/* NEEDS ATTENTION */}
-      <div id="needs-attention">
+      <div ref={needsAttentionRef}>
         {urgent.length > 0 && <PrioritySection title="Needs Attention" items={urgent} />}
       </div>
 
@@ -526,7 +534,7 @@ function Dashboard() {
       {review.length > 0 && <PrioritySection title="Review Needed" items={review} muted showDate />}
 
       {/* MONTHLY CASH FLOW BARS */}
-      <section id="cash-flow" className="rounded-2xl border border-border bg-card p-4">
+      <section ref={cashFlowRef} className="rounded-2xl border border-border bg-card p-4">
         <h2 className="mb-3 text-sm font-bold">Monthly Cash Flow</h2>
         <CashFlowBars
           inflow={monthlyIn}
@@ -577,7 +585,15 @@ function Dashboard() {
       />
 
       {/* FINANCIAL HEALTH */}
-      <FinancialHealthCard checks={healthChecks} passCount={passCount} totalScored={totalScored} />
+      <FinancialHealthCard
+        checks={healthChecks}
+        passCount={passCount}
+        totalScored={totalScored}
+        onScroll={(target) => {
+          if (target === "cash-flow") scrollTo(cashFlowRef);
+          if (target === "needs-attention") scrollTo(needsAttentionRef);
+        }}
+      />
 
       {/* LIFETIME CHART */}
       <section className="rounded-2xl border border-border bg-card p-4">
@@ -823,10 +839,11 @@ function InsuranceAdequacyCard({
   );
 }
 
-function FinancialHealthCard({ checks, passCount, totalScored }: {
+function FinancialHealthCard({ checks, passCount, totalScored, onScroll }: {
   checks: { label: string; status: "pass" | "warning" | "fail" | "incomplete"; detail: string; href: string }[];
   passCount: number;
   totalScored: number;
+  onScroll: (target: string) => void;
 }) {
   const statusIcon = { pass: "✓", warning: "⚠", fail: "✗", incomplete: "—" };
   const statusColor = {
@@ -857,14 +874,25 @@ function FinancialHealthCard({ checks, passCount, totalScored }: {
           const color = statusColor[c.status];
           const border = rowBorder[c.status];
           return (
-            <Link key={c.label} to={c.href as any} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 hover:bg-accent/30 ${border}`}>
-              <span className={`w-4 shrink-0 text-center text-sm font-bold ${color}`}>{icon}</span>
-              <div className="min-w-0 flex-1">
-                <div className="text-xs font-semibold">{c.label}</div>
-                <div className="text-[10px] text-muted-foreground">{c.detail}</div>
-              </div>
-              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            </Link>
+            {c.href === "cash-flow" || c.href === "needs-attention" ? (
+              <button key={c.label} onClick={() => onScroll(c.href)} className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 hover:bg-accent/30 ${border}`}>
+                <span className={`w-4 shrink-0 text-center text-sm font-bold ${color}`}>{icon}</span>
+                <div className="min-w-0 flex-1 text-left">
+                  <div className="text-xs font-semibold">{c.label}</div>
+                  <div className="text-[10px] text-muted-foreground">{c.detail}</div>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              </button>
+            ) : (
+              <Link key={c.label} to={c.href as any} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 hover:bg-accent/30 ${border}`}>
+                <span className={`w-4 shrink-0 text-center text-sm font-bold ${color}`}>{icon}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold">{c.label}</div>
+                  <div className="text-[10px] text-muted-foreground">{c.detail}</div>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              </Link>
+            )}
           );
         })}
       </div>
