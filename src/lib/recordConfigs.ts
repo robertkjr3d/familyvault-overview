@@ -2,7 +2,7 @@ import {
   CURRENCIES, BANKS, PROPERTY_PURPOSE, INSURANCE_FREQ, INSURANCE_CATEGORIES, INVESTMENT_TYPES,
 } from "./options";
 
-export type FieldType = "text" | "number" | "date" | "select" | "textarea" | "member" | "chips";
+export type FieldType = "text" | "number" | "date" | "select" | "textarea" | "member" | "chips" | "property_select";
 export type SelectOption = string | { value: string; label: string };
 
 export type FieldDef = {
@@ -87,6 +87,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
       { key: "rate_label", label: "Rate label", type: "text", placeholder: "e.g. SORA + 0.8%" },
       { key: "monthly_payment", label: "Actual monthly payment", type: "number", money: true, placeholder: "Leave blank to auto-calculate" },
       { key: "reprice_date", label: "Reprice date", type: "date" },
+      { key: "property_id", label: "Linked property (mortgage)", type: "property_select" },
       { key: "loan_end_date", label: "Loan end date", type: "date" },
       { key: "action", label: "Action", type: "text", placeholder: "e.g. Ask UOB for repricing rate by May 2026" },
     ],
