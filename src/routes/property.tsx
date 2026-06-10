@@ -81,6 +81,7 @@ function PropertyPage() {
           <PropertyRow
             key={p.id}
             p={p}
+            loans={loans}
             onStatus={(s) => status.mutate({ id: p.id, status: s })}
             onDelete={() => del.mutate(p.id)}
           />
@@ -95,6 +96,7 @@ function PropertyPage() {
               <PropertyRow
                 key={p.id}
                 p={p}
+                loans={loans}
                 onStatus={(s) => status.mutate({ id: p.id, status: s })}
                 onDelete={() => del.mutate(p.id)}
               />
@@ -116,8 +118,10 @@ function AlertLabel({ text }: { text: string }) {
   );
 }
 
-function PropertyRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) => void; onDelete: () => void }) {
+function PropertyRow({ p, loans, onStatus, onDelete }: { p: any; loans: any[]; onStatus: (s: any) => void; onDelete: () => void }) {
   const edit = useEditRecord("properties", p);
+  const linkedLoan = loans.find((l: any) => l.property_id === p.id);
+  const hasMismatch = linkedLoan && Number(linkedLoan.monthly_payment) !== Number(p.monthly_payment);
   const costs = totalCosts(p);
   const gainPa = capitalGainPa(p);
   const target = parseTargetPct(p.strategy);
@@ -170,6 +174,11 @@ function PropertyRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) => 
           />
           <FieldRow label="Mortgage" value={p.mortgage_bank ? `${p.mortgage_bank} · ${fmtMoney(p.mortgage_balance, p.currency)}` : "—"} />
           <FieldRow label="Monthly payment" value={fmtMoney(p.monthly_payment, p.currency)} />
+          {hasMismatch && (
+            <div className="rounded-lg border border-review/40 bg-review-soft/30 px-3 py-2 text-xs text-muted-foreground">
+              ⚠ Linked loan ({linkedLoan.bank}) has a different monthly payment of {fmtMoney(linkedLoan.monthly_payment)}. The loan amount is used for cash flow calculations — update one to match.
+            </div>
+          )}
           <FieldRow label="Interest rate" value={fmtPct(p.interest_rate)} />
           <FieldRow label="Rate type" value={p.rate_type ?? "—"} />
          <FieldRow label={<AlertLabel text="Rate ends / Reprice" />} value={fmtDate(p.fixed_rate_end)} />
