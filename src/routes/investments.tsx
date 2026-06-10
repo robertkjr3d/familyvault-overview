@@ -89,7 +89,7 @@ function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: an
   const daysSinceUpdate = inv.updated_at
     ? Math.floor((Date.now() - new Date(inv.updated_at).getTime()) / (1000 * 60 * 60 * 24))
     : null;
-  const isStale = daysSinceUpdate !== null && daysSinceUpdate > 90;
+  const isStale = daysSinceUpdate !== null && daysSinceUpdate > 1;
   return (
     <HashHighlight id={`record-${inv.id}`}>
       <RecordCard
