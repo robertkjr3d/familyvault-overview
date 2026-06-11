@@ -28,7 +28,7 @@ function InsurancePage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("insurance_policies", "insurance");
-  const del = useDeleteMutation("insurance_policies", "insurance");
+  const del = useDeleteMutation("insurance_policies", "insurance", "insurance");
 
   const { data: items = [] } = useQuery({
     queryKey: ["insurance", memberFilter, activeHouseholdId],
