@@ -27,7 +27,7 @@ function InvestmentsPage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("investments", "investments");
-  const del = useDeleteMutation("investments", "investments");
+  const del = useDeleteMutation("investments", "investments", "investment");
 
   const { data: items = [] } = useQuery({
     queryKey: ["investments", memberFilter, activeHouseholdId],
