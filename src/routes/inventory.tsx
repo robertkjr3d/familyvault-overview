@@ -176,11 +176,11 @@ function InventoryPage() {
         )}
       </section>
 
-      {/* Go-Bag */}
-      <ChecklistSection table="gobag_items" queryKey="gobag" title="Go-Bag Checklist" items={gobag} />
-
       {/* Travel Checklist */}
       <ChecklistSection table="travel_checklist_items" queryKey="travel_checklist" title="Travel Checklist" items={travelChecklist} />
+
+      {/* Go-Bag */}
+      <ChecklistSection table="gobag_items" queryKey="gobag" title="Go-Bag Checklist" items={gobag} />
 
       {/* FAB */}
       <button
