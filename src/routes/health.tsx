@@ -24,7 +24,7 @@ export const Route = createFileRoute("/health")({
 function HealthPage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
   const status = useStatusMutation("health_conditions", "health");
-  const del = useDeleteMutation("health_conditions", "health");
+  const del = useDeleteMutation("health_conditions", "health", "health");
   const { data: members = [] } = useMembers();
 
   const { data: items = [] } = useQuery({
