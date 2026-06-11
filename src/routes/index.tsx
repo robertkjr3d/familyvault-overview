@@ -31,10 +31,10 @@ function Dashboard() {
   const [dismissing, setDismissing] = useState<string | null>(null);
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const queryClient = useQueryClient();
-  const cashFlowRef = useRef<HTMLElement>(null);
-  const needsAttentionRef = useRef<HTMLDivElement>(null);
+  const cashFlowRef = useRef<any>(null);
+  const needsAttentionRef = useRef<any>(null);
 
-  function scrollTo(ref: React.RefObject<HTMLElement | HTMLDivElement>) {
+  function scrollTo(ref: any) {
     if (!ref.current) return;
     const top = ref.current.getBoundingClientRect().top + window.scrollY - 72;
     window.scrollTo({ top, behavior: "smooth" });
