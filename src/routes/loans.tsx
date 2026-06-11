@@ -30,7 +30,7 @@ function LoansPage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("loans", "loans");
-  const del = useDeleteMutation("loans", "loans");
+  const useDeleteMutation("loans", "loans", "loan");
   const { today } = useToday();
 
   const { data: loans = [] } = useQuery({
