@@ -212,14 +212,15 @@ export function LifetimeChart({
         }
       }
 
-      // FD / savings maturities
+      // FD / savings maturities — informational marker only.
+      // The balance is already inside investablePool and compounding there,
+      // so it must NOT also be added to annualIn (that would double-count it).
       for (const s of savings) {
         if (!s.maturity_date) continue;
         const matYear = new Date(s.maturity_date).getFullYear();
         if (matYear === y && s.balance) {
           const bal = Number(s.balance);
-          annualIn += bal;
-          events.push(`${s.institution ?? "FD"} matures +${fmt(bal)}`);
+          events.push(`${s.institution ?? "FD"} matures (${fmt(bal)} becomes available)`);
         }
       }
 
