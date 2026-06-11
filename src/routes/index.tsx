@@ -873,8 +873,7 @@ function FinancialHealthCard({ checks, passCount, totalScored, onScroll }: {
           const icon = statusIcon[c.status];
           const color = statusColor[c.status];
           const border = rowBorder[c.status];
-          return (
-            {c.href === "cash-flow" || c.href === "needs-attention" ? (
+          return c.href === "cash-flow" || c.href === "needs-attention" ? (
               <button key={c.label} onClick={() => onScroll(c.href)} className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 hover:bg-accent/30 ${border}`}>
                 <span className={`w-4 shrink-0 text-center text-sm font-bold ${color}`}>{icon}</span>
                 <div className="min-w-0 flex-1 text-left">
@@ -892,8 +891,7 @@ function FinancialHealthCard({ checks, passCount, totalScored, onScroll }: {
                 </div>
                 <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               </Link>
-            )}
-          );
+            );
         })}
       </div>
       <p className="mt-3 text-[10px] text-muted-foreground">Indicative only. Based on data entered. Not financial advice.</p>
