@@ -18,16 +18,23 @@ export function useStatusMutation(table: string, queryKey: string) {
   });
 }
 
-export function useDeleteMutation(table: string, queryKey: string) {
+export function useDeleteMutation(table: string, queryKey: string, entityType?: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from(table as any).delete().eq("id", id);
       if (error) throw error;
+      // Clean up any reminders (auto-generated or manually set) that point at this record,
+      // so deleted entries don't leave "phantom" reminders behind.
+      if (entityType) {
+        await supabase.from("reminders").delete().eq("entity_type", entityType).eq("entity_id", id);
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [queryKey] });
       qc.invalidateQueries({ queryKey: ["alert-count"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["alerts-all"] });
       toast.success("Deleted");
     },
     onError: (e: any) => toast.error(e.message),
