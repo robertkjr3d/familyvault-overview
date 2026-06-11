@@ -36,8 +36,7 @@ function Dashboard() {
 
   function scrollTo(ref: any) {
     if (!ref.current) return;
-    const top = ref.current.getBoundingClientRect().top + window.scrollY - 72;
-    window.scrollTo({ top, behavior: "smooth" });
+    ref.current.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   const { data } = useQuery({
@@ -454,7 +453,7 @@ function Dashboard() {
       </section>
 
       {/* NEEDS ATTENTION */}
-      <div ref={needsAttentionRef}>
+      <div ref={needsAttentionRef} className="scroll-mt-20">
         {urgent.length > 0 && <PrioritySection title="Needs Attention" items={urgent} />}
       </div>
 
@@ -534,7 +533,7 @@ function Dashboard() {
       {review.length > 0 && <PrioritySection title="Review Needed" items={review} muted showDate />}
 
       {/* MONTHLY CASH FLOW BARS */}
-      <section ref={cashFlowRef} className="rounded-2xl border border-border bg-card p-4">
+      <section ref={cashFlowRef} className="scroll-mt-20 rounded-2xl border border-border bg-card p-4">
         <h2 className="mb-3 text-sm font-bold">Monthly Cash Flow</h2>
         <CashFlowBars
           inflow={monthlyIn}
