@@ -78,7 +78,7 @@ function SavingsPage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("savings_accounts", "savings");
-  const del = useDeleteMutation("savings_accounts", "savings");
+  const del = useDeleteMutation("savings_accounts", "savings", "savings");
 
   const { data: items = [] } = useQuery({
     queryKey: ["savings", memberFilter, activeHouseholdId],
