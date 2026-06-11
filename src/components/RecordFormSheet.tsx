@@ -111,6 +111,15 @@ export function RecordFormSheet({
 
       if (cfg.table === "savings_accounts" && payload.maturity_date && savedId) {
         try {
+          // Remove any previously auto-generated FD reminder for this entry first,
+          // so editing/re-saving (even with no changes) doesn't create duplicates.
+          await supabase
+            .from("reminders")
+            .delete()
+            .eq("entity_type", "savings")
+            .eq("entity_id", savedId)
+            .like("what", "FD Maturing —%");
+
           const remindAt = addDays(parseISO(payload.maturity_date), -30);
           await supabase.from("reminders").insert({
             household_id: activeHouseholdId,
@@ -119,6 +128,16 @@ export function RecordFormSheet({
             what: `FD Maturing — ${payload.institution ?? ""} matures on ${payload.maturity_date}.`,
             remind_at: remindAt.toISOString(),
           });
+        } catch { /* non-fatal */ }
+      } else if (cfg.table === "savings_accounts" && !payload.maturity_date && savedId) {
+        // Maturity date was cleared — remove any stale auto-generated reminder too.
+        try {
+          await supabase
+            .from("reminders")
+            .delete()
+            .eq("entity_type", "savings")
+            .eq("entity_id", savedId)
+            .like("what", "FD Maturing —%");
         } catch { /* non-fatal */ }
       }
 
