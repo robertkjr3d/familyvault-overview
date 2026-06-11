@@ -121,13 +121,15 @@ export function RecordFormSheet({
             .like("what", "FD Maturing —%");
 
           const remindAt = addDays(parseISO(payload.maturity_date), -30);
-          await supabase.from("reminders").insert({
-            household_id: activeHouseholdId,
-            entity_type: "savings",
-            entity_id: savedId,
-            what: `FD Maturing — ${payload.institution ?? ""} matures on ${payload.maturity_date}.`,
-            remind_at: remindAt.toISOString(),
-          });
+          if (remindAt.getTime() > Date.now()) {
+            await supabase.from("reminders").insert({
+              household_id: activeHouseholdId,
+              entity_type: "savings",
+              entity_id: savedId,
+              what: `FD Maturing — ${payload.institution ?? ""} matures on ${payload.maturity_date}.`,
+              remind_at: remindAt.toISOString(),
+            });
+          }
         } catch { /* non-fatal */ }
       } else if (cfg.table === "savings_accounts" && !payload.maturity_date && savedId) {
         // Maturity date was cleared — remove any stale auto-generated reminder too.
