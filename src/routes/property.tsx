@@ -53,7 +53,7 @@ function PropertyPage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("properties", "properties");
-  const del = useDeleteMutation("properties", "properties");
+  const del = useDeleteMutation("properties", "properties", "property");
 
   const { data: loans = [] } = useQuery({
     queryKey: ["loans", activeHouseholdId],
