@@ -386,8 +386,8 @@ function Dashboard() {
       if (ratio < 0.6) return { label: "Debt ratio", status: "warning", detail: `${pct}% of assets — monitor debt levels`, href: "/loans" };
       return { label: "Debt ratio", status: "fail", detail: `${pct}% of assets — high debt load`, href: "/loans" };
     })(),
-    (() => {
-      if (urgent.length === 0) return { label: "Urgent alerts", status: "pass", detail: "No urgent items", href: "needs-attention" };
+   (() => {
+      if (urgent.length === 0) return { label: "Urgent alerts", status: "pass", detail: "No urgent items", href: "" };
       return { label: "Urgent alerts", status: "fail", detail: `${urgent.length} item${urgent.length === 1 ? "" : "s"} need attention`, href: "needs-attention" };
     })(),
   ] as { label: string; status: "pass" | "warning" | "fail" | "incomplete"; detail: string; href: string }[];
@@ -875,6 +875,17 @@ function FinancialHealthCard({ checks, passCount, totalScored, onScroll }: {
           const icon = statusIcon[c.status];
           const color = statusColor[c.status];
           const border = rowBorder[c.status];
+          if (c.href === "") {
+            return (
+              <div key={c.label} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${border}`}>
+                <span className={`w-4 shrink-0 text-center text-sm font-bold ${color}`}>{icon}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold">{c.label}</div>
+                  <div className="text-[10px] text-muted-foreground">{c.detail}</div>
+                </div>
+              </div>
+            );
+          }
           return c.href === "cash-flow" || c.href === "needs-attention" ? (
               <button key={c.label} onClick={() => onScroll(c.href)} className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 hover:bg-accent/30 ${border}`}>
                 <span className={`w-4 shrink-0 text-center text-sm font-bold ${color}`}>{icon}</span>
