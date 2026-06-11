@@ -177,10 +177,10 @@ function InventoryPage() {
       </section>
 
       {/* Go-Bag */}
-      <ChecklistSection table="gobag_items" title="Go-Bag Checklist" items={gobag} />
+      <ChecklistSection table="gobag_items" queryKey="gobag" title="Go-Bag Checklist" items={gobag} />
 
       {/* Travel Checklist */}
-      <ChecklistSection table="travel_checklist_items" title="Travel Checklist" items={travelChecklist} />
+      <ChecklistSection table="travel_checklist_items" queryKey="travel_checklist" title="Travel Checklist" items={travelChecklist} />
 
       {/* FAB */}
       <button
@@ -205,7 +205,7 @@ function InventoryPage() {
 }
 
 /* ---------- Checklist Section (Go-Bag, Travel, etc.) ---------- */
-function ChecklistSection({ table, title, items }: { table: string; title: string; items: any[] }) {
+function ChecklistSection({ table, queryKey, title, items }: { table: string; queryKey: string; title: string; items: any[] }) {
   const qc = useQueryClient();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const [open, setOpen] = useState(false);
@@ -216,7 +216,7 @@ function ChecklistSection({ table, title, items }: { table: string; title: strin
 
   async function toggle(id: string, checked: boolean) {
     await supabase.from(table).update({ checked }).eq("id", id);
-    qc.invalidateQueries({ queryKey: [table, activeHouseholdId] });
+    qc.invalidateQueries({ queryKey: [queryKey, activeHouseholdId] });
   }
 
   async function addItem() {
@@ -232,12 +232,12 @@ function ChecklistSection({ table, title, items }: { table: string; title: strin
     setAdding(false);
     if (error) { toast.error(error.message); return; }
     setNewLabel("");
-    qc.invalidateQueries({ queryKey: [table, activeHouseholdId] });
+    qc.invalidateQueries({ queryKey: [queryKey, activeHouseholdId] });
   }
 
   async function deleteItem(id: string) {
     await supabase.from(table).delete().eq("id", id);
-    qc.invalidateQueries({ queryKey: [table, activeHouseholdId] });
+    qc.invalidateQueries({ queryKey: [queryKey, activeHouseholdId] });
   }
 
   return (
