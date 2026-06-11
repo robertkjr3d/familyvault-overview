@@ -33,10 +33,13 @@ function Dashboard() {
   const queryClient = useQueryClient();
   const cashFlowRef = useRef<any>(null);
   const needsAttentionRef = useRef<any>(null);
+  const [highlight, setHighlight] = useState<string | null>(null);
 
-  function scrollTo(ref: any) {
+  function scrollTo(ref: any, key: string) {
     if (!ref.current) return;
     ref.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    setHighlight(key);
+    setTimeout(() => setHighlight((h) => (h === key ? null : h)), 1800);
   }
 
   const { data } = useQuery({
@@ -453,7 +456,7 @@ function Dashboard() {
       </section>
 
       {/* NEEDS ATTENTION */}
-      <div ref={needsAttentionRef} className="scroll-mt-20">
+      <div ref={needsAttentionRef} className={`scroll-mt-28 rounded-2xl transition-all ${highlight === "needs-attention" ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}>
         {urgent.length > 0 && <PrioritySection title="Needs Attention" items={urgent} />}
       </div>
 
@@ -533,7 +536,7 @@ function Dashboard() {
       {review.length > 0 && <PrioritySection title="Review Needed" items={review} muted showDate />}
 
       {/* MONTHLY CASH FLOW BARS */}
-      <section ref={cashFlowRef} className="scroll-mt-20 rounded-2xl border border-border bg-card p-4">
+     <section ref={cashFlowRef} className={`scroll-mt-28 rounded-2xl border border-border bg-card p-4 transition-all ${highlight === "cash-flow" ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}>
         <h2 className="mb-3 text-sm font-bold">Monthly Cash Flow</h2>
         <CashFlowBars
           inflow={monthlyIn}
@@ -589,8 +592,8 @@ function Dashboard() {
         passCount={passCount}
         totalScored={totalScored}
         onScroll={(target) => {
-          if (target === "cash-flow") scrollTo(cashFlowRef);
-          if (target === "needs-attention") scrollTo(needsAttentionRef);
+          if (target === "cash-flow") scrollTo(cashFlowRef, "cash-flow");
+          if (target === "needs-attention") scrollTo(needsAttentionRef, "needs-attention");
         }}
       />
 
