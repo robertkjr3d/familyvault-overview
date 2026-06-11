@@ -37,7 +37,6 @@ function InventoryPage() {
   const [search, setSearch] = useState("");
   const [openFolder, setOpenFolder] = useState<Folder | null>(null);
   const [showAddFolder, setShowAddFolder] = useState(false);
-  const [showGoBag, setShowGoBag] = useState(false);
 
   const { data: folders = [] } = useQuery({
     queryKey: ["folders", activeHouseholdId],
@@ -74,6 +73,16 @@ function InventoryPage() {
     },
   });
 
+  const { data: travelChecklist = [] } = useQuery({
+    queryKey: ["travel_checklist", activeHouseholdId],
+    enabled: !!activeHouseholdId,
+    queryFn: async () => {
+      if (!activeHouseholdId) return [];
+      const { data } = await supabase.from("travel_checklist_items").select("*").eq("household_id", activeHouseholdId).order("sort_order");
+      return data ?? [];
+    },
+  });
+
   const folderById = useMemo(() => {
     const m = new Map<string, Folder>();
     folders.forEach((f) => m.set(f.id, f));
@@ -95,12 +104,6 @@ function InventoryPage() {
       .map((i) => ({ item: i, path: folderById.get(i.folder_id)?.name ?? "Unknown" }));
   }, [q, allItems, folderById]);
 
-  const toggleGo = async (id: string, checked: boolean) => {
-    await supabase.from("gobag_items").update({ checked }).eq("id", id);
-    qc.invalidateQueries({ queryKey: ["gobag"] });
-  };
-
-  const goBagDone = gobag.filter((g: any) => g.checked).length;
 
   return (
     <div className="space-y-5 pb-24">
@@ -174,46 +177,10 @@ function InventoryPage() {
       </section>
 
       {/* Go-Bag */}
-      <section className="rounded-2xl border border-border bg-muted/40">
-        <button
-          type="button"
-          onClick={() => setShowGoBag((v) => !v)}
-          className="flex w-full items-center justify-between px-4 py-3 text-left"
-        >
-          <span className="text-sm font-semibold">
-            Go-Bag Checklist — {gobag.length} items
-            {goBagDone > 0 && (
-              <span className="ml-2 text-xs font-normal text-muted-foreground">({goBagDone} ✓)</span>
-            )}
-          </span>
-          <ChevronDown className={`h-4 w-4 transition ${showGoBag ? "rotate-180" : ""}`} />
-        </button>
-        {showGoBag && (
-          <div className="border-t border-border/40 px-4 py-3">
-            {gobag.length === 0 ? (
-              <p className="py-2 text-center text-xs text-muted-foreground">
-                No items in your go-bag yet.
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {gobag.map((g: any) => (
-                  <li key={g.id}>
-                    <label className="flex cursor-pointer items-center gap-3 text-sm">
-                      <input
-                        type="checkbox"
-                        defaultChecked={g.checked}
-                        onChange={(e) => toggleGo(g.id, e.target.checked)}
-                        className="h-4 w-4 rounded border-border"
-                      />
-                      <span className={g.checked ? "text-muted-foreground line-through" : ""}>{g.label}</span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-      </section>
+      <ChecklistSection table="gobag_items" title="Go-Bag Checklist" items={gobag} />
+
+      {/* Travel Checklist */}
+      <ChecklistSection table="travel_checklist_items" title="Travel Checklist" items={travelChecklist} />
 
       {/* FAB */}
       <button
@@ -234,6 +201,103 @@ function InventoryPage() {
         />
       )}
     </div>
+  );
+}
+
+/* ---------- Checklist Section (Go-Bag, Travel, etc.) ---------- */
+function ChecklistSection({ table, title, items }: { table: string; title: string; items: any[] }) {
+  const qc = useQueryClient();
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
+  const [open, setOpen] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  const done = items.filter((g: any) => g.checked).length;
+
+  async function toggle(id: string, checked: boolean) {
+    await supabase.from(table).update({ checked }).eq("id", id);
+    qc.invalidateQueries({ queryKey: [table, activeHouseholdId] });
+  }
+
+  async function addItem() {
+    if (!newLabel.trim() || !activeHouseholdId) return;
+    setAdding(true);
+    const maxSort = items.reduce((m, g: any) => Math.max(m, g.sort_order ?? 0), 0);
+    const { error } = await supabase.from(table).insert({
+      household_id: activeHouseholdId,
+      label: newLabel.trim(),
+      checked: false,
+      sort_order: maxSort + 1,
+    });
+    setAdding(false);
+    if (error) { toast.error(error.message); return; }
+    setNewLabel("");
+    qc.invalidateQueries({ queryKey: [table, activeHouseholdId] });
+  }
+
+  async function deleteItem(id: string) {
+    await supabase.from(table).delete().eq("id", id);
+    qc.invalidateQueries({ queryKey: [table, activeHouseholdId] });
+  }
+
+  return (
+    <section className="rounded-2xl border border-border bg-muted/40">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-4 py-3 text-left"
+      >
+        <span className="text-sm font-semibold">
+          {title} — {items.length} item{items.length === 1 ? "" : "s"}
+          {done > 0 && (
+            <span className="ml-2 text-xs font-normal text-muted-foreground">({done} ✓)</span>
+          )}
+        </span>
+        <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="space-y-3 border-t border-border/40 px-4 py-3">
+          {items.length === 0 ? (
+            <p className="py-2 text-center text-xs text-muted-foreground">No items yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {items.map((g: any) => (
+                <li key={g.id} className="flex items-center gap-3 text-sm">
+                  <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+                    <input
+                      type="checkbox"
+                      defaultChecked={g.checked}
+                      onChange={(e) => toggle(g.id, e.target.checked)}
+                      className="h-4 w-4 shrink-0 rounded border-border"
+                    />
+                    <span className={`truncate ${g.checked ? "text-muted-foreground line-through" : ""}`}>{g.label}</span>
+                  </label>
+                  <button
+                    onClick={() => deleteItem(g.id)}
+                    className="shrink-0 rounded-md p-1 text-urgent hover:bg-urgent/10"
+                    aria-label="Delete item"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex gap-2">
+            <Input
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") addItem(); }}
+              placeholder="Add an item…"
+              className="h-9 flex-1"
+            />
+            <Button size="sm" onClick={addItem} disabled={adding || !newLabel.trim()}>
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
