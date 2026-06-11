@@ -407,8 +407,12 @@ function FolderSheet({ folder, items, onClose }: { folder: Folder; items: Item[]
 
   async function delFolder() {
     if (!confirm(`Delete "${folder.name}" and all ${items.length} items inside?`)) return;
+    const itemIds = items.map((it) => it.id);
     await supabase.from("inventory_items").delete().eq("folder_id", folder.id);
     await supabase.from("inventory_folders").delete().eq("id", folder.id);
+    if (itemIds.length > 0) {
+      await supabase.from("reminders").delete().eq("entity_type", "inventory").in("entity_id", itemIds);
+    }
     toast.success("Location deleted");
     qc.invalidateQueries({ queryKey: ["folders"] });
     qc.invalidateQueries({ queryKey: ["inventory_items"] });
@@ -432,6 +436,7 @@ function FolderSheet({ folder, items, onClose }: { folder: Folder; items: Item[]
   async function delItem(id: string) {
     if (!confirm("Delete this item?")) return;
     await supabase.from("inventory_items").delete().eq("id", id);
+    await supabase.from("reminders").delete().eq("entity_type", "inventory").eq("entity_id", id);
     qc.invalidateQueries({ queryKey: ["inventory_items"] });
   }
 
