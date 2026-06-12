@@ -109,9 +109,6 @@ export function RecordFormSheet({
         savedId = (data as any)?.id;
       }
 
-      
-      }
-
       toast.success(isEdit ? "Saved" : `${cfg.label} added`);
       qc.invalidateQueries({ queryKey: [cfg.queryKey] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
