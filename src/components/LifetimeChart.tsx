@@ -21,12 +21,19 @@ type Props = {
   appSettings: any;
 };
 
+type LineItem = {
+  label: string;
+  amount: number;
+};
+
 type ChartPoint = {
   year: number;
   netWorth: number;
   annualNet: number;
   annualIn: number;
   annualOut: number;
+  inflowItems: LineItem[];
+  outflowItems: LineItem[];
   propAppreciation: number;
   investGrowth: number;
   events: string[];
@@ -141,32 +148,44 @@ export function LifetimeChart({
       const y = startYear + i;
       let annualIn = 0;
       let annualOut = 0;
+      const inflowItems: LineItem[] = [];
+      const outflowItems: LineItem[] = [];
       const events: string[] = [];
 
       // Salary — stops at retirement year
       const salaryActive = retirementYear === null || y < retirementYear;
       if (salaryActive) {
-        annualIn += monthlyIncome * 12;
+        const salary = monthlyIncome * 12;
+        annualIn += salary;
+        if (salary > 0) inflowItems.push({ label: "Salary income", amount: salary });
       }
 
       // CPF LIFE payout
       if (cpfStartYear !== null && y >= cpfStartYear && cpfMonthlyPayout > 0) {
-        annualIn += cpfMonthlyPayout * 12;
+        const cpf = cpfMonthlyPayout * 12;
+        annualIn += cpf;
+        inflowItems.push({ label: "CPF LIFE payout", amount: cpf });
         if (y === cpfStartYear) events.push(`CPF LIFE begins +${fmt(cpfMonthlyPayout * 12)}/yr`);
       }
 
       // Base household expenses — inflate annually
-      annualOut += monthlyExpenses * 12 * Math.pow(1 + inflationRate, i);
+      const livingExpenses = monthlyExpenses * 12 * Math.pow(1 + inflationRate, i);
+      annualOut += livingExpenses;
+      if (livingExpenses > 0) outflowItems.push({ label: "Living expenses", amount: livingExpenses });
 
       // Properties
       let yearPropertyAppreciation = 0;
       for (const p of properties) {
         // Rental income
-        annualIn += (Number(p.monthly_rent) || 0) * 12;
+        const rental = (Number(p.monthly_rent) || 0) * 12;
+        annualIn += rental;
+        if (rental > 0) inflowItems.push({ label: `${p.name ?? "Property"} rental`, amount: rental });
 
         // Costs — use itemised fields, fall back to monthly_costs
         const costs = propertyTotalCosts(p);
-        annualOut += costs * 12 * Math.pow(1 + inflationRate, i);
+        const annualCosts = costs * 12 * Math.pow(1 + inflationRate, i);
+        annualOut += annualCosts;
+        if (annualCosts > 0) outflowItems.push({ label: `${p.name ?? "Property"} costs`, amount: annualCosts });
 
         // Mortgage — skip if linked loan covers it, stop at mortgage_end_date
         const isMortgagedViaLoan = mortgagedPropertyIds.has(p.id);
@@ -175,7 +194,9 @@ export function LifetimeChart({
             ? new Date(p.mortgage_end_date).getFullYear()
             : null;
           if (mortgageEndYear === null || y <= mortgageEndYear) {
-            annualOut += Number(p.monthly_payment) * 12;
+            const mortgage = Number(p.monthly_payment) * 12;
+            annualOut += mortgage;
+            outflowItems.push({ label: `${p.name ?? "Property"} mortgage`, amount: mortgage });
           }
         }
 
@@ -192,7 +213,9 @@ export function LifetimeChart({
           ? new Date(l.loan_end_date).getFullYear()
           : null;
         if (loanEndYear === null || y <= loanEndYear) {
-          annualOut += Number(l.monthly_payment) * 12;
+          const repayment = Number(l.monthly_payment) * 12;
+          annualOut += repayment;
+          outflowItems.push({ label: `${l.bank ?? "Loan"} repayment`, amount: repayment });
         }
         if (loanEndYear === y) {
           events.push(`${l.bank ?? "Loan"} paid off`);
@@ -203,7 +226,11 @@ export function LifetimeChart({
       for (const ins of insurance) {
         const insStart = ins.start_date ? new Date(ins.start_date).getFullYear() : startYear;
         const insEnd = ins.end_date ? new Date(ins.end_date).getFullYear() : startYear + 40;
-        if (y >= insStart && y <= insEnd) annualOut += insuranceAnnual(ins);
+        if (y >= insStart && y <= insEnd) {
+          const premium = insuranceAnnual(ins);
+          annualOut += premium;
+          if (premium > 0) outflowItems.push({ label: `${ins.name ?? "Insurance"} premium`, amount: premium });
+        }
         if (ins.payout_amount && ins.payout_start_date) {
           const payoutStartYear = new Date(ins.payout_start_date).getFullYear();
           const payoutEndYear = ins.payout_end_date ? new Date(ins.payout_end_date).getFullYear() : payoutStartYear;
@@ -217,9 +244,11 @@ export function LifetimeChart({
             : Number(ins.payout_amount);
           if (isRecurring && y >= payoutStartYear && y <= payoutEndYear) {
             annualIn += annualPayoutAmt;
+            inflowItems.push({ label: `${ins.name ?? "Insurance"} payout`, amount: annualPayoutAmt });
             if (y === payoutStartYear) events.push(`${ins.name ?? "Insurance"} payout begins +${fmt(annualPayoutAmt)}/yr`);
           } else if (!isRecurring && y === payoutStartYear) {
             annualIn += annualPayoutAmt;
+            inflowItems.push({ label: `${ins.name ?? "Insurance"} payout`, amount: annualPayoutAmt });
             events.push(`${ins.name ?? "Insurance"} payout +${fmt(annualPayoutAmt)}`);
           }
         }
@@ -234,7 +263,9 @@ export function LifetimeChart({
           const premStartYear = new Date(inv.premium_start_date).getFullYear();
           const premEndYear = inv.premium_end_date ? new Date(inv.premium_end_date).getFullYear() : premStartYear;
           if (y >= premStartYear && y <= premEndYear) {
-            annualOut += investmentPremiumAnnual(inv);
+            const premium = investmentPremiumAnnual(inv);
+            annualOut += premium;
+            if (premium > 0) outflowItems.push({ label: `${inv.name ?? "ILP"} premium`, amount: premium });
             if (y === premEndYear) events.push(`${inv.name ?? "ILP"} premiums end`);
           }
         }
@@ -252,9 +283,11 @@ export function LifetimeChart({
             : Number(inv.payout_amount);
           if (isRecurring && y >= payoutStartYear && y <= payoutEndYear) {
             annualIn += annualPayoutAmt;
+            inflowItems.push({ label: `${inv.name ?? "ILP"} payout`, amount: annualPayoutAmt });
             if (y === payoutStartYear) events.push(`${inv.name ?? "ILP"} payout begins +${fmt(annualPayoutAmt)}/yr`);
           } else if (!isRecurring && y === payoutStartYear) {
             annualIn += annualPayoutAmt;
+            inflowItems.push({ label: `${inv.name ?? "ILP"} payout`, amount: annualPayoutAmt });
             events.push(`${inv.name ?? "ILP"} payout +${fmt(annualPayoutAmt)}`);
           }
         }
@@ -278,9 +311,11 @@ export function LifetimeChart({
           const amt = Number(ev.amount);
           if (ev.type === "inflow") {
             annualIn += amt;
+            inflowItems.push({ label: ev.label, amount: amt });
             events.push(`${ev.label} +${fmt(amt)}`);
           } else {
             annualOut += amt;
+            outflowItems.push({ label: ev.label, amount: amt });
             events.push(`${ev.label} −${fmt(amt)}`);
           }
         }
@@ -301,12 +336,28 @@ export function LifetimeChart({
       // Net worth: cash flow + investment growth + property appreciation
       runningNetWorth += annualNet + investmentGrowth + yearPropertyAppreciation;
 
+      // Dev-time sanity check: itemized lists must sum to the same totals
+      // used for netWorth. If this ever warns, an item was missed or
+      // double-counted during a future edit to this loop.
+      if (import.meta.env.DEV) {
+        const inSum = inflowItems.reduce((s, it) => s + it.amount, 0);
+        const outSum = outflowItems.reduce((s, it) => s + it.amount, 0);
+        if (Math.abs(inSum - annualIn) > 1) {
+          console.warn(`LifetimeChart: inflowItems sum (${inSum}) != annualIn (${annualIn}) for year ${y}`);
+        }
+        if (Math.abs(outSum - annualOut) > 1) {
+          console.warn(`LifetimeChart: outflowItems sum (${outSum}) != annualOut (${annualOut}) for year ${y}`);
+        }
+      }
+
       years.push({
         year: y,
         netWorth: Math.round(runningNetWorth),
         annualNet: Math.round(annualNet),
         annualIn: Math.round(annualIn),
         annualOut: Math.round(annualOut),
+        inflowItems: inflowItems.map((it) => ({ ...it, amount: Math.round(it.amount) })),
+        outflowItems: outflowItems.map((it) => ({ ...it, amount: Math.round(it.amount) })),
         propAppreciation: Math.round(yearPropertyAppreciation),
         investGrowth: Math.round(investmentGrowth),
         events,
@@ -315,7 +366,7 @@ export function LifetimeChart({
 
     return years;
   }, [
-    properties, loans, insurance, savings, plannedEvents,
+    properties, loans, insurance, savings, investments, plannedEvents,
     startingNetWorth, monthlyIncome, monthlyExpenses,
     retirementYear, cpfStartYear, cpfMonthlyPayout,
     investmentGrowthRate, propertyAppreciationRate, inflationRate,
