@@ -7,6 +7,7 @@ import {
   XAxis, YAxis, Tooltip, ReferenceLine, CartesianGrid,
 } from "recharts";
 import { useToday } from "@/lib/today";
+import { YearDetailPanel } from "@/components/YearDetailPanel";
 
 type Props = {
   properties: any[];
@@ -21,12 +22,12 @@ type Props = {
   appSettings: any;
 };
 
-type LineItem = {
+export type LineItem = {
   label: string;
   amount: number;
 };
 
-type ChartPoint = {
+export type ChartPoint = {
   year: number;
   netWorth: number;
   annualNet: number;
@@ -65,7 +66,7 @@ function propertyTotalCosts(p: any): number {
   return itemised || (Number(p.monthly_costs) || 0);
 }
 
-function fmt(v: number): string {
+export function fmt(v: number): string {
   const abs = Math.abs(v);
   const sign = v < 0 ? "-" : "";
   if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
@@ -537,6 +538,11 @@ export function LifetimeChart({
           )}
         </div>
       )}
+      <YearDetailPanel
+        data={data}
+        retirementYear={retirementYear}
+        shortfallYear={shortfallYear?.year ?? null}
+      />
       <p className="text-[10px] text-muted-foreground">
         Projection only · inflation-adjusted expenses · property &amp; investment growth modelled at assumed rates · foreign currency excluded · not financial advice
       </p>
