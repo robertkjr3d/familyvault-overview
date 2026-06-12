@@ -90,6 +90,7 @@ function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: an
     ? Math.floor((Date.now() - new Date(inv.updated_at).getTime()) / (1000 * 60 * 60 * 24))
     : null;
   const isStale = daysSinceUpdate !== null && daysSinceUpdate > 1;
+  const isILPOrEndowment = inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
   return (
     <HashHighlight id={`record-${inv.id}`}>
       <RecordCard
@@ -120,10 +121,10 @@ function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: an
           <FieldRow label="Amount invested" value={fmtMoney(inv.cost_basis)} />
           <FieldRow label="Current value (est.)" value={fmtMoney(inv.current_value)} />
           <FieldRow label="Projected return" value={fmtPct(inv.projected_return_pct)} />
-          {inv.coverage && <FieldRow label="Coverage" value={inv.coverage} />}
-          {inv.premium_start_date && <FieldRow label="Premium start" value={fmtDate(inv.premium_start_date)} />}
-          {inv.premium_frequency && <FieldRow label="Premium frequency" value={freqLabel(inv.premium_frequency)} />}
-          {inv.premium_end_date && <FieldRow label="Premium end" value={fmtDate(inv.premium_end_date)} />}
+          {isILPOrEndowment && inv.coverage && <FieldRow label="Coverage" value={inv.coverage} />}
+          {isILPOrEndowment && inv.premium_start_date && <FieldRow label="Premium start" value={fmtDate(inv.premium_start_date)} />}
+          {isILPOrEndowment && inv.premium_frequency && <FieldRow label="Premium frequency" value={freqLabel(inv.premium_frequency)} />}
+          {isILPOrEndowment && inv.premium_end_date && <FieldRow label="Premium end" value={fmtDate(inv.premium_end_date)} />}
         </Section>
 
         <CollapsibleSection icon={<span>📝</span>} title="Notes">
