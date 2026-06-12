@@ -624,6 +624,7 @@ function Dashboard() {
           loans={loans}
           insurance={insurance}
           savings={savings}
+          investments={investments}
           members={members}
           startingNetWorth={netWorth}
           monthlyIncome={salaryIncome}
