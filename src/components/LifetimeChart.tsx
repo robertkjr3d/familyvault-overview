@@ -25,6 +25,8 @@ type ChartPoint = {
   year: number;
   netWorth: number;
   annualNet: number;
+  annualIn: number;
+  annualOut: number;
   propAppreciation: number;
   investGrowth: number;
   events: string[];
@@ -303,6 +305,8 @@ export function LifetimeChart({
         year: y,
         netWorth: Math.round(runningNetWorth),
         annualNet: Math.round(annualNet),
+        annualIn: Math.round(annualIn),
+        annualOut: Math.round(annualOut),
         propAppreciation: Math.round(yearPropertyAppreciation),
         investGrowth: Math.round(investmentGrowth),
         events,
@@ -323,6 +327,10 @@ export function LifetimeChart({
   const maxNetWorth = Math.max(...data.map((d) => d.netWorth));
   const eventYears = data.filter((d) => d.events.length > 0);
   const hasIncome = monthlyIncome > 0;
+  const hasILPPayout = investments.some((inv: any) =>
+    (inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment")
+    && inv.payout_amount && inv.payout_start_date
+  );
   const domainMin = Math.min(minNetWorth * 1.1, minNetWorth - 50000, 0);
   const domainMax = maxNetWorth * 1.05;
 
@@ -349,6 +357,18 @@ export function LifetimeChart({
             <span className="text-muted-foreground">Cash flow net</span>
             <span className={anColor}>{fmt(an.value)}</span>
           </div>
+        )}
+        {point && (
+          <>
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">— Income</span>
+              <span className="text-settled">+{fmt(point.annualIn)}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">— Outflow</span>
+              <span className="text-urgent">−{fmt(point.annualOut)}</span>
+            </div>
+          </>
         )}
         {showPropGrowth && (
           <div className="flex justify-between gap-4">
@@ -389,6 +409,13 @@ export function LifetimeChart({
             Consider adjusting income, expenses, or retirement date.
           </p>
         </div>
+      )}
+      {hasILPPayout && (
+        <p className="rounded-lg bg-review-soft/40 px-3 py-2 text-xs text-muted-foreground">
+          ⚠ ILP/Endowment payouts are shown as additional income, while the policy's current value
+          keeps growing untouched. In reality, the value would decline as payouts are drawn —
+          this projection is indicative only and likely optimistic for years with active payouts.
+        </p>
       )}
       {!hasIncome && (
         <p className="rounded-lg bg-review-soft/40 px-3 py-2 text-xs text-muted-foreground">
