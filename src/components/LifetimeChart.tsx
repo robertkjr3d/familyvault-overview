@@ -13,6 +13,7 @@ type Props = {
   loans: any[];
   insurance: any[];
   savings: any[];
+  investments: any[];
   members: any[];
   startingNetWorth: number;
   monthlyIncome: number;
@@ -39,6 +40,16 @@ function insuranceAnnual(ins: any): number {
   return premium;
 }
 
+function investmentPremiumAnnual(inv: any): number {
+  const premium = Number(inv.premium_amount) || 0;
+  const f = (inv.premium_frequency || "annual").toLowerCase();
+  if (f === "one-off" || f === "single") return 0;
+  if (f.includes("month")) return premium * 12;
+  if (f.includes("semi") || f.includes("half")) return premium * 2;
+  if (f.includes("quart")) return premium * 4;
+  return premium;
+}
+
 function propertyTotalCosts(p: any): number {
   const itemised = ["cost_management", "cost_property_tax", "cost_fire_insurance", "cost_maintenance", "cost_other"]
     .reduce((s, k) => s + (Number(p[k]) || 0), 0);
@@ -54,7 +65,7 @@ function fmt(v: number): string {
 }
 
 export function LifetimeChart({
-  properties, loans, insurance, savings, members,
+  properties, loans, insurance, savings, investments, members,
   startingNetWorth, monthlyIncome, monthlyExpenses, appSettings,
 }: Props) {
   const { today } = useToday();
@@ -209,6 +220,18 @@ export function LifetimeChart({
             annualIn += annualPayoutAmt;
             events.push(`${ins.name ?? "Insurance"} payout +${fmt(annualPayoutAmt)}`);
           }
+        }
+      }
+
+      // ILP / Endowment premiums — only count during the premium-paying window
+      for (const inv of investments) {
+        const isILP = inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
+        if (!isILP || !inv.premium_amount || !inv.premium_start_date) continue;
+        const premStartYear = new Date(inv.premium_start_date).getFullYear();
+        const premEndYear = inv.premium_end_date ? new Date(inv.premium_end_date).getFullYear() : premStartYear;
+        if (y >= premStartYear && y <= premEndYear) {
+          annualOut += investmentPremiumAnnual(inv);
+          if (y === premEndYear) events.push(`${inv.name ?? "ILP"} premiums end`);
         }
       }
 
