@@ -223,15 +223,38 @@ export function LifetimeChart({
         }
       }
 
-      // ILP / Endowment premiums — only count during the premium-paying window
+      // ILP / Endowment premiums and payouts
       for (const inv of investments) {
         const isILP = inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
-        if (!isILP || !inv.premium_amount || !inv.premium_start_date) continue;
-        const premStartYear = new Date(inv.premium_start_date).getFullYear();
-        const premEndYear = inv.premium_end_date ? new Date(inv.premium_end_date).getFullYear() : premStartYear;
-        if (y >= premStartYear && y <= premEndYear) {
-          annualOut += investmentPremiumAnnual(inv);
-          if (y === premEndYear) events.push(`${inv.name ?? "ILP"} premiums end`);
+        if (!isILP) continue;
+
+        if (inv.premium_amount && inv.premium_start_date) {
+          const premStartYear = new Date(inv.premium_start_date).getFullYear();
+          const premEndYear = inv.premium_end_date ? new Date(inv.premium_end_date).getFullYear() : premStartYear;
+          if (y >= premStartYear && y <= premEndYear) {
+            annualOut += investmentPremiumAnnual(inv);
+            if (y === premEndYear) events.push(`${inv.name ?? "ILP"} premiums end`);
+          }
+        }
+
+        if (inv.payout_amount && inv.payout_start_date) {
+          const payoutStartYear = new Date(inv.payout_start_date).getFullYear();
+          const payoutEndYear = inv.payout_end_date ? new Date(inv.payout_end_date).getFullYear() : payoutStartYear;
+          const pFreq = (inv.payout_frequency || "one-off").toLowerCase();
+          const isRecurring = pFreq.includes("month") || pFreq.includes("annual") || pFreq.includes("year") || pFreq.includes("quart") || pFreq.includes("semi") || pFreq.includes("half");
+          const annualPayoutAmt = isRecurring
+            ? pFreq.includes("month") ? Number(inv.payout_amount) * 12
+            : pFreq.includes("quart") ? Number(inv.payout_amount) * 4
+            : pFreq.includes("semi") || pFreq.includes("half") ? Number(inv.payout_amount) * 2
+            : Number(inv.payout_amount)
+            : Number(inv.payout_amount);
+          if (isRecurring && y >= payoutStartYear && y <= payoutEndYear) {
+            annualIn += annualPayoutAmt;
+            if (y === payoutStartYear) events.push(`${inv.name ?? "ILP"} payout begins +${fmt(annualPayoutAmt)}/yr`);
+          } else if (!isRecurring && y === payoutStartYear) {
+            annualIn += annualPayoutAmt;
+            events.push(`${inv.name ?? "ILP"} payout +${fmt(annualPayoutAmt)}`);
+          }
         }
       }
 
