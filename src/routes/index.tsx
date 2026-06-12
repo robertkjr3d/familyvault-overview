@@ -146,6 +146,22 @@ function Dashboard() {
     return premium / 12;
   }
 
+  // ILP/Endowment premiums currently being paid — treated as a monthly outflow.
+  function investmentPremiumMonthly(inv: any): number {
+    if (inv.group_name !== "ILP (Investment-Linked Policy)" && inv.group_name !== "Endowment") return 0;
+    const premium = Number(inv.premium_amount) || 0;
+    if (!premium || !inv.premium_start_date) return 0;
+    if (new Date(inv.premium_start_date).getTime() > today.getTime()) return 0;
+    if (inv.premium_end_date && new Date(inv.premium_end_date).getTime() < today.getTime()) return 0;
+    const freq = (inv.premium_frequency ?? "").toLowerCase();
+    if (freq === "one-off" || freq === "single") return 0;
+    if (freq === "monthly") return premium;
+    if (freq === "quarterly") return premium / 3;
+    if (freq === "half-yearly" || freq === "semi-annual") return premium / 6;
+    if (freq === "annual" || freq === "yearly" || freq === "") return premium / 12;
+    return premium / 12;
+  }
+
   // Properties with a linked mortgage loan should not double-count monthly_payment
   const mortgagedPropertyIds = new Set(
     loans.filter((l: any) => l.property_id).map((l: any) => l.property_id)
@@ -162,8 +178,9 @@ function Dashboard() {
   }, 0);
   const loanOut = loans.reduce((s: number, l: any) => s + (Number(l.monthly_payment) || 0), 0);
   const insuranceOut = insurance.reduce((s: number, p: any) => s + insuranceMonthly(p), 0);
+  const investmentPremiumOut = investments.reduce((s: number, inv: any) => s + investmentPremiumMonthly(inv), 0);
   const baseExpenses = Number(appSettings?.monthly_expenses) || 0;
-  const monthlyOut = propertyOut + loanOut + insuranceOut + baseExpenses;
+  const monthlyOut = propertyOut + loanOut + insuranceOut + investmentPremiumOut + baseExpenses;
   const netCashFlow = monthlyIn - monthlyOut;
 
   const showSettingsNudge = salaryIncome === 0 && baseExpenses === 0;
@@ -549,6 +566,7 @@ function Dashboard() {
             { label: "Property costs", value: propertyOut },
             { label: "Loan repayments", value: loanOut },
             { label: "Insurance premiums", value: insuranceOut },
+            { label: "ILP / Endowment premiums", value: investmentPremiumOut },
             { label: "Other expenses", value: baseExpenses },
           ]}
         />
