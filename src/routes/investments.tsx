@@ -121,7 +121,8 @@ function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: an
           <FieldRow label="Amount invested" value={fmtMoney(inv.cost_basis)} />
           <FieldRow label="Current value (est.)" value={fmtMoney(inv.current_value)} />
           <FieldRow label="Projected return" value={fmtPct(inv.projected_return_pct)} />
-          {isILPOrEndowment && inv.coverage && <FieldRow label="Coverage" value={inv.coverage} />}
+         {isILPOrEndowment && inv.coverage && <FieldRow label="Coverage" value={inv.coverage} />}
+          {isILPOrEndowment && inv.premium_amount && <FieldRow label="Premium amount" value={fmtMoney(inv.premium_amount)} />}
           {isILPOrEndowment && inv.premium_start_date && <FieldRow label="Premium start" value={fmtDate(inv.premium_start_date)} />}
           {isILPOrEndowment && inv.premium_frequency && <FieldRow label="Premium frequency" value={freqLabel(inv.premium_frequency)} />}
           {isILPOrEndowment && inv.premium_end_date && <FieldRow label="Premium end" value={fmtDate(inv.premium_end_date)} />}
