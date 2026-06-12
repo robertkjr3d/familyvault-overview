@@ -150,32 +150,36 @@ export function RecordFormSheet({
           <SheetTitle className="text-base pr-8">{isEdit ? `Edit ${cfg.label}` : `Add ${cfg.label}`}</SheetTitle>
         </SheetHeader>
         <form onSubmit={submit} onKeyDown={handleFormKeyDown} className="mt-4 space-y-4 pb-4">
-          {sections.map((sec, idx) => (
-            <div key={idx} className="space-y-3">
-              {sec.title && (
-                <div className="border-b border-border pb-1.5 pt-1 text-sm font-bold">{sec.title}</div>
-              )}
-              {sec.fields.map((f) => (
-                <div key={f.key} className="space-y-1.5">
-                  <Label htmlFor={f.key} className="text-xs">
-                    <span className="flex items-center gap-1">
-                      {f.label}
-                      {ALERT_FIELDS.has(f.key) && <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" />}
-                      {f.required && <span className="text-urgent"> *</span>}
-                    </span>
-                  </Label>
-                  <FieldInput
-                    f={f}
-                    value={values[f.key]}
-                    onChange={(v) => setVal(f.key, v)}
-                    members={members}
-                    properties={properties}
-                    currency={(f.currencyFrom && values[f.currencyFrom]) || "SGD"}
-                  />
-                </div>
-              ))}
-            </div>
-          ))}
+          {sections.map((sec, idx) => {
+            const visibleFields = sec.fields.filter((f) => !f.showIf || f.showIf(values));
+            if (visibleFields.length === 0) return null;
+            return (
+              <div key={idx} className="space-y-3">
+                {sec.title && (
+                  <div className="border-b border-border pb-1.5 pt-1 text-sm font-bold">{sec.title}</div>
+                )}
+                {visibleFields.map((f) => (
+                  <div key={f.key} className="space-y-1.5">
+                    <Label htmlFor={f.key} className="text-xs">
+                      <span className="flex items-center gap-1">
+                        {f.label}
+                        {ALERT_FIELDS.has(f.key) && <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" />}
+                        {f.required && <span className="text-urgent"> *</span>}
+                      </span>
+                    </Label>
+                    <FieldInput
+                      f={f}
+                      value={values[f.key]}
+                      onChange={(v) => setVal(f.key, v)}
+                      members={members}
+                      properties={properties}
+                      currency={(f.currencyFrom && values[f.currencyFrom]) || "SGD"}
+                    />
+                  </div>
+                ))}
+              </div>
+            );
+          })}
           <div className="sticky bottom-0 -mx-4 flex gap-2 border-t border-border bg-background/95 px-4 py-3 backdrop-blur">
             <Button type="button" variant="outline" className="flex-1 cursor-pointer" onClick={() => onOpenChange(false)}>
               Cancel
