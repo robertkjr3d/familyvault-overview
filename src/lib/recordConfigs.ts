@@ -17,6 +17,7 @@ export type FieldDef = {
   currencyFrom?: string;
   hideOnAdd?: boolean;
   section?: string;
+  showIf?: (values: Record<string, any>) => boolean;
 };
 
 export type RecordConfig = {
@@ -137,10 +138,10 @@ export const recordConfigs: Record<string, RecordConfig> = {
       { key: "cost_basis", label: "Amount invested", type: "number", money: true },
       { key: "current_value", label: "Current value (est.)", type: "number", money: true },
       { key: "projected_return_pct", label: "Projected return %", type: "number" },
-      { key: "premium_start_date", label: "Premium start date", type: "date" },
-      { key: "premium_frequency", label: "Premium frequency", type: "select", options: INSURANCE_FREQ },
-      { key: "premium_end_date", label: "Premium end date", type: "date" },
-      { key: "coverage", label: "Coverage", type: "text", placeholder: "e.g. 101% on death or TPD" },
+      { key: "premium_start_date", label: "Premium start date", type: "date", showIf: (v) => v.group_name === "ILP (Investment-Linked Policy)" || v.group_name === "Endowment" },
+      { key: "premium_frequency", label: "Premium frequency", type: "select", options: INSURANCE_FREQ, showIf: (v) => v.group_name === "ILP (Investment-Linked Policy)" || v.group_name === "Endowment" },
+      { key: "premium_end_date", label: "Premium end date", type: "date", showIf: (v) => v.group_name === "ILP (Investment-Linked Policy)" || v.group_name === "Endowment" },
+      { key: "coverage", label: "Coverage", type: "text", placeholder: "e.g. 101% on death or TPD", showIf: (v) => v.group_name === "ILP (Investment-Linked Policy)" || v.group_name === "Endowment" },
       { key: "strategy", label: "Strategy / notes", type: "textarea" },
     ],
   },
