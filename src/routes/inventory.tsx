@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useMemo, useRef, useState } from "react";
-import { Camera, Plus, Search, Trash2, ChevronDown, Folder as FolderIcon, X, Pencil, ArrowRightLeft } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Camera, Plus, Search, Trash2, ChevronDown, Folder as FolderIcon, X, Pencil, ArrowRightLeft, Bell } from "lucide-react";
+import { HashHighlight } from "@/components/HashHighlight";
 import { ReminderButton } from "@/components/loan/ReminderButton";
 import { RemindersList } from "@/components/loan/RemindersList";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -91,6 +92,23 @@ function InventoryPage() {
 
   const openFolder = openFolderId ? folderById.get(openFolderId) ?? null : null;
   const openSubfolder = openSubfolderId ? folderById.get(openSubfolderId) ?? null : null;
+
+  const [hashHandled, setHashHandled] = useState(false);
+  useEffect(() => {
+    if (hashHandled) return;
+    if (allItems.length === 0 || folders.length === 0) return;
+    const match = window.location.hash.match(/^#record-(.+)$/);
+    if (!match) { setHashHandled(true); return; }
+    const item = allItems.find((i) => i.id === match[1]);
+    if (item) {
+      const f = folderById.get(item.folder_id);
+      if (f) {
+        if (f.parent_id) { setOpenFolderId(f.parent_id); setOpenSubfolderId(f.id); }
+        else { setOpenFolderId(f.id); setOpenSubfolderId(null); }
+      }
+    }
+    setHashHandled(true);
+  }, [allItems, folders, folderById, hashHandled]);
 
   const itemCountByFolder = useMemo(() => {
     const m = new Map<string, number>();
@@ -717,15 +735,18 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
 
           <ul className="space-y-2">
             {items.map((it) => (
-              <li key={it.id} className="rounded-lg border border-border bg-card p-3">
+              <li key={it.id}>
+              <HashHighlight id={`record-${it.id}`}>
+              <div className="rounded-lg border border-border bg-card p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1">
                     <div className="text-sm font-semibold">{it.name}</div>
                     {it.category && <div className="text-xs text-muted-foreground">{it.category}</div>}
                     {it.action && <div className="mt-1 text-xs">{it.action}</div>}
                     {it.warranty_date && (
-                      <div className="mt-1 text-[11px] text-muted-foreground">
+                      <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
                         Warranty/Expiry: {fmtDate(it.warranty_date)}
+                        <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" />
                       </div>
                     )}
                   </div>
@@ -761,6 +782,8 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
                     <EditItemForm item={it} onDone={() => setEditingItem(null)} />
                   </div>
                 )}
+              </div>
+              </HashHighlight>
               </li>
             ))}
           </ul>
