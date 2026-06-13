@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/StatusToggle";
 import { useAppStore } from "@/lib/store";
 import { addDays, isBefore, parseISO } from "date-fns";
 import { LifetimeChart } from "@/components/LifetimeChart";
-import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check, Bell, PiggyBank } from "lucide-react";
+import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check, Bell, PiggyBank, Package } from "lucide-react";
 import { useState, useRef } from "react";
 import { fmtPct } from "@/lib/format";
 import { HashHighlight } from "@/components/HashHighlight";
@@ -54,12 +54,13 @@ function Dashboard() {
         if (memberFilter !== "all") scoped = scoped.eq("member_id", memberFilter);
         return scoped;
       };
-      const [props, loans, insurance, invs, savings] = await Promise.all([
+      const [props, loans, insurance, invs, savings, inventoryItems] = await Promise.all([
         filter(supabase.from("properties").select("*")),
         filter(supabase.from("loans").select("*")),
         filter(supabase.from("insurance_policies").select("*")),
         filter(supabase.from("investments").select("*")),
         filter(supabase.from("savings_accounts").select("*")),
+        filter(supabase.from("inventory_items").select("*")),
       ]);
       return {
         properties: props.data ?? [],
@@ -67,6 +68,7 @@ function Dashboard() {
         insurance: insurance.data ?? [],
         investments: invs.data ?? [],
         savings: savings.data ?? [],
+        inventoryItems: inventoryItems.data ?? [],
       };
     },
   });
@@ -123,6 +125,7 @@ function Dashboard() {
   const insurance = data?.insurance ?? [];
   const investments = data?.investments ?? [];
   const savings = data?.savings ?? [];
+  const inventoryItems = data?.inventoryItems ?? [];
 
   const propertyValue = properties.reduce((s: number, p: any) => s + (Number(p.current_value) || 0), 0);
   const investmentsValue = investments.reduce((s: number, i: any) => s + (Number(i.current_value) || 0), 0);
@@ -258,6 +261,15 @@ function Dashboard() {
       const d = parseISO(s.maturity_date);
       if (isBefore(d, horizon90)) {
         allUpcoming.push({ date: s.maturity_date, label: `${s.institution} FD matures`, amount: s.balance, member_id: s.member_id, href: "/savings", recordId: s.id, sourceType: "savings_maturity", daysLeft: daysUntil(s.maturity_date), icon: PiggyBank });
+      }
+    }
+  }
+
+  for (const it of inventoryItems as any[]) {
+    if (it.warranty_date) {
+      const d = parseISO(it.warranty_date);
+      if (isBefore(d, horizon90)) {
+        allUpcoming.push({ date: it.warranty_date, label: `${it.name} — warranty/expiry`, amount: null, member_id: it.member_id, href: "/inventory", recordId: it.id, sourceType: "inventory_warranty", daysLeft: daysUntil(it.warranty_date), icon: Package });
       }
     }
   }
