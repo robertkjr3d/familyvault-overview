@@ -958,8 +958,27 @@ function EditItemForm({ item, onDone }: { item: Item; onDone: () => void }) {
         warranty_date: warranty || null,
       })
       .eq("id", item.id);
+    if (error) { setSaving(false); toast.error(error.message); return; }
+
+    const nameChanged = name.trim() !== item.name;
+    const warrantyChanged = (item.warranty_date ?? "") !== warranty;
+    if (nameChanged || warrantyChanged) {
+      await supabase.from("reminders").delete()
+        .eq("entity_type", "inventory")
+        .eq("entity_id", item.id)
+        .like("what", "Warranty expires for%");
+      if (warranty) {
+        const remindAt = addDays(parseISO(warranty), -90);
+        await supabase.from("reminders").insert({
+          entity_type: "inventory",
+          entity_id: item.id,
+          what: `Warranty expires for ${name.trim()}`,
+          remind_at: remindAt.toISOString(),
+        });
+      }
+    }
+
     setSaving(false);
-    if (error) { toast.error(error.message); return; }
     toast.success("Item updated");
     qc.invalidateQueries({ queryKey: ["inventory_items"] });
     onDone();
