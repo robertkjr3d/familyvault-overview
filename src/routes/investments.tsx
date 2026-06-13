@@ -89,7 +89,7 @@ function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: an
   const daysSinceUpdate = inv.updated_at
     ? Math.floor((Date.now() - new Date(inv.updated_at).getTime()) / (1000 * 60 * 60 * 24))
     : null;
-  const isStale = daysSinceUpdate !== null && daysSinceUpdate > 1;
+  const isStale = daysSinceUpdate !== null && daysSinceUpdate > 90;
   const isILPOrEndowment = inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
   const staleTitle = "Updated " + daysSinceUpdate + "d ago";
   const staleIndicator = isStale ? <span className="ml-1 text-review" title={staleTitle}>⚠</span> : null;
