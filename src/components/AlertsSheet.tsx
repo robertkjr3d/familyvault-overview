@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Building2, Shield, Landmark, TrendingUp, Heart, PiggyBank, Bell, ChevronRight, Gem } from "lucide-react";
+import { Building2, Shield, Landmark, TrendingUp, Heart, PiggyBank, Bell, ChevronRight, Gem, Package } from "lucide-react";
 import { MemberTag } from "./MemberTag";
 import { addDays, parseISO } from "date-fns";
 import { fmtDate, fmtMoney } from "@/lib/format";
@@ -54,13 +54,14 @@ async function fetchDueSoonItems(today: Date, householdId: string): Promise<DueS
     return Math.ceil((parseISO(dateStr).getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   }
 
-  const [insurance, properties, loans, savings, reminders, dismissed] = await Promise.all([
+  const [insurance, properties, loans, savings, reminders, dismissed, inventoryItems] = await Promise.all([
     supabase.from("insurance_policies").select("*").eq("household_id", householdId).lte("next_due_date", horizonStr).then((r) => r.data ?? []),
     supabase.from("properties").select("*").eq("household_id", householdId).lte("fixed_rate_end", horizonStr).then((r) => r.data ?? []),
     supabase.from("loans").select("*").eq("household_id", householdId).lte("reprice_date", horizonStr).then((r) => r.data ?? []),
     supabase.from("savings_accounts").select("*").eq("household_id", householdId).lte("maturity_date", horizonStr).then((r) => r.data ?? []),
     supabase.from("reminders").select("*").eq("household_id", householdId).eq("dismissed", false).lte("remind_at", horizonStr).then((r) => r.data ?? []),
     supabase.from("dismissed_dashboard_items").select("record_id, source_type, dismissed_date").eq("household_id", householdId).then((r) => r.data ?? []),
+    supabase.from("inventory_items").select("*").eq("household_id", householdId).lte("warranty_date", horizonStr).then((r) => r.data ?? []),
   ]);
 
   const dismissedKeys = new Set(
@@ -96,6 +97,11 @@ async function fetchDueSoonItems(today: Date, householdId: string): Promise<DueS
     const recordId = r.entity_id ?? r.id;
     if (!dismissedKeys.has(`reminder::${recordId}::${dateStr}`)) {
       items.push({ label: r.what ?? "Reminder", date: dateStr, sourceType: "reminder", daysLeft: daysUntil(dateStr), amount: null, href, recordId, member_id: null, icon: Bell, kind: "Reminder" });
+    }
+  }
+  for (const it of inventoryItems) {
+    if (it.warranty_date && !dismissedKeys.has(`inventory_warranty::${it.id}::${it.warranty_date}`)) {
+      items.push({ label: `${it.name} — warranty/expiry`, date: it.warranty_date, sourceType: "inventory_warranty", daysLeft: daysUntil(it.warranty_date), amount: null, href: "/inventory", recordId: it.id, member_id: it.member_id, icon: Package, kind: "Inventory" });
     }
   }
 
