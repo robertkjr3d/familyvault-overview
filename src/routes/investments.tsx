@@ -91,6 +91,9 @@ function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: an
     : null;
   const isStale = daysSinceUpdate !== null && daysSinceUpdate > 1;
   const isILPOrEndowment = inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
+  const staleTitle = "Updated " + daysSinceUpdate + "d ago";
+  const staleIndicator = isStale ? <span className="ml-1 text-review" title={staleTitle}>⚠</span> : null;
+
   return (
     <HashHighlight id={`record-${inv.id}`}>
       <RecordCard
@@ -108,7 +111,7 @@ function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: an
           rightMeta={
           <div className="text-right text-xs">
             <div className="text-muted-foreground">
-              Value (est.){isStale && <span className="ml-1 text-review" title={`Updated ${daysSinceUpdate}d ago`}>⚠</span>}
+              Value (est.){staleIndicator}
             </div>
             <div className="font-bold">{fmtMoney(inv.current_value)}</div>
             <div className={gain >= 0 ? "text-settled" : "text-urgent"}>{fmtMoney(gain)}</div>
