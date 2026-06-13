@@ -105,8 +105,11 @@ function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: an
         updatedAt={inv.updated_at}
         createdAt={inv.created_at}
         rightMeta={
+          rightMeta={
           <div className="text-right text-xs">
-            <div className="text-muted-foreground">Value (est.)</div>
+            <div className="text-muted-foreground">
+              Value (est.){isStale && <span className="ml-1 text-review" title={`Updated ${daysSinceUpdate}d ago`}>⚠</span>}
+            </div>
             <div className="font-bold">{fmtMoney(inv.current_value)}</div>
             <div className={gain >= 0 ? "text-settled" : "text-urgent"}>{fmtMoney(gain)}</div>
           </div>
