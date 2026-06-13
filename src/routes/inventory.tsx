@@ -893,7 +893,7 @@ function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => voi
         <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Electronics" />
       </div>
       <div className="space-y-1.5">
-        <Label className="text-xs">Warranty/Expiry date</Label>
+        <Label className="text-xs flex items-center gap-1">Warranty/Expiry date <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" /></Label>
         <div className="relative flex items-center">
           <Input type="date" value={warranty} onChange={(e) => setWarranty(e.target.value)} className="h-7 w-full pr-8" />
           {warranty && (
@@ -996,7 +996,7 @@ function EditItemForm({ item, onDone }: { item: Item; onDone: () => void }) {
         <Input value={name} onChange={(e) => setName(e.target.value)} />
       </div>
       <div className="space-y-1.5">
-        <Label className="text-xs">Warranty/Expiry date</Label>
+        <Label className="text-xs flex items-center gap-1">Warranty/Expiry date <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" /></Label>
         <div className="relative flex items-center">
           <Input type="date" value={warranty} onChange={(e) => setWarranty(e.target.value)} className="h-7 w-full pr-8" />
           {warranty && (
