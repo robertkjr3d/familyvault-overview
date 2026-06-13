@@ -191,7 +191,7 @@ function InventoryPage() {
             No locations yet. Tap + to add one.
           </p>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
             {topLevelFolders.map((f) => (
               <button
                 key={f.id}
@@ -593,23 +593,23 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
   ) : null;
 
   const subfolderGrid = subfolders.length > 0 ? (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+    <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
       {subfolders.map((sf) => (
         <button
           key={sf.id}
           onClick={() => onOpenSubfolder(sf)}
-          className="group overflow-hidden rounded-2xl border border-border bg-card text-left shadow-sm transition hover:shadow-md"
+          className="group overflow-hidden rounded-xl border border-border bg-card text-left shadow-sm transition hover:shadow-md"
         >
           <div className="relative aspect-square w-full overflow-hidden bg-muted">
             {sf.photo_url ? (
               <img src={sf.photo_url} alt={sf.name} className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
-                <FolderIcon className="h-8 w-8 text-muted-foreground" />
+                <FolderIcon className="h-4 w-4 text-muted-foreground" />
               </div>
             )}
           </div>
-          <div className="p-2 text-xs font-semibold">{sf.name}</div>
+          <div className="truncate p-1 text-[10px] font-semibold">{sf.name}</div>
         </button>
       ))}
     </div>
