@@ -512,6 +512,14 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
     qc.invalidateQueries({ queryKey: ["folders"] });
   }
 
+  async function removeFolderPhoto() {
+    if (!confirm("Remove this photo?")) return;
+    const { error } = await supabase.from("inventory_folders").update({ photo_url: null }).eq("id", folder.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Photo removed");
+    qc.invalidateQueries({ queryKey: ["folders"] });
+  }
+
   async function delItem(id: string) {
     if (!confirm("Delete this item?")) return;
     await supabase.from("inventory_items").delete().eq("id", id);
@@ -564,6 +572,15 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
     }
     return [];
   }, [parentFolder, topLevelFolders, subfolders, folder.id]);
+
+  const removePhotoButton = folder.photo_url ? (
+    <button
+      onClick={removeFolderPhoto}
+      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold hover:bg-accent"
+    >
+      <X className="h-3.5 w-3.5" /> Remove photo
+    </button>
+  ) : null;
 
   const moveFolderButton = canMoveFolder ? (
     <button
@@ -647,6 +664,7 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
                 >
                   <Camera className="h-3.5 w-3.5" /> Change photo
                 </button>
+                {removePhotoButton}
                 <button
                   onClick={renameFolder}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold hover:bg-accent"
@@ -924,8 +942,32 @@ function EditItemForm({ item, onDone }: { item: Item; onDone: () => void }) {
     onDone();
   }
 
+  async function removePhoto() {
+    if (!confirm("Remove this photo?")) return;
+    const { error } = await supabase.from("inventory_items").update({ photo_url: null }).eq("id", item.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Photo removed");
+    qc.invalidateQueries({ queryKey: ["inventory_items"] });
+  }
+
+  const photoPreview = item.photo_url ? (
+    <div className="space-y-1.5">
+      <Label className="text-xs">Photo</Label>
+      <div className="relative w-full">
+        <img src={item.photo_url} alt="" className="w-full h-auto max-h-40 rounded-md object-contain" />
+        <button
+          type="button"
+          onClick={removePhoto}
+          className="absolute right-2 top-2 rounded-full bg-black/60 p-1 text-white text-xs leading-none"
+          aria-label="Remove photo"
+        >✕</button>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div className="space-y-3">
+      {photoPreview}
       <div className="space-y-1.5">
         <Label className="text-xs">Item name *</Label>
         <Input value={name} onChange={(e) => setName(e.target.value)} />
