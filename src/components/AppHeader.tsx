@@ -99,6 +99,7 @@ export function AppHeader() {
         { table: "properties",         field: "fixed_rate_end", sourceType: "property_fixed_rate" },
         { table: "loans",              field: "reprice_date",  sourceType: "loan_reprice" },
         { table: "savings_accounts",   field: "maturity_date", sourceType: "savings_maturity" },
+        { table: "inventory_items",    field: "warranty_date", sourceType: "inventory_warranty" },
       ];
 
       const { data: dismissed } = await supabase
