@@ -13,7 +13,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { fmtDate } from "@/lib/format";
-import { addDays, parseISO } from "date-fns";
 import { useAppStore } from "@/lib/store";
 
 export const Route = createFileRoute("/inventory")({
@@ -850,7 +849,7 @@ function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => voi
         if (upErr) throw upErr;
         photo_url = supabase.storage.from("inventory-photos").getPublicUrl(path).data.publicUrl;
       }
-      const { data: ins, error } = await supabase
+      const { error } = await supabase
         .from("inventory_items")
         .insert({
           folder_id: folderId,
@@ -859,20 +858,8 @@ function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => voi
           action: action.trim() || null,
           warranty_date: warranty || null,
           photo_url,
-        })
-        .select()
-        .single();
-      if (error) throw error;
-
-      if (warranty && ins) {
-        const remindAt = addDays(parseISO(warranty), -90);
-        await supabase.from("reminders").insert({
-          entity_type: "inventory",
-          entity_id: ins.id,
-          what: `Warranty expires for ${name.trim()}`,
-          remind_at: remindAt.toISOString(),
         });
-      }
+      if (error) throw error;
 
       toast.success("Item added");
       qc.invalidateQueries({ queryKey: ["inventory_items"] });
@@ -958,27 +945,8 @@ function EditItemForm({ item, onDone }: { item: Item; onDone: () => void }) {
         warranty_date: warranty || null,
       })
       .eq("id", item.id);
-    if (error) { setSaving(false); toast.error(error.message); return; }
-
-    const nameChanged = name.trim() !== item.name;
-    const warrantyChanged = (item.warranty_date ?? "") !== warranty;
-    if (nameChanged || warrantyChanged) {
-      await supabase.from("reminders").delete()
-        .eq("entity_type", "inventory")
-        .eq("entity_id", item.id)
-        .like("what", "Warranty expires for%");
-      if (warranty) {
-        const remindAt = addDays(parseISO(warranty), -90);
-        await supabase.from("reminders").insert({
-          entity_type: "inventory",
-          entity_id: item.id,
-          what: `Warranty expires for ${name.trim()}`,
-          remind_at: remindAt.toISOString(),
-        });
-      }
-    }
-
     setSaving(false);
+    if (error) { toast.error(error.message); return; }
     toast.success("Item updated");
     qc.invalidateQueries({ queryKey: ["inventory_items"] });
     onDone();
