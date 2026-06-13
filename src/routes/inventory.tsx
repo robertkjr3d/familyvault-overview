@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo, useRef, useState } from "react";
-import { Camera, Plus, Search, Trash2, ChevronDown, Folder as FolderIcon, X } from "lucide-react";
+import { Camera, Plus, Search, Trash2, ChevronDown, Folder as FolderIcon, X, Pencil, ArrowRightLeft } from "lucide-react";
 import { ReminderButton } from "@/components/loan/ReminderButton";
 import { RemindersList } from "@/components/loan/RemindersList";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -35,8 +35,8 @@ function InventoryPage() {
   const qc = useQueryClient();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const [search, setSearch] = useState("");
-  const [openFolder, setOpenFolder] = useState<Folder | null>(null);
-  const [openSubfolder, setOpenSubfolder] = useState<Folder | null>(null);
+  const [openFolderId, setOpenFolderId] = useState<string | null>(null);
+  const [openSubfolderId, setOpenSubfolderId] = useState<string | null>(null);
   const [showAddFolder, setShowAddFolder] = useState(false);
 
   const { data: folders = [] } = useQuery({
@@ -89,6 +89,9 @@ function InventoryPage() {
     return m;
   }, [folders]);
 
+  const openFolder = openFolderId ? folderById.get(openFolderId) ?? null : null;
+  const openSubfolder = openSubfolderId ? folderById.get(openSubfolderId) ?? null : null;
+
   const itemCountByFolder = useMemo(() => {
     const m = new Map<string, number>();
     allItems.forEach((i) => m.set(i.folder_id, (m.get(i.folder_id) ?? 0) + 1));
@@ -119,6 +122,16 @@ function InventoryPage() {
     });
     return m;
   }, [topLevelFolders, childrenByParent, itemCountByFolder]);
+
+  const itemMoveOptions = useMemo(() => {
+    const opts: { id: string; label: string }[] = [];
+    topLevelFolders.forEach((f) => {
+      opts.push({ id: f.id, label: f.name });
+      const children = childrenByParent.get(f.id) ?? [];
+      children.forEach((c) => opts.push({ id: c.id, label: f.name + " > " + c.name }));
+    });
+    return opts;
+  }, [topLevelFolders, childrenByParent]);
 
   const q = search.trim().toLowerCase();
   const searchResults = useMemo(() => {
@@ -154,7 +167,10 @@ function InventoryPage() {
                 key={item.id}
                 onClick={() => {
                   const f = folderById.get(item.folder_id);
-                  if (f) setOpenFolder(f);
+                  if (f) {
+                    if (f.parent_id) { setOpenFolderId(f.parent_id); setOpenSubfolderId(f.id); }
+                    else { setOpenFolderId(f.id); setOpenSubfolderId(null); }
+                  }
                   setSearch("");
                 }}
                 className="block w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
@@ -179,7 +195,7 @@ function InventoryPage() {
             {topLevelFolders.map((f) => (
               <button
                 key={f.id}
-                onClick={() => setOpenFolder(f)}
+                onClick={() => setOpenFolderId(f.id)}
                 className="group overflow-hidden rounded-2xl border border-border bg-card text-left shadow-sm transition hover:shadow-md"
               >
                 <div className="relative aspect-square w-full overflow-hidden bg-muted">
@@ -223,9 +239,11 @@ function InventoryPage() {
           folder={openFolder}
           items={allItems.filter((i) => i.folder_id === openFolder.id)}
           allItems={allItems}
-          onClose={() => { setOpenFolder(null); setOpenSubfolder(null); }}
+          onClose={() => { setOpenFolderId(null); setOpenSubfolderId(null); }}
           subfolders={childrenByParent.get(openFolder.id) ?? []}
-          onOpenSubfolder={(f) => setOpenSubfolder(f)}
+          onOpenSubfolder={(f) => setOpenSubfolderId(f.id)}
+          topLevelFolders={topLevelFolders}
+          itemMoveOptions={itemMoveOptions}
         />
       )}
       {openSubfolder && (
@@ -233,10 +251,12 @@ function InventoryPage() {
           folder={openSubfolder}
           items={allItems.filter((i) => i.folder_id === openSubfolder.id)}
           allItems={allItems}
-          onClose={() => setOpenSubfolder(null)}
+          onClose={() => setOpenSubfolderId(null)}
           subfolders={[]}
           onOpenSubfolder={() => {}}
           parentFolder={openFolder}
+          topLevelFolders={topLevelFolders}
+          itemMoveOptions={itemMoveOptions}
         />
       )}
     </div>
@@ -438,12 +458,14 @@ function AddFolderSheet({ open, onClose, parentId }: { open: boolean; onClose: (
 }
 
 /* ---------- Folder Detail ---------- */
-function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfolder, parentFolder }: { folder: Folder; items: Item[]; allItems: Item[]; onClose: () => void; subfolders: Folder[]; onOpenSubfolder: (f: Folder) => void; parentFolder?: Folder | null }) {
+function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfolder, parentFolder, topLevelFolders, itemMoveOptions }: { folder: Folder; items: Item[]; allItems: Item[]; onClose: () => void; subfolders: Folder[]; onOpenSubfolder: (f: Folder) => void; parentFolder?: Folder | null; topLevelFolders: Folder[]; itemMoveOptions: { id: string; label: string }[] }) {
   const qc = useQueryClient();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const [adding, setAdding] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [showAddSubfolder, setShowAddSubfolder] = useState(false);
+  const [showMoveFolder, setShowMoveFolder] = useState(false);
+  const [movingItem, setMovingItem] = useState<Item | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const backButton = parentFolder ? (
@@ -496,6 +518,79 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
     await supabase.from("reminders").delete().eq("entity_type", "inventory").eq("entity_id", id);
     qc.invalidateQueries({ queryKey: ["inventory_items"] });
   }
+
+  async function renameFolder() {
+    const newName = window.prompt("Rename location", folder.name);
+    if (newName === null) return;
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === folder.name) return;
+    const { error } = await supabase.from("inventory_folders").update({ name: trimmed }).eq("id", folder.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Renamed");
+    qc.invalidateQueries({ queryKey: ["folders"] });
+  }
+
+  async function moveFolderTo(targetParentId: string | null) {
+    const { error } = await supabase.from("inventory_folders").update({ parent_id: targetParentId }).eq("id", folder.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Moved");
+    qc.invalidateQueries({ queryKey: ["folders"] });
+    setShowMoveFolder(false);
+    onClose();
+  }
+
+  async function moveItemTo(itemId: string, targetFolderId: string) {
+    const { error } = await supabase.from("inventory_items").update({ folder_id: targetFolderId }).eq("id", itemId);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Item moved");
+    qc.invalidateQueries({ queryKey: ["inventory_items"] });
+    setMovingItem(null);
+  }
+
+  const canMoveFolder = parentFolder ? true : subfolders.length === 0;
+
+  const folderMoveOptions = useMemo(() => {
+    if (parentFolder) {
+      const opts = [{ id: "__top__", label: "Make a top-level location" }];
+      topLevelFolders.forEach((f) => {
+        if (f.id !== parentFolder.id) opts.push({ id: f.id, label: "Move into " + f.name });
+      });
+      return opts;
+    }
+    if (subfolders.length === 0) {
+      return topLevelFolders
+        .filter((f) => f.id !== folder.id)
+        .map((f) => ({ id: f.id, label: "Move into " + f.name }));
+    }
+    return [];
+  }, [parentFolder, topLevelFolders, subfolders, folder.id]);
+
+  const moveFolderButton = canMoveFolder ? (
+    <button
+      onClick={() => setShowMoveFolder(true)}
+      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold hover:bg-accent"
+    >
+      <ArrowRightLeft className="h-3.5 w-3.5" /> Move
+    </button>
+  ) : null;
+
+  const moveItemSheet = movingItem ? (
+    <MovePickerSheet
+      title={'Move "' + movingItem.name + '"'}
+      options={itemMoveOptions.filter((o) => o.id !== folder.id)}
+      onPick={(id) => moveItemTo(movingItem.id, id)}
+      onClose={() => setMovingItem(null)}
+    />
+  ) : null;
+
+  const moveFolderSheet = showMoveFolder ? (
+    <MovePickerSheet
+      title={'Move "' + folder.name + '"'}
+      options={folderMoveOptions}
+      onPick={(id) => moveFolderTo(id === "__top__" ? null : id)}
+      onClose={() => setShowMoveFolder(false)}
+    />
+  ) : null;
 
   const subfolderGrid = subfolders.length > 0 ? (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -553,6 +648,13 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
                   <Camera className="h-3.5 w-3.5" /> Change photo
                 </button>
                 <button
+                  onClick={renameFolder}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold hover:bg-accent"
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Rename
+                </button>
+                {moveFolderButton}
+                <button
                   onClick={delFolder}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-urgent hover:bg-urgent/10"
                 >
@@ -605,7 +707,7 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
                     {it.action && <div className="mt-1 text-xs">{it.action}</div>}
                     {it.warranty_date && (
                       <div className="mt-1 text-[11px] text-muted-foreground">
-                        Warranty until {fmtDate(it.warranty_date)}
+                        Warranty/Expiry: {fmtDate(it.warranty_date)}
                       </div>
                     )}
                   </div>
@@ -613,6 +715,13 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
                     <img src={it.photo_url} alt="" className="h-14 w-14 rounded-md object-cover" />
                   )}
                   <div className="flex gap-1">
+                    <button
+                      onClick={() => setMovingItem(it)}
+                      className="rounded-md p-1 text-muted-foreground hover:bg-accent"
+                      aria-label="Move item"
+                    >
+                      <ArrowRightLeft className="h-3.5 w-3.5" />
+                    </button>
                     <button
                       onClick={() => setEditingItem(it)}
                       className="rounded-md p-1 text-muted-foreground hover:bg-accent"
@@ -639,6 +748,37 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
           </ul>
 
           {adding && <AddItemForm folderId={folder.id} onDone={() => setAdding(false)} />}
+        </div>
+        {moveItemSheet}
+        {moveFolderSheet}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/* ---------- Move Picker ---------- */
+function MovePickerSheet({ title, options, onPick, onClose }: { title: string; options: { id: string; label: string }[]; onPick: (id: string) => void; onClose: () => void }) {
+  const emptyState = options.length === 0 ? (
+    <p className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+      No other locations available.
+    </p>
+  ) : null;
+
+  return (
+    <Sheet open onOpenChange={(v) => !v && onClose()}>
+      <SheetContent side="bottom" className="max-h-[80vh] overflow-y-auto rounded-t-2xl">
+        <SheetHeader><SheetTitle>{title}</SheetTitle></SheetHeader>
+        <div className="mt-3 space-y-1 pb-6">
+          {emptyState}
+          {options.map((o) => (
+            <button
+              key={o.id}
+              onClick={() => onPick(o.id)}
+              className="block w-full rounded-md border border-border px-3 py-2 text-left text-sm hover:bg-accent"
+            >
+              {o.label}
+            </button>
+          ))}
         </div>
       </SheetContent>
     </Sheet>
@@ -712,7 +852,7 @@ function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => voi
         <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Electronics" />
       </div>
       <div className="space-y-1.5">
-        <Label className="text-xs">Warranty date</Label>
+        <Label className="text-xs">Warranty/Expiry date</Label>
         <div className="relative flex items-center">
           <Input type="date" value={warranty} onChange={(e) => setWarranty(e.target.value)} className="h-7 w-full pr-8" />
           {warranty && (
@@ -791,7 +931,7 @@ function EditItemForm({ item, onDone }: { item: Item; onDone: () => void }) {
         <Input value={name} onChange={(e) => setName(e.target.value)} />
       </div>
       <div className="space-y-1.5">
-        <Label className="text-xs">Warranty date</Label>
+        <Label className="text-xs">Warranty/Expiry date</Label>
         <div className="relative flex items-center">
           <Input type="date" value={warranty} onChange={(e) => setWarranty(e.target.value)} className="h-7 w-full pr-8" />
           {warranty && (
