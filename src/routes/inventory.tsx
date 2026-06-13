@@ -36,6 +36,7 @@ function InventoryPage() {
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const [search, setSearch] = useState("");
   const [openFolder, setOpenFolder] = useState<Folder | null>(null);
+  const [openSubfolder, setOpenSubfolder] = useState<Folder | null>(null);
   const [showAddFolder, setShowAddFolder] = useState(false);
 
   const { data: folders = [] } = useQuery({
@@ -47,7 +48,6 @@ function InventoryPage() {
         .from("inventory_folders")
         .select("*")
         .eq("household_id", activeHouseholdId)
-        .is("parent_id", null)
         .order("sort_order");
       return (data ?? []) as Folder[];
     },
@@ -94,6 +94,31 @@ function InventoryPage() {
     allItems.forEach((i) => m.set(i.folder_id, (m.get(i.folder_id) ?? 0) + 1));
     return m;
   }, [allItems]);
+
+  const topLevelFolders = useMemo(() => folders.filter((f) => f.parent_id === null), [folders]);
+
+  const childrenByParent = useMemo(() => {
+    const m = new Map<string, Folder[]>();
+    folders.forEach((f) => {
+      if (f.parent_id) {
+        const arr = m.get(f.parent_id) ?? [];
+        arr.push(f);
+        m.set(f.parent_id, arr);
+      }
+    });
+    return m;
+  }, [folders]);
+
+  const totalCountByFolder = useMemo(() => {
+    const m = new Map<string, number>();
+    topLevelFolders.forEach((f) => {
+      let total = itemCountByFolder.get(f.id) ?? 0;
+      const children = childrenByParent.get(f.id) ?? [];
+      children.forEach((c) => { total += itemCountByFolder.get(c.id) ?? 0; });
+      m.set(f.id, total);
+    });
+    return m;
+  }, [topLevelFolders, childrenByParent, itemCountByFolder]);
 
   const q = search.trim().toLowerCase();
   const searchResults = useMemo(() => {
@@ -145,13 +170,13 @@ function InventoryPage() {
       {/* My Locations grid */}
       <section>
         <h2 className="mb-3 text-sm font-bold">My Locations</h2>
-        {folders.length === 0 ? (
+        {topLevelFolders.length === 0 ? (
           <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
             No locations yet. Tap + to add one.
           </p>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {folders.map((f) => (
+            {topLevelFolders.map((f) => (
               <button
                 key={f.id}
                 onClick={() => setOpenFolder(f)}
@@ -166,7 +191,7 @@ function InventoryPage() {
                     </div>
                   )}
                   <span className="absolute right-2 top-2 rounded-full bg-background/85 px-2 py-0.5 text-[10px] font-semibold">
-                    {itemCountByFolder.get(f.id) ?? 0}
+                    {totalCountByFolder.get(f.id) ?? 0}
                   </span>
                 </div>
                 <div className="p-2.5 text-sm font-semibold">{f.name}</div>
@@ -192,12 +217,26 @@ function InventoryPage() {
         <Plus className="h-7 w-7" />
       </button>
 
-      <AddFolderSheet open={showAddFolder} onClose={() => setShowAddFolder(false)} />
+      <AddFolderSheet open={showAddFolder} onClose={() => setShowAddFolder(false)} parentId={null} />
       {openFolder && (
         <FolderSheet
           folder={openFolder}
           items={allItems.filter((i) => i.folder_id === openFolder.id)}
-          onClose={() => setOpenFolder(null)}
+          allItems={allItems}
+          onClose={() => { setOpenFolder(null); setOpenSubfolder(null); }}
+          subfolders={childrenByParent.get(openFolder.id) ?? []}
+          onOpenSubfolder={(f) => setOpenSubfolder(f)}
+        />
+      )}
+      {openSubfolder && (
+        <FolderSheet
+          folder={openSubfolder}
+          items={allItems.filter((i) => i.folder_id === openSubfolder.id)}
+          allItems={allItems}
+          onClose={() => setOpenSubfolder(null)}
+          subfolders={[]}
+          onOpenSubfolder={() => {}}
+          parentFolder={openFolder}
         />
       )}
     </div>
@@ -302,7 +341,7 @@ function ChecklistSection({ table, queryKey, title, items }: { table: string; qu
 }
 
 /* ---------- Add Folder ---------- */
-function AddFolderSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+function AddFolderSheet({ open, onClose, parentId }: { open: boolean; onClose: () => void; parentId: string | null }) {
   const qc = useQueryClient();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const [name, setName] = useState("");
@@ -310,6 +349,7 @@ function AddFolderSheet({ open, onClose }: { open: boolean; onClose: () => void 
   const [preview, setPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const sheetTitle = parentId ? "New Subfolder" : "New Location";
 
   function reset() {
     setName(""); setPhotoFile(null); setPreview(null);
@@ -332,7 +372,7 @@ function AddFolderSheet({ open, onClose }: { open: boolean; onClose: () => void 
         household_id: activeHouseholdId,
         name: name.trim(),
         photo_url,
-        parent_id: null,
+        parent_id: parentId,
       });
       if (error) throw error;
       toast.success("Location added");
@@ -346,7 +386,7 @@ function AddFolderSheet({ open, onClose }: { open: boolean; onClose: () => void 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && (reset(), onClose())}>
       <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] overflow-y-auto">
-        <SheetHeader><SheetTitle>New Location</SheetTitle></SheetHeader>
+        <SheetHeader><SheetTitle>{sheetTitle}</SheetTitle></SheetHeader>
         <div className="mt-4 space-y-4 pb-6">
           <div>
             <Label className="text-xs">Photo (optional)</Label>
@@ -398,17 +438,34 @@ function AddFolderSheet({ open, onClose }: { open: boolean; onClose: () => void 
 }
 
 /* ---------- Folder Detail ---------- */
-function FolderSheet({ folder, items, onClose }: { folder: Folder; items: Item[]; onClose: () => void }) {
+function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfolder, parentFolder }: { folder: Folder; items: Item[]; allItems: Item[]; onClose: () => void; subfolders: Folder[]; onOpenSubfolder: (f: Folder) => void; parentFolder?: Folder | null }) {
   const qc = useQueryClient();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const [adding, setAdding] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
+  const [showAddSubfolder, setShowAddSubfolder] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const backButton = parentFolder ? (
+    <button
+      onClick={onClose}
+      className="mb-1 flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+    >
+      ← {parentFolder.name}
+    </button>
+  ) : null;
+
   async function delFolder() {
-    if (!confirm(`Delete "${folder.name}" and all ${items.length} items inside?`)) return;
-    const itemIds = items.map((it) => it.id);
+    const subfolderIds = subfolders.map((sf) => sf.id);
+    const subfolderItems = allItems.filter((it) => subfolderIds.includes(it.folder_id));
+    const totalItems = items.length + subfolderItems.length;
+    if (!confirm(`Delete "${folder.name}" and everything inside — ${totalItems} item(s) and ${subfolderIds.length} subfolder(s)?`)) return;
+    const itemIds = [...items.map((it) => it.id), ...subfolderItems.map((it) => it.id)];
     await supabase.from("inventory_items").delete().eq("folder_id", folder.id);
+    if (subfolderIds.length > 0) {
+      await supabase.from("inventory_items").delete().in("folder_id", subfolderIds);
+      await supabase.from("inventory_folders").delete().in("id", subfolderIds);
+    }
     await supabase.from("inventory_folders").delete().eq("id", folder.id);
     if (itemIds.length > 0) {
       await supabase.from("reminders").delete().eq("entity_type", "inventory").in("entity_id", itemIds);
@@ -440,9 +497,47 @@ function FolderSheet({ folder, items, onClose }: { folder: Folder; items: Item[]
     qc.invalidateQueries({ queryKey: ["inventory_items"] });
   }
 
+  const subfolderGrid = subfolders.length > 0 ? (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      {subfolders.map((sf) => (
+        <button
+          key={sf.id}
+          onClick={() => onOpenSubfolder(sf)}
+          className="group overflow-hidden rounded-2xl border border-border bg-card text-left shadow-sm transition hover:shadow-md"
+        >
+          <div className="relative aspect-square w-full overflow-hidden bg-muted">
+            {sf.photo_url ? (
+              <img src={sf.photo_url} alt={sf.name} className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center">
+                <FolderIcon className="h-8 w-8 text-muted-foreground" />
+              </div>
+            )}
+          </div>
+          <div className="p-2 text-xs font-semibold">{sf.name}</div>
+        </button>
+      ))}
+    </div>
+  ) : null;
+
+  const subfoldersSection = parentFolder ? null : (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Subfolders ({subfolders.length})
+        </h3>
+        <Button size="sm" variant="outline" onClick={() => setShowAddSubfolder(true)}>
+          <Plus className="mr-1 h-3.5 w-3.5" /> Add subfolder
+        </Button>
+      </div>
+      {subfolderGrid}
+    </div>
+  );
+
   return (
     <Sheet open onOpenChange={(v) => !v && onClose()}>
       <SheetContent side="bottom" className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl">
+        {backButton}
         <SheetHeader>
           <SheetTitle className="flex items-center justify-between pr-8">
             <span>{folder.name}</span>
@@ -479,6 +574,10 @@ function FolderSheet({ folder, items, onClose }: { folder: Folder; items: Item[]
         {folder.photo_url && (
           <img src={folder.photo_url} alt="" className="mt-3 w-full rounded-xl object-contain max-h-48" />
         )}
+
+        <div className="mt-4">{subfoldersSection}</div>
+
+        <AddFolderSheet open={showAddSubfolder} onClose={() => setShowAddSubfolder(false)} parentId={folder.id} />
 
         <div className="mt-4 space-y-2">
           <div className="flex items-center justify-between">
