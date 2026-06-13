@@ -108,7 +108,6 @@ function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: an
         updatedAt={inv.updated_at}
         createdAt={inv.created_at}
         rightMeta={
-          rightMeta={
           <div className="text-right text-xs">
             <div className="text-muted-foreground">
               Value (est.){staleIndicator}
