@@ -160,18 +160,27 @@ function InventoryPage() {
 
   function exportCsv() {
     const rows: string[] = [];
-    rows.push(["Location", "Subfolder", "Item name", "Category", "Action / Notes", "Warranty/Expiry date", "Photo URL"].map(csvCell).join(","));
+    rows.push(["Location", "Location photo URL", "Subfolder", "Subfolder photo URL", "Item name", "Category", "Action / Notes", "Warranty/Expiry date", "Item photo URL"].map(csvCell).join(","));
 
     topLevelFolders.forEach((f) => {
       const directItems = allItems.filter((i) => i.folder_id === f.id);
-      directItems.forEach((it) => {
-        rows.push([f.name, "", it.name, it.category ?? "", it.action ?? "", it.warranty_date ?? "", it.photo_url ?? ""].map(csvCell).join(","));
-      });
       const children = childrenByParent.get(f.id) ?? [];
+
+      if (directItems.length === 0 && children.length === 0) {
+        rows.push([f.name, f.photo_url ?? "", "", "", "", "", "", "", ""].map(csvCell).join(","));
+      }
+
+      directItems.forEach((it) => {
+        rows.push([f.name, f.photo_url ?? "", "", "", it.name, it.category ?? "", it.action ?? "", it.warranty_date ?? "", it.photo_url ?? ""].map(csvCell).join(","));
+      });
+
       children.forEach((sf) => {
         const subItems = allItems.filter((i) => i.folder_id === sf.id);
+        if (subItems.length === 0) {
+          rows.push([f.name, f.photo_url ?? "", sf.name, sf.photo_url ?? "", "", "", "", "", ""].map(csvCell).join(","));
+        }
         subItems.forEach((it) => {
-          rows.push([f.name, sf.name, it.name, it.category ?? "", it.action ?? "", it.warranty_date ?? "", it.photo_url ?? ""].map(csvCell).join(","));
+          rows.push([f.name, f.photo_url ?? "", sf.name, sf.photo_url ?? "", it.name, it.category ?? "", it.action ?? "", it.warranty_date ?? "", it.photo_url ?? ""].map(csvCell).join(","));
         });
       });
     });
