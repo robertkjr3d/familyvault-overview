@@ -31,6 +31,42 @@ type Item = {
   photo_url: string | null;
 };
 
+const MAX_PHOTO_DIMENSION = 1280;
+const PHOTO_JPEG_QUALITY = 0.8;
+
+function compressImage(file: File): Promise<File> {
+  return new Promise((resolve) => {
+    if (!file.type.startsWith("image/")) { resolve(file); return; }
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      let { width, height } = img;
+      const scale = Math.min(1, MAX_PHOTO_DIMENSION / Math.max(width, height));
+      const targetW = Math.round(width * scale);
+      const targetH = Math.round(height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = targetW;
+      canvas.height = targetH;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { resolve(file); return; }
+      ctx.drawImage(img, 0, 0, targetW, targetH);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { resolve(file); return; }
+          const newName = file.name.replace(/\.[^.]+$/, "") + ".jpg";
+          resolve(new File([blob], newName, { type: "image/jpeg" }));
+        },
+        "image/jpeg",
+        PHOTO_JPEG_QUALITY
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(file); };
+    img.src = objectUrl;
+  });
+}
+
+
 function InventoryPage() {
   const qc = useQueryClient();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
@@ -93,6 +129,7 @@ function InventoryPage() {
   const openSubfolder = openSubfolderId ? folderById.get(openSubfolderId) ?? null : null;
 
   const [hashHandled, setHashHandled] = useState(false);
+  const [generatingDocx, setGeneratingDocx] = useState(false);
   useEffect(() => {
     if (hashHandled) return;
     if (allItems.length === 0 || folders.length === 0) return;
@@ -250,6 +287,134 @@ function InventoryPage() {
     URL.revokeObjectURL(url);
   }
 
+  async function fetchImageBytes(url: string): Promise<ArrayBuffer | null> {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      return await res.arrayBuffer();
+    } catch {
+      return null;
+    }
+  }
+
+  async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+    const results: R[] = new Array(items.length);
+    let next = 0;
+    async function worker() {
+      while (next < items.length) {
+        const i = next++;
+        results[i] = await fn(items[i]);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+    return results;
+  }
+
+  async function exportDocx() {
+    setGeneratingDocx(true);
+    try {
+      const docxLib: any = await import("https://esm.sh/docx@9");
+      const { Document, Packer, Paragraph, TextRun, ImageRun, HeadingLevel } = docxLib;
+
+      // Collect every photo URL we need, fetch them all up front (with a concurrency cap)
+      const photoUrls = new Set<string>();
+      topLevelFolders.forEach((f) => {
+        if (f.photo_url) photoUrls.add(f.photo_url);
+        (childrenByParent.get(f.id) ?? []).forEach((sf) => { if (sf.photo_url) photoUrls.add(sf.photo_url); });
+      });
+      allItems.forEach((it) => { if (it.photo_url) photoUrls.add(it.photo_url); });
+
+      const urlList = Array.from(photoUrls);
+      const fetched = await mapWithConcurrency(urlList, 4, fetchImageBytes);
+      const imageBytesByUrl = new Map<string, ArrayBuffer | null>();
+      urlList.forEach((u, i) => imageBytesByUrl.set(u, fetched[i]));
+
+      function imageParagraph(url: string | null, widthPx: number): any | null {
+        if (!url) return null;
+        const bytes = imageBytesByUrl.get(url);
+        if (!bytes) {
+          return new Paragraph({ children: [new TextRun({ text: "[photo unavailable]", italics: true, color: "999999" })] });
+        }
+        try {
+          const aspect = 1; // unknown aspect ratio at this point; square-ish thumbnail is acceptable
+          return new Paragraph({
+            children: [new ImageRun({ type: "jpg", data: bytes, transformation: { width: widthPx, height: Math.round(widthPx * aspect) } })],
+          });
+        } catch {
+          return new Paragraph({ children: [new TextRun({ text: "[photo unavailable]", italics: true, color: "999999" })] });
+        }
+      }
+
+      const children: any[] = [];
+      children.push(new Paragraph({ text: "FamilyVault Inventory", heading: HeadingLevel.TITLE }));
+      children.push(new Paragraph({
+        children: [new TextRun({ text: `Exported ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`, italics: true, color: "666666" })],
+      }));
+      children.push(new Paragraph({ text: "" }));
+
+      function pushItem(it: Item, indent: number) {
+        const lines: any[] = [];
+        const nameRuns = [new TextRun({ text: it.name, bold: true })];
+        if (it.category) nameRuns.push(new TextRun({ text: `  (${it.category})`, italics: true, color: "666666" }));
+        lines.push(new Paragraph({ children: nameRuns, indent: { left: indent } }));
+        if (it.action) lines.push(new Paragraph({ children: [new TextRun({ text: `Notes: ${it.action}` })], indent: { left: indent } }));
+        if (it.warranty_date) lines.push(new Paragraph({ children: [new TextRun({ text: `Warranty/Expiry: ${it.warranty_date}` })], indent: { left: indent } }));
+        const img = imageParagraph(it.photo_url, 120);
+        if (img) lines.push(img);
+        lines.push(new Paragraph({ text: "" }));
+        children.push(...lines);
+      }
+
+      topLevelFolders.forEach((f) => {
+        children.push(new Paragraph({ text: f.name, heading: HeadingLevel.HEADING_1 }));
+        const fImg = imageParagraph(f.photo_url, 180);
+        if (fImg) children.push(fImg);
+
+        const directItems = allItems.filter((i) => i.folder_id === f.id);
+        const subfolders = childrenByParent.get(f.id) ?? [];
+
+        if (directItems.length === 0 && subfolders.length === 0) {
+          children.push(new Paragraph({ children: [new TextRun({ text: "(empty)", italics: true, color: "999999" })] }));
+        }
+
+        directItems.forEach((it) => pushItem(it, 0));
+
+        subfolders.forEach((sf) => {
+          children.push(new Paragraph({ text: sf.name, heading: HeadingLevel.HEADING_2 }));
+          const sfImg = imageParagraph(sf.photo_url, 150);
+          if (sfImg) children.push(sfImg);
+          const subItems = allItems.filter((i) => i.folder_id === sf.id);
+          if (subItems.length === 0) {
+            children.push(new Paragraph({ children: [new TextRun({ text: "(empty)", italics: true, color: "999999" })] }));
+          }
+          subItems.forEach((it) => pushItem(it, 360));
+        });
+      });
+
+      const doc = new Document({
+        sections: [{
+          properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } },
+          children,
+        }],
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `familyvault-inventory-${new Date().toISOString().slice(0, 10)}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Master document downloaded");
+    } catch (err: any) {
+      toast.error("Could not generate document: " + (err?.message ?? "unknown error"));
+    } finally {
+      setGeneratingDocx(false);
+    }
+  }
+
   const q = search.trim().toLowerCase();
   const searchResults = useMemo(() => {
     if (!q) return [];
@@ -390,6 +555,12 @@ function InventoryPage() {
         <p className="text-center text-[11px] text-muted-foreground">
           Clean outline by location and subfolder — good for Apple Notes (no photos).
         </p>
+        <Button variant="outline" className="w-full" onClick={exportDocx} disabled={allItems.length === 0 || generatingDocx}>
+          {generatingDocx ? "Generating… please wait" : "Export master document (Word, with photos)"}
+        </Button>
+        <p className="text-center text-[11px] text-muted-foreground">
+          Full backup with embedded photos. Can take up to a minute for large inventories — don't close the page while it's generating.
+        </p>
       </div>
     </div>
   );
@@ -515,8 +686,9 @@ function AddFolderSheet({ open, onClose, parentId }: { open: boolean; onClose: (
     try {
       let photo_url: string | null = null;
       if (photoFile) {
-        const path = `${activeHouseholdId}/folders/${Date.now()}-${photoFile.name}`;
-        const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, photoFile);
+        const compressed = await compressImage(photoFile);
+        const path = `${activeHouseholdId}/folders/${Date.now()}-${compressed.name}`;
+        const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
         if (upErr) throw upErr;
         photo_url = supabase.storage.from("inventory-photos").getPublicUrl(path).data.publicUrl;
       }
@@ -635,8 +807,9 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
       toast.error("Select a household first.");
       return;
     }
-    const path = `${activeHouseholdId}/folders/${Date.now()}-${f.name}`;
-    const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, f);
+    const compressed = await compressImage(f);
+    const path = `${activeHouseholdId}/folders/${Date.now()}-${compressed.name}`;
+    const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
     if (upErr) { toast.error(upErr.message); return; }
     const photo_url = supabase.storage.from("inventory-photos").getPublicUrl(path).data.publicUrl;
     await supabase.from("inventory_folders").update({ photo_url }).eq("id", folder.id);
@@ -959,8 +1132,9 @@ function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => voi
     try {
       let photo_url: string | null = null;
       if (photoFile) {
-        const path = `${activeHouseholdId}/items/${Date.now()}-${photoFile.name}`;
-        const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, photoFile);
+        const compressed = await compressImage(photoFile);
+        const path = `${activeHouseholdId}/items/${Date.now()}-${compressed.name}`;
+        const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
         if (upErr) throw upErr;
         photo_url = supabase.storage.from("inventory-photos").getPublicUrl(path).data.publicUrl;
       }
@@ -1079,8 +1253,9 @@ function EditItemForm({ item, onDone }: { item: Item; onDone: () => void }) {
 
   async function changeItemPhoto(f: File) {
     if (!activeHouseholdId) { toast.error("Select a household first."); return; }
-    const path = `${activeHouseholdId}/items/${Date.now()}-${f.name}`;
-    const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, f);
+    const compressed = await compressImage(f);
+    const path = `${activeHouseholdId}/items/${Date.now()}-${compressed.name}`;
+    const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
     if (upErr) { toast.error(upErr.message); return; }
     const photo_url = supabase.storage.from("inventory-photos").getPublicUrl(path).data.publicUrl;
     const { error } = await supabase.from("inventory_items").update({ photo_url }).eq("id", item.id);
