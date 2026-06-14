@@ -158,28 +158,12 @@ function InventoryPage() {
     return s;
   }
 
-  function imgCell(url: string | null | undefined): string {
-    if (!url) return "";
-    const escapedUrl = url.replace(/"/g, '""');
-    return `"=IMAGE(""${escapedUrl}"", 4, 60, 60)"`;
-  }
-
   function exportCsv() {
     const rows: string[] = [];
-    rows.push(["Location", "Location photo", "Subfolder", "Subfolder photo", "Item name", "Category", "Action / Notes", "Warranty/Expiry date", "Item photo"].map(csvCell).join(","));
+    rows.push(["Location", "Location photo URL", "Subfolder", "Subfolder photo URL", "Item name", "Category", "Action / Notes", "Warranty/Expiry date", "Item photo URL"].map(csvCell).join(","));
 
     function buildRow(locName: string, locPhoto: string | null | undefined, subName: string, subPhoto: string | null | undefined, itemName: string, category: string, notes: string, warranty: string, itemPhoto: string | null | undefined): string {
-      return [
-        csvCell(locName),
-        imgCell(locPhoto),
-        csvCell(subName),
-        imgCell(subPhoto),
-        csvCell(itemName),
-        csvCell(category),
-        csvCell(notes),
-        csvCell(warranty),
-        imgCell(itemPhoto),
-      ].join(",");
+      return [locName, locPhoto ?? "", subName, subPhoto ?? "", itemName, category, notes, warranty, itemPhoto ?? ""].map(csvCell).join(",");
     }
 
     topLevelFolders.forEach((f) => {
@@ -211,6 +195,55 @@ function InventoryPage() {
     const a = document.createElement("a");
     a.href = url;
     a.download = `familyvault-inventory-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function exportText() {
+    const lines: string[] = [];
+    lines.push("FAMILYVAULT INVENTORY");
+    lines.push(`Exported ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`);
+    lines.push("");
+
+    topLevelFolders.forEach((f) => {
+      lines.push(f.name.toUpperCase());
+      const directItems = allItems.filter((i) => i.folder_id === f.id);
+      const children = childrenByParent.get(f.id) ?? [];
+
+      if (directItems.length === 0 && children.length === 0) {
+        lines.push("  (empty)");
+      }
+
+      directItems.forEach((it) => {
+        lines.push(`  - ${it.name}` + (it.category ? ` (${it.category})` : ""));
+        if (it.action) lines.push(`      Notes: ${it.action}`);
+        if (it.warranty_date) lines.push(`      Warranty/Expiry: ${it.warranty_date}`);
+      });
+
+      children.forEach((sf) => {
+        lines.push(`  ${sf.name}`);
+        const subItems = allItems.filter((i) => i.folder_id === sf.id);
+        if (subItems.length === 0) {
+          lines.push("    (empty)");
+        }
+        subItems.forEach((it) => {
+          lines.push(`    - ${it.name}` + (it.category ? ` (${it.category})` : ""));
+          if (it.action) lines.push(`        Notes: ${it.action}`);
+          if (it.warranty_date) lines.push(`        Warranty/Expiry: ${it.warranty_date}`);
+        });
+      });
+
+      lines.push("");
+    });
+
+    const text = lines.join("\n");
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `familyvault-inventory-${new Date().toISOString().slice(0, 10)}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -344,12 +377,18 @@ function InventoryPage() {
         />
       )}
 
-      <div className="pt-2">
+      <div className="pt-2 space-y-2">
         <Button variant="outline" className="w-full" onClick={exportCsv} disabled={allItems.length === 0}>
-          Export inventory (Excel / CSV)
+          Export as spreadsheet (CSV)
         </Button>
-        <p className="mt-1 text-center text-[11px] text-muted-foreground">
-          Downloads a spreadsheet of every item, organised by location and subfolder.
+        <p className="text-center text-[11px] text-muted-foreground">
+          One row per item with photo links — open in Google Sheets / Excel.
+        </p>
+        <Button variant="outline" className="w-full" onClick={exportText} disabled={allItems.length === 0}>
+          Export as text list
+        </Button>
+        <p className="text-center text-[11px] text-muted-foreground">
+          Clean outline by location and subfolder — good for Apple Notes (no photos).
         </p>
       </div>
     </div>
