@@ -974,11 +974,13 @@ function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => voi
 /* ---------- Edit Item Form ---------- */
 function EditItemForm({ item, onDone }: { item: Item; onDone: () => void }) {
   const qc = useQueryClient();
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const [name, setName] = useState(item.name);
   const [category, setCategory] = useState(item.category ?? "");
   const [action, setAction] = useState(item.action ?? "");
   const [warranty, setWarranty] = useState(item.warranty_date ?? "");
   const [saving, setSaving] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   async function save() {
     if (!name.trim()) { toast.error("Item name required"); return; }
@@ -1007,24 +1009,62 @@ function EditItemForm({ item, onDone }: { item: Item; onDone: () => void }) {
     qc.invalidateQueries({ queryKey: ["inventory_items"] });
   }
 
-  const photoPreview = item.photo_url ? (
+  async function changeItemPhoto(f: File) {
+    if (!activeHouseholdId) { toast.error("Select a household first."); return; }
+    const path = `${activeHouseholdId}/items/${Date.now()}-${f.name}`;
+    const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, f);
+    if (upErr) { toast.error(upErr.message); return; }
+    const photo_url = supabase.storage.from("inventory-photos").getPublicUrl(path).data.publicUrl;
+    const { error } = await supabase.from("inventory_items").update({ photo_url }).eq("id", item.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Photo added");
+    qc.invalidateQueries({ queryKey: ["inventory_items"] });
+  }
+
+  const photoSection = item.photo_url ? (
     <div className="space-y-1.5">
       <Label className="text-xs">Photo</Label>
       <div className="relative w-full">
         <img src={item.photo_url} alt="" className="w-full h-auto max-h-40 rounded-md object-contain" />
-        <button
-          type="button"
-          onClick={removePhoto}
-          className="absolute right-2 top-2 rounded-full bg-black/60 p-1 text-white text-xs leading-none"
-          aria-label="Remove photo"
-        >✕</button>
+        <div className="absolute right-2 top-2 flex gap-1">
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="rounded-full bg-black/60 p-1 text-white text-xs leading-none"
+            aria-label="Change photo"
+          ><Camera className="h-3.5 w-3.5" /></button>
+          <button
+            type="button"
+            onClick={removePhoto}
+            className="rounded-full bg-black/60 p-1 text-white text-xs leading-none"
+            aria-label="Remove photo"
+          >✕</button>
+        </div>
       </div>
     </div>
-  ) : null;
+  ) : (
+    <div className="space-y-1.5">
+      <Label className="text-xs">Photo</Label>
+      <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
+        <Camera className="mr-1 h-3.5 w-3.5" /> Add photo
+      </Button>
+    </div>
+  );
+
+  const photoInput = (
+    <input
+      ref={fileRef}
+      type="file"
+      accept="image/*"
+      className="hidden"
+      onChange={(e) => { const f = e.target.files?.[0]; if (f) changeItemPhoto(f); }}
+    />
+  );
 
   return (
     <div className="space-y-3">
-      {photoPreview}
+      {photoSection}
+      {photoInput}
       <div className="space-y-1.5">
         <Label className="text-xs">Item name *</Label>
         <Input value={name} onChange={(e) => setName(e.target.value)} />
