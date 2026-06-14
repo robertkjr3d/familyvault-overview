@@ -158,29 +158,49 @@ function InventoryPage() {
     return s;
   }
 
+  function imgCell(url: string | null | undefined): string {
+    if (!url) return "";
+    const escapedUrl = url.replace(/"/g, '""');
+    return `"=IMAGE(""${escapedUrl}"", 4, 60, 60)"`;
+  }
+
   function exportCsv() {
     const rows: string[] = [];
-    rows.push(["Location", "Location photo URL", "Subfolder", "Subfolder photo URL", "Item name", "Category", "Action / Notes", "Warranty/Expiry date", "Item photo URL"].map(csvCell).join(","));
+    rows.push(["Location", "Location photo", "Subfolder", "Subfolder photo", "Item name", "Category", "Action / Notes", "Warranty/Expiry date", "Item photo"].map(csvCell).join(","));
+
+    function buildRow(locName: string, locPhoto: string | null | undefined, subName: string, subPhoto: string | null | undefined, itemName: string, category: string, notes: string, warranty: string, itemPhoto: string | null | undefined): string {
+      return [
+        csvCell(locName),
+        imgCell(locPhoto),
+        csvCell(subName),
+        imgCell(subPhoto),
+        csvCell(itemName),
+        csvCell(category),
+        csvCell(notes),
+        csvCell(warranty),
+        imgCell(itemPhoto),
+      ].join(",");
+    }
 
     topLevelFolders.forEach((f) => {
       const directItems = allItems.filter((i) => i.folder_id === f.id);
       const children = childrenByParent.get(f.id) ?? [];
 
       if (directItems.length === 0 && children.length === 0) {
-        rows.push([f.name, f.photo_url ?? "", "", "", "", "", "", "", ""].map(csvCell).join(","));
+        rows.push(buildRow(f.name, f.photo_url, "", null, "", "", "", "", null));
       }
 
       directItems.forEach((it) => {
-        rows.push([f.name, f.photo_url ?? "", "", "", it.name, it.category ?? "", it.action ?? "", it.warranty_date ?? "", it.photo_url ?? ""].map(csvCell).join(","));
+        rows.push(buildRow(f.name, f.photo_url, "", null, it.name, it.category ?? "", it.action ?? "", it.warranty_date ?? "", it.photo_url));
       });
 
       children.forEach((sf) => {
         const subItems = allItems.filter((i) => i.folder_id === sf.id);
         if (subItems.length === 0) {
-          rows.push([f.name, f.photo_url ?? "", sf.name, sf.photo_url ?? "", "", "", "", "", ""].map(csvCell).join(","));
+          rows.push(buildRow(f.name, f.photo_url, sf.name, sf.photo_url, "", "", "", "", null));
         }
         subItems.forEach((it) => {
-          rows.push([f.name, f.photo_url ?? "", sf.name, sf.photo_url ?? "", it.name, it.category ?? "", it.action ?? "", it.warranty_date ?? "", it.photo_url ?? ""].map(csvCell).join(","));
+          rows.push(buildRow(f.name, f.photo_url, sf.name, sf.photo_url, it.name, it.category ?? "", it.action ?? "", it.warranty_date ?? "", it.photo_url));
         });
       });
     });
