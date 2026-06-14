@@ -150,6 +150,44 @@ function InventoryPage() {
     return opts;
   }, [topLevelFolders, childrenByParent]);
 
+  function csvCell(v: string | null | undefined): string {
+    const s = (v ?? "").replace(/\r?\n/g, " ");
+    if (s.includes(",") || s.includes('"')) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  function exportCsv() {
+    const rows: string[] = [];
+    rows.push(["Location", "Subfolder", "Item name", "Category", "Action / Notes", "Warranty/Expiry date", "Photo URL"].map(csvCell).join(","));
+
+    topLevelFolders.forEach((f) => {
+      const directItems = allItems.filter((i) => i.folder_id === f.id);
+      directItems.forEach((it) => {
+        rows.push([f.name, "", it.name, it.category ?? "", it.action ?? "", it.warranty_date ?? "", it.photo_url ?? ""].map(csvCell).join(","));
+      });
+      const children = childrenByParent.get(f.id) ?? [];
+      children.forEach((sf) => {
+        const subItems = allItems.filter((i) => i.folder_id === sf.id);
+        subItems.forEach((it) => {
+          rows.push([f.name, sf.name, it.name, it.category ?? "", it.action ?? "", it.warranty_date ?? "", it.photo_url ?? ""].map(csvCell).join(","));
+        });
+      });
+    });
+
+    const csv = rows.join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `familyvault-inventory-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   const q = search.trim().toLowerCase();
   const searchResults = useMemo(() => {
     if (!q) return [];
@@ -276,6 +314,15 @@ function InventoryPage() {
           itemMoveOptions={itemMoveOptions}
         />
       )}
+
+      <div className="pt-2">
+        <Button variant="outline" className="w-full" onClick={exportCsv} disabled={allItems.length === 0}>
+          Export inventory (Excel / CSV)
+        </Button>
+        <p className="mt-1 text-center text-[11px] text-muted-foreground">
+          Downloads a spreadsheet of every item, organised by location and subfolder.
+        </p>
+      </div>
     </div>
   );
 }
