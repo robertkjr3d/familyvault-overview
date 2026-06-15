@@ -14,7 +14,7 @@ import { differenceInDays, parseISO } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { useEditRecord } from "@/components/EditRecordButton";
+import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
 import { ReminderButton } from "@/components/loan/ReminderButton";
 import { RemindersList } from "@/components/loan/RemindersList";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
@@ -130,6 +130,7 @@ function AlertLabel({ text }: { text: string }) {
 
 function SavingsRow({ a, onStatus, onDelete }: { a: any; onStatus: (s: any) => void; onDelete: () => void }) {
   const edit = useEditRecord("savings_accounts", a);
+  const dup = useDuplicateRecord("savings_accounts", a);
   const stale = staleDays(a.last_updated);
   const isStale = stale != null && stale >= 30;
   return (
@@ -143,6 +144,7 @@ function SavingsRow({ a, onStatus, onDelete }: { a: any; onStatus: (s: any) => v
         action={a.note}
         onEdit={edit.open}
         onDelete={onDelete}
+        onDuplicate={dup.open}
        hasNotes={!!a.notes}
         updatedAt={a.updated_at}
         createdAt={a.created_at}
@@ -164,6 +166,12 @@ function SavingsRow({ a, onStatus, onDelete }: { a: any; onStatus: (s: any) => v
           <FieldRow label="Balance" value={fmtMoney(a.balance)} />
           <FieldRow label="Interest rate" value={fmtPct(a.interest_rate)} />
           <FieldRow label={<AlertLabel text="Maturity" />} value={fmtDate(a.maturity_date)} />
+          {(a.account_type || "").toLowerCase().includes("cpf") && (
+            <>
+              <FieldRow label={<AlertLabel text="Withdrawal eligible" />} value={fmtDate(a.withdrawal_date)} />
+              <FieldRow label="Est. monthly payout" value={fmtMoney(a.estimated_monthly_payout)} />
+            </>
+          )}
           <FieldRow label="Last updated" value={fmtDate(a.last_updated)} />
         </Section>
 
@@ -201,6 +209,7 @@ function SavingsRow({ a, onStatus, onDelete }: { a: any; onStatus: (s: any) => v
         </div>
       </RecordCard>
       {edit.element}
+      {dup.element}
     </>
   );
 }
