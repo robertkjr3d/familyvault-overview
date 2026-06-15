@@ -31,7 +31,36 @@ export function useEditRecord(
   };
 }
 
-/** Standalone pencil button (rarely needed — RecordCard already shows one). */
+/**
+ * Opens the Add form pre-filled with a copy of an existing record
+ * (id/timestamps stripped) so the user can review/edit before saving
+ * as a brand-new record.
+ *
+ * Usage:
+ *   const dup = useDuplicateRecord("insurance_policies", p);
+ *   <RecordCard onDuplicate={dup.open} ... />
+ *   {dup.element}
+ */
+export function useDuplicateRecord(
+  configKey: keyof typeof recordConfigs,
+  row: Record<string, any> | null | undefined,
+) {
+  const [open, setOpen] = useState(false);
+  const { id, created_at, updated_at, ...rest } = row ?? {};
+  return {
+    open: () => setOpen(true),
+    element: row ? (
+      <RecordFormSheet
+        configKey={configKey}
+        open={open}
+        onOpenChange={setOpen}
+        initial={rest}
+      />
+    ) : null,
+  };
+}
+
+
 export function EditRecordButton({
   configKey, row,
 }: { configKey: keyof typeof recordConfigs; row: Record<string, any> }) {
