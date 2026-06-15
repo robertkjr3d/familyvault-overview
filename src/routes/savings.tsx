@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
+import { isFdLikeAccountType, isCpfAccountType } from "@/lib/options";
 import { ReminderButton } from "@/components/loan/ReminderButton";
 import { RemindersList } from "@/components/loan/RemindersList";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
@@ -27,7 +28,17 @@ export const Route = createFileRoute("/savings")({
   head: () => ({ meta: [{ title: "Savings — FamilyVault" }] }),
 });
 
-const GROUP_ORDER = ["Fixed Deposits", "Fixed Deposit", "FD", "Banks", "Bank Accounts", "SRS", "CPF"];
+const GROUP_ORDER = [
+  "Savings Account",
+  "Fixed Deposit (FD)",
+  "T-Bills / Singapore Savings Bonds",
+  "SRS (Supplementary Retirement Scheme)",
+  "CPF-Ordinary Account (OA)",
+  "CPF-Special Account (SA)",
+  "CPF-Medisave Account (MA)",
+  "CPF-Retirement Account (RA)",
+  "Other",
+];
 function groupRank(name: string) {
   const i = GROUP_ORDER.findIndex((g) => g.toLowerCase() === (name ?? "").toLowerCase());
   return i === -1 ? 999 : i;
@@ -93,7 +104,7 @@ function SavingsPage() {
     },
   });
 
-  const groups = Array.from(new Set(items.map((i: any) => i.group_name))).sort((a, b) => groupRank(a) - groupRank(b));
+  const groups = Array.from(new Set(items.map((i: any) => i.account_type || "Other"))).sort((a, b) => groupRank(a) - groupRank(b));
 
   return (
     <div className="space-y-4">
@@ -103,7 +114,7 @@ function SavingsPage() {
         <section key={g}>
           <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">{g}</h2>
           <div className="space-y-3">
-            {sortByStatus(items.filter((i: any) => i.group_name === g)).map((a: any) => (
+            {sortByStatus(items.filter((i: any) => (i.account_type || "Other") === g)).map((a: any) => (
               <SavingsRow
                 key={a.id}
                 a={a}
@@ -133,6 +144,8 @@ function SavingsRow({ a, onStatus, onDelete }: { a: any; onStatus: (s: any) => v
   const dup = useDuplicateRecord("savings_accounts", a);
   const stale = staleDays(a.last_updated);
   const isStale = stale != null && stale >= 30;
+  const isFD = isFdLikeAccountType(a.account_type);
+  const isCPF = isCpfAccountType(a.account_type);
   return (
     <>
       <RecordCard
@@ -165,11 +178,14 @@ function SavingsRow({ a, onStatus, onDelete }: { a: any; onStatus: (s: any) => v
         <Section title="Account">
           <FieldRow label="Balance" value={fmtMoney(a.balance)} />
           <FieldRow label="Interest rate" value={fmtPct(a.interest_rate)} />
-          <FieldRow label={<AlertLabel text="Maturity" />} value={fmtDate(a.maturity_date)} />
-          {(a.account_type || "").toLowerCase().includes("cpf") && (
+          {isFD && <FieldRow label={<AlertLabel text="Maturity" />} value={fmtDate(a.maturity_date)} />}
+          {isCPF && (
             <>
               <FieldRow label={<AlertLabel text="Withdrawal eligible" />} value={fmtDate(a.withdrawal_date)} />
               <FieldRow label="Est. monthly payout" value={fmtMoney(a.estimated_monthly_payout)} />
+              <p className="pt-1 text-[11px] text-muted-foreground">
+                Reference only — not used in the Lifetime Net Worth chart. The chart's CPF LIFE payout estimate is set under Settings.
+              </p>
             </>
           )}
           <FieldRow label="Last updated" value={fmtDate(a.last_updated)} />
