@@ -11,7 +11,7 @@ import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
 import { sortByStatus } from "@/lib/sort";
 import { fmtMoney, fmtDate, fmtPct } from "@/lib/format";
 import { HashHighlight } from "@/components/HashHighlight";
-import { useEditRecord } from "@/components/EditRecordButton";
+import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
 import { PROPERTY_PURPOSE_LABEL } from "@/lib/options";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { NotesEditor } from "@/components/loan/NotesEditor";
@@ -130,6 +130,7 @@ function AlertLabel({ text }: { text: string }) {
 
 function PropertyRow({ p, loans, onStatus, onDelete }: { p: any; loans: any[]; onStatus: (s: any) => void; onDelete: () => void }) {
   const edit = useEditRecord("properties", p);
+  const dup = useDuplicateRecord("properties", p);
   const linkedLoan = loans.find((l: any) => l.property_id === p.id);
   const hasMismatch = linkedLoan && Number(linkedLoan.monthly_payment) !== Number(p.monthly_payment);
   const costs = totalCosts(p);
@@ -154,6 +155,7 @@ function PropertyRow({ p, loans, onStatus, onDelete }: { p: any; loans: any[]; o
         onStatusChange={onStatus}
         action={p.action_note}
         onEdit={edit.open}
+        onDuplicate={dup.open}
         onDelete={onDelete}
         hasNotes={!!p.notes}
         updatedAt={p.updated_at}
@@ -229,6 +231,7 @@ function PropertyRow({ p, loans, onStatus, onDelete }: { p: any; loans: any[]; o
         </div>
       </RecordCard>
       {edit.element}
+      {dup.element}
     </HashHighlight>
   );
 }
