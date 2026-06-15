@@ -14,6 +14,27 @@ export const BANKS = [
   "Maybank","Bank of China","CIMB","RHB","Other",
 ];
 
+export const SAVINGS_ACCOUNT_TYPES = [
+  "Savings Account",
+  "Fixed Deposit (FD)",
+  "CPF-Ordinary Account (OA)",
+  "CPF-Special Account (SA)",
+  "CPF-Medisave Account (MA)",
+  "CPF-Retirement Account (RA)",
+  "SRS (Supplementary Retirement Scheme)",
+  "T-Bills / Singapore Savings Bonds",
+  "Other",
+];
+
+const FD_LIKE_TYPES = new Set(["Fixed Deposit (FD)", "T-Bills / Singapore Savings Bonds"]);
+export function isFdLikeAccountType(accountType: string | null | undefined): boolean {
+  return FD_LIKE_TYPES.has(accountType ?? "");
+}
+
+export function isCpfAccountType(accountType: string | null | undefined): boolean {
+  return (accountType ?? "").startsWith("CPF-");
+}
+
 export const INSURANCE_FREQ = [
   { value: "annual", label: "Annual" },
   { value: "semi-annual", label: "Semi-Annual" },
