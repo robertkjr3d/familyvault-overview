@@ -1,5 +1,6 @@
 import {
   CURRENCIES, BANKS, PROPERTY_PURPOSE, INSURANCE_FREQ, INSURANCE_CATEGORIES, INVESTMENT_TYPES,
+  SAVINGS_ACCOUNT_TYPES, isFdLikeAccountType, isCpfAccountType,
 } from "./options";
 
 export type FieldType = "text" | "number" | "date" | "select" | "textarea" | "member" | "chips" | "property_select";
@@ -158,13 +159,13 @@ export const recordConfigs: Record<string, RecordConfig> = {
     fields: [
       { key: "institution", label: "Institution", type: "text", required: true, placeholder: "e.g. DBS, OCBC" },
       { key: "member_id", label: "Owner", type: "member" },
-      { key: "account_type", label: "Account type", type: "text", placeholder: "e.g. eSavers, FD, SRS, CPF" },
+      { key: "account_type", label: "Account type", type: "select", options: SAVINGS_ACCOUNT_TYPES, required: true },
       { key: "account_number", label: "Account number", type: "text" },
       { key: "balance", label: "Balance", type: "number", money: true },
       { key: "interest_rate", label: "Interest rate %", type: "number" },
-      { key: "maturity_date", label: "Maturity date (for FDs)", type: "date" },
-      { key: "withdrawal_date", label: "Withdrawal eligible date", type: "date", showIf: (v) => (v.account_type || "").toLowerCase().includes("cpf") },
-      { key: "estimated_monthly_payout", label: "Estimated monthly payout", type: "number", money: true, showIf: (v) => (v.account_type || "").toLowerCase().includes("cpf") },
+      { key: "maturity_date", label: "Maturity date", type: "date", showIf: (v) => isFdLikeAccountType(v.account_type) },
+      { key: "withdrawal_date", label: "Withdrawal eligible date", type: "date", showIf: (v) => isCpfAccountType(v.account_type) },
+      { key: "estimated_monthly_payout", label: "Estimated monthly payout (reference only)", type: "number", money: true, showIf: (v) => isCpfAccountType(v.account_type) },
       { key: "last_updated", label: "Balance as of", type: "date" },
       { key: "note", label: "Notes", type: "textarea" },
     ],
