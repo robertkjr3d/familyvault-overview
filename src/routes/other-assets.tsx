@@ -9,7 +9,7 @@ import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
 import { sortByStatus } from "@/lib/sort";
 import { fmtMoney, fmtDate } from "@/lib/format";
 import { HashHighlight } from "@/components/HashHighlight";
-import { useEditRecord } from "@/components/EditRecordButton";
+import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { NotesEditor } from "@/components/loan/NotesEditor";
 import { HistoryLog } from "@/components/loan/HistoryLog";
@@ -85,6 +85,7 @@ function OtherAssetsPage() {
 
 function AssetRow({ asset, onStatus, onDelete }: { asset: any; onStatus: (s: any) => void; onDelete: () => void }) {
   const edit = useEditRecord("other_assets", asset);
+  const dup = useDuplicateRecord("other_assets", asset);
   return (
     <HashHighlight id={`record-${asset.id}`}>
       <RecordCard
@@ -94,6 +95,7 @@ function AssetRow({ asset, onStatus, onDelete }: { asset: any; onStatus: (s: any
         onStatusChange={onStatus}
         action={asset.action}
         onEdit={edit.open}
+        onDuplicate={dup.open}
         onDelete={onDelete}
         hasNotes={!!asset.notes}
         updatedAt={asset.updated_at}
@@ -136,6 +138,7 @@ function AssetRow({ asset, onStatus, onDelete }: { asset: any; onStatus: (s: any
         </div>
       </RecordCard>
       {edit.element}
+      {dup.element}
     </HashHighlight>
   );
 }
