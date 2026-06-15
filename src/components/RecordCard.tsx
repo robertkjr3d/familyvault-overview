@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ChevronDown, Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, Copy, Pencil, Trash2 } from "lucide-react";
 import { StatusToggle, type Status } from "./StatusToggle";
 import { MemberTag } from "./MemberTag";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,7 @@ type Props = {
   children?: ReactNode;
   onEdit?: () => void;
   onDelete?: () => void;
+  onDuplicate?: () => void;
   defaultOpen?: boolean;
   highlight?: boolean;
   persistKey?: string;
@@ -39,7 +40,7 @@ function readPersisted(key: string | undefined, def: boolean): boolean {
 
 export function RecordCard({
   title, subtitle, memberId, status, onStatusChange, action, rightMeta, children,
-  onEdit, onDelete, defaultOpen = false, highlight, persistKey, hasNotes, updatedAt, createdAt,
+  onEdit, onDelete, onDuplicate, defaultOpen = false, highlight, persistKey, hasNotes, updatedAt, createdAt,
 }: Props) {
   const [open, setOpen] = useState(() => readPersisted(persistKey, defaultOpen));
 
@@ -64,6 +65,15 @@ export function RecordCard({
             aria-label="Edit"
           >
             <Pencil className="h-[18px] w-[18px]" />
+          </button>
+        )}
+        {onDuplicate && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
+            className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-background/60 hover:text-foreground"
+            aria-label="Duplicate"
+          >
+            <Copy className="h-[18px] w-[18px]" />
           </button>
         )}
         {onDelete && (
