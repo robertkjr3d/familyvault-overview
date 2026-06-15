@@ -163,6 +163,8 @@ export const recordConfigs: Record<string, RecordConfig> = {
       { key: "balance", label: "Balance", type: "number", money: true },
       { key: "interest_rate", label: "Interest rate %", type: "number" },
       { key: "maturity_date", label: "Maturity date (for FDs)", type: "date" },
+      { key: "withdrawal_date", label: "Withdrawal eligible date", type: "date", showIf: (v) => (v.account_type || "").toLowerCase().includes("cpf") },
+      { key: "estimated_monthly_payout", label: "Estimated monthly payout", type: "number", money: true, showIf: (v) => (v.account_type || "").toLowerCase().includes("cpf") },
       { key: "last_updated", label: "Balance as of", type: "date" },
       { key: "note", label: "Notes", type: "textarea" },
     ],
@@ -204,4 +206,3 @@ export const recordConfigs: Record<string, RecordConfig> = {
     ],
   },
 };
-
