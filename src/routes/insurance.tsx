@@ -10,7 +10,7 @@ import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
 import { sortByStatus } from "@/lib/sort";
 import { fmtMoney, fmtDate } from "@/lib/format";
 import { HashHighlight } from "@/components/HashHighlight";
-import { useEditRecord } from "@/components/EditRecordButton";
+import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
 import { freqLabel } from "@/lib/options";
 import { DocumentsList } from "@/components/loan/DocumentsList";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
@@ -97,6 +97,7 @@ function AlertLabel({ text }: { text: string }) {
 
 function InsuranceRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) => void; onDelete: () => void }) {
   const edit = useEditRecord("insurance_policies", p);
+  const dup = useDuplicateRecord("insurance_policies", p);
   return (
     <HashHighlight id={`record-${p.id}`}>
       <RecordCard
@@ -108,6 +109,7 @@ function InsuranceRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) =>
         action={p.action}
         onEdit={edit.open}
         onDelete={onDelete}
+        onDuplicate={dup.open}
        hasNotes={!!p.notes}
         updatedAt={p.updated_at}
         createdAt={p.created_at}
@@ -159,6 +161,7 @@ function InsuranceRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) =>
         </div>
       </RecordCard>
       {edit.element}
+      {dup.element}
     </HashHighlight>
   );
 }
