@@ -10,7 +10,7 @@ import { sortByStatus } from "@/lib/sort";
 import { fmtMoney, fmtPct, fmtDate } from "@/lib/format";
 import { freqLabel } from "@/lib/options";
 import { HashHighlight } from "@/components/HashHighlight";
-import { useEditRecord } from "@/components/EditRecordButton";
+import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { NotesEditor } from "@/components/loan/NotesEditor";
 import { HistoryLog } from "@/components/loan/HistoryLog";
@@ -85,6 +85,7 @@ function InvestmentsPage() {
 
 function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: any) => void; onDelete: () => void }) {
   const edit = useEditRecord("investments", inv);
+  const dup = useDuplicateRecord("investments", inv);
   const gain = (inv.current_value || 0) - (inv.cost_basis || 0);
   const daysSinceUpdate = inv.updated_at
     ? Math.floor((Date.now() - new Date(inv.updated_at).getTime()) / (1000 * 60 * 60 * 24))
@@ -103,6 +104,7 @@ function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: an
         onStatusChange={onStatus}
         action={inv.strategy}
         onEdit={edit.open}
+        onDuplicate={dup.open}
         onDelete={onDelete}
        hasNotes={!!inv.notes}
         updatedAt={inv.updated_at}
@@ -160,6 +162,7 @@ function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: an
         </div>
       </RecordCard>
       {edit.element}
+      {dup.element}
     </HashHighlight>
   );
 }
