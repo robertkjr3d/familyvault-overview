@@ -129,12 +129,13 @@ function InsuranceRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) =>
           <FieldRow label={<AlertLabel text="End" />} value={fmtDate(p.end_date)} />
           <FieldRow label={<AlertLabel text="Next due" />} value={fmtDate(p.next_due_date)} />
         </Section>
-        {(p.payout_amount || p.payout_start_date || p.payout_end_date) && (
+        {(p.payout_amount || p.payout_start_date || p.payout_end_date || p.beneficiary) && (
           <Section title="Payout">
             {p.payout_amount && <FieldRow label="Payout amount (est.)" value={fmtMoney(p.payout_amount, p.currency)} />}
             {p.payout_start_date && <FieldRow label="Payout start" value={fmtDate(p.payout_start_date)} />}
             {p.payout_frequency && <FieldRow label="Payout frequency" value={freqLabel(p.payout_frequency)} />}
             {p.payout_end_date && <FieldRow label="Payout end" value={fmtDate(p.payout_end_date)} />}
+            {p.beneficiary && <FieldRow label="Beneficiary" value={p.beneficiary} />}
           </Section>
         )}
 
