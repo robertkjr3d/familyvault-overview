@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useMembers } from "@/hooks/useMembers";
 import { useAppStore } from "@/lib/store";
 import { Trash2 } from "lucide-react";
+import { fmtMoney } from "@/lib/format";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -40,6 +41,7 @@ function SettingsPage() {
   const { data: members = [] } = useMembers();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const setShareOpen = useAppStore((s) => s.setShareOpen);
+  const [generatingEstateDoc, setGeneratingEstateDoc] = useState(false);
 
   const { data: settings } = useQuery({
     queryKey: ["app_settings", activeHouseholdId],
@@ -152,6 +154,219 @@ function SettingsPage() {
     a.href = url; a.download = `familyvault-export-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function exportAssetSummaryDocx() {
+    if (!activeHouseholdId) {
+      toast.error("Select a household first.");
+      return;
+    }
+    setGeneratingEstateDoc(true);
+    try {
+      const docxLib: any = await import("https://esm.sh/docx@9");
+      const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType } = docxLib;
+
+      const filter = (q: any) => q.eq("household_id", activeHouseholdId);
+      const [propsRes, loansRes, insRes, invRes, savRes, otherRes] = await Promise.all([
+        filter(supabase.from("properties").select("*")),
+        filter(supabase.from("loans").select("*")),
+        filter(supabase.from("insurance_policies").select("*")),
+        filter(supabase.from("investments").select("*")),
+        filter(supabase.from("savings_accounts").select("*")),
+        filter(supabase.from("other_assets").select("*")),
+      ]);
+
+      const properties = propsRes.data ?? [];
+      const loans = loansRes.data ?? [];
+      const insurance = insRes.data ?? [];
+      const investments = invRes.data ?? [];
+      const savings = savRes.data ?? [];
+      const otherAssets = otherRes.data ?? [];
+
+      const memberById = new Map(members.map((m: any) => [m.id, m]));
+      const ownerLabel = (memberId: string | null | undefined) => {
+        if (!memberId) return "Joint / Household";
+        const m = memberById.get(memberId);
+        return m ? `${m.emoji ? m.emoji + " " : ""}${m.name}` : "Joint / Household";
+      };
+
+      // fmtMoney only renders $ or £; for non-SGD currencies, append the
+      // currency code explicitly so a will-attachment isn't ambiguous.
+      const fmtMoneyCcy = (n: number | null | undefined, ccy?: string | null) => {
+        const base = fmtMoney(n, ccy === "GBP" ? "GBP" : "SGD");
+        if (n == null || isNaN(Number(n))) return base;
+        if (ccy && ccy !== "SGD" && ccy !== "GBP") return `${base} ${ccy}`;
+        return base;
+      };
+
+      // Build owner order: each member in sort order, then "Joint / Household" last
+      const ownerKeys: (string | null)[] = [...members.map((m: any) => m.id), null];
+
+      const cell = (text: string, opts: any = {}) =>
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text, ...opts })] })],
+          width: { size: opts.width ?? 25, type: WidthType.PERCENTAGE },
+        });
+
+      const headerRow = (labels: string[]) =>
+        new TableRow({
+          children: labels.map((l) => cell(l, { bold: true, width: 100 / labels.length })),
+        });
+
+      const dataRow = (values: string[]) =>
+        new TableRow({
+          children: values.map((v) => cell(v, { width: 100 / values.length })),
+        });
+
+      const children: any[] = [];
+
+      // --- Title & disclaimer ---
+      children.push(new Paragraph({ text: "Asset & Liability Summary", heading: HeadingLevel.TITLE }));
+      children.push(new Paragraph({
+        children: [new TextRun({ text: `Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} via FamilyVault`, italics: true, color: "666666" })],
+      }));
+      children.push(new Paragraph({ text: "" }));
+      children.push(new Paragraph({
+        children: [new TextRun({
+          text: "This document is a reference summary of assets and liabilities recorded in FamilyVault. It is intended to assist with estate planning discussions (e.g. as an attachment alongside a will) and does NOT constitute a legal will or binding instruction. Always consult a qualified lawyer or financial advisor for legal estate planning.",
+          italics: true, color: "999999",
+        })],
+      }));
+      children.push(new Paragraph({ text: "" }));
+
+      // --- Overall net worth summary ---
+      const totalAssetsVal = properties.reduce((s: number, p: any) => s + (Number(p.current_value) || 0), 0)
+        + investments.reduce((s: number, i: any) => s + (Number(i.current_value) || 0), 0)
+        + savings.reduce((s: number, a: any) => s + (Number(a.balance) || 0), 0)
+        + otherAssets.reduce((s: number, a: any) => s + (Number(a.estimated_value) || 0), 0);
+      const totalLiabilitiesVal = loans.reduce((s: number, l: any) => s + (Number(l.balance) || 0), 0);
+
+      children.push(new Paragraph({ text: "Household Summary", heading: HeadingLevel.HEADING_1 }));
+      children.push(new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: [
+          headerRow(["", "Amount (SGD)"]),
+          dataRow(["Total assets", fmtMoney(totalAssetsVal)]),
+          dataRow(["Total liabilities", fmtMoney(totalLiabilitiesVal)]),
+          dataRow(["Net worth", fmtMoney(totalAssetsVal - totalLiabilitiesVal)]),
+        ],
+      }));
+      children.push(new Paragraph({ text: "" }));
+      children.push(new Paragraph({
+        children: [new TextRun({ text: "Note: foreign-currency assets are shown in their original currency below but excluded from the SGD totals above.", italics: true, color: "999999" })],
+      }));
+      children.push(new Paragraph({ text: "" }));
+
+      // --- Per-owner sections ---
+      for (const ownerId of ownerKeys) {
+        const label = ownerLabel(ownerId);
+        const ownProps = properties.filter((p: any) => (p.member_id ?? null) === ownerId);
+        const ownLoans = loans.filter((l: any) => (l.member_id ?? null) === ownerId);
+        const ownIns = insurance.filter((p: any) => (p.member_id ?? null) === ownerId);
+        const ownInv = investments.filter((i: any) => (i.member_id ?? null) === ownerId);
+        const ownSav = savings.filter((a: any) => (a.member_id ?? null) === ownerId);
+        const ownOther = otherAssets.filter((a: any) => (a.member_id ?? null) === ownerId);
+
+        const hasAny = ownProps.length || ownLoans.length || ownIns.length || ownInv.length || ownSav.length || ownOther.length;
+        if (!hasAny) continue;
+
+        children.push(new Paragraph({ text: label, heading: HeadingLevel.HEADING_1 }));
+
+        if (ownProps.length) {
+          children.push(new Paragraph({ text: "Properties", heading: HeadingLevel.HEADING_2 }));
+          children.push(new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              headerRow(["Name", "Current value", "Beneficiary / intended for"]),
+              ...ownProps.map((p: any) => dataRow([p.name ?? "—", fmtMoneyCcy(p.current_value, p.currency), p.beneficiary || "—"])),
+            ],
+          }));
+          children.push(new Paragraph({ text: "" }));
+        }
+
+        if (ownInv.length) {
+          children.push(new Paragraph({ text: "Investments", heading: HeadingLevel.HEADING_2 }));
+          children.push(new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              headerRow(["Name", "Type", "Current value"]),
+              ...ownInv.map((i: any) => dataRow([i.name ?? "—", i.group_name ?? "—", fmtMoney(i.current_value)])),
+            ],
+          }));
+          children.push(new Paragraph({ text: "" }));
+        }
+
+        if (ownSav.length) {
+          children.push(new Paragraph({ text: "Savings & CPF", heading: HeadingLevel.HEADING_2 }));
+          children.push(new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              headerRow(["Institution", "Account type", "Balance"]),
+              ...ownSav.map((a: any) => dataRow([a.institution ?? "—", a.account_type ?? "—", fmtMoney(a.balance)])),
+            ],
+          }));
+          children.push(new Paragraph({ text: "" }));
+        }
+
+        if (ownOther.length) {
+          children.push(new Paragraph({ text: "Other Assets", heading: HeadingLevel.HEADING_2 }));
+          children.push(new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              headerRow(["Name", "Category", "Estimated value"]),
+              ...ownOther.map((a: any) => dataRow([a.name ?? "—", a.category ?? "—", fmtMoney(a.estimated_value)])),
+            ],
+          }));
+          children.push(new Paragraph({ text: "" }));
+        }
+
+        if (ownIns.length) {
+          children.push(new Paragraph({ text: "Insurance Policies", heading: HeadingLevel.HEADING_2 }));
+          children.push(new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              headerRow(["Policy", "Provider", "Sum assured", "Beneficiary"]),
+              ...ownIns.map((p: any) => dataRow([p.name ?? "—", p.provider || "—", fmtMoneyCcy(p.sum_assured, p.currency), p.beneficiary || "—"])),
+            ],
+          }));
+          children.push(new Paragraph({ text: "" }));
+        }
+
+        if (ownLoans.length) {
+          children.push(new Paragraph({ text: "Liabilities (Loans)", heading: HeadingLevel.HEADING_2 }));
+          children.push(new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              headerRow(["Bank", "Purpose", "Outstanding balance"]),
+              ...ownLoans.map((l: any) => dataRow([l.bank ?? "—", l.purpose || "—", fmtMoney(l.balance)])),
+            ],
+          }));
+          children.push(new Paragraph({ text: "" }));
+        }
+      }
+
+      const doc = new Document({
+        sections: [{
+          properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } },
+          children,
+        }],
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `familyvault-asset-summary-${new Date().toISOString().slice(0, 10)}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Asset summary downloaded");
+    } catch (err: any) {
+      toast.error(err.message || "Could not generate document");
+    } finally {
+      setGeneratingEstateDoc(false);
+    }
   }
 
   const currency = settings?.currency ?? "SGD";
@@ -432,6 +647,9 @@ function SettingsPage() {
         <div className="flex flex-col gap-2">
           <button onClick={exportCsv} className="rounded-lg border border-border px-3 py-2 text-sm font-semibold">
             Export all data as CSV
+          </button>
+          <button onClick={exportAssetSummaryDocx} disabled={generatingEstateDoc} className="rounded-lg border border-border px-3 py-2 text-sm font-semibold">
+            {generatingEstateDoc ? "Generating…" : "Export Asset & Liability Summary (.docx)"}
           </button>
           <button onClick={clearDemo} className="rounded-lg border border-urgent/40 px-3 py-2 text-sm font-semibold text-urgent">
             Clear all demo data
