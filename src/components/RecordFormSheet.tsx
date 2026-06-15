@@ -43,9 +43,24 @@ export function RecordFormSheet({
     },
   });
 
+  // Existing records of this table, used to compute "most common value"
+  // smart defaults (owner, currency, bank) for new records.
+  const { data: existingRecords = [] } = useQuery({
+    queryKey: [cfg.queryKey, "smart-defaults", activeHouseholdId],
+    enabled: !!activeHouseholdId && !isEdit,
+    queryFn: async () => {
+      if (!activeHouseholdId) return [];
+      const { data, error } = await supabase.from(cfg.table as any).select("*").eq("household_id", activeHouseholdId);
+      if (error) return [];
+      return data ?? [];
+    },
+  });
+
+  const smartDefaults = isEdit ? {} : computeSmartDefaults(cfg.fields, existingRecords);
+
   useEffect(() => {
-    if (open) setValues(seed(cfg.fields, initial));
-  }, [open, initial, cfg]);
+    if (open) setValues(seed(cfg.fields, initial, smartDefaults));
+  }, [open, initial, cfg, JSON.stringify(smartDefaults)]);
 
   function setVal(k: string, v: any) {
     setValues((s) => ({ ...s, [k]: v }));
@@ -313,7 +328,7 @@ function FieldInput({ f, value, onChange, members, properties, currency }: {
   return <Input value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder={f.placeholder} />;
 }
 
-function seed(fields: FieldDef[], initial?: Record<string, any>) {
+function seed(fields: FieldDef[], initial?: Record<string, any>, smartDefaults?: Record<string, any>) {
   const v: Record<string, any> = {};
   for (const f of fields) {
     const init = initial?.[f.key];
@@ -321,6 +336,8 @@ function seed(fields: FieldDef[], initial?: Record<string, any>) {
       v[f.key] = Array.isArray(init) ? init : (Array.isArray(f.default) ? f.default : []);
     } else if (init !== undefined && init !== null) {
       v[f.key] = init;
+    } else if (smartDefaults?.[f.key] !== undefined) {
+      v[f.key] = smartDefaults[f.key];
     } else if (f.default !== undefined) {
       v[f.key] = f.default;
     } else {
@@ -328,4 +345,33 @@ function seed(fields: FieldDef[], initial?: Record<string, any>) {
     }
   }
   return v;
+}
+
+// Computes "most common existing value" defaults for owner, currency, and bank
+// fields, based on the household's existing records in this table. Falls back
+// to nothing (undefined) if there's no data yet — seed() then uses f.default.
+const SMART_DEFAULT_KEYS = new Set(["member_id", "currency", "bank", "mortgage_bank"]);
+
+function mostCommon(values: any[]): any {
+  const counts = new Map<any, number>();
+  for (const v of values) {
+    if (v === null || v === undefined || v === "") continue;
+    counts.set(v, (counts.get(v) ?? 0) + 1);
+  }
+  let best: any; let bestCount = 0;
+  for (const [v, c] of counts) {
+    if (c > bestCount) { best = v; bestCount = c; }
+  }
+  return best;
+}
+
+function computeSmartDefaults(fields: FieldDef[], records: Record<string, any>[]): Record<string, any> {
+  if (!records.length) return {};
+  const result: Record<string, any> = {};
+  for (const f of fields) {
+    if (!SMART_DEFAULT_KEYS.has(f.key)) continue;
+    const common = mostCommon(records.map((r) => r[f.key]));
+    if (common !== undefined) result[f.key] = common;
+  }
+  return result;
 }
