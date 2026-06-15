@@ -19,7 +19,7 @@ import { ReminderButton } from "@/components/loan/ReminderButton";
 import { RemindersList } from "@/components/loan/RemindersList";
 import { monthlyPayment, remainingBalance, monthsSince } from "@/lib/loanMath";
 import { useToday } from "@/lib/today";
-import { useEditRecord } from "@/components/EditRecordButton";
+import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
 
 export const Route = createFileRoute("/loans")({
   component: LoansPage,
@@ -77,6 +77,7 @@ function AlertLabel({ text }: { text: string }) {
 
 function LoanRow({ l, today, onStatus, onDelete }: { l: any; today: Date; onStatus: (s: any) => void; onDelete: () => void }) {
   const edit = useEditRecord("loans", l);
+  const dup = useDuplicateRecord("loans", l);
   const principal = Number(l.original_amount ?? l.balance ?? 0);
   const rate = Number(l.rate ?? 0);
   const term = Number(l.term_years ?? 0);
@@ -99,6 +100,7 @@ function LoanRow({ l, today, onStatus, onDelete }: { l: any; today: Date; onStat
         onStatusChange={onStatus}
         action={actionLabel}
         onEdit={edit.open}
+        onDuplicate={dup.open}
         onDelete={onDelete}
         hasNotes={!!l.notes}
         updatedAt={l.updated_at}
@@ -154,6 +156,7 @@ function LoanRow({ l, today, onStatus, onDelete }: { l: any; today: Date; onStat
         </div>
       </RecordCard>
       {edit.element}
+      {dup.element}
     </HashHighlight>
   );
 }
