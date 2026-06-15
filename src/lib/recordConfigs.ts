@@ -70,6 +70,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
       // 🎯 Strategy & Action
       { key: "strategy", label: "Investment strategy", type: "text", placeholder: "e.g. Capital appreciation at 5% p.a., sell by 2028", section: "🎯 Strategy & Action" },
       { key: "action_note", label: "Action", type: "text", placeholder: "e.g. Ask UOB for repricing rate May 2026", section: "🎯 Strategy & Action" },
+      { key: "beneficiary", label: "Beneficiary / intended for", type: "text", placeholder: "e.g. Split equally between Aza and Leslie", section: "🎯 Strategy & Action" },
     ],
   },
 
@@ -122,6 +123,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
       { key: "payout_start_date", label: "Payout start date", type: "date", section: "💰 Payout" },
       { key: "payout_frequency", label: "Payout frequency", type: "select", options: INSURANCE_FREQ, section: "💰 Payout" },
       { key: "payout_end_date", label: "Payout end date", type: "date", section: "💰 Payout" },
+      { key: "beneficiary", label: "Beneficiary", type: "text", placeholder: "e.g. Leslie (spouse)", section: "💰 Payout" },
 
       // 🎯 Action
       { key: "action", label: "Action", type: "text", placeholder: "e.g. Renew before Mar 2027", section: "🎯 Action" },
