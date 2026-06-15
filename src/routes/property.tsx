@@ -175,6 +175,7 @@ function PropertyRow({ p, loans, onStatus, onDelete }: { p: any; loans: any[]; o
       >
         <Section title="Strategy">
           <p className="text-sm text-foreground/80">{p.strategy || "—"}</p>
+          {p.beneficiary && <FieldRow label="Beneficiary / intended for" value={p.beneficiary} />}
         </Section>
         <Section title="Financials">
           <FieldRow label="Purchase price" value={fmtMoney(p.purchase_price, p.currency)} />
