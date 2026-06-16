@@ -248,7 +248,7 @@ export function LifetimeChart({
       for (const ins of insurance) {
         const insHref = `/insurance#record-${ins.id}`;
         const insStart = ins.start_date ? new Date(ins.start_date).getFullYear() : startYear;
-        const insEnd = ins.end_date ? new Date(ins.end_date).getFullYear() : startYear + 40;
+        const insEnd = ins.end_date ? new Date(ins.end_date).getFullYear() : startYear + 70;
         if (y >= insStart && y <= insEnd) {
           const premium = insuranceAnnual(ins);
           annualOut += premium;
@@ -256,7 +256,7 @@ export function LifetimeChart({
         }
         if (ins.payout_amount && ins.payout_start_date) {
           const payoutStartYear = new Date(ins.payout_start_date).getFullYear();
-          const payoutEndYear = ins.payout_end_date ? new Date(ins.payout_end_date).getFullYear() : payoutStartYear;
+          const payoutEndYear = ins.payout_end_date ? new Date(ins.payout_end_date).getFullYear() : startYear + 70;
           const pFreq = (ins.payout_frequency || "one-off").toLowerCase();
           const isRecurring = pFreq.includes("month") || pFreq.includes("annual") || pFreq.includes("year") || pFreq.includes("quart") || pFreq.includes("semi") || pFreq.includes("half");
           const annualPayoutAmt = isRecurring
@@ -285,7 +285,7 @@ export function LifetimeChart({
 
         if (inv.premium_amount && inv.premium_start_date) {
           const premStartYear = new Date(inv.premium_start_date).getFullYear();
-          const premEndYear = inv.premium_end_date ? new Date(inv.premium_end_date).getFullYear() : premStartYear;
+          const premEndYear = inv.premium_end_date ? new Date(inv.premium_end_date).getFullYear() : startYear + 70;
           if (y >= premStartYear && y <= premEndYear) {
             const premium = investmentPremiumAnnual(inv);
             annualOut += premium;
@@ -296,7 +296,7 @@ export function LifetimeChart({
 
         if (inv.payout_amount && inv.payout_start_date) {
           const payoutStartYear = new Date(inv.payout_start_date).getFullYear();
-          const payoutEndYear = inv.payout_end_date ? new Date(inv.payout_end_date).getFullYear() : payoutStartYear;
+          const payoutEndYear = inv.payout_end_date ? new Date(inv.payout_end_date).getFullYear() : startYear + 70;
           const pFreq = (inv.payout_frequency || "one-off").toLowerCase();
           const isRecurring = pFreq.includes("month") || pFreq.includes("annual") || pFreq.includes("year") || pFreq.includes("quart") || pFreq.includes("semi") || pFreq.includes("half");
           const annualPayoutAmt = isRecurring
