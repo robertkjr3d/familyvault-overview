@@ -47,20 +47,21 @@ function Dashboard() {
     enabled: !!activeHouseholdId,
     queryFn: async () => {
       if (!activeHouseholdId) {
-        return { properties: [], loans: [], insurance: [], investments: [], savings: [] };
+        return { properties: [], loans: [], insurance: [], investments: [], savings: [], otherAssets: [] };
       }
       const filter = (q: any) => {
         let scoped = q.eq("household_id", activeHouseholdId);
         if (memberFilter !== "all") scoped = scoped.eq("member_id", memberFilter);
         return scoped;
       };
-      const [props, loans, insurance, invs, savings, inventoryItems] = await Promise.all([
+      const [props, loans, insurance, invs, savings, inventoryItems, otherAssets] = await Promise.all([
         filter(supabase.from("properties").select("*")),
         filter(supabase.from("loans").select("*")),
         filter(supabase.from("insurance_policies").select("*")),
         filter(supabase.from("investments").select("*")),
         filter(supabase.from("savings_accounts").select("*")),
         filter(supabase.from("inventory_items").select("*")),
+        filter(supabase.from("other_assets").select("*")),
       ]);
       return {
         properties: props.data ?? [],
@@ -69,6 +70,7 @@ function Dashboard() {
         investments: invs.data ?? [],
         savings: savings.data ?? [],
         inventoryItems: inventoryItems.data ?? [],
+        otherAssets: otherAssets.data ?? [],
       };
     },
   });
@@ -126,17 +128,21 @@ function Dashboard() {
   const investments = data?.investments ?? [];
   const savings = data?.savings ?? [];
   const inventoryItems = data?.inventoryItems ?? [];
+  const otherAssets = data?.otherAssets ?? [];
 
   const propertyValue = properties.reduce((s: number, p: any) => s + (Number(p.current_value) || 0), 0);
   const investmentsValue = investments.reduce((s: number, i: any) => s + (Number(i.current_value) || 0), 0);
   const savingsValue = savings.reduce((s: number, a: any) => s + (Number(a.balance) || 0), 0);
-  const totalAssets = propertyValue + investmentsValue + savingsValue;
+  const otherAssetsValue = otherAssets.reduce((s: number, a: any) => s + (Number(a.estimated_value) || 0), 0);
+  const totalAssets = propertyValue + investmentsValue + savingsValue + otherAssetsValue;
   const totalLiabilities = loans.reduce((s: number, l: any) => s + (Number(l.balance) || 0), 0);
   const netWorth = totalAssets - totalLiabilities;
 
   const salaryIncome = Number(appSettings?.monthly_income) || 0;
   const rentalIncome = properties.reduce((s: number, p: any) => s + (Number(p.monthly_rent) || 0), 0);
-  const monthlyIn = salaryIncome + rentalIncome;
+  const insurancePayoutIn = insurance.reduce((s: number, p: any) => s + insurancePayoutMonthly(p), 0);
+  const investmentPayoutIn = investments.reduce((s: number, inv: any) => s + investmentPayoutMonthly(inv), 0);
+  const monthlyIn = salaryIncome + rentalIncome + insurancePayoutIn + investmentPayoutIn;
 
   function insuranceMonthly(p: any): number {
     const premium = Number(p.premium) || 0;
@@ -163,6 +169,51 @@ function Dashboard() {
     if (freq === "half-yearly" || freq === "semi-annual") return premium / 6;
     if (freq === "annual" || freq === "yearly" || freq === "") return premium / 12;
     return premium / 12;
+  }
+
+  // Insurance payouts currently active — treated as a monthly inflow.
+  // One-off payouts only count in the month they occur; recurring payouts count
+  // for every month between payout_start_date and payout_end_date (or indefinitely if no end date).
+  function insurancePayoutMonthly(p: any): number {
+    const amount = Number(p.payout_amount) || 0;
+    if (!amount || !p.payout_start_date) return 0;
+    const startTime = new Date(p.payout_start_date).getTime();
+    if (startTime > today.getTime()) return 0;
+    const freq = (p.payout_frequency ?? "").toLowerCase();
+    const isOneOff = freq === "one-off" || freq === "single" || freq === "";
+    if (isOneOff) {
+      // Only counts as "this month's" inflow during the actual payout month/year
+      const payoutDate = new Date(p.payout_start_date);
+      return payoutDate.getFullYear() === today.getFullYear() && payoutDate.getMonth() === today.getMonth() ? amount : 0;
+    }
+    if (p.payout_end_date && new Date(p.payout_end_date).getTime() < today.getTime()) return 0;
+    if (freq === "monthly") return amount;
+    if (freq === "quarterly") return amount / 3;
+    if (freq === "half-yearly" || freq === "semi-annual") return amount / 6;
+    if (freq === "annual" || freq === "yearly") return amount / 12;
+    return amount / 12;
+  }
+
+  // ILP/Endowment payouts currently active — treated as a monthly inflow. Same logic as insurance payouts.
+  function investmentPayoutMonthly(inv: any): number {
+    const isILP = inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
+    if (!isILP) return 0;
+    const amount = Number(inv.payout_amount) || 0;
+    if (!amount || !inv.payout_start_date) return 0;
+    const startTime = new Date(inv.payout_start_date).getTime();
+    if (startTime > today.getTime()) return 0;
+    const freq = (inv.payout_frequency ?? "").toLowerCase();
+    const isOneOff = freq === "one-off" || freq === "single" || freq === "";
+    if (isOneOff) {
+      const payoutDate = new Date(inv.payout_start_date);
+      return payoutDate.getFullYear() === today.getFullYear() && payoutDate.getMonth() === today.getMonth() ? amount : 0;
+    }
+    if (inv.payout_end_date && new Date(inv.payout_end_date).getTime() < today.getTime()) return 0;
+    if (freq === "monthly") return amount;
+    if (freq === "quarterly") return amount / 3;
+    if (freq === "half-yearly" || freq === "semi-annual") return amount / 6;
+    if (freq === "annual" || freq === "yearly") return amount / 12;
+    return amount / 12;
   }
 
   // Properties with a linked mortgage loan should not double-count monthly_payment
@@ -252,6 +303,22 @@ function Dashboard() {
       const d = parseISO(l.reprice_date);
       if (isBefore(d, horizon90)) {
         allUpcoming.push({ date: l.reprice_date, label: `${l.bank} loan — reprice`, amount: null, member_id: l.member_id, href: "/loans", recordId: l.id, sourceType: "loan_reprice", daysLeft: daysUntil(l.reprice_date), icon: Landmark });
+      }
+    }
+    if (l.loan_end_date) {
+      const d = parseISO(l.loan_end_date);
+      if (isBefore(d, horizon90)) {
+        allUpcoming.push({ date: l.loan_end_date, label: `${l.bank} loan — fully repaid`, amount: null, member_id: l.member_id, href: "/loans", recordId: l.id, sourceType: "loan_end", daysLeft: daysUntil(l.loan_end_date), icon: Landmark });
+      }
+    }
+  }
+
+  for (const inv of investments as any[]) {
+    const isILP = inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
+    if (isILP && inv.premium_end_date) {
+      const d = parseISO(inv.premium_end_date);
+      if (isBefore(d, horizon90)) {
+        allUpcoming.push({ date: inv.premium_end_date, label: `${inv.name} — premiums end`, amount: null, member_id: inv.member_id, href: "/investments", recordId: inv.id, sourceType: "investment_premium_end", daysLeft: daysUntil(inv.premium_end_date), icon: TrendingUp });
       }
     }
   }
@@ -470,6 +537,7 @@ function Dashboard() {
             <BreakdownRow label="Properties" value={fmtMoney(propertyValue)} />
             <BreakdownRow label="Investments" value={fmtMoney(investmentsValue)} />
             <BreakdownRow label="Savings & CPF" value={fmtMoney(savingsValue)} />
+            <BreakdownRow label="Other Assets" value={fmtMoney(otherAssetsValue)} />
             <div className="my-2 border-t border-dashed border-border" />
             <BreakdownRow label="Total Assets" value={fmtMoney(totalAssets)} bold />
             <div className="my-2 border-t border-border" />
@@ -573,6 +641,8 @@ function Dashboard() {
           inflowBreakdown={[
             { label: "Salary / income", value: salaryIncome },
             { label: "Rental income", value: rentalIncome },
+            { label: "Insurance payouts", value: insurancePayoutIn },
+            { label: "ILP / Endowment payouts", value: investmentPayoutIn },
           ]}
           outflowBreakdown={[
             { label: "Property costs", value: propertyOut },
