@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { HistoryLog } from "@/components/loan/HistoryLog";
 import { AddRecordFab } from "@/components/AddRecordFab";
 import { Bell } from "lucide-react";
@@ -18,6 +19,7 @@ import { NotesEditor } from "@/components/loan/NotesEditor";
 import { DocumentsList } from "@/components/loan/DocumentsList";
 import { ReminderButton } from "@/components/loan/ReminderButton";
 import { RemindersList } from "@/components/loan/RemindersList";
+import { useEntityCounts } from "@/lib/useEntityCounts";
 
 export const Route = createFileRoute("/property")({
   component: PropertyPage,
@@ -54,6 +56,7 @@ function PropertyPage() {
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("properties", "properties");
   const del = useDeleteMutation("properties", "properties", "property");
+  const counts = useEntityCounts("property", activeHouseholdId);
 
   const { data: loans = [] } = useQuery({
     queryKey: ["loans", activeHouseholdId],
@@ -94,6 +97,9 @@ function PropertyPage() {
             loans={loans}
             onStatus={(s) => status.mutate({ id: p.id, status: s })}
             onDelete={() => del.mutate(p.id)}
+            reminderCount={counts.reminderCounts[p.id] || 0}
+            historyCount={counts.historyCounts[p.id] || 0}
+            documentsCount={counts.documentsCounts[p.id] || 0}
           />
         ))}
       </div>
@@ -109,6 +115,9 @@ function PropertyPage() {
                 loans={loans}
                 onStatus={(s) => status.mutate({ id: p.id, status: s })}
                 onDelete={() => del.mutate(p.id)}
+                reminderCount={counts.reminderCounts[p.id] || 0}
+                historyCount={counts.historyCounts[p.id] || 0}
+                documentsCount={counts.documentsCounts[p.id] || 0}
               />
             ))}
           </div>
@@ -128,7 +137,12 @@ function AlertLabel({ text }: { text: string }) {
   );
 }
 
-function PropertyRow({ p, loans, onStatus, onDelete }: { p: any; loans: any[]; onStatus: (s: any) => void; onDelete: () => void }) {
+function PropertyRow({
+  p, loans, onStatus, onDelete, reminderCount, historyCount, documentsCount,
+}: {
+  p: any; loans: any[]; onStatus: (s: any) => void; onDelete: () => void;
+  reminderCount: number; historyCount: number; documentsCount: number;
+}) {
   const edit = useEditRecord("properties", p);
   const dup = useDuplicateRecord("properties", p);
   const linkedLoan = loans.find((l: any) => l.property_id === p.id);
@@ -145,6 +159,17 @@ function PropertyRow({ p, loans, onStatus, onDelete }: { p: any; loans: any[]; o
   const netYield = p.current_value ? (netRent * 12) / p.current_value * 100 : null;
   const cashFlow = netRent - (Number(p.monthly_payment) || 0);
 
+  const [cardOpen, setCardOpen] = useState(false);
+  const [section, setSection] = useState<"notes" | "history" | "documents" | null>(null);
+
+  function openSection(target: "notes" | "history" | "documents") {
+    setCardOpen(true);
+    setSection(target);
+    setTimeout(() => {
+      document.getElementById(`${target}-${p.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
+  }
+
   return (
     <HashHighlight id={`record-${p.id}`}>
       <RecordCard
@@ -160,6 +185,15 @@ function PropertyRow({ p, loans, onStatus, onDelete }: { p: any; loans: any[]; o
         hasNotes={!!p.notes}
         updatedAt={p.updated_at}
         createdAt={p.created_at}
+        open={cardOpen}
+        onOpenChange={setCardOpen}
+        reminderCount={reminderCount}
+        historyCount={historyCount}
+        documentsCount={documentsCount}
+        onNotesClick={() => openSection("notes")}
+        onReminderClick={() => openSection("notes")}
+        onHistoryClick={() => openSection("history")}
+        onDocumentsClick={() => openSection("documents")}
         rightMeta={
           <div className="text-right text-xs">
             <div className="text-muted-foreground">Value (est.)</div>
@@ -195,7 +229,7 @@ function PropertyRow({ p, loans, onStatus, onDelete }: { p: any; loans: any[]; o
           )}
           <FieldRow label="Interest rate" value={fmtPct(p.interest_rate)} />
           <FieldRow label="Rate type" value={p.rate_type ?? "—"} />
-         <FieldRow label={<AlertLabel text="Rate ends / Reprice" />} value={fmtDate(p.fixed_rate_end)} />
+          <FieldRow label={<AlertLabel text="Rate ends / Reprice" />} value={fmtDate(p.fixed_rate_end)} />
           <FieldRow label="Mortgage end date" value={p.mortgage_end_date ? fmtDate(p.mortgage_end_date) : <span className="text-muted-foreground text-xs">Not set — chart assumes ongoing</span>} />
           <FieldRow label="Monthly rent" value={fmtMoney(p.monthly_rent, p.currency)} />
         </Section>
@@ -216,20 +250,39 @@ function PropertyRow({ p, loans, onStatus, onDelete }: { p: any; loans: any[]; o
           />
         </Section>
 
-        <CollapsibleSection icon={<span>📝</span>} title="Notes">
+        <CollapsibleSection
+          id={`notes-${p.id}`}
+          icon={<span>📝</span>}
+          title="Notes"
+          open={section === "notes"}
+          onOpenChange={(o) => setSection(o ? "notes" : null)}
+        >
           <NotesEditor table="properties" queryKey="properties" id={p.id} value={p.notes} />
+          <RemindersList entityType="property" entityId={p.id} />
+          <div className="flex justify-end pt-1">
+            <ReminderButton entityType="property" entityId={p.id} />
+          </div>
         </CollapsibleSection>
-        <CollapsibleSection icon={<span>🔄</span>} title="Add an Update">
+        <CollapsibleSection
+          id={`history-${p.id}`}
+          icon={<span>🔄</span>}
+          title="Add an Update"
+          count={historyCount}
+          open={section === "history"}
+          onOpenChange={(o) => setSection(o ? "history" : null)}
+        >
           <HistoryLog entityType="property" entityId={p.id} />
         </CollapsibleSection>
-        <CollapsibleSection icon={<span>📎</span>} title="Documents">
+        <CollapsibleSection
+          id={`documents-${p.id}`}
+          icon={<span>📎</span>}
+          title="Documents"
+          count={documentsCount}
+          open={section === "documents"}
+          onOpenChange={(o) => setSection(o ? "documents" : null)}
+        >
           <DocumentsList entityType="property" entityId={p.id} />
         </CollapsibleSection>
-
-        <RemindersList entityType="property" entityId={p.id} />
-        <div className="flex justify-end pt-1">
-          <ReminderButton entityType="property" entityId={p.id} />
-        </div>
       </RecordCard>
       {edit.element}
       {dup.element}
