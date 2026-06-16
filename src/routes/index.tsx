@@ -7,9 +7,11 @@ import { MemberFilterBar } from "@/components/MemberFilterBar";
 import { MemberTag } from "@/components/MemberTag";
 import { StatusBadge } from "@/components/StatusToggle";
 import { useAppStore } from "@/lib/store";
-import { addDays, isBefore, parseISO } from "date-fns";
+import { addDays } from "date-fns";
+import { buildUpcomingItems } from "@/lib/alerts";
+import type { UpcomingItem } from "@/lib/alerts";
 import { LifetimeChart } from "@/components/LifetimeChart";
-import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check, Bell, PiggyBank, Package } from "lucide-react";
+import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check } from "lucide-react";
 import { useState, useRef } from "react";
 import { fmtPct } from "@/lib/format";
 import { HashHighlight } from "@/components/HashHighlight";
@@ -239,129 +241,13 @@ function Dashboard() {
 
   const showSettingsNudge = salaryIncome === 0 && baseExpenses === 0;
 
-  function reminderHref(entityType: string | null | undefined): string {
-    switch (entityType) {
-      case "loan":       return "/loans";
-      case "property":   return "/property";
-      case "insurance":  return "/insurance";
-      case "savings":    return "/savings";
-      case "investment": return "/investments";
-      case "health":     return "/health";
-      case "inventory":  return "/inventory";
-    case "other_asset": return "/other-assets";
-    default:           return "/";
-    }
-  }
+  const horizon90 = 90;
 
-  const horizon90 = addDays(today, 90);
-
-  type Upcoming = {
-    date: string;
-    label: string;
-    amount?: number | null;
-    member_id?: string | null;
-    href: string;
-    recordId: string;
-    sourceType: string;
-    daysLeft: number;
-    icon: any;
-  };
-
-  function daysUntil(dateStr: string) {
-    const d = parseISO(dateStr);
-    return Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  }
-
-  const allUpcoming: Upcoming[] = [];
-
-  for (const p of insurance as any[]) {
-    if (p.next_due_date) {
-      const d = parseISO(p.next_due_date);
-      if (isBefore(d, horizon90)) {
-        allUpcoming.push({ date: p.next_due_date, label: p.name, amount: p.premium, member_id: p.member_id, href: "/insurance", recordId: p.id, sourceType: "insurance_next_due", daysLeft: daysUntil(p.next_due_date), icon: Shield });
-      }
-    }
-    if (p.end_date) {
-      const d = parseISO(p.end_date);
-      if (isBefore(d, horizon90)) {
-        allUpcoming.push({ date: p.end_date, label: `${p.name} — policy ends`, amount: null, member_id: p.member_id, href: "/insurance", recordId: p.id, sourceType: "insurance_end", daysLeft: daysUntil(p.end_date), icon: Shield });
-      }
-    }
-  }
-
-  for (const p of properties as any[]) {
-    if (p.fixed_rate_end) {
-      const d = parseISO(p.fixed_rate_end);
-      if (isBefore(d, horizon90)) {
-        allUpcoming.push({ date: p.fixed_rate_end, label: `${p.name} — fixed rate ends`, amount: null, member_id: p.member_id, href: "/property", recordId: p.id, sourceType: "property_fixed_rate", daysLeft: daysUntil(p.fixed_rate_end), icon: Building2 });
-      }
-    }
-  }
-
-  for (const l of loans as any[]) {
-    if (l.reprice_date) {
-      const d = parseISO(l.reprice_date);
-      if (isBefore(d, horizon90)) {
-        allUpcoming.push({ date: l.reprice_date, label: `${l.bank} loan — reprice`, amount: null, member_id: l.member_id, href: "/loans", recordId: l.id, sourceType: "loan_reprice", daysLeft: daysUntil(l.reprice_date), icon: Landmark });
-      }
-    }
-    if (l.loan_end_date) {
-      const d = parseISO(l.loan_end_date);
-      if (isBefore(d, horizon90)) {
-        allUpcoming.push({ date: l.loan_end_date, label: `${l.bank} loan — fully repaid`, amount: null, member_id: l.member_id, href: "/loans", recordId: l.id, sourceType: "loan_end", daysLeft: daysUntil(l.loan_end_date), icon: Landmark });
-      }
-    }
-  }
-
-  for (const inv of investments as any[]) {
-    const isILP = inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
-    if (isILP && inv.premium_end_date) {
-      const d = parseISO(inv.premium_end_date);
-      if (isBefore(d, horizon90)) {
-        allUpcoming.push({ date: inv.premium_end_date, label: `${inv.name} — premiums end`, amount: null, member_id: inv.member_id, href: "/investments", recordId: inv.id, sourceType: "investment_premium_end", daysLeft: daysUntil(inv.premium_end_date), icon: TrendingUp });
-      }
-    }
-  }
-
-  for (const s of savings as any[]) {
-    if (s.maturity_date) {
-      const d = parseISO(s.maturity_date);
-      if (isBefore(d, horizon90)) {
-        allUpcoming.push({ date: s.maturity_date, label: `${s.institution} FD matures`, amount: s.balance, member_id: s.member_id, href: "/savings", recordId: s.id, sourceType: "savings_maturity", daysLeft: daysUntil(s.maturity_date), icon: PiggyBank });
-      }
-    }
-  }
-
-  for (const it of inventoryItems as any[]) {
-    if (it.warranty_date) {
-      const d = parseISO(it.warranty_date);
-      if (isBefore(d, horizon90)) {
-        allUpcoming.push({ date: it.warranty_date, label: `${it.name} — warranty/expiry`, amount: null, member_id: it.member_id, href: "/inventory", recordId: it.id, sourceType: "inventory_warranty", daysLeft: daysUntil(it.warranty_date), icon: Package });
-      }
-    }
-  }
-
-  for (const r of remindersData ?? []) {
-    const dateStr = r.remind_at.slice(0, 10);
-    const d = parseISO(dateStr);
-    if (isBefore(d, horizon90)) {
-      const href = reminderHref(r.entity_type);
-      const recordId = r.entity_id ?? r.id;
-      allUpcoming.push({
-        date: dateStr,
-        label: r.what ?? "Reminder",
-        amount: null,
-        member_id: null,
-        href,
-        recordId,
-        sourceType: "reminder",
-        daysLeft: daysUntil(dateStr),
-        icon: Bell,
-      });
-    }
-  }
-
-  allUpcoming.sort((a, b) => a.date.localeCompare(b.date));
+  const allUpcoming = buildUpcomingItems(
+    { properties, loans, insurance, investments, savings, inventoryItems, reminders: remindersData ?? [] },
+    today,
+    horizon90
+  );
 
   const upcoming = allUpcoming.filter(
     (u) => !dismissedKeys.has(`${u.sourceType}::${u.recordId}::${u.date}`)
@@ -375,7 +261,7 @@ function Dashboard() {
     ]);
   }
 
-  async function dismissItem(u: Upcoming) {
+  async function dismissItem(u: UpcomingItem) {
     if (!activeHouseholdId) return;
     const key = `${u.sourceType}::${u.recordId}`;
     if (dismissing === key) return;
