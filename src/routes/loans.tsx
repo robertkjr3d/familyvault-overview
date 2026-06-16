@@ -86,19 +86,20 @@ function LoanRow({ l, today, onStatus, onDelete }: { l: any; today: Date; onStat
     principal && term && l.start_date
       ? remainingBalance(principal, rate, term, monthsSince(l.start_date, today))
       : null;
-  const actionLabel = l.reprice_date
-    ? `Reprice by ${fmtMonth(l.reprice_date)}`
-    : l.action || null;
+  const repriceLabel = l.reprice_date ? `Reprice by ${fmtMonth(l.reprice_date)}` : null;
+  const actionLabel = l.action || null;
+  const displayedMonthlyPayment = l.monthly_payment || calcPmt;
+  const rateSubtitle = l.rate_label || (l.rate ? `${l.rate}%` : "");
 
   return (
     <HashHighlight id={`record-${l.id}`}>
       <RecordCard
         title={`${l.bank} · ${l.purpose ?? ""}`}
-        subtitle={l.rate_label || (l.rate ? `${l.rate}%` : "")}
+        subtitle={rateSubtitle}
         memberId={l.member_id}
         status={l.status}
         onStatusChange={onStatus}
-        action={actionLabel}
+        action={repriceLabel || actionLabel}
         onEdit={edit.open}
         onDuplicate={dup.open}
         onDelete={onDelete}
@@ -109,9 +110,9 @@ function LoanRow({ l, today, onStatus, onDelete }: { l: any; today: Date; onStat
           <div className="text-right text-xs">
             <div className="text-muted-foreground">Balance</div>
             <div className="font-bold">{fmtMoney(l.balance)} <span className="text-[10px] font-normal text-muted-foreground">(est.)</span></div>
-            {(l.monthly_payment || calcPmt) && (
-              <div className="text-muted-foreground">
-                {fmtMoney(l.monthly_payment || calcPmt)}/mo
+            {displayedMonthlyPayment && (
+              <div className="font-semibold text-urgent">
+                −{fmtMoney(displayedMonthlyPayment)}/mo
               </div>
             )}
           </div>
@@ -125,6 +126,7 @@ function LoanRow({ l, today, onStatus, onDelete }: { l: any; today: Date; onStat
           <FieldRow label="Current rate" value={l.rate_label || fmtPct(l.rate)} />
           <FieldRow label={<AlertLabel text="Reprice date" />} value={fmtDate(l.reprice_date)} />
           <FieldRow label="Loan end date" value={l.loan_end_date ? fmtDate(l.loan_end_date) : <span className="text-muted-foreground text-xs">Not set — chart assumes ongoing</span>} />
+          {l.action && <FieldRow label="Action" value={l.action} />}
           <FieldRow
             label="Est. monthly repayment"
             value={calcPmt ? <span className="font-bold text-primary">{fmtMoney(calcPmt)}</span> : "—"}
