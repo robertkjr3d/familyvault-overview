@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Bell } from "lucide-react";
 import { AddRecordFab } from "@/components/AddRecordFab";
 import { createFileRoute } from "@tanstack/react-router";
@@ -18,6 +19,8 @@ import { HistoryLog } from "@/components/loan/HistoryLog";
 import { NotesEditor } from "@/components/loan/NotesEditor";
 import { ReminderButton } from "@/components/loan/ReminderButton";
 import { RemindersList } from "@/components/loan/RemindersList";
+import { computeNextOccurrence } from "@/lib/alerts";
+import { useEntityCounts } from "@/lib/useEntityCounts";
 
 export const Route = createFileRoute("/insurance")({
   component: InsurancePage,
@@ -29,6 +32,7 @@ function InsurancePage() {
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("insurance_policies", "insurance");
   const del = useDeleteMutation("insurance_policies", "insurance", "insurance");
+  const counts = useEntityCounts("insurance", activeHouseholdId);
 
   const { data: items = [] } = useQuery({
     queryKey: ["insurance", memberFilter, activeHouseholdId],
@@ -76,6 +80,9 @@ function InsurancePage() {
                 p={p}
                 onStatus={(s) => status.mutate({ id: p.id, status: s })}
                 onDelete={() => del.mutate(p.id)}
+                reminderCount={counts.reminderCounts[p.id] || 0}
+                historyCount={counts.historyCounts[p.id] || 0}
+                documentsCount={counts.documentsCounts[p.id] || 0}
               />
             ))}
           </div>
@@ -95,9 +102,30 @@ function AlertLabel({ text }: { text: string }) {
   );
 }
 
-function InsuranceRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) => void; onDelete: () => void }) {
+function InsuranceRow({
+  p, onStatus, onDelete, reminderCount, historyCount, documentsCount,
+}: {
+  p: any; onStatus: (s: any) => void; onDelete: () => void;
+  reminderCount: number; historyCount: number; documentsCount: number;
+}) {
   const edit = useEditRecord("insurance_policies", p);
   const dup = useDuplicateRecord("insurance_policies", p);
+
+  // Derived from start_date + frequency, same logic the bell/dashboard use —
+  // not the manually-set next_due_date field, which no longer drives alerts.
+  const nextDue = computeNextOccurrence(p.start_date, p.frequency, p.end_date, new Date());
+
+  const [cardOpen, setCardOpen] = useState(false);
+  const [section, setSection] = useState<"notes" | "history" | "documents" | null>(null);
+
+  function openSection(target: "notes" | "history" | "documents") {
+    setCardOpen(true);
+    setSection(target);
+    setTimeout(() => {
+      document.getElementById(`${target}-${p.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
+  }
+
   return (
     <HashHighlight id={`record-${p.id}`}>
       <RecordCard
@@ -110,9 +138,18 @@ function InsuranceRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) =>
         onEdit={edit.open}
         onDelete={onDelete}
         onDuplicate={dup.open}
-       hasNotes={!!p.notes}
+        hasNotes={!!p.notes}
         updatedAt={p.updated_at}
         createdAt={p.created_at}
+        open={cardOpen}
+        onOpenChange={setCardOpen}
+        reminderCount={reminderCount}
+        historyCount={historyCount}
+        documentsCount={documentsCount}
+        onNotesClick={() => openSection("notes")}
+        onReminderClick={() => openSection("notes")}
+        onHistoryClick={() => openSection("history")}
+        onDocumentsClick={() => openSection("documents")}
         rightMeta={
           <div className="text-right text-xs">
             <div className="text-muted-foreground">Premium</div>
@@ -127,7 +164,10 @@ function InsuranceRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) =>
           <FieldRow label="Sum assured" value={fmtMoney(p.sum_assured, p.currency)} />
           <FieldRow label="Start" value={fmtDate(p.start_date)} />
           <FieldRow label={<AlertLabel text="End" />} value={fmtDate(p.end_date)} />
-          <FieldRow label={<AlertLabel text="Next due" />} value={fmtDate(p.next_due_date)} />
+          <FieldRow
+            label={<AlertLabel text="Next premium due" />}
+            value={nextDue ? <span className="font-semibold text-primary">{fmtDate(nextDue)}</span> : "—"}
+          />
         </Section>
         {(p.payout_amount || p.payout_start_date || p.payout_end_date || p.beneficiary) && (
           <Section title="Payout">
@@ -139,27 +179,46 @@ function InsuranceRow({ p, onStatus, onDelete }: { p: any; onStatus: (s: any) =>
           </Section>
         )}
 
-        <CollapsibleSection icon={<span>📝</span>} title="Notes">
+        <CollapsibleSection
+          id={`notes-${p.id}`}
+          icon={<span>📝</span>}
+          title="Notes"
+          open={section === "notes"}
+          onOpenChange={(o) => setSection(o ? "notes" : null)}
+        >
           <NotesEditor
             table="insurance_policies"
             queryKey="insurance"
             id={p.id}
             value={p.notes}
           />
+          <RemindersList entityType="insurance" entityId={p.id} />
+          <div className="flex justify-end pt-1">
+            <ReminderButton entityType="insurance" entityId={p.id} />
+          </div>
         </CollapsibleSection>
 
-        <CollapsibleSection icon={<span>🔄</span>} title="Add an Update">
+        <CollapsibleSection
+          id={`history-${p.id}`}
+          icon={<span>🔄</span>}
+          title="Add an Update"
+          count={historyCount}
+          open={section === "history"}
+          onOpenChange={(o) => setSection(o ? "history" : null)}
+        >
           <HistoryLog entityType="insurance" entityId={p.id} />
         </CollapsibleSection>
 
-        <CollapsibleSection icon={<span>📎</span>} title="Documents">
+        <CollapsibleSection
+          id={`documents-${p.id}`}
+          icon={<span>📎</span>}
+          title="Documents"
+          count={documentsCount}
+          open={section === "documents"}
+          onOpenChange={(o) => setSection(o ? "documents" : null)}
+        >
           <DocumentsList entityType="insurance" entityId={p.id} />
         </CollapsibleSection>
-
-        <RemindersList entityType="insurance" entityId={p.id} />
-        <div className="flex justify-end pt-1">
-          <ReminderButton entityType="insurance" entityId={p.id} />
-        </div>
       </RecordCard>
       {edit.element}
       {dup.element}
