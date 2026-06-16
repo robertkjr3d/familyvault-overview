@@ -167,7 +167,7 @@ function PropertyRow({ p, loans, onStatus, onDelete }: { p: any; loans: any[]; o
             {p.monthly_rent && (
               <>
                 <div className="mt-1 text-muted-foreground">Rental</div>
-                <div className="font-semibold">{fmtMoney(p.monthly_rent, p.currency)}/mo</div>
+                <div className="font-semibold text-settled">+{fmtMoney(p.monthly_rent, p.currency)}/mo</div>
               </>
             )}
           </div>
