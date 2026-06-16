@@ -1,10 +1,10 @@
-import { addDays } from "date-fns";
 import { useEffect, useState } from "react";
 import { Bell, Crown, Share2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToday } from "@/lib/today";
 import { AlertsSheet } from "./AlertsSheet";
+import { buildUpcomingItems } from "@/lib/alerts";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { useAppStore } from "@/lib/store";
 import { toast } from "sonner";
@@ -86,57 +86,38 @@ export function AppHeader() {
     },
   });
 
+  // 30-day horizon, same source-of-truth as the AlertsSheet ("Due Soon" list) and
+  // the dashboard's 90-day view. Any new alert source only needs to be added once,
+  // in src/lib/alerts.ts.
   const { data: alertCount = 0 } = useQuery({
     queryKey: ["alert-count", selectedHouseholdId],
     enabled: !!selectedHouseholdId,
     queryFn: async () => {
       const today = new Date();
-      const horizonStr = addDays(today, 30).toISOString().slice(0, 10);
+      const householdId = selectedHouseholdId!;
 
-      const dateFields: Array<{ table: string; field: string; sourceType: string }> = [
-        { table: "insurance_policies", field: "next_due_date", sourceType: "insurance_next_due" },
-        { table: "insurance_policies", field: "end_date",      sourceType: "insurance_end" },
-        { table: "properties",         field: "fixed_rate_end", sourceType: "property_fixed_rate" },
-        { table: "loans",              field: "reprice_date",  sourceType: "loan_reprice" },
-        { table: "savings_accounts",   field: "maturity_date", sourceType: "savings_maturity" },
-        { table: "inventory_items",    field: "warranty_date", sourceType: "inventory_warranty" },
-      ];
-
-      const { data: dismissed } = await supabase
-        .from("dismissed_dashboard_items")
-        .select("record_id, source_type")
-        .eq("household_id", selectedHouseholdId!);
+      const [properties, loans, insurance, investments, savings, inventoryItems, reminders, dismissed] = await Promise.all([
+        supabase.from("properties").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
+        supabase.from("loans").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
+        supabase.from("insurance_policies").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
+        supabase.from("investments").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
+        supabase.from("savings_accounts").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
+        supabase.from("inventory_items").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
+        supabase.from("reminders").select("*").eq("household_id", householdId).eq("dismissed", false).then((r) => r.data ?? []),
+        supabase.from("dismissed_dashboard_items").select("record_id, source_type, dismissed_date").eq("household_id", householdId).then((r) => r.data ?? []),
+      ]);
 
       const dismissedKeys = new Set(
-        (dismissed ?? []).map((d: any) => `${d.source_type}::${d.record_id}`)
+        dismissed.map((d: any) => `${d.source_type}::${d.record_id}::${d.dismissed_date}`)
       );
 
-      let count = 0;
-      for (const { table, field, sourceType } of dateFields) {
-        const { data } = await supabase
-          .from(table as any)
-          .select(`id, ${field}`)
-          .eq("household_id", selectedHouseholdId!)
-          .lte(field, horizonStr);
-        const undismissed = (data ?? []).filter(
-          (r: any) => r[field] != null && !dismissedKeys.has(`${sourceType}::${r.id}`)
-        );
-        count += undismissed.length;
-      }
+      const allItems = buildUpcomingItems(
+        { properties, loans, insurance, investments, savings, inventoryItems, reminders },
+        today,
+        30
+      );
 
-      const { data: reminders } = await supabase
-        .from("reminders")
-        .select("id, entity_id")
-        .eq("household_id", selectedHouseholdId!)
-        .eq("dismissed", false)
-        .lte("remind_at", horizonStr);
-      const undismissedReminders = (reminders ?? []).filter((r: any) => {
-        const recordId = r.entity_id ?? r.id;
-        return !dismissedKeys.has(`reminder::${recordId}`);
-      });
-      count += undismissedReminders.length;
-
-      return count;
+      return allItems.filter((item) => !dismissedKeys.has(`${item.sourceType}::${item.recordId}::${item.date}`)).length;
     },
     refetchInterval: 5_000,
   });
