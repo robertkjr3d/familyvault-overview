@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { AddRecordFab } from "@/components/AddRecordFab";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -16,6 +17,7 @@ import { HistoryLog } from "@/components/loan/HistoryLog";
 import { DocumentsList } from "@/components/loan/DocumentsList";
 import { ReminderButton } from "@/components/loan/ReminderButton";
 import { RemindersList } from "@/components/loan/RemindersList";
+import { useEntityCounts } from "@/lib/useEntityCounts";
 
 export const Route = createFileRoute("/other-assets")({
   component: OtherAssetsPage,
@@ -27,6 +29,7 @@ function OtherAssetsPage() {
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("other_assets", "other_assets");
   const del = useDeleteMutation("other_assets", "other_assets", "other_asset");
+  const counts = useEntityCounts("other_asset", activeHouseholdId);
 
   const { data: items = [] } = useQuery({
     queryKey: ["other_assets", memberFilter, activeHouseholdId],
@@ -64,6 +67,9 @@ function OtherAssetsPage() {
                     asset={asset}
                     onStatus={(s) => status.mutate({ id: asset.id, status: s })}
                     onDelete={() => del.mutate(asset.id)}
+                    reminderCount={counts.reminderCounts[asset.id] || 0}
+                    historyCount={counts.historyCounts[asset.id] || 0}
+                    documentsCount={counts.documentsCounts[asset.id] || 0}
                   />
                 ))}
               </div>
@@ -83,9 +89,26 @@ function OtherAssetsPage() {
   );
 }
 
-function AssetRow({ asset, onStatus, onDelete }: { asset: any; onStatus: (s: any) => void; onDelete: () => void }) {
+function AssetRow({
+  asset, onStatus, onDelete, reminderCount, historyCount, documentsCount,
+}: {
+  asset: any; onStatus: (s: any) => void; onDelete: () => void;
+  reminderCount: number; historyCount: number; documentsCount: number;
+}) {
   const edit = useEditRecord("other_assets", asset);
   const dup = useDuplicateRecord("other_assets", asset);
+
+  const [cardOpen, setCardOpen] = useState(false);
+  const [section, setSection] = useState<"notes" | "history" | "documents" | null>(null);
+
+  function openSection(target: "notes" | "history" | "documents") {
+    setCardOpen(true);
+    setSection(target);
+    setTimeout(() => {
+      document.getElementById(`${target}-${asset.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
+  }
+
   return (
     <HashHighlight id={`record-${asset.id}`}>
       <RecordCard
@@ -100,6 +123,15 @@ function AssetRow({ asset, onStatus, onDelete }: { asset: any; onStatus: (s: any
         hasNotes={!!asset.notes}
         updatedAt={asset.updated_at}
         createdAt={asset.created_at}
+        open={cardOpen}
+        onOpenChange={setCardOpen}
+        reminderCount={reminderCount}
+        historyCount={historyCount}
+        documentsCount={documentsCount}
+        onNotesClick={() => openSection("notes")}
+        onReminderClick={() => openSection("notes")}
+        onHistoryClick={() => openSection("history")}
+        onDocumentsClick={() => openSection("documents")}
         rightMeta={
           asset.estimated_value ? (
             <div className="text-right text-xs">
@@ -115,27 +147,46 @@ function AssetRow({ asset, onStatus, onDelete }: { asset: any; onStatus: (s: any
           {asset.action && <FieldRow label="Action" value={asset.action} />}
         </Section>
 
-        <CollapsibleSection icon={<span>📝</span>} title="Notes">
+        <CollapsibleSection
+          id={`notes-${asset.id}`}
+          icon={<span>📝</span>}
+          title="Notes"
+          open={section === "notes"}
+          onOpenChange={(o) => setSection(o ? "notes" : null)}
+        >
           <NotesEditor
             table="other_assets"
             queryKey="other_assets"
             id={asset.id}
             value={asset.notes}
           />
+          <RemindersList entityType="other_asset" entityId={asset.id} />
+          <div className="flex justify-end pt-1">
+            <ReminderButton entityType="other_asset" entityId={asset.id} />
+          </div>
         </CollapsibleSection>
 
-        <CollapsibleSection icon={<span>🔄</span>} title="Add an Update">
+        <CollapsibleSection
+          id={`history-${asset.id}`}
+          icon={<span>🔄</span>}
+          title="Add an Update"
+          count={historyCount}
+          open={section === "history"}
+          onOpenChange={(o) => setSection(o ? "history" : null)}
+        >
           <HistoryLog entityType="other_asset" entityId={asset.id} />
         </CollapsibleSection>
 
-        <CollapsibleSection icon={<span>📎</span>} title="Documents">
+        <CollapsibleSection
+          id={`documents-${asset.id}`}
+          icon={<span>📎</span>}
+          title="Documents"
+          count={documentsCount}
+          open={section === "documents"}
+          onOpenChange={(o) => setSection(o ? "documents" : null)}
+        >
           <DocumentsList entityType="other_asset" entityId={asset.id} />
         </CollapsibleSection>
-
-        <RemindersList entityType="other_asset" entityId={asset.id} />
-        <div className="flex justify-end pt-1">
-          <ReminderButton entityType="other_asset" entityId={asset.id} />
-        </div>
       </RecordCard>
       {edit.element}
       {dup.element}
