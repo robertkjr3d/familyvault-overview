@@ -86,10 +86,11 @@ function LoanRow({ l, today, onStatus, onDelete }: { l: any; today: Date; onStat
     principal && term && l.start_date
       ? remainingBalance(principal, rate, term, monthsSince(l.start_date, today))
       : null;
-  const repriceLabel = l.reprice_date ? `Reprice by ${fmtMonth(l.reprice_date)}` : null;
-  const actionLabel = l.action || null;
+  const rateParts = [l.rate ? `${l.rate}%` : null, l.rate_label || null].filter(Boolean);
+  const rateSubtitle = rateParts.join(" · ");
+  const actionParts = [l.reprice_date ? `Reprice by ${fmtMonth(l.reprice_date)}` : null, l.action || null].filter(Boolean);
+  const actionLabel = actionParts.join(" · ") || null;
   const displayedMonthlyPayment = l.monthly_payment || calcPmt;
-  const rateSubtitle = l.rate_label || (l.rate ? `${l.rate}%` : "");
 
   return (
     <HashHighlight id={`record-${l.id}`}>
@@ -99,7 +100,7 @@ function LoanRow({ l, today, onStatus, onDelete }: { l: any; today: Date; onStat
         memberId={l.member_id}
         status={l.status}
         onStatusChange={onStatus}
-        action={repriceLabel || actionLabel}
+        action={actionLabel}
         onEdit={edit.open}
         onDuplicate={dup.open}
         onDelete={onDelete}
