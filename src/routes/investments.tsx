@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { AddRecordFab } from "@/components/AddRecordFab";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -17,6 +18,7 @@ import { HistoryLog } from "@/components/loan/HistoryLog";
 import { DocumentsList } from "@/components/loan/DocumentsList";
 import { ReminderButton } from "@/components/loan/ReminderButton";
 import { RemindersList } from "@/components/loan/RemindersList";
+import { useEntityCounts } from "@/lib/useEntityCounts";
 
 export const Route = createFileRoute("/investments")({
   component: InvestmentsPage,
@@ -28,6 +30,7 @@ function InvestmentsPage() {
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("investments", "investments");
   const del = useDeleteMutation("investments", "investments", "investment");
+  const counts = useEntityCounts("investment", activeHouseholdId);
 
   const { data: items = [] } = useQuery({
     queryKey: ["investments", memberFilter, activeHouseholdId],
@@ -66,6 +69,9 @@ function InvestmentsPage() {
                     inv={inv}
                     onStatus={(s) => status.mutate({ id: inv.id, status: s })}
                     onDelete={() => del.mutate(inv.id)}
+                    reminderCount={counts.reminderCounts[inv.id] || 0}
+                    historyCount={counts.historyCounts[inv.id] || 0}
+                    documentsCount={counts.documentsCounts[inv.id] || 0}
                   />
                 ))}
               </div>
@@ -83,7 +89,12 @@ function InvestmentsPage() {
   );
 }
 
-function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: any) => void; onDelete: () => void }) {
+function InvestmentRow({
+  inv, onStatus, onDelete, reminderCount, historyCount, documentsCount,
+}: {
+  inv: any; onStatus: (s: any) => void; onDelete: () => void;
+  reminderCount: number; historyCount: number; documentsCount: number;
+}) {
   const edit = useEditRecord("investments", inv);
   const dup = useDuplicateRecord("investments", inv);
   const gain = (inv.current_value || 0) - (inv.cost_basis || 0);
@@ -94,6 +105,30 @@ function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: an
   const isILPOrEndowment = inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
   const staleTitle = "Updated " + daysSinceUpdate + "d ago";
   const staleIndicator = isStale ? <span className="ml-1 text-review" title={staleTitle}>⚠</span> : null;
+
+  // Premium shown on the collapsed card so a yearly/monthly ILP/Endowment premium
+  // is visible without expanding — same pattern as Loans' monthly repayment.
+  const premiumMonthlyEquivalent = (() => {
+    if (!isILPOrEndowment || !inv.premium_amount) return null;
+    const amt = Number(inv.premium_amount);
+    const freq = (inv.premium_frequency || "annual").toLowerCase();
+    if (freq === "monthly") return amt;
+    if (freq === "quarterly") return amt / 3;
+    if (freq === "semi-annual") return amt / 6;
+    if (freq === "annual") return amt / 12;
+    return null; // one-off — no recurring amount to show
+  })();
+
+  const [cardOpen, setCardOpen] = useState(false);
+  const [section, setSection] = useState<"notes" | "history" | "documents" | null>(null);
+
+  function openSection(target: "notes" | "history" | "documents") {
+    setCardOpen(true);
+    setSection(target);
+    setTimeout(() => {
+      document.getElementById(`${target}-${inv.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
+  }
 
   return (
     <HashHighlight id={`record-${inv.id}`}>
@@ -106,9 +141,18 @@ function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: an
         onEdit={edit.open}
         onDuplicate={dup.open}
         onDelete={onDelete}
-       hasNotes={!!inv.notes}
+        hasNotes={!!inv.notes}
         updatedAt={inv.updated_at}
         createdAt={inv.created_at}
+        open={cardOpen}
+        onOpenChange={setCardOpen}
+        reminderCount={reminderCount}
+        historyCount={historyCount}
+        documentsCount={documentsCount}
+        onNotesClick={() => openSection("notes")}
+        onReminderClick={() => openSection("notes")}
+        onHistoryClick={() => openSection("history")}
+        onDocumentsClick={() => openSection("documents")}
         rightMeta={
           <div className="text-right text-xs">
             <div className="text-muted-foreground">
@@ -116,6 +160,11 @@ function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: an
             </div>
             <div className="font-bold">{fmtMoney(inv.current_value)}</div>
             <div className={gain >= 0 ? "text-settled" : "text-urgent"}>{fmtMoney(gain)}</div>
+            {premiumMonthlyEquivalent != null && (
+              <div className="mt-1 font-semibold text-urgent">
+                −{fmtMoney(premiumMonthlyEquivalent)}/mo
+              </div>
+            )}
           </div>
         }
       >
@@ -128,7 +177,7 @@ function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: an
           <FieldRow label="Amount invested" value={fmtMoney(inv.cost_basis)} />
           <FieldRow label="Current value (est.)" value={fmtMoney(inv.current_value)} />
           <FieldRow label="Projected return" value={fmtPct(inv.projected_return_pct)} />
-         {isILPOrEndowment && inv.coverage && <FieldRow label="Coverage" value={inv.coverage} />}
+          {isILPOrEndowment && inv.coverage && <FieldRow label="Coverage" value={inv.coverage} />}
           {isILPOrEndowment && inv.premium_amount && <FieldRow label="Premium amount" value={fmtMoney(inv.premium_amount)} />}
           {isILPOrEndowment && inv.premium_start_date && <FieldRow label="Premium start" value={fmtDate(inv.premium_start_date)} />}
           {isILPOrEndowment && inv.premium_frequency && <FieldRow label="Premium frequency" value={freqLabel(inv.premium_frequency)} />}
@@ -139,27 +188,46 @@ function InvestmentRow({ inv, onStatus, onDelete }: { inv: any; onStatus: (s: an
           {isILPOrEndowment && inv.payout_end_date && <FieldRow label="Payout end" value={fmtDate(inv.payout_end_date)} />}
         </Section>
 
-        <CollapsibleSection icon={<span>📝</span>} title="Notes">
+        <CollapsibleSection
+          id={`notes-${inv.id}`}
+          icon={<span>📝</span>}
+          title="Notes"
+          open={section === "notes"}
+          onOpenChange={(o) => setSection(o ? "notes" : null)}
+        >
           <NotesEditor
             table="investments"
             queryKey="investments"
             id={inv.id}
             value={inv.notes}
           />
+          <RemindersList entityType="investment" entityId={inv.id} />
+          <div className="flex justify-end pt-1">
+            <ReminderButton entityType="investment" entityId={inv.id} />
+          </div>
         </CollapsibleSection>
 
-        <CollapsibleSection icon={<span>🔄</span>} title="Add an Update">
+        <CollapsibleSection
+          id={`history-${inv.id}`}
+          icon={<span>🔄</span>}
+          title="Add an Update"
+          count={historyCount}
+          open={section === "history"}
+          onOpenChange={(o) => setSection(o ? "history" : null)}
+        >
           <HistoryLog entityType="investment" entityId={inv.id} />
         </CollapsibleSection>
 
-        <CollapsibleSection icon={<span>📎</span>} title="Documents">
+        <CollapsibleSection
+          id={`documents-${inv.id}`}
+          icon={<span>📎</span>}
+          title="Documents"
+          count={documentsCount}
+          open={section === "documents"}
+          onOpenChange={(o) => setSection(o ? "documents" : null)}
+        >
           <DocumentsList entityType="investment" entityId={inv.id} />
         </CollapsibleSection>
-
-        <RemindersList entityType="investment" entityId={inv.id} />
-        <div className="flex justify-end pt-1">
-          <ReminderButton entityType="investment" entityId={inv.id} />
-        </div>
       </RecordCard>
       {edit.element}
       {dup.element}
