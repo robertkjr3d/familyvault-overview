@@ -22,6 +22,8 @@ import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { NotesEditor } from "@/components/loan/NotesEditor";
 import { HistoryLog } from "@/components/loan/HistoryLog";
 import { DocumentsList } from "@/components/loan/DocumentsList";
+import { HashHighlight } from "@/components/HashHighlight";
+import { useEntityCounts } from "@/lib/useEntityCounts";
 
 export const Route = createFileRoute("/savings")({
   component: SavingsPage,
@@ -90,6 +92,7 @@ function SavingsPage() {
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("savings_accounts", "savings");
   const del = useDeleteMutation("savings_accounts", "savings", "savings");
+  const counts = useEntityCounts("savings", activeHouseholdId);
 
   const { data: items = [] } = useQuery({
     queryKey: ["savings", memberFilter, activeHouseholdId],
@@ -120,6 +123,9 @@ function SavingsPage() {
                 a={a}
                 onStatus={(s) => status.mutate({ id: a.id, status: s })}
                 onDelete={() => del.mutate(a.id)}
+                reminderCount={counts.reminderCounts[a.id] || 0}
+                historyCount={counts.historyCounts[a.id] || 0}
+                documentsCount={counts.documentsCounts[a.id] || 0}
               />
             ))}
           </div>
@@ -139,15 +145,32 @@ function AlertLabel({ text }: { text: string }) {
   );
 }
 
-function SavingsRow({ a, onStatus, onDelete }: { a: any; onStatus: (s: any) => void; onDelete: () => void }) {
+function SavingsRow({
+  a, onStatus, onDelete, reminderCount, historyCount, documentsCount,
+}: {
+  a: any; onStatus: (s: any) => void; onDelete: () => void;
+  reminderCount: number; historyCount: number; documentsCount: number;
+}) {
   const edit = useEditRecord("savings_accounts", a);
   const dup = useDuplicateRecord("savings_accounts", a);
   const stale = staleDays(a.last_updated);
   const isStale = stale != null && stale >= 30;
   const isFD = isFdLikeAccountType(a.account_type);
   const isCPF = isCpfAccountType(a.account_type);
+
+  const [cardOpen, setCardOpen] = useState(false);
+  const [section, setSection] = useState<"notes" | "history" | "documents" | null>(null);
+
+  function openSection(target: "notes" | "history" | "documents") {
+    setCardOpen(true);
+    setSection(target);
+    setTimeout(() => {
+      document.getElementById(`${target}-${a.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
+  }
+
   return (
-    <>
+    <HashHighlight id={`record-${a.id}`}>
       <RecordCard
         title={`${a.institution} · ${a.account_type ?? ""}`}
         subtitle={a.note}
@@ -158,9 +181,18 @@ function SavingsRow({ a, onStatus, onDelete }: { a: any; onStatus: (s: any) => v
         onEdit={edit.open}
         onDelete={onDelete}
         onDuplicate={dup.open}
-       hasNotes={!!a.notes}
+        hasNotes={!!a.notes}
         updatedAt={a.updated_at}
         createdAt={a.created_at}
+        open={cardOpen}
+        onOpenChange={setCardOpen}
+        reminderCount={reminderCount}
+        historyCount={historyCount}
+        documentsCount={documentsCount}
+        onNotesClick={() => openSection("notes")}
+        onReminderClick={() => openSection("notes")}
+        onHistoryClick={() => openSection("history")}
+        onDocumentsClick={() => openSection("documents")}
         rightMeta={
           <div className="text-right text-xs">
             <div className="text-muted-foreground">Balance</div>
@@ -202,30 +234,49 @@ function SavingsRow({ a, onStatus, onDelete }: { a: any; onStatus: (s: any) => v
           <UpdateBalanceInline id={a.id} current={a.balance} />
         </div>
 
-        <CollapsibleSection icon={<span>📝</span>} title="Notes">
+        <CollapsibleSection
+          id={`notes-${a.id}`}
+          icon={<span>📝</span>}
+          title="Notes"
+          open={section === "notes"}
+          onOpenChange={(o) => setSection(o ? "notes" : null)}
+        >
           <NotesEditor
             table="savings_accounts"
             queryKey="savings"
             id={a.id}
             value={a.notes}
           />
+          <RemindersList entityType="savings" entityId={a.id} />
+          <div className="flex justify-end pt-1">
+            <ReminderButton entityType="savings" entityId={a.id} />
+          </div>
         </CollapsibleSection>
 
-        <CollapsibleSection icon={<span>🔄</span>} title="Add an Update">
+        <CollapsibleSection
+          id={`history-${a.id}`}
+          icon={<span>🔄</span>}
+          title="Add an Update"
+          count={historyCount}
+          open={section === "history"}
+          onOpenChange={(o) => setSection(o ? "history" : null)}
+        >
           <HistoryLog entityType="savings" entityId={a.id} />
         </CollapsibleSection>
 
-        <CollapsibleSection icon={<span>📎</span>} title="Documents">
+        <CollapsibleSection
+          id={`documents-${a.id}`}
+          icon={<span>📎</span>}
+          title="Documents"
+          count={documentsCount}
+          open={section === "documents"}
+          onOpenChange={(o) => setSection(o ? "documents" : null)}
+        >
           <DocumentsList entityType="savings" entityId={a.id} />
         </CollapsibleSection>
-
-        <RemindersList entityType="savings" entityId={a.id} />
-        <div className="flex justify-end pt-1">
-          <ReminderButton entityType="savings" entityId={a.id} />
-        </div>
       </RecordCard>
       {edit.element}
       {dup.element}
-    </>
+    </HashHighlight>
   );
 }
