@@ -25,6 +25,7 @@ type Props = {
 export type LineItem = {
   label: string;
   amount: number;
+  href?: string;
 };
 
 export type ChartPoint = {
@@ -125,6 +126,14 @@ export function LifetimeChart({
     },
   });
 
+  // Investments and savings without a currency field are treated as SGD.
+  // Once the currency field is added to investments, non-SGD ones will be excluded.
+  const sgdInvestments = investments.filter((inv: any) => !inv.currency || inv.currency === "SGD");
+  const foreignInvestments = investments.filter((inv: any) => inv.currency && inv.currency !== "SGD");
+  const sgdSavings = savings.filter((s: any) => !s.currency || s.currency === "SGD");
+  const foreignSavings = savings.filter((s: any) => s.currency && s.currency !== "SGD");
+  const hasForeignExcluded = foreignInvestments.length > 0 || foreignSavings.length > 0;
+
   const data = useMemo<ChartPoint[]>(() => {
     let runningNetWorth = startingNetWorth;
 
@@ -134,9 +143,19 @@ export function LifetimeChart({
       propValues[p.id] = Number(p.current_value) || 0;
     }
 
-    // Investable pool: net worth minus property values, grows independently
-    const totalPropertyValue = properties.reduce((s: number, p: any) => s + (Number(p.current_value) || 0), 0);
-    let investablePool = Math.max(startingNetWorth - totalPropertyValue, 0);
+    // Per-investment value tracking for growth (SGD only, non-ILP/Endowment)
+    // ILP/Endowment are already handled via their premium/payout fields below
+    const invValues: Record<string, number> = {};
+    for (const inv of sgdInvestments) {
+      const isILP = inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
+      if (!isILP) invValues[inv.id] = Number(inv.current_value) || 0;
+    }
+
+    // Per-savings balance tracking for growth (SGD only)
+    const savValues: Record<string, number> = {};
+    for (const s of sgdSavings) {
+      savValues[s.id] = Number(s.balance) || 0;
+    }
 
     // Properties linked to a loan — skip their monthly_payment (counted via loan)
     const mortgagedPropertyIds = new Set(
@@ -158,35 +177,37 @@ export function LifetimeChart({
       if (salaryActive) {
         const salary = monthlyIncome * 12;
         annualIn += salary;
-        if (salary > 0) inflowItems.push({ label: "Salary income", amount: salary });
+        if (salary > 0) inflowItems.push({ label: "Salary income", amount: salary, href: "/settings" });
       }
 
       // CPF LIFE payout
       if (cpfStartYear !== null && y >= cpfStartYear && cpfMonthlyPayout > 0) {
         const cpf = cpfMonthlyPayout * 12;
         annualIn += cpf;
-        inflowItems.push({ label: "CPF LIFE payout", amount: cpf });
+        inflowItems.push({ label: "CPF LIFE payout", amount: cpf, href: "/settings" });
         if (y === cpfStartYear) events.push(`CPF LIFE begins +${fmt(cpfMonthlyPayout * 12)}/yr`);
       }
 
       // Base household expenses — inflate annually
       const livingExpenses = monthlyExpenses * 12 * Math.pow(1 + inflationRate, i);
       annualOut += livingExpenses;
-      if (livingExpenses > 0) outflowItems.push({ label: "Living expenses", amount: livingExpenses });
+      if (livingExpenses > 0) outflowItems.push({ label: "Living expenses", amount: livingExpenses, href: "/settings" });
 
       // Properties
       let yearPropertyAppreciation = 0;
       for (const p of properties) {
+        const propHref = `/property#record-${p.id}`;
+
         // Rental income
         const rental = (Number(p.monthly_rent) || 0) * 12;
         annualIn += rental;
-        if (rental > 0) inflowItems.push({ label: `${p.name ?? "Property"} rental`, amount: rental });
+        if (rental > 0) inflowItems.push({ label: `${p.name ?? "Property"} rental`, amount: rental, href: propHref });
 
         // Costs — use itemised fields, fall back to monthly_costs
         const costs = propertyTotalCosts(p);
         const annualCosts = costs * 12 * Math.pow(1 + inflationRate, i);
         annualOut += annualCosts;
-        if (annualCosts > 0) outflowItems.push({ label: `${p.name ?? "Property"} costs`, amount: annualCosts });
+        if (annualCosts > 0) outflowItems.push({ label: `${p.name ?? "Property"} costs`, amount: annualCosts, href: propHref });
 
         // Mortgage — skip if linked loan covers it, stop at mortgage_end_date
         const isMortgagedViaLoan = mortgagedPropertyIds.has(p.id);
@@ -197,11 +218,11 @@ export function LifetimeChart({
           if (mortgageEndYear === null || y <= mortgageEndYear) {
             const mortgage = Number(p.monthly_payment) * 12;
             annualOut += mortgage;
-            outflowItems.push({ label: `${p.name ?? "Property"} mortgage`, amount: mortgage });
+            outflowItems.push({ label: `${p.name ?? "Property"} mortgage`, amount: mortgage, href: propHref });
           }
         }
 
-        // Property appreciation — tracked separately, does not feed investablePool
+        // Property appreciation — tracked separately, does not feed investable pools
         const appreciation = (propValues[p.id] || 0) * propertyAppreciationRate;
         propValues[p.id] += appreciation;
         yearPropertyAppreciation += appreciation;
@@ -216,7 +237,7 @@ export function LifetimeChart({
         if (loanEndYear === null || y <= loanEndYear) {
           const repayment = Number(l.monthly_payment) * 12;
           annualOut += repayment;
-          outflowItems.push({ label: `${l.bank ?? "Loan"} repayment`, amount: repayment });
+          outflowItems.push({ label: `${l.bank ?? "Loan"} repayment`, amount: repayment, href: `/loans#record-${l.id}` });
         }
         if (loanEndYear === y) {
           events.push(`${l.bank ?? "Loan"} paid off`);
@@ -225,12 +246,13 @@ export function LifetimeChart({
 
       // Insurance premiums and payouts
       for (const ins of insurance) {
+        const insHref = `/insurance#record-${ins.id}`;
         const insStart = ins.start_date ? new Date(ins.start_date).getFullYear() : startYear;
         const insEnd = ins.end_date ? new Date(ins.end_date).getFullYear() : startYear + 40;
         if (y >= insStart && y <= insEnd) {
           const premium = insuranceAnnual(ins);
           annualOut += premium;
-          if (premium > 0) outflowItems.push({ label: `${ins.name ?? "Insurance"} premium`, amount: premium });
+          if (premium > 0) outflowItems.push({ label: `${ins.name ?? "Insurance"} premium`, amount: premium, href: insHref });
         }
         if (ins.payout_amount && ins.payout_start_date) {
           const payoutStartYear = new Date(ins.payout_start_date).getFullYear();
@@ -245,20 +267,21 @@ export function LifetimeChart({
             : Number(ins.payout_amount);
           if (isRecurring && y >= payoutStartYear && y <= payoutEndYear) {
             annualIn += annualPayoutAmt;
-            inflowItems.push({ label: `${ins.name ?? "Insurance"} payout`, amount: annualPayoutAmt });
+            inflowItems.push({ label: `${ins.name ?? "Insurance"} payout`, amount: annualPayoutAmt, href: insHref });
             if (y === payoutStartYear) events.push(`${ins.name ?? "Insurance"} payout begins +${fmt(annualPayoutAmt)}/yr`);
           } else if (!isRecurring && y === payoutStartYear) {
             annualIn += annualPayoutAmt;
-            inflowItems.push({ label: `${ins.name ?? "Insurance"} payout`, amount: annualPayoutAmt });
+            inflowItems.push({ label: `${ins.name ?? "Insurance"} payout`, amount: annualPayoutAmt, href: insHref });
             events.push(`${ins.name ?? "Insurance"} payout +${fmt(annualPayoutAmt)}`);
           }
         }
       }
 
-      // ILP / Endowment premiums and payouts
-      for (const inv of investments) {
+      // ILP / Endowment premiums and payouts (SGD investments only)
+      for (const inv of sgdInvestments) {
         const isILP = inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
         if (!isILP) continue;
+        const invHref = `/investments#record-${inv.id}`;
 
         if (inv.premium_amount && inv.premium_start_date) {
           const premStartYear = new Date(inv.premium_start_date).getFullYear();
@@ -266,7 +289,7 @@ export function LifetimeChart({
           if (y >= premStartYear && y <= premEndYear) {
             const premium = investmentPremiumAnnual(inv);
             annualOut += premium;
-            if (premium > 0) outflowItems.push({ label: `${inv.name ?? "ILP"} premium`, amount: premium });
+            if (premium > 0) outflowItems.push({ label: `${inv.name ?? "ILP"} premium`, amount: premium, href: invHref });
             if (y === premEndYear) events.push(`${inv.name ?? "ILP"} premiums end`);
           }
         }
@@ -284,20 +307,55 @@ export function LifetimeChart({
             : Number(inv.payout_amount);
           if (isRecurring && y >= payoutStartYear && y <= payoutEndYear) {
             annualIn += annualPayoutAmt;
-            inflowItems.push({ label: `${inv.name ?? "ILP"} payout`, amount: annualPayoutAmt });
+            inflowItems.push({ label: `${inv.name ?? "ILP"} payout`, amount: annualPayoutAmt, href: invHref });
             if (y === payoutStartYear) events.push(`${inv.name ?? "ILP"} payout begins +${fmt(annualPayoutAmt)}/yr`);
           } else if (!isRecurring && y === payoutStartYear) {
             annualIn += annualPayoutAmt;
-            inflowItems.push({ label: `${inv.name ?? "ILP"} payout`, amount: annualPayoutAmt });
+            inflowItems.push({ label: `${inv.name ?? "ILP"} payout`, amount: annualPayoutAmt, href: invHref });
             events.push(`${inv.name ?? "ILP"} payout +${fmt(annualPayoutAmt)}`);
           }
         }
       }
 
+      // Per-investment growth (SGD non-ILP/Endowment only)
+      // Each investment compounds at the global investment growth rate and appears
+      // as its own named line item in the year detail, with a link to the record.
+      let yearInvestGrowth = 0;
+      for (const inv of sgdInvestments) {
+        const isILP = inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
+        if (isILP) continue;
+        const growth = (invValues[inv.id] || 0) * investmentGrowthRate;
+        invValues[inv.id] += growth;
+        yearInvestGrowth += growth;
+        if (growth > 0) {
+          inflowItems.push({
+            label: `${inv.name ?? "Investment"} growth`,
+            amount: growth,
+            href: `/investments#record-${inv.id}`,
+          });
+        }
+      }
+
+      // Per-savings growth (SGD only)
+      // Each savings account compounds at the global investment growth rate and
+      // appears as its own named line item in the year detail, with a link to the record.
+      for (const s of sgdSavings) {
+        const growth = (savValues[s.id] || 0) * investmentGrowthRate;
+        savValues[s.id] += growth;
+        yearInvestGrowth += growth;
+        if (growth > 0) {
+          inflowItems.push({
+            label: `${s.institution ?? "Savings"} growth`,
+            amount: growth,
+            href: `/savings#record-${s.id}`,
+          });
+        }
+      }
+
       // FD / savings maturities — informational marker only.
-      // The balance is already inside investablePool and compounding there,
+      // The balance is already inside savValues and compounding there,
       // so it must NOT also be added to annualIn (that would double-count it).
-      for (const s of savings) {
+      for (const s of sgdSavings) {
         if (!s.maturity_date) continue;
         const matYear = new Date(s.maturity_date).getFullYear();
         if (matYear === y && s.balance) {
@@ -327,15 +385,14 @@ export function LifetimeChart({
         events.push("Retirement — salary ends");
       }
 
-      // Investment growth on investable pool — completely separate from property
-      const investmentGrowth = investablePool * investmentGrowthRate;
-      investablePool += investmentGrowth;
+      // Investment growth feeds into annualIn so net worth maths stays consistent
+      annualIn += yearInvestGrowth;
 
-      // Cash flow net (excludes appreciation and investment growth)
+      // Cash flow net (excludes property appreciation; includes investment/savings growth)
       const annualNet = annualIn - annualOut;
 
-      // Net worth: cash flow + investment growth + property appreciation
-      runningNetWorth += annualNet + investmentGrowth + yearPropertyAppreciation;
+      // Net worth: cash flow (which now includes investment growth) + property appreciation
+      runningNetWorth += annualNet + yearPropertyAppreciation;
 
       // Dev-time sanity check: itemized lists must sum to the same totals
       // used for netWorth. If this ever warns, an item was missed or
@@ -360,14 +417,14 @@ export function LifetimeChart({
         inflowItems: inflowItems.map((it) => ({ ...it, amount: Math.round(it.amount) })),
         outflowItems: outflowItems.map((it) => ({ ...it, amount: Math.round(it.amount) })),
         propAppreciation: Math.round(yearPropertyAppreciation),
-        investGrowth: Math.round(investmentGrowth),
+        investGrowth: Math.round(yearInvestGrowth),
         events,
       });
     }
 
     return years;
   }, [
-    properties, loans, insurance, savings, investments, plannedEvents,
+    properties, loans, insurance, sgdSavings, sgdInvestments, plannedEvents,
     startingNetWorth, monthlyIncome, monthlyExpenses,
     retirementYear, cpfStartYear, cpfMonthlyPayout,
     investmentGrowthRate, propertyAppreciationRate, inflationRate,
@@ -379,7 +436,7 @@ export function LifetimeChart({
   const maxNetWorth = Math.max(...data.map((d) => d.netWorth));
   const eventYears = data.filter((d) => d.events.length > 0);
   const hasIncome = monthlyIncome > 0;
-  const hasILPPayout = investments.some((inv: any) =>
+  const hasILPPayout = sgdInvestments.some((inv: any) =>
     (inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment")
     && inv.payout_amount && inv.payout_start_date
   );
@@ -467,6 +524,15 @@ export function LifetimeChart({
           ⚠ ILP/Endowment payouts are shown as additional income, while the policy's current value
           keeps growing untouched. In reality, the value would decline as payouts are drawn —
           this projection is indicative only and likely optimistic for years with active payouts.
+        </p>
+      )}
+      {hasForeignExcluded && (
+        <p className="rounded-lg bg-review-soft/40 px-3 py-2 text-xs text-muted-foreground">
+          ⚠ {foreignInvestments.length > 0 && foreignSavings.length > 0
+            ? "Some investments and savings accounts are"
+            : foreignInvestments.length > 0
+            ? "Some investments are"
+            : "Some savings accounts are"} in foreign currency and excluded from this projection. Only SGD assets are modelled.
         </p>
       )}
       {!hasIncome && (
