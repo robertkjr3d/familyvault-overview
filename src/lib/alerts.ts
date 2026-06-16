@@ -39,8 +39,55 @@ export function reminderHref(entityType: string | null | undefined): string {
   }
 }
 
+const FREQ_MONTHS: Record<string, number> = {
+  monthly: 1,
+  quarterly: 3,
+  "semi-annual": 6,
+  annual: 12,
+};
+
 /**
- * Single source of truth for every date-based "upcoming/overdue" alert in the app.
+ * Given a recurring premium/payment's start date and frequency, find the next
+ * occurrence on or after `today` — entirely derived, no manually-maintained
+ * "next due date" field to go stale. Used for both Insurance premiums and
+ * ILP/Endowment premiums, which share the same start/frequency/end shape.
+ *
+ * Returns null if frequency is "one-off"/unrecognised, if startDate is missing,
+ * or if the recurring schedule has already ended (endDate in the past).
+ */
+export function computeNextOccurrence(
+  startDateStr: string | null | undefined,
+  frequency: string | null | undefined,
+  endDateStr: string | null | undefined,
+  today: Date
+): string | null {
+  if (!startDateStr) return null;
+  const freq = (frequency || "annual").toLowerCase();
+  const intervalMonths = FREQ_MONTHS[freq];
+  if (!intervalMonths) return null; // one-off, or unrecognised — no recurring "next due"
+
+  if (endDateStr && new Date(endDateStr).getTime() < today.getTime()) return null;
+
+  const start = new Date(startDateStr);
+  if (isNaN(start.getTime())) return null;
+
+  // Advance from the start date by whole intervals until we land on or after today.
+  // Using setMonth repeatedly (rather than a division) avoids day-of-month drift
+  // (e.g. Jan 31 + 1 month should not silently become Mar 3).
+  let occurrence = new Date(start);
+  let guard = 0;
+  while (occurrence.getTime() < today.getTime() && guard < 1000) {
+    occurrence = new Date(occurrence);
+    occurrence.setMonth(occurrence.getMonth() + intervalMonths);
+    guard++;
+  }
+
+  if (endDateStr && occurrence.getTime() > new Date(endDateStr).getTime()) return null;
+
+  return occurrence.toISOString().slice(0, 10);
+}
+
+
  * Used by both the dashboard's 90-day view and the bell header's 30-day view —
  * any new alert source must only be added here, never duplicated.
  *
@@ -66,8 +113,9 @@ export function buildUpcomingItems(
   }
 
   for (const p of data.insurance) {
-    if (within(p.next_due_date)) {
-      items.push({ date: p.next_due_date, label: p.name, amount: p.premium, member_id: p.member_id, href: "/insurance", recordId: p.id, sourceType: "insurance_next_due", daysLeft: daysUntil(p.next_due_date), icon: Shield, kind: "Insurance" });
+    const nextOccurrence = computeNextOccurrence(p.start_date, p.frequency, p.end_date, today);
+    if (nextOccurrence && within(nextOccurrence)) {
+      items.push({ date: nextOccurrence, label: p.name, amount: p.premium, member_id: p.member_id, href: "/insurance", recordId: p.id, sourceType: "insurance_next_due", daysLeft: daysUntil(nextOccurrence), icon: Shield, kind: "Insurance" });
     }
     if (within(p.end_date)) {
       items.push({ date: p.end_date, label: `${p.name} — policy ends`, amount: null, member_id: p.member_id, href: "/insurance", recordId: p.id, sourceType: "insurance_end", daysLeft: daysUntil(p.end_date), icon: Shield, kind: "Insurance" });
@@ -91,7 +139,12 @@ export function buildUpcomingItems(
 
   for (const inv of data.investments) {
     const isILP = inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
-    if (isILP && within(inv.premium_end_date)) {
+    if (!isILP) continue;
+    const nextOccurrence = computeNextOccurrence(inv.premium_start_date, inv.premium_frequency, inv.premium_end_date, today);
+    if (nextOccurrence && within(nextOccurrence)) {
+      items.push({ date: nextOccurrence, label: `${inv.name} — premium due`, amount: inv.premium_amount, member_id: inv.member_id, href: "/investments", recordId: inv.id, sourceType: "investment_premium_due", daysLeft: daysUntil(nextOccurrence), icon: TrendingUp, kind: "Invest" });
+    }
+    if (within(inv.premium_end_date)) {
       items.push({ date: inv.premium_end_date, label: `${inv.name} — premiums end`, amount: null, member_id: inv.member_id, href: "/investments", recordId: inv.id, sourceType: "investment_premium_end", daysLeft: daysUntil(inv.premium_end_date), icon: TrendingUp, kind: "Invest" });
     }
   }
