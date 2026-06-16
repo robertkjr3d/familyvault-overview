@@ -1,12 +1,31 @@
 import { useState } from "react";
 import { fmt } from "@/components/LifetimeChart";
-import type { ChartPoint } from "@/components/LifetimeChart";
+import type { ChartPoint, LineItem } from "@/components/LifetimeChart";
 
 type Props = {
   data: ChartPoint[];
   retirementYear: number | null;
   shortfallYear: number | null;
 };
+
+function ItemRow({ it, color }: { it: LineItem; color: "settled" | "urgent" }) {
+  const sign = color === "settled" ? "+" : "−";
+  const textClass = color === "settled" ? "font-medium text-settled" : "font-medium text-urgent";
+  const inner = (
+    <div className="flex justify-between gap-2 py-0.5">
+      <span className="text-muted-foreground">{it.label}</span>
+      <span className={textClass}>{sign}{fmt(it.amount)}</span>
+    </div>
+  );
+  if (it.href) {
+    return (
+      <a href={it.href} className="block rounded hover:bg-accent/40 -mx-1 px-1 transition-colors">
+        {inner}
+      </a>
+    );
+  }
+  return inner;
+}
 
 export function YearDetailPanel({ data, retirementYear, shortfallYear }: Props) {
   const [selectedYear, setSelectedYear] = useState<number>(data[0]?.year ?? new Date().getFullYear());
@@ -59,10 +78,7 @@ export function YearDetailPanel({ data, retirementYear, shortfallYear }: Props) 
               Money in
             </div>
             {inflows.map((it, i) => (
-              <div key={i} className="flex justify-between gap-2 py-0.5">
-                <span className="text-muted-foreground">{it.label}</span>
-                <span className="font-medium text-settled">+{fmt(it.amount)}</span>
-              </div>
+              <ItemRow key={i} it={it} color="settled" />
             ))}
             <div className="mt-1 flex justify-between border-t border-border pt-1 font-bold">
               <span>Total in</span>
@@ -77,10 +93,7 @@ export function YearDetailPanel({ data, retirementYear, shortfallYear }: Props) 
               Money out
             </div>
             {outflows.map((it, i) => (
-              <div key={i} className="flex justify-between gap-2 py-0.5">
-                <span className="text-muted-foreground">{it.label}</span>
-                <span className="font-medium text-urgent">−{fmt(it.amount)}</span>
-              </div>
+              <ItemRow key={i} it={it} color="urgent" />
             ))}
             <div className="mt-1 flex justify-between border-t border-border pt-1 font-bold">
               <span>Total out</span>
@@ -100,20 +113,15 @@ export function YearDetailPanel({ data, retirementYear, shortfallYear }: Props) 
           </span>
         </div>
 
-        {(point.propAppreciation > 0 || point.investGrowth > 0) && (
+        {point.propAppreciation > 0 && (
           <div className="mt-2 space-y-0.5 border-t border-border pt-2">
-            {point.propAppreciation > 0 && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Property growth</span>
-                <span className="font-medium text-settled">+{fmt(point.propAppreciation)}</span>
-              </div>
-            )}
-            {point.investGrowth > 0 && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Investment growth</span>
-                <span className="font-medium text-settled">+{fmt(point.investGrowth)}</span>
-              </div>
-            )}
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Property appreciation</span>
+              <span className="font-medium text-settled">+{fmt(point.propAppreciation)}</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Not included in cash flow — tracked separately as an asset value increase.
+            </p>
           </div>
         )}
 
@@ -130,6 +138,10 @@ export function YearDetailPanel({ data, retirementYear, shortfallYear }: Props) 
         {inflows.length === 0 && outflows.length === 0 && (
           <div className="text-muted-foreground">No cash flow recorded for this year.</div>
         )}
+
+        <p className="mt-2 text-[10px] text-muted-foreground">
+          Tap any line item to go to that record.
+        </p>
       </div>
     </div>
   );
