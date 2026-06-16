@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { AddRecordFab } from "@/components/AddRecordFab";
 import { Bell } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
@@ -20,6 +21,7 @@ import { RemindersList } from "@/components/loan/RemindersList";
 import { monthlyPayment, remainingBalance, monthsSince } from "@/lib/loanMath";
 import { useToday } from "@/lib/today";
 import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
+import { useEntityCounts } from "@/lib/useEntityCounts";
 
 export const Route = createFileRoute("/loans")({
   component: LoansPage,
@@ -32,6 +34,7 @@ function LoansPage() {
   const status = useStatusMutation("loans", "loans");
   const del = useDeleteMutation("loans", "loans", "loan");
   const { today } = useToday();
+  const counts = useEntityCounts("loan", activeHouseholdId);
 
   const { data: loans = [] } = useQuery({
     queryKey: ["loans", memberFilter, activeHouseholdId],
@@ -58,6 +61,9 @@ function LoansPage() {
             today={today}
             onStatus={(s) => status.mutate({ id: l.id, status: s })}
             onDelete={() => del.mutate(l.id)}
+            reminderCount={counts.reminderCounts[l.id] || 0}
+            historyCount={counts.historyCounts[l.id] || 0}
+            documentsCount={counts.documentsCounts[l.id] || 0}
           />
         ))}
       </div>
@@ -75,7 +81,12 @@ function AlertLabel({ text }: { text: string }) {
   );
 }
 
-function LoanRow({ l, today, onStatus, onDelete }: { l: any; today: Date; onStatus: (s: any) => void; onDelete: () => void }) {
+function LoanRow({
+  l, today, onStatus, onDelete, reminderCount, historyCount, documentsCount,
+}: {
+  l: any; today: Date; onStatus: (s: any) => void; onDelete: () => void;
+  reminderCount: number; historyCount: number; documentsCount: number;
+}) {
   const edit = useEditRecord("loans", l);
   const dup = useDuplicateRecord("loans", l);
   const principal = Number(l.original_amount ?? l.balance ?? 0);
@@ -92,6 +103,17 @@ function LoanRow({ l, today, onStatus, onDelete }: { l: any; today: Date; onStat
   const actionLabel = actionParts.join(" · ") || null;
   const displayedMonthlyPayment = l.monthly_payment || calcPmt;
 
+  const [cardOpen, setCardOpen] = useState(false);
+  const [section, setSection] = useState<"notes" | "history" | "documents" | null>(null);
+
+  function openSection(target: "notes" | "history" | "documents") {
+    setCardOpen(true);
+    setSection(target);
+    setTimeout(() => {
+      document.getElementById(`${target}-${l.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
+  }
+
   return (
     <HashHighlight id={`record-${l.id}`}>
       <RecordCard
@@ -107,6 +129,15 @@ function LoanRow({ l, today, onStatus, onDelete }: { l: any; today: Date; onStat
         hasNotes={!!l.notes}
         updatedAt={l.updated_at}
         createdAt={l.created_at}
+        open={cardOpen}
+        onOpenChange={setCardOpen}
+        reminderCount={reminderCount}
+        historyCount={historyCount}
+        documentsCount={documentsCount}
+        onNotesClick={() => openSection("notes")}
+        onReminderClick={() => openSection("notes")}
+        onHistoryClick={() => openSection("history")}
+        onDocumentsClick={() => openSection("documents")}
         rightMeta={
           <div className="text-right text-xs">
             <div className="text-muted-foreground">Balance</div>
@@ -141,22 +172,41 @@ function LoanRow({ l, today, onStatus, onDelete }: { l: any; today: Date; onStat
           <RateSchedule loanId={l.id} />
         </CollapsibleSection>
 
-        <CollapsibleSection icon={<span>📝</span>} title="Notes" defaultOpen={!!l.notes}>
+        <CollapsibleSection
+          id={`notes-${l.id}`}
+          icon={<span>📝</span>}
+          title="Notes"
+          open={section === "notes"}
+          onOpenChange={(o) => setSection(o ? "notes" : null)}
+        >
           <NotesEditor table="loans" queryKey="loans" id={l.id} value={l.notes} />
+          <RemindersList entityType="loan" entityId={l.id} />
+          <div className="flex justify-end pt-1">
+            <ReminderButton entityType="loan" entityId={l.id} />
+          </div>
         </CollapsibleSection>
 
-        <CollapsibleSection icon={<span>🔄</span>} title="Add an Update">
+        <CollapsibleSection
+          id={`history-${l.id}`}
+          icon={<span>🔄</span>}
+          title="Add an Update"
+          count={historyCount}
+          open={section === "history"}
+          onOpenChange={(o) => setSection(o ? "history" : null)}
+        >
           <HistoryLog entityType="loan" entityId={l.id} />
         </CollapsibleSection>
 
-        <CollapsibleSection icon={<span>📎</span>} title="Documents">
+        <CollapsibleSection
+          id={`documents-${l.id}`}
+          icon={<span>📎</span>}
+          title="Documents"
+          count={documentsCount}
+          open={section === "documents"}
+          onOpenChange={(o) => setSection(o ? "documents" : null)}
+        >
           <DocumentsList entityType="loan" entityId={l.id} />
         </CollapsibleSection>
-
-        <RemindersList entityType="loan" entityId={l.id} />
-        <div className="flex justify-end pt-1">
-          <ReminderButton entityType="loan" entityId={l.id} />
-        </div>
       </RecordCard>
       {edit.element}
       {dup.element}
