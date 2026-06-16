@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ChevronDown, Copy, Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, Copy, Pencil, Trash2, Bell, NotebookPen, RotateCw, Paperclip } from "lucide-react";
 import { StatusToggle, type Status } from "./StatusToggle";
 import { MemberTag } from "./MemberTag";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,20 @@ type Props = {
   hasNotes?: boolean;
   updatedAt?: string | null;
   createdAt?: string | null;
+  /** Counts for the icon row below the status toggle. Pass undefined/0 to hide an icon entirely. */
+  reminderCount?: number;
+  historyCount?: number;
+  documentsCount?: number;
+  /** Called when the Notes/Reminder/Update/Documents icon is tapped. The card expands itself;
+   * the parent is responsible for opening the right inner CollapsibleSection and scrolling to it. */
+  onNotesClick?: () => void;
+  onReminderClick?: () => void;
+  onHistoryClick?: () => void;
+  onDocumentsClick?: () => void;
+  /** Controlled open state, so a click on an icon can force the card open even if it was collapsed.
+   * Falls back to internal state if not provided (existing behaviour preserved). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 const tintBg: Record<Status, string> = {
@@ -38,16 +52,64 @@ function readPersisted(key: string | undefined, def: boolean): boolean {
   return def;
 }
 
+function CardIconButton({
+  onClick,
+  active,
+  label,
+  children,
+}: {
+  onClick: () => void;
+  active: boolean;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      className={cn(
+        "flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground",
+        active && "text-primary",
+      )}
+      aria-label={label}
+      title={label}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function RecordCard({
   title, subtitle, memberId, status, onStatusChange, action, rightMeta, children,
   onEdit, onDelete, onDuplicate, defaultOpen = false, highlight, persistKey, hasNotes, updatedAt, createdAt,
+  reminderCount, historyCount, documentsCount,
+  onNotesClick, onReminderClick, onHistoryClick, onDocumentsClick,
+  open: openProp, onOpenChange,
 }: Props) {
-  const [open, setOpen] = useState(() => readPersisted(persistKey, defaultOpen));
+  const [internalOpen, setInternalOpen] = useState(() => readPersisted(persistKey, defaultOpen));
+  const isControlled = openProp !== undefined;
+  const open = isControlled ? openProp : internalOpen;
+
+  function setOpen(updater: boolean | ((v: boolean) => boolean)) {
+    const next = typeof updater === "function" ? updater(open) : updater;
+    if (isControlled) {
+      onOpenChange?.(next);
+    } else {
+      setInternalOpen(next);
+    }
+  }
 
   useEffect(() => {
     if (!persistKey || typeof window === "undefined") return;
     localStorage.setItem(`fv:open:${persistKey}`, open ? "1" : "0");
   }, [open, persistKey]);
+
+  function handleIconClick(callback?: () => void) {
+    setOpen(true);
+    callback?.();
+  }
+
+  const hasAnyIcon = hasNotes || (reminderCount ?? 0) > 0 || (historyCount ?? 0) > 0 || (documentsCount ?? 0) > 0;
 
   return (
     <article
@@ -124,12 +186,39 @@ export function RecordCard({
               <span className="text-[10px] text-muted-foreground">{label} {dateStr}</span>
             );
           })()}
-          {hasNotes && <span className="text-sm" title="Has notes">📝</span>}
           <ChevronDown
             className={cn("h-4 w-4 text-muted-foreground transition", open && "rotate-180")}
           />
         </div>
       </button>
+
+      {hasAnyIcon && (
+        <div className="flex items-center gap-1 border-t border-border/40 px-4 py-1.5 text-[11px]">
+          {hasNotes && (
+            <CardIconButton onClick={() => handleIconClick(onNotesClick)} active={!!hasNotes} label="View notes">
+              <NotebookPen className="h-3.5 w-3.5" />
+            </CardIconButton>
+          )}
+          {(reminderCount ?? 0) > 0 && (
+            <CardIconButton onClick={() => handleIconClick(onReminderClick)} active label={`${reminderCount} reminder${reminderCount === 1 ? "" : "s"}`}>
+              <Bell className="h-3.5 w-3.5 fill-yellow-500 text-yellow-500" />
+              <span>{reminderCount}</span>
+            </CardIconButton>
+          )}
+          {(historyCount ?? 0) > 0 && (
+            <CardIconButton onClick={() => handleIconClick(onHistoryClick)} active label={`${historyCount} update${historyCount === 1 ? "" : "s"}`}>
+              <RotateCw className="h-3.5 w-3.5" />
+              <span>{historyCount}</span>
+            </CardIconButton>
+          )}
+          {(documentsCount ?? 0) > 0 && (
+            <CardIconButton onClick={() => handleIconClick(onDocumentsClick)} active label={`${documentsCount} document${documentsCount === 1 ? "" : "s"}`}>
+              <Paperclip className="h-3.5 w-3.5" />
+              <span>{documentsCount}</span>
+            </CardIconButton>
+          )}
+        </div>
+      )}
 
       {open && children && (
         <div className="space-y-4 border-t border-border/40 bg-background/40 p-4">{children}</div>
