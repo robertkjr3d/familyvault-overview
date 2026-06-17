@@ -11,10 +11,23 @@ type Props = {
 function ItemRow({ it, color }: { it: LineItem; color: "settled" | "urgent" }) {
   const sign = color === "settled" ? "+" : "−";
   const textClass = color === "settled" ? "font-medium text-settled" : "font-medium text-urgent";
+  const times = it.timesPerYear ?? 1;
+  const perOccurrence = times > 1 ? it.amount / times : null;
+  const periodLabel = times === 12 ? "/mo" : times === 4 ? "/qtr" : times === 2 ? "/half-yr" : "";
   const inner = (
     <div className="flex justify-between gap-2 py-0.5">
-      <span className="text-muted-foreground">{it.label}</span>
-      <span className={textClass}>{sign}{fmt(it.amount)}</span>
+      <span className="text-muted-foreground">
+        {it.label}
+        <span className="ml-1 text-[9px] font-normal text-muted-foreground/70">×{times}</span>
+      </span>
+      <span className="text-right">
+        <span className={textClass}>{sign}{fmt(it.amount)}</span>
+        {perOccurrence !== null && (
+          <span className="block text-[9px] font-normal text-muted-foreground/70">
+            {fmt(perOccurrence)}{periodLabel}
+          </span>
+        )}
+      </span>
     </div>
   );
   if (it.href) {
