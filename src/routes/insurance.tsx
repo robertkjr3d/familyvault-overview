@@ -12,7 +12,7 @@ import { sortByStatus } from "@/lib/sort";
 import { fmtMoney, fmtDate } from "@/lib/format";
 import { HashHighlight } from "@/components/HashHighlight";
 import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
-import { freqLabel } from "@/lib/options";
+import { freqLabel, INSURANCE_CATEGORIES } from "@/lib/options";
 import { DocumentsList } from "@/components/loan/DocumentsList";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { HistoryLog } from "@/components/loan/HistoryLog";
@@ -33,6 +33,7 @@ function InsurancePage() {
   const status = useStatusMutation("insurance_policies", "insurance");
   const del = useDeleteMutation("insurance_policies", "insurance", "insurance");
   const counts = useEntityCounts("insurance", activeHouseholdId);
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
 
   const { data: items = [] } = useQuery({
     queryKey: ["insurance", memberFilter, activeHouseholdId],
@@ -54,7 +55,12 @@ function InsurancePage() {
     return s + Number(i.premium) * mult;
   }, 0);
 
-  const categories = Array.from(new Set(items.map((i: any) => i.category)));
+  const presentCategories = new Set(items.map((i: any) => i.category));
+  const categories = INSURANCE_CATEGORIES.filter((c) => presentCategories.has(c));
+  // If the only policy in the selected category gets deleted (or filters change),
+  // fall back to "All" rather than silently rendering a blank page.
+  const effectiveCategory = selectedCategory === "All" || categories.includes(selectedCategory) ? selectedCategory : "All";
+  const visibleCategories = effectiveCategory === "All" ? categories : categories.filter((c) => c === effectiveCategory);
 
   return (
     <div className="space-y-4">
@@ -63,6 +69,33 @@ function InsurancePage() {
         {items.length} policies · {fmtMoney(totalAnnual)} / year total
       </p>
       <MemberFilterBar table="insurance_policies" />
+      <p className="text-[11px] text-muted-foreground">
+        Looking for ILP or Endowment policies? Those are tracked under{" "}
+        <a href="/investments" className="font-semibold text-primary underline">Investments</a>.
+      </p>
+
+      {categories.length > 1 && (
+        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+          {["All", ...categories].map((cat) => {
+            const isSelected = effectiveCategory === cat;
+            const count = cat === "All" ? items.length : items.filter((i: any) => i.category === cat).length;
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSelectedCategory(cat)}
+                className={`flex-shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                  isSelected
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card text-muted-foreground"
+                }`}
+              >
+                {cat} <span className="opacity-70">({count})</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {items.length === 0 && (
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
@@ -70,7 +103,7 @@ function InsurancePage() {
         </div>
       )}
 
-      {categories.map((cat) => (
+      {visibleCategories.map((cat) => (
         <section key={cat}>
           <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">{cat}</h2>
           <div className="space-y-3">
