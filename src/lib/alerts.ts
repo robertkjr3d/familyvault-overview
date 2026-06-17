@@ -87,7 +87,8 @@ export function computeNextOccurrence(
   return occurrence.toISOString().slice(0, 10);
 }
 
-
+/**
+ * Single source of truth for every date-based "upcoming/overdue" alert in the app.
  * Used by both the dashboard's 90-day view and the bell header's 30-day view —
  * any new alert source must only be added here, never duplicated.
  *
