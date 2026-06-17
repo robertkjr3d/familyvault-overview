@@ -170,55 +170,59 @@ export function RecordCard({
         </div>
       </button>
 
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-2 border-t border-border/40 px-4 py-2"
-      >
-        <StatusToggle value={status} onChange={onStatusChange} />
-        <div className="flex items-center gap-2">
-          {updatedAt && (() => {
-            const updMs = new Date(updatedAt).getTime();
-            const creMs = createdAt ? new Date(createdAt).getTime() : updMs;
-            const wasEdited = updMs - creMs > 60000;
-            const label = wasEdited ? "Updated" : "Added";
-            const dateStr = new Date(updatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
-            return (
-              <span className="text-[10px] text-muted-foreground">{label} {dateStr}</span>
-            );
-          })()}
-          <ChevronDown
-            className={cn("h-4 w-4 text-muted-foreground transition", open && "rotate-180")}
-          />
+      <div className="flex w-full items-center justify-between gap-2 border-t border-border/40 px-4 py-2">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center"
+          aria-label="Toggle status"
+        >
+          <StatusToggle value={status} onChange={onStatusChange} />
+        </button>
+        <div className="flex items-center gap-1">
+          {hasAnyIcon && (
+            <div className="flex items-center gap-1 text-[11px]">
+              {hasNotes && (
+                <CardIconButton onClick={() => handleIconClick(onNotesClick)} active={!!hasNotes} label="View notes">
+                  <NotebookPen className="h-3.5 w-3.5" />
+                </CardIconButton>
+              )}
+              {(reminderCount ?? 0) > 0 && (
+                <CardIconButton onClick={() => handleIconClick(onReminderClick)} active label={`${reminderCount} reminder${reminderCount === 1 ? "" : "s"}`}>
+                  <Bell className="h-3.5 w-3.5 fill-yellow-500 text-yellow-500" />
+                  <span>{reminderCount}</span>
+                </CardIconButton>
+              )}
+              {(historyCount ?? 0) > 0 && (
+                <CardIconButton onClick={() => handleIconClick(onHistoryClick)} active label={`${historyCount} update${historyCount === 1 ? "" : "s"}`}>
+                  <RotateCw className="h-3.5 w-3.5" />
+                  <span>{historyCount}</span>
+                </CardIconButton>
+              )}
+              {(documentsCount ?? 0) > 0 && (
+                <CardIconButton onClick={() => handleIconClick(onDocumentsClick)} active label={`${documentsCount} document${documentsCount === 1 ? "" : "s"}`}>
+                  <Paperclip className="h-3.5 w-3.5" />
+                  <span>{documentsCount}</span>
+                </CardIconButton>
+              )}
+            </div>
+          )}
+          <button onClick={() => setOpen((v) => !v)} className="flex items-center gap-2" aria-label="Toggle details">
+            {updatedAt && (() => {
+              const updMs = new Date(updatedAt).getTime();
+              const creMs = createdAt ? new Date(createdAt).getTime() : updMs;
+              const wasEdited = updMs - creMs > 60000;
+              const label = wasEdited ? "Updated" : "Added";
+              const dateStr = new Date(updatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
+              return (
+                <span className="text-[10px] text-muted-foreground">{label} {dateStr}</span>
+              );
+            })()}
+            <ChevronDown
+              className={cn("h-4 w-4 text-muted-foreground transition", open && "rotate-180")}
+            />
+          </button>
         </div>
-      </button>
-
-      {hasAnyIcon && (
-        <div className="flex items-center gap-1 border-t border-border/40 px-4 py-1.5 text-[11px]">
-          {hasNotes && (
-            <CardIconButton onClick={() => handleIconClick(onNotesClick)} active={!!hasNotes} label="View notes">
-              <NotebookPen className="h-3.5 w-3.5" />
-            </CardIconButton>
-          )}
-          {(reminderCount ?? 0) > 0 && (
-            <CardIconButton onClick={() => handleIconClick(onReminderClick)} active label={`${reminderCount} reminder${reminderCount === 1 ? "" : "s"}`}>
-              <Bell className="h-3.5 w-3.5 fill-yellow-500 text-yellow-500" />
-              <span>{reminderCount}</span>
-            </CardIconButton>
-          )}
-          {(historyCount ?? 0) > 0 && (
-            <CardIconButton onClick={() => handleIconClick(onHistoryClick)} active label={`${historyCount} update${historyCount === 1 ? "" : "s"}`}>
-              <RotateCw className="h-3.5 w-3.5" />
-              <span>{historyCount}</span>
-            </CardIconButton>
-          )}
-          {(documentsCount ?? 0) > 0 && (
-            <CardIconButton onClick={() => handleIconClick(onDocumentsClick)} active label={`${documentsCount} document${documentsCount === 1 ? "" : "s"}`}>
-              <Paperclip className="h-3.5 w-3.5" />
-              <span>{documentsCount}</span>
-            </CardIconButton>
-          )}
-        </div>
-      )}
+      </div>
 
       {open && children && (
         <div className="space-y-4 border-t border-border/40 bg-background/40 p-4">{children}</div>
