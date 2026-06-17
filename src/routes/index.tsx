@@ -11,6 +11,7 @@ import { addDays } from "date-fns";
 import { buildUpcomingItems } from "@/lib/alerts";
 import type { UpcomingItem } from "@/lib/alerts";
 import { LifetimeChart } from "@/components/LifetimeChart";
+import type { LineItem } from "@/components/LifetimeChart";
 import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check } from "lucide-react";
 import { useState, useRef } from "react";
 import { fmtPct } from "@/lib/format";
@@ -29,6 +30,7 @@ function Dashboard() {
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const { data: members = [] } = useMembers();
   const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [cashFlowDetailOpen, setCashFlowDetailOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [dismissing, setDismissing] = useState<string | null>(null);
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
@@ -238,6 +240,43 @@ function Dashboard() {
   const baseExpenses = Number(appSettings?.monthly_expenses) || 0;
   const monthlyOut = propertyOut + loanOut + insuranceOut + investmentPremiumOut + baseExpenses;
   const netCashFlow = monthlyIn - monthlyOut;
+
+  // Per-record cash flow detail — same "what's adding/subtracting and from where"
+  // pattern as the Lifetime Chart's Year Detail panel, but for this month's actual figures.
+  const inflowDetailItems: LineItem[] = [
+    ...(salaryIncome > 0 ? [{ label: "Salary / income", amount: salaryIncome, href: "/settings" }] : []),
+    ...properties
+      .filter((p: any) => (Number(p.monthly_rent) || 0) > 0)
+      .map((p: any) => ({ label: `${p.name ?? "Property"} rental`, amount: Number(p.monthly_rent) || 0, href: `/property#record-${p.id}` })),
+    ...insurance
+      .filter((p: any) => insurancePayoutMonthly(p) > 0)
+      .map((p: any) => ({ label: `${p.name ?? "Insurance"} payout`, amount: insurancePayoutMonthly(p), href: `/insurance#record-${p.id}` })),
+    ...investments
+      .filter((inv: any) => investmentPayoutMonthly(inv) > 0)
+      .map((inv: any) => ({ label: `${inv.name ?? "ILP"} payout`, amount: investmentPayoutMonthly(inv), href: `/investments#record-${inv.id}` })),
+  ];
+
+  const outflowDetailItems: LineItem[] = [
+    ...properties.flatMap((p: any) => {
+      const items: LineItem[] = [];
+      const propHref = `/property#record-${p.id}`;
+      const costs = propertyTotalCosts(p);
+      if (costs > 0) items.push({ label: `${p.name ?? "Property"} costs`, amount: costs, href: propHref });
+      const mortgage = mortgagedPropertyIds.has(p.id) ? 0 : Number(p.monthly_payment) || 0;
+      if (mortgage > 0) items.push({ label: `${p.name ?? "Property"} mortgage`, amount: mortgage, href: propHref });
+      return items;
+    }),
+    ...loans
+      .filter((l: any) => (Number(l.monthly_payment) || 0) > 0)
+      .map((l: any) => ({ label: `${l.bank ?? "Loan"} repayment`, amount: Number(l.monthly_payment) || 0, href: `/loans#record-${l.id}` })),
+    ...insurance
+      .filter((p: any) => insuranceMonthly(p) > 0)
+      .map((p: any) => ({ label: `${p.name ?? "Insurance"} premium`, amount: insuranceMonthly(p), href: `/insurance#record-${p.id}` })),
+    ...investments
+      .filter((inv: any) => investmentPremiumMonthly(inv) > 0)
+      .map((inv: any) => ({ label: `${inv.name ?? "ILP"} premium`, amount: investmentPremiumMonthly(inv), href: `/investments#record-${inv.id}` })),
+    ...(baseExpenses > 0 ? [{ label: "Other expenses (Settings)", amount: baseExpenses, href: "/settings" }] : []),
+  ];
 
   const showSettingsNudge = salaryIncome === 0 && baseExpenses === 0;
 
@@ -520,7 +559,18 @@ function Dashboard() {
 
       {/* MONTHLY CASH FLOW BARS */}
      <section ref={cashFlowRef} className={`scroll-mt-28 rounded-2xl border border-border bg-card p-4 transition-all ${highlight === "cash-flow" ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}>
-        <h2 className="mb-3 text-sm font-bold">Monthly Cash Flow</h2>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-bold">Monthly Cash Flow</h2>
+          {(inflowDetailItems.length > 0 || outflowDetailItems.length > 0) && (
+            <button
+              onClick={() => setCashFlowDetailOpen((v) => !v)}
+              className="flex items-center gap-1 text-xs font-semibold text-primary"
+            >
+              {cashFlowDetailOpen ? "Hide breakdown" : "Show breakdown"}
+              <ChevronDown className={`h-3.5 w-3.5 transition ${cashFlowDetailOpen ? "rotate-180" : ""}`} />
+            </button>
+          )}
+        </div>
         <CashFlowBars
           inflow={monthlyIn}
           outflow={monthlyOut}
@@ -538,6 +588,30 @@ function Dashboard() {
             { label: "Other expenses", value: baseExpenses },
           ]}
         />
+        {cashFlowDetailOpen && (
+          <div className="mt-3 space-y-3 border-t border-border/40 pt-3 text-xs">
+            {inflowDetailItems.length > 0 && (
+              <div>
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Money in — by record
+                </div>
+                {inflowDetailItems.map((it, i) => (
+                  <CashFlowItemRow key={i} it={it} color="settled" />
+                ))}
+              </div>
+            )}
+            {outflowDetailItems.length > 0 && (
+              <div>
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Money out — by record
+                </div>
+                {outflowDetailItems.map((it, i) => (
+                  <CashFlowItemRow key={i} it={it} color="urgent" />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <div className="mt-3 text-center">
           <div className="text-xs text-muted-foreground">Net</div>
           <div className={`text-2xl font-bold ${netCashFlow >= 0 ? "text-settled" : "text-urgent"}`}>
@@ -623,6 +697,25 @@ function BreakdownRow({ label, value, bold, className }: { label: string; value:
       <span>{value}</span>
     </div>
   );
+}
+
+function CashFlowItemRow({ it, color }: { it: LineItem; color: "settled" | "urgent" }) {
+  const sign = color === "settled" ? "+" : "−";
+  const textClass = color === "settled" ? "font-medium text-settled" : "font-medium text-urgent";
+  const inner = (
+    <div className="flex justify-between gap-2 py-0.5">
+      <span className="text-muted-foreground">{it.label}</span>
+      <span className={textClass}>{sign}{fmtMoney(it.amount)}</span>
+    </div>
+  );
+  if (it.href) {
+    return (
+      <a href={it.href} className="block rounded hover:bg-accent/40 -mx-1 px-1 transition-colors">
+        {inner}
+      </a>
+    );
+  }
+  return inner;
 }
 
 type BreakdownItem = { label: string; value: number };
