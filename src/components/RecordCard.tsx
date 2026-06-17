@@ -171,14 +171,14 @@ export function RecordCard({
       </button>
 
       <div className="flex w-full items-center justify-between gap-2 border-t border-border/40 px-4 py-2">
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="flex items-center"
-          aria-label="Toggle status"
-        >
-          <StatusToggle value={status} onChange={onStatusChange} />
-        </button>
         <div className="flex items-center gap-1">
+          <button
+            onClick={() => setOpen((v) => !v)}
+            className="flex items-center"
+            aria-label="Toggle status"
+          >
+            <StatusToggle value={status} onChange={onStatusChange} />
+          </button>
           {hasAnyIcon && (
             <div className="flex items-center gap-1 text-[11px]">
               {hasNotes && (
@@ -206,22 +206,22 @@ export function RecordCard({
               )}
             </div>
           )}
-          <button onClick={() => setOpen((v) => !v)} className="flex items-center gap-2" aria-label="Toggle details">
-            {updatedAt && (() => {
-              const updMs = new Date(updatedAt).getTime();
-              const creMs = createdAt ? new Date(createdAt).getTime() : updMs;
-              const wasEdited = updMs - creMs > 60000;
-              const label = wasEdited ? "Updated" : "Added";
-              const dateStr = new Date(updatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
-              return (
-                <span className="text-[10px] text-muted-foreground">{label} {dateStr}</span>
-              );
-            })()}
-            <ChevronDown
-              className={cn("h-4 w-4 text-muted-foreground transition", open && "rotate-180")}
-            />
-          </button>
         </div>
+        <button onClick={() => setOpen((v) => !v)} className="flex items-center gap-2" aria-label="Toggle details">
+          {updatedAt && (() => {
+            const updMs = new Date(updatedAt).getTime();
+            const creMs = createdAt ? new Date(createdAt).getTime() : updMs;
+            const wasEdited = updMs - creMs > 60000;
+            const label = wasEdited ? "Updated" : "Added";
+            const dateStr = new Date(updatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
+            return (
+              <span className="text-[10px] text-muted-foreground">{label} {dateStr}</span>
+            );
+          })()}
+          <ChevronDown
+            className={cn("h-4 w-4 text-muted-foreground transition", open && "rotate-180")}
+          />
+        </button>
       </div>
 
       {open && children && (
