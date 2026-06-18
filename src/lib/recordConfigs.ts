@@ -116,7 +116,10 @@ export const recordConfigs: Record<string, RecordConfig> = {
       { key: "frequency", label: "Premium frequency", type: "select", options: INSURANCE_FREQ, default: "annual", section: "💳 Premium" },
       { key: "start_date", label: "Premium start date", type: "date", section: "💳 Premium" },
       { key: "end_date", label: "Premium end date", type: "date", section: "💳 Premium" },
-      { key: "next_due_date", label: "Next premium due", type: "date", section: "💳 Premium" },
+      // Note: next_due_date was removed from this form — it no longer drives any
+      // alert or display anywhere (insurance.tsx and the dashboard both derive the
+      // next-due date from start_date + frequency via computeNextOccurrence). The
+      // column itself is left alone in the database, just no longer editable here.
 
       // 💰 Payout
       { key: "sum_assured", label: "Sum assured", type: "number", money: true, section: "💰 Payout" },
@@ -142,6 +145,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
       { key: "currency", label: "Currency", type: "select", options: CURRENCIES, default: "SGD" },
       { key: "cost_basis", label: "Amount invested", type: "number", money: true, currencyFrom: "currency" },
       { key: "current_value", label: "Current value (est.)", type: "number", money: true, currencyFrom: "currency" },
+      { key: "last_updated", label: "Value as of", type: "date" },
       { key: "projected_return_pct", label: "Projected return %", type: "number" },
      { key: "premium_amount", label: "Premium amount", type: "number", money: true, showIf: (v) => v.group_name === "ILP (Investment-Linked Policy)" || v.group_name === "Endowment" },
       { key: "premium_start_date", label: "Premium start date", type: "date", showIf: (v) => v.group_name === "ILP (Investment-Linked Policy)" || v.group_name === "Endowment" },
