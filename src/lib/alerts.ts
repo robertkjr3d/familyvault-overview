@@ -71,14 +71,28 @@ export function computeNextOccurrence(
   const start = new Date(startDateStr);
   if (isNaN(start.getTime())) return null;
 
-  // Advance from the start date by whole intervals until we land on or after today.
-  // Using setMonth repeatedly (rather than a division) avoids day-of-month drift
-  // (e.g. Jan 31 + 1 month should not silently become Mar 3).
+  // Advance from the start date by whole intervals until landing on or after
+  // today. Each step re-derives from the ORIGINAL start day (not the previous
+  // step's result) and clamps to the target month's actual length — e.g. a
+  // start date of Jan 31 with a monthly frequency correctly lands on Feb 28,
+  // not Mar 3. Re-deriving from the original day each time (rather than
+  // compounding off a previously-clamped date) also avoids the clamp
+  // permanently "losing" the 31st in later months (Mar 31 stays 31, it isn't
+  // dragged down to 28 just because Feb had to clamp).
+  function addMonthsFromStart(monthsToAdd: number): Date {
+    const targetMonthIndex = start.getMonth() + monthsToAdd;
+    const result = new Date(start.getFullYear(), targetMonthIndex, 1);
+    const lastDayOfTargetMonth = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+    result.setDate(Math.min(start.getDate(), lastDayOfTargetMonth));
+    return result;
+  }
+
+  let monthsAdded = 0;
   let occurrence = new Date(start);
   let guard = 0;
   while (occurrence.getTime() < today.getTime() && guard < 1000) {
-    occurrence = new Date(occurrence);
-    occurrence.setMonth(occurrence.getMonth() + intervalMonths);
+    monthsAdded += intervalMonths;
+    occurrence = addMonthsFromStart(monthsAdded);
     guard++;
   }
 
