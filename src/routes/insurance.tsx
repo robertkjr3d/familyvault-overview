@@ -168,6 +168,7 @@ function InsuranceRow({
         status={p.status}
         onStatusChange={onStatus}
         action={p.action}
+        tags={Array.isArray(p.also_covers) ? p.also_covers : null}
         onEdit={edit.open}
         onDelete={onDelete}
         onDuplicate={dup.open}
