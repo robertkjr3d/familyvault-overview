@@ -74,7 +74,7 @@ function propertyTotalCosts(p: any): number {
 // Maps a frequency string (e.g. insurance/ILP "frequency" or "payout_frequency"
 // fields) to how many times per year it occurs, for the Year Detail frequency column.
 // Defaults to 1 (annual / single occurrence) for unrecognised or one-off values.
-function freqTimesPerYear(freq: string | null | undefined): number {
+export function freqTimesPerYear(freq: string | null | undefined): number {
   const f = (freq || "annual").toLowerCase();
   if (f.includes("month")) return 12;
   if (f.includes("quart")) return 4;
