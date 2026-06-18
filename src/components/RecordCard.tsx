@@ -11,6 +11,10 @@ type Props = {
   status: Status;
   onStatusChange: (s: Status) => void;
   action?: string | null;
+  /** Small informational badges shown below the title/subtitle, e.g. secondary
+   * categories a record also applies to. Purely informational — doesn't affect
+   * any filtering, grouping, or tab logic. */
+  tags?: string[] | null;
   rightMeta?: ReactNode;
   children?: ReactNode;
   onEdit?: () => void;
@@ -80,7 +84,7 @@ function CardIconButton({
 }
 
 export function RecordCard({
-  title, subtitle, memberId, status, onStatusChange, action, rightMeta, children,
+  title, subtitle, memberId, status, onStatusChange, action, tags, rightMeta, children,
   onEdit, onDelete, onDuplicate, defaultOpen = false, highlight, persistKey, hasNotes, updatedAt, createdAt,
   reminderCount, historyCount, documentsCount,
   onNotesClick, onReminderClick, onHistoryClick, onDocumentsClick,
@@ -159,6 +163,15 @@ export function RecordCard({
             <MemberTag memberId={memberId} />
           </div>
           {subtitle && <div className="text-xs text-muted-foreground">{subtitle}</div>}
+          {tags && tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {tags.map((t) => (
+                <span key={t} className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  {t}
+                </span>
+              ))}
+            </div>
+          )}
           {action && (
             <p className="line-clamp-2 text-sm text-foreground/90">
               <span className="font-medium text-primary">Action:</span> {action}
