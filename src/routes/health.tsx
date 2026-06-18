@@ -9,12 +9,12 @@ import { RecordCard, Section } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
 import { sortByStatus } from "@/lib/sort";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
-import { NotesEditor } from "@/components/loan/NotesEditor";
-import { HistoryLog } from "@/components/loan/HistoryLog";
-import { DocumentsList } from "@/components/loan/DocumentsList";
+import { NotesEditor } from "@/components/NotesEditor";
+import { HistoryLog } from "@/components/HistoryLog";
+import { DocumentsList } from "@/components/DocumentsList";
 import { useEditRecord } from "@/components/EditRecordButton";
-import { ReminderButton } from "@/components/loan/ReminderButton";
-import { RemindersList } from "@/components/loan/RemindersList";
+import { ReminderButton } from "@/components/ReminderButton";
+import { RemindersList } from "@/components/RemindersList";
 
 export const Route = createFileRoute("/health")({
   component: HealthPage,
