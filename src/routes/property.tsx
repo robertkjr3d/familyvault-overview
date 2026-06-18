@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { HistoryLog } from "@/components/loan/HistoryLog";
+import { HistoryLog } from "@/components/HistoryLog";
 import { AddRecordFab } from "@/components/AddRecordFab";
 import { Bell } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
@@ -15,10 +15,10 @@ import { HashHighlight } from "@/components/HashHighlight";
 import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
 import { PROPERTY_PURPOSE_LABEL } from "@/lib/options";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
-import { NotesEditor } from "@/components/loan/NotesEditor";
-import { DocumentsList } from "@/components/loan/DocumentsList";
-import { ReminderButton } from "@/components/loan/ReminderButton";
-import { RemindersList } from "@/components/loan/RemindersList";
+import { NotesEditor } from "@/components/NotesEditor";
+import { DocumentsList } from "@/components/DocumentsList";
+import { ReminderButton } from "@/components/ReminderButton";
+import { RemindersList } from "@/components/RemindersList";
 import { useEntityCounts } from "@/lib/useEntityCounts";
 
 export const Route = createFileRoute("/property")({
