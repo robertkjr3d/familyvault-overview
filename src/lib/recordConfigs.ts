@@ -104,6 +104,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
       // 📋 Policy Details
       { key: "name", label: "Policy name", type: "text", required: true, section: "📋 Policy Details" },
       { key: "category", label: "Category", type: "select", options: INSURANCE_CATEGORIES, required: true, section: "📋 Policy Details" },
+      { key: "also_covers", label: "Also covers (optional)", type: "chips", placeholder: "e.g. Disability — type and press Enter…", default: [], section: "📋 Policy Details" },
       { key: "provider", label: "Provider", type: "text", section: "📋 Policy Details" },
       { key: "member_id", label: "Insured", type: "member", section: "📋 Policy Details" },
       { key: "policy_number", label: "Policy number", type: "text", section: "📋 Policy Details" },
