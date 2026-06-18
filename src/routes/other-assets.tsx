@@ -12,11 +12,11 @@ import { fmtMoney, fmtDate } from "@/lib/format";
 import { HashHighlight } from "@/components/HashHighlight";
 import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
-import { NotesEditor } from "@/components/loan/NotesEditor";
-import { HistoryLog } from "@/components/loan/HistoryLog";
-import { DocumentsList } from "@/components/loan/DocumentsList";
-import { ReminderButton } from "@/components/loan/ReminderButton";
-import { RemindersList } from "@/components/loan/RemindersList";
+import { NotesEditor } from "@/components/NotesEditor";
+import { HistoryLog } from "@/components/HistoryLog";
+import { DocumentsList } from "@/components/DocumentsList";
+import { ReminderButton } from "@/components/ReminderButton";
+import { RemindersList } from "@/components/RemindersList";
 import { useEntityCounts } from "@/lib/useEntityCounts";
 
 export const Route = createFileRoute("/other-assets")({
