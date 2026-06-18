@@ -8,7 +8,7 @@ import { MemberTag } from "@/components/MemberTag";
 import { StatusBadge } from "@/components/StatusToggle";
 import { useAppStore } from "@/lib/store";
 import { addDays } from "date-fns";
-import { buildUpcomingItems } from "@/lib/alerts";
+import { buildUpcomingItems, computeNextOccurrence } from "@/lib/alerts";
 import type { UpcomingItem } from "@/lib/alerts";
 import { LifetimeChart } from "@/components/LifetimeChart";
 import type { LineItem } from "@/components/LifetimeChart";
@@ -779,7 +779,12 @@ function CashFlowBars({
 function reviewDateInfo(kind: string, row: any): { prefix: string; date: string } | null {
   if (kind === "Property" && row.fixed_rate_end) return { prefix: "Reprice by", date: fmtMonth(row.fixed_rate_end) };
   if (kind === "Loan" && row.reprice_date) return { prefix: "Reprice by", date: fmtMonth(row.reprice_date) };
-  if (kind === "Insurance" && row.next_due_date) return { prefix: "Renew by", date: fmtMonth(row.next_due_date) };
+  if (kind === "Insurance") {
+    // Derived from start_date + frequency, same as everywhere else alerts are computed —
+    // not the dead next_due_date field, which no longer gets kept in sync with reality.
+    const nextDue = computeNextOccurrence(row.start_date, row.frequency, row.end_date, new Date());
+    if (nextDue) return { prefix: "Renew by", date: fmtMonth(nextDue) };
+  }
   return null;
 }
 
