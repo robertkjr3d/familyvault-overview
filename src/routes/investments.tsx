@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { AddRecordFab } from "@/components/AddRecordFab";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { differenceInDays, parseISO } from "date-fns";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppStore } from "@/lib/store";
 import { MemberFilterBar } from "@/components/MemberFilterBar";
@@ -13,17 +17,58 @@ import { freqLabel } from "@/lib/options";
 import { HashHighlight } from "@/components/HashHighlight";
 import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
-import { NotesEditor } from "@/components/loan/NotesEditor";
-import { HistoryLog } from "@/components/loan/HistoryLog";
-import { DocumentsList } from "@/components/loan/DocumentsList";
-import { ReminderButton } from "@/components/loan/ReminderButton";
-import { RemindersList } from "@/components/loan/RemindersList";
+import { NotesEditor } from "@/components/NotesEditor";
+import { HistoryLog } from "@/components/HistoryLog";
+import { DocumentsList } from "@/components/DocumentsList";
+import { ReminderButton } from "@/components/ReminderButton";
+import { RemindersList } from "@/components/RemindersList";
 import { useEntityCounts } from "@/lib/useEntityCounts";
 
 export const Route = createFileRoute("/investments")({
   component: InvestmentsPage,
   head: () => ({ meta: [{ title: "Investments — FamilyVault" }] }),
 });
+
+function staleDays(lastUpdated: string | null | undefined) {
+  if (!lastUpdated) return null;
+  try { return differenceInDays(new Date(), parseISO(lastUpdated)); } catch { return null; }
+}
+
+function UpdateValueInline({ id, current }: { id: string; current: number | null | undefined }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(current?.toString() ?? "");
+  const qc = useQueryClient();
+
+  async function save() {
+    const num = Number(val.replace(/,/g, ""));
+    if (isNaN(num)) { toast.error("Enter a valid number"); return; }
+    const today = new Date().toISOString().slice(0, 10);
+    const { error } = await supabase.from("investments").update({ current_value: num, last_updated: today } as any).eq("id", id);
+    if (error) toast.error(error.message);
+    else {
+      toast.success("Value updated");
+      qc.invalidateQueries({ queryKey: ["investments"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      setEditing(false);
+    }
+  }
+
+  if (!editing) {
+    return (
+      <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs"
+        onClick={(e) => { e.stopPropagation(); setEditing(true); }}>
+        Update
+      </Button>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+      <Input type="text" inputMode="decimal" value={val} onChange={(e) => setVal(e.target.value)} className="h-7 w-24 text-xs" autoFocus />
+      <Button type="button" size="sm" className="h-7 px-2 text-xs" onClick={save}>Save</Button>
+      <Button type="button" size="sm" variant="ghost" className="h-7 px-1.5 text-xs" onClick={() => setEditing(false)}>✕</Button>
+    </div>
+  );
+}
 
 function InvestmentsPage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
@@ -98,12 +143,15 @@ function InvestmentRow({
   const edit = useEditRecord("investments", inv);
   const dup = useDuplicateRecord("investments", inv);
   const gain = (inv.current_value || 0) - (inv.cost_basis || 0);
-  const daysSinceUpdate = inv.updated_at
-    ? Math.floor((Date.now() - new Date(inv.updated_at).getTime()) / (1000 * 60 * 60 * 24))
-    : null;
-  const isStale = daysSinceUpdate !== null && daysSinceUpdate > 90;
+  // Uses a dedicated last_updated field (stamped only when the value itself is
+  // changed via Update, or edited on the form) rather than the system updated_at
+  // timestamp — updated_at resets on ANY edit (e.g. tweaking the strategy notes),
+  // which would silently clear the staleness warning without the value actually
+  // having been refreshed. Same reasoning savings_accounts already uses.
+  const stale = staleDays(inv.last_updated);
+  const isStale = stale != null && stale >= 90;
   const isILPOrEndowment = inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
-  const staleTitle = "Updated " + daysSinceUpdate + "d ago";
+  const staleTitle = "Updated " + stale + "d ago";
   const staleIndicator = isStale ? <span className="ml-1 text-review" title={staleTitle}>⚠</span> : null;
 
   // Premium shown on the collapsed card so a yearly/monthly ILP/Endowment premium
@@ -160,6 +208,12 @@ function InvestmentRow({
             </div>
             <div className="font-bold">{fmtMoney(inv.current_value)}</div>
             <div className={gain >= 0 ? "text-settled" : "text-urgent"}>{fmtMoney(gain)}</div>
+            <div className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
+              {isStale && (
+                <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: "hsl(38 95% 55%)" }} aria-label="Value is stale" />
+              )}
+              <span>{inv.last_updated ? `Updated: ${fmtDate(inv.last_updated)}` : "Never updated"}</span>
+            </div>
             {premiumMonthlyEquivalent != null && (
               <div className="mt-1 font-semibold text-urgent">
                 −{fmtMoney(premiumMonthlyEquivalent)}/mo
@@ -168,14 +222,20 @@ function InvestmentRow({
           </div>
         }
       >
-        {isStale && (
-          <div className="rounded-lg border border-review/40 bg-review-soft/30 px-3 py-2 text-xs text-muted-foreground">
-            ⚠ Current value was last updated {daysSinceUpdate} days ago — consider refreshing this estimate.
+        <div className="flex items-center justify-between gap-2 rounded-md border border-dashed border-border/60 px-3 py-2">
+          <div className="text-xs">
+            {isStale ? (
+              <span className="font-medium" style={{ color: "hsl(38 95% 35%)" }}>● Current value is {stale} days old — update it</span>
+            ) : (
+              <span className="text-muted-foreground">Update current value</span>
+            )}
           </div>
-        )}
+          <UpdateValueInline id={inv.id} current={inv.current_value} />
+        </div>
         <Section title="Holding">
           <FieldRow label="Amount invested" value={fmtMoney(inv.cost_basis)} />
           <FieldRow label="Current value (est.)" value={fmtMoney(inv.current_value)} />
+          <FieldRow label="Value as of" value={fmtDate(inv.last_updated)} />
           <FieldRow label="Projected return" value={fmtPct(inv.projected_return_pct)} />
           {isILPOrEndowment && inv.coverage && <FieldRow label="Coverage" value={inv.coverage} />}
           {isILPOrEndowment && inv.premium_amount && <FieldRow label="Premium amount" value={fmtMoney(inv.premium_amount)} />}
