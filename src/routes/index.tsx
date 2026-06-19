@@ -58,13 +58,19 @@ function Dashboard() {
         if (memberFilter !== "all") scoped = scoped.eq("member_id", memberFilter);
         return scoped;
       };
-      const [props, loans, insurance, invs, savings, inventoryItems, otherAssets] = await Promise.all([
+      // inventory_items has no member_id column — don't apply memberFilter,
+      // or it silently returns [] whenever any specific member is selected.
+      // Route through 'any' since the generated types predate the household_id
+      // column added via migration (same stale-types issue as every other table here).
+      const filterHH = (q: any) => q.eq("household_id", activeHouseholdId);
+
+      const [props, loans, insurance, invs, savings, inventoryItemsRes, otherAssets] = await Promise.all([
         filter(supabase.from("properties").select("*")),
         filter(supabase.from("loans").select("*")),
         filter(supabase.from("insurance_policies").select("*")),
         filter(supabase.from("investments").select("*")),
         filter(supabase.from("savings_accounts").select("*")),
-        filter(supabase.from("inventory_items").select("*")),
+        filterHH(supabase.from("inventory_items").select("*")),
         filter(supabase.from("other_assets").select("*")),
       ]);
       return {
@@ -73,7 +79,7 @@ function Dashboard() {
         insurance: insurance.data ?? [],
         investments: invs.data ?? [],
         savings: savings.data ?? [],
-        inventoryItems: inventoryItems.data ?? [],
+        inventoryItems: inventoryItemsRes.data ?? [],
         otherAssets: otherAssets.data ?? [],
       };
     },
