@@ -127,7 +127,7 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen pb-20">
+      <div className="min-h-screen pb-36">
         <AppHeader />
         <main className="mx-auto max-w-3xl px-4 py-4">
           <Outlet />
