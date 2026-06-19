@@ -11,10 +11,10 @@ type Props = {
   status: Status;
   onStatusChange: (s: Status) => void;
   action?: string | null;
-  /** Small informational badges shown below the title/subtitle, e.g. secondary
-   * categories a record also applies to. Purely informational — doesn't affect
-   * any filtering, grouping, or tab logic. */
+  /** Small informational badges shown below the title/subtitle */
   tags?: string[] | null;
+  /** Second member shown alongside the primary memberId — used for joint savings accounts */
+  secondaryMemberId?: string | null;
   rightMeta?: ReactNode;
   children?: ReactNode;
   onEdit?: () => void;
@@ -84,7 +84,7 @@ function CardIconButton({
 }
 
 export function RecordCard({
-  title, subtitle, memberId, status, onStatusChange, action, tags, rightMeta, children,
+  title, subtitle, memberId, secondaryMemberId, status, onStatusChange, action, tags, rightMeta, children,
   onEdit, onDelete, onDuplicate, defaultOpen = false, highlight, persistKey, hasNotes, updatedAt, createdAt,
   reminderCount, historyCount, documentsCount,
   onNotesClick, onReminderClick, onHistoryClick, onDocumentsClick,
@@ -161,6 +161,7 @@ export function RecordCard({
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-semibold leading-tight">{title}</h3>
             <MemberTag memberId={memberId} />
+            {secondaryMemberId && <MemberTag memberId={secondaryMemberId} />}
           </div>
           {subtitle && <div className="text-xs text-muted-foreground">{subtitle}</div>}
           {tags && tags.length > 0 && (
