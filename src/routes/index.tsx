@@ -440,13 +440,18 @@ function Dashboard() {
         />
       </div>
 
-      {/* MONTHLY CASH FLOW LINE */}
-      <div className="text-center text-sm font-semibold">
+      {/* MONTHLY CASH FLOW LINE — tapping scrolls to the full breakdown below */}
+      <button
+        type="button"
+        onClick={() => scrollTo(cashFlowRef, "cash-flow")}
+        className="w-full text-center text-sm font-semibold transition-opacity hover:opacity-75"
+      >
         <span className="text-muted-foreground">Monthly Cash Flow: </span>
         <span className={netCashFlow >= 0 ? "text-settled" : "text-urgent"}>
           {netCashFlow >= 0 ? "+" : ""}{fmtMoney(netCashFlow)}
         </span>
-      </div>
+        <span className="ml-1 text-[10px] text-muted-foreground">↓</span>
+      </button>
 
       {/* NET WORTH BREAKDOWN */}
       <section className="rounded-2xl border border-border bg-card">
