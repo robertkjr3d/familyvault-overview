@@ -130,7 +130,7 @@ export function buildUpcomingItems(
   for (const p of data.insurance) {
     const nextOccurrence = computeNextOccurrence(p.start_date, p.frequency, p.end_date, today);
     if (nextOccurrence && within(nextOccurrence)) {
-      items.push({ date: nextOccurrence, label: p.name, amount: p.premium, member_id: p.member_id, href: "/insurance", recordId: p.id, sourceType: "insurance_next_due", daysLeft: daysUntil(nextOccurrence), icon: Shield, kind: "Insurance" });
+      items.push({ date: nextOccurrence, label: `${p.name} — premium due`, amount: p.premium, member_id: p.member_id, href: "/insurance", recordId: p.id, sourceType: "insurance_next_due", daysLeft: daysUntil(nextOccurrence), icon: Shield, kind: "Insurance" });
     }
     if (within(p.end_date)) {
       items.push({ date: p.end_date, label: `${p.name} — policy ends`, amount: null, member_id: p.member_id, href: "/insurance", recordId: p.id, sourceType: "insurance_end", daysLeft: daysUntil(p.end_date), icon: Shield, kind: "Insurance" });
@@ -176,12 +176,38 @@ export function buildUpcomingItems(
     }
   }
 
+  // Map entity_type values to the already-loaded data arrays so we can look up
+  // the entity's display name and member without an extra DB query.
+  const entityLookup: Record<string, any[]> = {
+    property:   data.properties,
+    loan:       data.loans,
+    insurance:  data.insurance,
+    investment: data.investments,
+    savings:    data.savings,
+    inventory:  data.inventoryItems,
+  };
+
   for (const r of data.reminders) {
     const dateStr = r.remind_at.slice(0, 10);
     if (within(dateStr)) {
       const href = reminderHref(r.entity_type);
       const recordId = r.entity_id ?? r.id;
-      items.push({ date: dateStr, label: r.what ?? "Reminder", amount: null, member_id: null, href, recordId, sourceType: "reminder", daysLeft: daysUntil(dateStr), icon: Bell, kind: "Reminder" });
+
+      // Resolve the entity this reminder belongs to (may be null for health/other_assets
+      // which are not in AlertSourceData).
+      const list = entityLookup[r.entity_type ?? ""] ?? [];
+      const entity = r.entity_id ? list.find((e: any) => e.id === r.entity_id) : null;
+      const entityName: string | null = entity
+        ? (entity.name || entity.bank || entity.institution || null)
+        : null;
+      const entityMemberId: string | null = entity?.member_id ?? null;
+
+      // Show "Policy Name — what you typed" so the card is immediately identifiable.
+      const label = entityName
+        ? `${entityName} — ${r.what ?? "Reminder"}`
+        : (r.what ?? "Reminder");
+
+      items.push({ date: dateStr, label, amount: null, member_id: entityMemberId, href, recordId, sourceType: "reminder", daysLeft: daysUntil(dateStr), icon: Bell, kind: "Reminder" });
     }
   }
 
