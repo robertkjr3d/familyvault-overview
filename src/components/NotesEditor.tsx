@@ -59,7 +59,14 @@ export function NotesEditor({
   const editorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!editorRef.current) return;
     const next = toEditorHtml(value);
+    // Skip resetting the editor when the incoming value is what we just saved.
+    // Without this guard, qc.invalidateQueries() after a save triggers a re-fetch
+    // that updates the `value` prop, which was resetting innerHTML and jumping the
+    // cursor back to the start while the user was still typing.
+    if (next === lastSavedRef.current && editorRef.current.innerHTML !== "") return;
+    editorRef.current.innerHTML = next;
     setHtml(next);
     lastSavedRef.current = next;
   }, [value, id]);
@@ -80,9 +87,14 @@ export function NotesEditor({
   }
 
   function onChange(nextHtml: string) {
+    // Only update local state — no debounced auto-save.
+    // User clicks Save explicitly; onBlur is a safety-net for accidental closes.
     setHtml(nextHtml);
+  }
+
+  async function handleSave() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => commit(nextHtml), 1000);
+    await commit(editorRef.current?.innerHTML ?? html);
   }
 
   function clearNotes() {
@@ -181,13 +193,6 @@ export function NotesEditor({
   const isEmpty = !htmlToPlainText(html);
 
   useEffect(() => {
-    if (!editorRef.current) return;
-    if (editorRef.current.innerHTML !== html) {
-      editorRef.current.innerHTML = html;
-    }
-  }, [html]);
-
-  useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       if (flashRef.current) clearTimeout(flashRef.current);
@@ -253,17 +258,12 @@ export function NotesEditor({
           onKeyUp={refreshFormatState}
           onMouseUp={refreshFormatState}
           onBlur={() => {
-            if (debounceRef.current) clearTimeout(debounceRef.current);
+            // Safety-net: save on blur in case the card is closed without clicking Save.
             void commit(editorRef.current?.innerHTML ?? html);
             setFormatState({ bold: false, italic: false, bullet: false });
           }}
           className="min-h-[132px] rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1"
         />
-        <span
-          className={`pointer-events-none absolute right-2 top-2 text-[11px] text-muted-foreground transition-opacity duration-300 ${justSaved ? "opacity-100" : "opacity-0"}`}
-        >
-          Saved ✓
-        </span>
       </div>
 
       <div className="flex items-center justify-between gap-2">
@@ -278,10 +278,15 @@ export function NotesEditor({
           <Trash2 className="mr-1 h-3.5 w-3.5" />
           Clear notes
         </Button>
-        <Button type="button" size="sm" variant="outline" onClick={summarise} disabled={isEmpty || summarising}>
-          <Sparkles className="mr-1 h-3.5 w-3.5" />
-          {summarising ? "Summarising…" : "Summarise"}
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Button type="button" size="sm" variant="outline" onClick={summarise} disabled={isEmpty || summarising}>
+            <Sparkles className="mr-1 h-3.5 w-3.5" />
+            {summarising ? "Summarising…" : "Summarise"}
+          </Button>
+          <Button type="button" size="sm" onClick={handleSave} disabled={isEmpty}>
+            {justSaved ? "Saved ✓" : "Save"}
+          </Button>
+        </div>
       </div>
     </div>
   );
