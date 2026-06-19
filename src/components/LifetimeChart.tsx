@@ -521,11 +521,11 @@ export function LifetimeChart({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-4 pb-1">
-        <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+        <span className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground">
           <span className="inline-block h-0.5 w-5 rounded-full bg-[oklch(0.72_0.13_80)]" />
           Net Worth
         </span>
-        <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+        <span className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground">
           <span className="inline-block h-0.5 w-5 rounded-full bg-[oklch(0.62_0.13_155)]" />
           Annual Cash Flow
         </span>
