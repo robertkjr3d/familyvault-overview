@@ -209,6 +209,9 @@ function MembersPage() {
           </section>
 
           <section className="space-y-3">
+            {members.length > 0 && (
+              <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Current members</h2>
+            )}
             {members.length === 0 && (
               <div className="rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
                 No members yet.
