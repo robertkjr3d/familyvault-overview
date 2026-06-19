@@ -173,8 +173,9 @@ function SavingsRow({
     <HashHighlight id={`record-${a.id}`}>
       <RecordCard
         title={`${a.institution} · ${a.account_type ?? ""}`}
-        subtitle={a.note}
+        subtitle={a.joint_member_id ? "Joint account" : undefined}
         memberId={a.member_id}
+        secondaryMemberId={a.joint_member_id ?? null}
         status={a.status}
         onStatusChange={onStatus}
         action={a.note}
