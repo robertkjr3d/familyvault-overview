@@ -166,7 +166,8 @@ export const recordConfigs: Record<string, RecordConfig> = {
     label: "Savings Account",
     fields: [
       { key: "institution", label: "Institution", type: "text", placeholder: "e.g. DBS, OCBC" },
-      { key: "member_id", label: "Owner", type: "member" },
+      { key: "member_id", label: "Primary owner", type: "member" },
+      { key: "joint_member_id", label: "Joint owner (optional)", type: "member" },
       { key: "account_type", label: "Account type", type: "select", options: SAVINGS_ACCOUNT_TYPES, required: true },
       { key: "account_number", label: "Account number", type: "text" },
       { key: "balance", label: "Balance", type: "number", money: true },
