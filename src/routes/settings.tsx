@@ -691,7 +691,7 @@ function SettingsPage() {
         <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-border/60 pt-3 text-xs">
           <a href="/privacy" className="font-semibold text-primary underline">Privacy Policy</a>
           <a href="/terms" className="font-semibold text-primary underline">Terms of Service</a>
-          <a href="mailto:hello@familyvault.app" className="font-semibold text-primary underline">Contact Us</a>
+          <a href="mailto:aza_tan@yahoo.com.sg" className="font-semibold text-primary underline">Contact Us</a>
         </div>
       </section>
     </div>
