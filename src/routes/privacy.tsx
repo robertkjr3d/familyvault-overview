@@ -7,7 +7,7 @@ export const Route = createFileRoute("/privacy")({
 
 const LAST_UPDATED = "20 June 2026";
 // Placeholder — replace with a real, monitored inbox. See chat for details.
-const CONTACT_EMAIL = "hello@familyvault.app";
+const CONTACT_EMAIL = "aza_tan@yahoo.com.sg";
 
 function PrivacyPage() {
   return (
