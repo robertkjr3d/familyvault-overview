@@ -140,3 +140,69 @@ describe("buildUpcomingItems", () => {
     expect(item?.href).toBe("/property");
   });
 });
+
+describe("buildUpcomingItems — per-category day thresholds", () => {
+  const today = new Date(2026, 5, 18); // 18 Jun 2026
+  const emptyData = {
+    properties: [], loans: [], insurance: [], investments: [],
+    savings: [], inventoryItems: [], reminders: [],
+  };
+
+  it("omitting categoryDays entirely behaves exactly like before (no 4th arg)", () => {
+    const data = {
+      ...emptyData,
+      savings: [{ id: "s1", institution: "OCBC", maturity_date: "2026-08-15", member_id: "m1", balance: 1000 }],
+    };
+    expect(buildUpcomingItems(data, today, 90).some((i) => i.recordId === "s1")).toBe(true);
+  });
+
+  it("a category threshold narrows the window — an FD maturing in 80 days is excluded once fd_days is set to 30", () => {
+    const data = {
+      ...emptyData,
+      savings: [{ id: "s1", institution: "OCBC", maturity_date: "2026-09-06", member_id: "m1", balance: 1000 }], // 80 days out
+    };
+    const withoutThreshold = buildUpcomingItems(data, today, 90);
+    expect(withoutThreshold.some((i) => i.recordId === "s1")).toBe(true);
+
+    const withThreshold = buildUpcomingItems(data, today, 90, { fd_days: 30 });
+    expect(withThreshold.some((i) => i.recordId === "s1")).toBe(false);
+  });
+
+  it("a category threshold cannot widen a view's horizon beyond what the view itself allows (e.g. the 30-day bell stays 30 days even if insurance_days is set to 90)", () => {
+    const data = {
+      ...emptyData,
+      insurance: [{ id: "i1", name: "Term Life", start_date: "2026-08-01", frequency: "annual", end_date: null, premium: 1200, member_id: "m1" }], // ~44 days out
+    };
+    const items = buildUpcomingItems(data, today, 30, { insurance_days: 90 });
+    expect(items.some((i) => i.recordId === "i1")).toBe(false);
+  });
+
+  it("category thresholds only affect their own category — a tight fd_days does not also hide insurance", () => {
+    const data = {
+      ...emptyData,
+      savings: [{ id: "s1", institution: "OCBC", maturity_date: "2026-09-06", member_id: "m1", balance: 1000 }], // 80 days out
+      insurance: [{ id: "i1", name: "Term Life", start_date: "2026-08-01", frequency: "annual", end_date: null, premium: 1200, member_id: "m1" }], // ~44 days out
+    };
+    const items = buildUpcomingItems(data, today, 90, { fd_days: 14 });
+    expect(items.some((i) => i.recordId === "s1")).toBe(false);
+    expect(items.some((i) => i.recordId === "i1")).toBe(true);
+  });
+
+  it("categories without a configurable setting (investments, reminders) always use the base horizonDays, unaffected by other category overrides", () => {
+    const data = {
+      ...emptyData,
+      investments: [{ id: "v1", name: "ILP Plan", group_name: "ILP (Investment-Linked Policy)", premium_start_date: "2026-08-01", premium_frequency: "annual", premium_end_date: null, premium_amount: 500, member_id: "m1" }],
+    };
+    const items = buildUpcomingItems(data, today, 90, { fd_days: 7, insurance_days: 7, mortgage_days: 7, warranty_days: 7 });
+    expect(items.some((i) => i.recordId === "v1")).toBe(true);
+  });
+
+  it("a null category override is treated the same as not providing one", () => {
+    const data = {
+      ...emptyData,
+      savings: [{ id: "s1", institution: "OCBC", maturity_date: "2026-08-15", member_id: "m1", balance: 1000 }],
+    };
+    const items = buildUpcomingItems(data, today, 90, { fd_days: null });
+    expect(items.some((i) => i.recordId === "s1")).toBe(true);
+  });
+});
