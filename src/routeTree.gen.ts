@@ -9,9 +9,11 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SavingsRouteImport } from './routes/savings'
 import { Route as PropertyRouteImport } from './routes/property'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as OtherAssetsRouteImport } from './routes/other-assets'
 import { Route as MembersRouteImport } from './routes/members'
 import { Route as LoansRouteImport } from './routes/loans'
@@ -21,6 +23,11 @@ import { Route as InsuranceRouteImport } from './routes/insurance'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as IndexRouteImport } from './routes/index'
 
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -34,6 +41,11 @@ const SavingsRoute = SavingsRouteImport.update({
 const PropertyRoute = PropertyRouteImport.update({
   id: '/property',
   path: '/property',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OtherAssetsRoute = OtherAssetsRouteImport.update({
@@ -86,9 +98,11 @@ export interface FileRoutesByFullPath {
   '/loans': typeof LoansRoute
   '/members': typeof MembersRoute
   '/other-assets': typeof OtherAssetsRoute
+  '/privacy': typeof PrivacyRoute
   '/property': typeof PropertyRoute
   '/savings': typeof SavingsRoute
   '/settings': typeof SettingsRoute
+  '/terms': typeof TermsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -99,9 +113,11 @@ export interface FileRoutesByTo {
   '/loans': typeof LoansRoute
   '/members': typeof MembersRoute
   '/other-assets': typeof OtherAssetsRoute
+  '/privacy': typeof PrivacyRoute
   '/property': typeof PropertyRoute
   '/savings': typeof SavingsRoute
   '/settings': typeof SettingsRoute
+  '/terms': typeof TermsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -113,9 +129,11 @@ export interface FileRoutesById {
   '/loans': typeof LoansRoute
   '/members': typeof MembersRoute
   '/other-assets': typeof OtherAssetsRoute
+  '/privacy': typeof PrivacyRoute
   '/property': typeof PropertyRoute
   '/savings': typeof SavingsRoute
   '/settings': typeof SettingsRoute
+  '/terms': typeof TermsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -128,9 +146,11 @@ export interface FileRouteTypes {
     | '/loans'
     | '/members'
     | '/other-assets'
+    | '/privacy'
     | '/property'
     | '/savings'
     | '/settings'
+    | '/terms'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -141,9 +161,11 @@ export interface FileRouteTypes {
     | '/loans'
     | '/members'
     | '/other-assets'
+    | '/privacy'
     | '/property'
     | '/savings'
     | '/settings'
+    | '/terms'
   id:
     | '__root__'
     | '/'
@@ -154,9 +176,11 @@ export interface FileRouteTypes {
     | '/loans'
     | '/members'
     | '/other-assets'
+    | '/privacy'
     | '/property'
     | '/savings'
     | '/settings'
+    | '/terms'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -168,13 +192,22 @@ export interface RootRouteChildren {
   LoansRoute: typeof LoansRoute
   MembersRoute: typeof MembersRoute
   OtherAssetsRoute: typeof OtherAssetsRoute
+  PrivacyRoute: typeof PrivacyRoute
   PropertyRoute: typeof PropertyRoute
   SavingsRoute: typeof SavingsRoute
   SettingsRoute: typeof SettingsRoute
+  TermsRoute: typeof TermsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -194,6 +227,13 @@ declare module '@tanstack/react-router' {
       path: '/property'
       fullPath: '/property'
       preLoaderRoute: typeof PropertyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/other-assets': {
@@ -264,9 +304,11 @@ const rootRouteChildren: RootRouteChildren = {
   LoansRoute: LoansRoute,
   MembersRoute: MembersRoute,
   OtherAssetsRoute: OtherAssetsRoute,
+  PrivacyRoute: PrivacyRoute,
   PropertyRoute: PropertyRoute,
   SavingsRoute: SavingsRoute,
   SettingsRoute: SettingsRoute,
+  TermsRoute: TermsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
