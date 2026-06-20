@@ -23,20 +23,6 @@ const ACCENT_PRESETS = [
   { name: "Slate", value: "oklch(0.45 0.04 250)" },
 ];
 
-type LSAlerts = {
-  mortgage_days: number;
-  insurance_days: number;
-  fd_days: number;
-  warranty_days: number;
-};
-const DEFAULTS: LSAlerts = { mortgage_days: 90, insurance_days: 60, fd_days: 30, warranty_days: 90 };
-
-function loadAlerts(): LSAlerts {
-  if (typeof window === "undefined") return DEFAULTS;
-  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem("fv:alerts") ?? "{}") }; }
-  catch { return DEFAULTS; }
-}
-
 function SettingsPage() {
   const qc = useQueryClient();
   const { data: members = [] } = useMembers();
@@ -76,7 +62,10 @@ function SettingsPage() {
   const [accent, setAccent] = useState<string>(() =>
     (typeof window !== "undefined" && localStorage.getItem("fv:accent")) || ACCENT_PRESETS[0].value
   );
-  const [alerts, setAlerts] = useState<LSAlerts>(loadAlerts);
+  const [mortgageDays, setMortgageDays] = useState<string>("90");
+  const [insuranceDays, setInsuranceDays] = useState<string>("60");
+  const [fdDays, setFdDays] = useState<string>("30");
+  const [warrantyDays, setWarrantyDays] = useState<string>("90");
 
   useEffect(() => {
     if (settings?.simulated_date) setSimDate(settings.simulated_date);
@@ -100,6 +89,13 @@ function SettingsPage() {
   ]);
 
   useEffect(() => {
+    if (settings?.mortgage_days != null) setMortgageDays(String(settings.mortgage_days));
+    if (settings?.insurance_days != null) setInsuranceDays(String(settings.insurance_days));
+    if (settings?.fd_days != null) setFdDays(String(settings.fd_days));
+    if (settings?.warranty_days != null) setWarrantyDays(String(settings.warranty_days));
+  }, [settings?.mortgage_days, settings?.insurance_days, settings?.fd_days, settings?.warranty_days]);
+
+  useEffect(() => {
     if (typeof document === "undefined") return;
     document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
@@ -108,10 +104,6 @@ function SettingsPage() {
     document.documentElement.style.setProperty("--aza", accent);
     localStorage.setItem("fv:accent", accent);
   }, [accent]);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    localStorage.setItem("fv:alerts", JSON.stringify(alerts));
-  }, [alerts]);
 
   const save = useMutation({
     mutationFn: async (patch: any) => {
@@ -593,25 +585,40 @@ function SettingsPage() {
       {/* Alerts & Reminders */}
       <section className="rounded-2xl border border-border bg-card p-4">
         <h2 className="mb-3 text-sm font-bold">Alerts & Reminders</h2>
+        <p className="mb-3 text-xs text-muted-foreground">
+          How many days before each kind of date you want to start seeing it on the dashboard and in the bell.
+        </p>
         {[
-          { key: "mortgage_days",  label: "Mortgage repricing alert" },
-          { key: "insurance_days", label: "Insurance renewal alert" },
-          { key: "fd_days",        label: "Fixed Deposit maturity alert" },
-          { key: "warranty_days",  label: "Warranty expiry alert" },
+          { key: "mortgage_days", label: "Mortgage repricing alert", value: mortgageDays, set: setMortgageDays },
+          { key: "insurance_days", label: "Insurance renewal alert", value: insuranceDays, set: setInsuranceDays },
+          { key: "fd_days", label: "Fixed Deposit maturity alert", value: fdDays, set: setFdDays },
+          { key: "warranty_days", label: "Warranty expiry alert", value: warrantyDays, set: setWarrantyDays },
         ].map((r) => (
           <div key={r.key} className="flex items-center justify-between py-1.5 text-sm">
             <span>{r.label}</span>
             <div className="flex items-center gap-1">
               <input
                 type="number"
-                value={(alerts as any)[r.key]}
-                onChange={(e) => setAlerts({ ...alerts, [r.key]: Number(e.target.value) })}
+                min="0"
+                value={r.value}
+                onChange={(e) => r.set(e.target.value)}
                 className="h-7 w-16 rounded-md border border-input bg-background px-2 text-right text-sm"
               />
               <span className="text-xs text-muted-foreground">days before</span>
             </div>
           </div>
         ))}
+        <button
+          className="mt-3 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+          onClick={() => save.mutate({
+            mortgage_days: parseInt(mortgageDays) || 90,
+            insurance_days: parseInt(insuranceDays) || 60,
+            fd_days: parseInt(fdDays) || 30,
+            warranty_days: parseInt(warrantyDays) || 90,
+          })}
+        >
+          Save
+        </button>
       </section>
 
       {/* Test Mode */}
@@ -681,6 +688,11 @@ function SettingsPage() {
         <p className="mt-2 text-xs italic text-muted-foreground">
           Built for families who want one place to track everything that matters.
         </p>
+        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-border/60 pt-3 text-xs">
+          <a href="/privacy" className="font-semibold text-primary underline">Privacy Policy</a>
+          <a href="/terms" className="font-semibold text-primary underline">Terms of Service</a>
+          <a href="mailto:hello@familyvault.app" className="font-semibold text-primary underline">Contact Us</a>
+        </div>
       </section>
     </div>
   );
