@@ -101,6 +101,13 @@ export function computeNextOccurrence(
   return occurrence.toISOString().slice(0, 10);
 }
 
+export type AlertCategoryDays = {
+  mortgage_days?: number | null;
+  insurance_days?: number | null;
+  fd_days?: number | null;
+  warranty_days?: number | null;
+};
+
 /**
  * Single source of truth for every date-based "upcoming/overdue" alert in the app.
  * Used by both the dashboard's 90-day view and the bell header's 30-day view —
@@ -108,46 +115,63 @@ export function computeNextOccurrence(
  *
  * horizonDays: how far into the future to look (dashboard = 90, bell = 30)
  * today: injected so callers can use a consistent "now" (e.g. useToday())
+ * categoryDays: optional, household-configurable lead time per category
+ *   (Settings → Alerts & Reminders). Each category's effective window is
+ *   capped at min(horizonDays, categoryDays.x) — a category setting can only
+ *   narrow the view's existing horizon, never widen it (e.g. setting
+ *   "Insurance renewal alert" to 120 days still won't surface in the bell's
+ *   30-day view; that view is intentionally short-range by design). Omit
+ *   entirely for the old single-horizon behaviour.
  */
 export function buildUpcomingItems(
   data: AlertSourceData,
   today: Date,
-  horizonDays: number
+  horizonDays: number,
+  categoryDays?: AlertCategoryDays
 ): UpcomingItem[] {
-  const horizon = addDays(today, horizonDays);
-  const items: UpcomingItem[] = [];
-
   function daysUntil(dateStr: string) {
     const d = parseISO(dateStr);
     return Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   }
 
-  function within(dateStr: string | null | undefined): boolean {
+  function within(dateStr: string | null | undefined, days: number = horizonDays): boolean {
     if (!dateStr) return false;
-    return isBefore(parseISO(dateStr), horizon);
+    return isBefore(parseISO(dateStr), addDays(today, days));
   }
+
+  function categoryHorizon(override: number | null | undefined): number {
+    if (override == null) return horizonDays;
+    return Math.min(horizonDays, override);
+  }
+
+  const insuranceHorizon = categoryHorizon(categoryDays?.insurance_days);
+  const mortgageHorizon = categoryHorizon(categoryDays?.mortgage_days);
+  const fdHorizon = categoryHorizon(categoryDays?.fd_days);
+  const warrantyHorizon = categoryHorizon(categoryDays?.warranty_days);
+
+  const items: UpcomingItem[] = [];
 
   for (const p of data.insurance) {
     const nextOccurrence = computeNextOccurrence(p.start_date, p.frequency, p.end_date, today);
-    if (nextOccurrence && within(nextOccurrence)) {
+    if (nextOccurrence && within(nextOccurrence, insuranceHorizon)) {
       items.push({ date: nextOccurrence, label: `${p.name} — premium due`, amount: p.premium, member_id: p.member_id, href: "/insurance", recordId: p.id, sourceType: "insurance_next_due", daysLeft: daysUntil(nextOccurrence), icon: Shield, kind: "Insurance" });
     }
-    if (within(p.end_date)) {
+    if (within(p.end_date, insuranceHorizon)) {
       items.push({ date: p.end_date, label: `${p.name} — policy ends`, amount: null, member_id: p.member_id, href: "/insurance", recordId: p.id, sourceType: "insurance_end", daysLeft: daysUntil(p.end_date), icon: Shield, kind: "Insurance" });
     }
   }
 
   for (const p of data.properties) {
-    if (within(p.fixed_rate_end)) {
+    if (within(p.fixed_rate_end, mortgageHorizon)) {
       items.push({ date: p.fixed_rate_end, label: `${p.name} — fixed rate ends`, amount: null, member_id: p.member_id, href: "/property", recordId: p.id, sourceType: "property_fixed_rate", daysLeft: daysUntil(p.fixed_rate_end), icon: Building2, kind: "Property" });
     }
   }
 
   for (const l of data.loans) {
-    if (within(l.reprice_date)) {
+    if (within(l.reprice_date, mortgageHorizon)) {
       items.push({ date: l.reprice_date, label: `${l.bank} loan — reprice`, amount: null, member_id: l.member_id, href: "/loans", recordId: l.id, sourceType: "loan_reprice", daysLeft: daysUntil(l.reprice_date), icon: Landmark, kind: "Loan" });
     }
-    if (within(l.loan_end_date)) {
+    if (within(l.loan_end_date, mortgageHorizon)) {
       items.push({ date: l.loan_end_date, label: `${l.bank} loan — fully repaid`, amount: null, member_id: l.member_id, href: "/loans", recordId: l.id, sourceType: "loan_end", daysLeft: daysUntil(l.loan_end_date), icon: Landmark, kind: "Loan" });
     }
   }
@@ -165,13 +189,13 @@ export function buildUpcomingItems(
   }
 
   for (const s of data.savings) {
-    if (within(s.maturity_date)) {
+    if (within(s.maturity_date, fdHorizon)) {
       items.push({ date: s.maturity_date, label: `${s.institution ?? "FD"} matures`, amount: s.balance, member_id: s.member_id, href: "/savings", recordId: s.id, sourceType: "savings_maturity", daysLeft: daysUntil(s.maturity_date), icon: PiggyBank, kind: "Savings" });
     }
   }
 
   for (const it of data.inventoryItems) {
-    if (within(it.warranty_date)) {
+    if (within(it.warranty_date, warrantyHorizon)) {
       items.push({ date: it.warranty_date, label: `${it.name} — warranty/expiry`, amount: null, member_id: it.member_id, href: "/inventory", recordId: it.id, sourceType: "inventory_warranty", daysLeft: daysUntil(it.warranty_date), icon: Package, kind: "Inventory" });
     }
   }
