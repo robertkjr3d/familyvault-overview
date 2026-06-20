@@ -101,6 +101,13 @@ export function RecordFormSheet({
       if (cfg.table === "savings_accounts" && !payload.group_name) {
         payload.group_name = payload.maturity_date ? "Fixed Deposits" : "Bank Accounts";
       }
+      // If the user enters a balance but leaves "Balance as of" blank, default
+      // it to today rather than leaving last_updated null — a brand-new
+      // record showing "Never updated" the moment it's created is misleading;
+      // they just told us the balance right now.
+      if (cfg.table === "savings_accounts" && !isEdit && payload.balance != null && !payload.last_updated) {
+        payload.last_updated = new Date().toISOString().slice(0, 10);
+      }
 
       if (!isEdit && activeHouseholdId) {
         payload.household_id = activeHouseholdId;
