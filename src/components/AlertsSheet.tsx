@@ -24,7 +24,7 @@ const SOURCES = [
 const BELL_HORIZON_DAYS = 30;
 
 async function fetchDueSoonItems(today: Date, householdId: string): Promise<UpcomingItem[]> {
-  const [properties, loans, insurance, investments, savings, inventoryItems, reminders, dismissed] = await Promise.all([
+  const [properties, loans, insurance, investments, savings, inventoryItems, reminders, dismissed, settings] = await Promise.all([
     supabase.from("properties").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
     supabase.from("loans").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
     supabase.from("insurance_policies").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
@@ -33,6 +33,7 @@ async function fetchDueSoonItems(today: Date, householdId: string): Promise<Upco
     supabase.from("inventory_items").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
     supabase.from("reminders").select("*").eq("household_id", householdId).eq("dismissed", false).then((r) => r.data ?? []),
     supabase.from("dismissed_dashboard_items").select("record_id, source_type, dismissed_date").eq("household_id", householdId).then((r) => r.data ?? []),
+    supabase.from("app_settings").select("mortgage_days, insurance_days, fd_days, warranty_days").eq("household_id", householdId).maybeSingle().then((r) => r.data),
   ]);
 
   const dismissedKeys = new Set(
@@ -42,7 +43,13 @@ async function fetchDueSoonItems(today: Date, householdId: string): Promise<Upco
   const allItems = buildUpcomingItems(
     { properties, loans, insurance, investments, savings, inventoryItems, reminders },
     today,
-    BELL_HORIZON_DAYS
+    BELL_HORIZON_DAYS,
+    {
+      mortgage_days: settings?.mortgage_days,
+      insurance_days: settings?.insurance_days,
+      fd_days: settings?.fd_days,
+      warranty_days: settings?.warranty_days,
+    }
   );
 
   return allItems.filter((item) => !dismissedKeys.has(`${item.sourceType}::${item.recordId}::${item.date}`));
