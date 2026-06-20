@@ -114,7 +114,13 @@ export function AppHeader() {
       const allItems = buildUpcomingItems(
         { properties, loans, insurance, investments, savings, inventoryItems, reminders },
         today,
-        30
+        30,
+        {
+          mortgage_days: settings?.mortgage_days,
+          insurance_days: settings?.insurance_days,
+          fd_days: settings?.fd_days,
+          warranty_days: settings?.warranty_days,
+        }
       );
 
       return allItems.filter((item) => !dismissedKeys.has(`${item.sourceType}::${item.recordId}::${item.date}`)).length;
