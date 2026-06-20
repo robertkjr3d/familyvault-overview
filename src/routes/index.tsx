@@ -1009,11 +1009,16 @@ function FinancialHealthCard({ checks, passCount, totalScored, onScroll }: {
 }
 
 function PrioritySection({ title, items, muted, showDate }: { title: string; items: any[]; muted?: boolean; showDate?: boolean }) {
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? items : items.slice(0, 8);
   return (
     <section className={`rounded-2xl border p-4 ${muted ? "border-review/40 bg-review-soft/40" : "border-urgent/40 bg-urgent-soft/30"}`}>
-      <h2 className="mb-3 text-sm font-bold">{title}</h2>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-bold">{title}</h2>
+        <span className="text-xs text-muted-foreground">{items.length} item{items.length === 1 ? "" : "s"}</span>
+      </div>
       <ul className="space-y-2">
-        {items.slice(0, 8).map(({ kind, row, href, icon: Icon }, i) => {
+        {visible.map(({ kind, row, href, icon: Icon }, i) => {
           const dateInfo = showDate ? reviewDateInfo(kind, row) : null;
           return (
             <li key={i}>
@@ -1038,6 +1043,14 @@ function PrioritySection({ title, items, muted, showDate }: { title: string; ite
           );
         })}
       </ul>
+      {items.length > 8 && (
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          className="mt-2 flex w-full items-center justify-center gap-1 py-2 text-xs font-semibold text-primary"
+        >
+          {showAll ? "Show less ↑" : `Show ${items.length - 8} more ↓`}
+        </button>
+      )}
     </section>
   );
 }
