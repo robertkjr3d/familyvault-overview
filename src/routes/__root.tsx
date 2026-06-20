@@ -4,6 +4,8 @@ import {
   createRootRouteWithContext,
   HeadContent,
   Scripts,
+  useRouterState,
+  Link,
 } from "@tanstack/react-router";
 import { Toaster } from "sonner";
 import { useEffect, useState } from "react";
@@ -69,6 +71,10 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const { initialized, session } = useAuthSession();
   const setActiveHouseholdId = useAppStore((s) => s.setActiveHouseholdId);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  // Legal pages must be readable before signing in — that's the whole point
+  // of a privacy policy / terms page. Bypass the auth gate for just these two.
+  const isPublicRoute = pathname === "/privacy" || pathname === "/terms";
 
   useEffect(() => {
     if (!session?.user?.id || typeof window === "undefined") {
@@ -106,6 +112,14 @@ function RootComponent() {
       cancelled = true;
     };
   }, [session?.user?.id, setActiveHouseholdId]);
+
+  if (isPublicRoute) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <Outlet />
+      </QueryClientProvider>
+    );
+  }
 
   if (!initialized) {
     return (
@@ -198,6 +212,12 @@ function SignInScreen() {
 
         {sentTo && <p className="mt-3 text-xs text-settled">Magic link sent to {sentTo}.</p>}
         {error && <p className="mt-3 text-xs text-urgent">{error}</p>}
+
+        <p className="mt-5 text-center text-[11px] text-muted-foreground">
+          By continuing, you agree to our{" "}
+          <Link to="/terms" className="underline">Terms of Service</Link> and{" "}
+          <Link to="/privacy" className="underline">Privacy Policy</Link>.
+        </p>
       </div>
     </div>
   );
