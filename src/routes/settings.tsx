@@ -7,6 +7,7 @@ import { useMembers } from "@/hooks/useMembers";
 import { useAppStore } from "@/lib/store";
 import { Trash2 } from "lucide-react";
 import { fmtMoney } from "@/lib/format";
+import { runFullExport } from "@/lib/fullExport";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -42,6 +43,7 @@ function SettingsPage() {
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const setShareOpen = useAppStore((s) => s.setShareOpen);
   const [generatingEstateDoc, setGeneratingEstateDoc] = useState(false);
+  const [generatingFullExport, setGeneratingFullExport] = useState(false);
 
   const { data: settings } = useQuery({
     queryKey: ["app_settings", activeHouseholdId],
@@ -135,25 +137,20 @@ function SettingsPage() {
     toast.success("Demo data cleared");
   }
 
-  async function exportCsv() {
-    const tables = ["properties", "loans", "insurance_policies", "investments", "savings_accounts"];
-    let out = "";
-    for (const t of tables) {
-      const { data } = await supabase.from(t as any).select("*");
-      if (!data || data.length === 0) continue;
-      const cols = Object.keys(data[0]);
-      out += `# ${t}\n${cols.join(",")}\n`;
-      for (const row of data) {
-        out += cols.map((c) => JSON.stringify((row as any)[c] ?? "")).join(",") + "\n";
-      }
-      out += "\n";
+  async function exportFull() {
+    if (!activeHouseholdId) {
+      toast.error("Select a household first.");
+      return;
     }
-    const blob = new Blob([out], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `familyvault-export-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    setGeneratingFullExport(true);
+    try {
+      await runFullExport(activeHouseholdId, members);
+      toast.success("Full export downloaded");
+    } catch (err: any) {
+      toast.error(err.message || "Could not generate export");
+    } finally {
+      setGeneratingFullExport(false);
+    }
   }
 
   async function exportAssetSummaryDocx() {
@@ -641,8 +638,8 @@ function SettingsPage() {
       <section className="rounded-2xl border border-border bg-card p-4">
         <h2 className="mb-3 text-sm font-bold">Data</h2>
         <div className="flex flex-col gap-2">
-          <button onClick={exportCsv} className="rounded-lg border border-border px-3 py-2 text-sm font-semibold">
-            Export all data as CSV
+          <button onClick={exportFull} disabled={generatingFullExport} className="rounded-lg border border-border px-3 py-2 text-sm font-semibold">
+            {generatingFullExport ? "Generating…" : "Export everything (Excel)"}
           </button>
           <button onClick={exportAssetSummaryDocx} disabled={generatingEstateDoc} className="rounded-lg border border-border px-3 py-2 text-sm font-semibold">
             {generatingEstateDoc ? "Generating…" : "Export Asset & Liability Summary (.docx)"}
