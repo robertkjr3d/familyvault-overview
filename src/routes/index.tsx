@@ -92,7 +92,7 @@ function Dashboard() {
       if (!activeHouseholdId) return null;
       const { data } = await supabase
         .from("app_settings")
-        .select("monthly_income, monthly_expenses, currency")
+        .select("monthly_income, monthly_expenses, currency, mortgage_days, insurance_days, fd_days, warranty_days")
         .eq("household_id", activeHouseholdId)
         .maybeSingle();
       return data;
@@ -291,7 +291,13 @@ function Dashboard() {
   const allUpcoming = buildUpcomingItems(
     { properties, loans, insurance, investments, savings, inventoryItems, reminders: remindersData ?? [] },
     today,
-    horizon90
+    horizon90,
+    {
+      mortgage_days: appSettings?.mortgage_days,
+      insurance_days: appSettings?.insurance_days,
+      fd_days: appSettings?.fd_days,
+      warranty_days: appSettings?.warranty_days,
+    }
   );
 
   const upcoming = allUpcoming.filter(
