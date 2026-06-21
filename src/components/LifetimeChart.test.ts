@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { freqTimesPerYear } from "./LifetimeChart";
+import { freqTimesPerYear } from "../lib/lifetimeChartMath";
 
 describe("freqTimesPerYear", () => {
   it("maps monthly to 12", () => {
