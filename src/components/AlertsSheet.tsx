@@ -118,7 +118,7 @@ export function AlertsSheet({ open, onOpenChange }: { open: boolean; onOpenChang
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-[10px] font-semibold uppercase text-muted-foreground">{item.kind}</span>
-                            <span className="truncate text-sm font-semibold">{item.label}</span>
+                            <span className="min-w-0 line-clamp-2 break-words text-sm font-semibold">{item.label}</span>
                             <MemberTag memberId={item.member_id} />
                           </div>
                           <div className="mt-1 flex items-center gap-2 text-xs">
