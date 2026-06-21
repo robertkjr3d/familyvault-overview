@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { fmtDate } from "@/lib/format";
 import { useAppStore } from "@/lib/store";
+import { compressImage } from "@/lib/imageCompression";
 
 export const Route = createFileRoute("/inventory")({
   component: InventoryPage,
@@ -30,41 +31,6 @@ type Item = {
   warranty_date: string | null;
   photo_url: string | null;
 };
-
-const MAX_PHOTO_DIMENSION = 1280;
-const PHOTO_JPEG_QUALITY = 0.8;
-
-function compressImage(file: File): Promise<File> {
-  return new Promise((resolve) => {
-    if (!file.type.startsWith("image/")) { resolve(file); return; }
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      let { width, height } = img;
-      const scale = Math.min(1, MAX_PHOTO_DIMENSION / Math.max(width, height));
-      const targetW = Math.round(width * scale);
-      const targetH = Math.round(height * scale);
-      const canvas = document.createElement("canvas");
-      canvas.width = targetW;
-      canvas.height = targetH;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { resolve(file); return; }
-      ctx.drawImage(img, 0, 0, targetW, targetH);
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) { resolve(file); return; }
-          const newName = file.name.replace(/\.[^.]+$/, "") + ".jpg";
-          resolve(new File([blob], newName, { type: "image/jpeg" }));
-        },
-        "image/jpeg",
-        PHOTO_JPEG_QUALITY
-      );
-    };
-    img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(file); };
-    img.src = objectUrl;
-  });
-}
 
 
 function InventoryPage() {
@@ -724,8 +690,11 @@ function AddFolderSheet({ open, onClose, parentId }: { open: boolean; onClose: (
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setPreview(null); setPhotoFile(null); }}
-                    className="absolute right-2 top-2 rounded-full bg-black/60 p-1 text-white text-xs leading-none"
-                  >✕</button>
+                    className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white"
+                    aria-label="Remove photo"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-1 py-6 text-muted-foreground">
@@ -1196,7 +1165,7 @@ function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => voi
               className="rounded-full p-0.5 text-urgent hover:bg-urgent/10"
               aria-label="Remove photo"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
         ) : (
@@ -1279,9 +1248,11 @@ function EditItemForm({ item, onDone }: { item: Item; onDone: () => void }) {
           <button
             type="button"
             onClick={removePhoto}
-            className="rounded-full bg-black/60 p-1 text-white text-xs leading-none"
+            className="rounded-full bg-black/60 p-1 text-white"
             aria-label="Remove photo"
-          >✕</button>
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
       </div>
     </div>
