@@ -13,6 +13,10 @@ const acceptPayloadSchema = z.object({
   token: z.string().min(16),
 });
 
+const listPeoplePayloadSchema = z.object({
+  householdId: z.string().uuid(),
+});
+
 const transferOwnershipPayloadSchema = z.object({
   householdId: z.string().uuid(),
   email: z.string().email(),
@@ -163,4 +167,71 @@ export const transferHouseholdOwnership = createServerFn({ method: "POST" })
 
     if (error) throw error;
     return { ok: true };
+  });
+
+export const listHouseholdPeople = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(listPeoplePayloadSchema)
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+
+    // Caller must themselves belong to this household to see who else has
+    // access to it.
+    const { data: membership, error: membershipError } = await supabase
+      .from("household_users" as any)
+      .select("household_id")
+      .eq("household_id", data.householdId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (membershipError) throw membershipError;
+    if (!membership) throw new Error("You are not a member of this household.");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // household_users RLS only exposes a user's own row (by design — see
+    // household_users_select policy), so listing everyone in the household
+    // needs the admin client. Same for household_invites, which has zero
+    // client-readable policies at all.
+    const { data: memberRows, error: memberError } = await supabaseAdmin
+      .from("household_users" as any)
+      .select("user_id, role, created_at")
+      .eq("household_id", data.householdId)
+      .order("created_at", { ascending: true });
+
+    if (memberError) throw memberError;
+
+    const members = await Promise.all(
+      ((memberRows ?? []) as Array<{ user_id: string; role: string; created_at: string }>).map(async (m) => {
+        const { data: userData } = await supabaseAdmin.auth.admin.getUserById(m.user_id);
+        return {
+          email: userData?.user?.email ?? "(email unavailable)",
+          role: m.role as "owner" | "member" | "viewer",
+          joinedAt: m.created_at,
+          isYou: m.user_id === userId,
+        };
+      })
+    );
+
+    const { data: inviteRows, error: inviteError } = await supabaseAdmin
+      .from("household_invites" as any)
+      .select("invited_email, role, created_at, expires_at")
+      .eq("household_id", data.householdId)
+      .is("accepted_at", null)
+      .is("cancelled_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: true });
+
+    if (inviteError) throw inviteError;
+
+    const pending = ((inviteRows ?? []) as Array<{ invited_email: string; role: string; created_at: string; expires_at: string }>).map(
+      (i) => ({
+        email: i.invited_email,
+        role: i.role as "member" | "viewer",
+        invitedAt: i.created_at,
+        expiresAt: i.expires_at,
+      })
+    );
+
+    return { members, pending };
   });
