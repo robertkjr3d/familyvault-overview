@@ -689,6 +689,7 @@ function SettingsPage() {
           Built for families who want one place to track everything that matters.
         </p>
         <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-border/60 pt-3 text-xs">
+          <a href="/#onboarding" className="font-semibold text-primary underline">Quick Start Guide</a>
           <a href="/privacy" className="font-semibold text-primary underline">Privacy Policy</a>
           <a href="/terms" className="font-semibold text-primary underline">Terms of Service</a>
           <a href="mailto:aza_tan@yahoo.com.sg" className="font-semibold text-primary underline">Contact Us</a>
