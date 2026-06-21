@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Bell, Crown, Share2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,7 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { sendHouseholdInvite, transferHouseholdOwnership } from "@/lib/householdInvites";
+import { sendHouseholdInvite, transferHouseholdOwnership, listHouseholdPeople } from "@/lib/householdInvites";
 
 export function AppHeader() {
   const { simulated, today } = useToday();
@@ -58,9 +58,13 @@ export function AppHeader() {
     },
   });
 
-  const households = memberships
-    .map((m) => ({ id: m.household_id, name: m.households?.name ?? "Household", role: m.role }))
-    .filter((h, i, arr) => arr.findIndex((x) => x.id === h.id) === i);
+  const households = useMemo(
+    () =>
+      memberships
+        .map((m) => ({ id: m.household_id, name: m.households?.name ?? "Household", role: m.role }))
+        .filter((h, i, arr) => arr.findIndex((x) => x.id === h.id) === i),
+    [memberships]
+  );
 
   const selectedHouseholdId = activeHouseholdId ?? households[0]?.id ?? null;
   const selectedHousehold = households.find((h) => h.id === selectedHouseholdId) ?? null;
@@ -68,7 +72,17 @@ export function AppHeader() {
   const canShareActiveHousehold = selectedMembership?.role === "owner";
 
   useEffect(() => {
-    if (!activeHouseholdId && households.length > 0) {
+    if (households.length === 0) return;
+    // Correct two cases: no household selected yet (fresh login, empty
+    // localStorage), AND a selected household that no longer matches any of
+    // the user's current memberships (stale id left over in localStorage —
+    // e.g. from earlier testing, a recreated household, or a different
+    // account having used this browser). Both cases previously left
+    // activeHouseholdId pointing at something invalid, which made the
+    // header show blank and made every insert fail RLS until the user
+    // manually reselected the household from the dropdown.
+    const isCurrentSelectionValid = households.some((h) => h.id === activeHouseholdId);
+    if (!isCurrentSelectionValid) {
       setActiveHouseholdId(households[0].id);
     }
   }, [activeHouseholdId, households, setActiveHouseholdId]);
@@ -128,6 +142,15 @@ export function AppHeader() {
     refetchInterval: 5_000,
   });
 
+  const { data: people, isLoading: peopleLoading } = useQuery({
+    queryKey: ["household-people", selectedHouseholdId],
+    enabled: shareOpen && !!selectedHouseholdId,
+    queryFn: async () => {
+      const result = await listHouseholdPeople({ data: { householdId: selectedHouseholdId! } });
+      return result;
+    },
+  });
+
   const shareMutation = useMutation({
     mutationFn: async ({ email, role }: { email: string; role: "member" | "viewer" }) => {
       if (!selectedHouseholdId) {
@@ -148,7 +171,7 @@ export function AppHeader() {
       toast.success("Invitation email sent.");
       setShareEmail("");
       setShareRole("member");
-      setShareOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["household-people", selectedHouseholdId] });
     },
     onError: (error: unknown) => {
       const message = error instanceof Error ? error.message : "Unable to share access.";
@@ -291,6 +314,36 @@ export function AppHeader() {
               Send an invite link for {selectedHousehold?.name ?? "this household"}. The recipient can accept directly from their email.
             </DialogDescription>
           </DialogHeader>
+
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">Who has access</p>
+            {peopleLoading && <p className="text-xs text-muted-foreground">Loading…</p>}
+            {!peopleLoading && people && (
+              <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
+                {people.members.map((m) => (
+                  <div key={m.email} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate">{m.email}{m.isYou ? " (you)" : ""}</span>
+                    <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium capitalize text-accent-foreground">
+                      {m.role}
+                    </span>
+                  </div>
+                ))}
+                {people.pending.map((p) => (
+                  <div key={p.email} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate text-muted-foreground">{p.email}</span>
+                    <span className="shrink-0 rounded-full bg-review-soft px-2 py-0.5 text-[10px] font-medium text-review-foreground">
+                      Invited, pending
+                    </span>
+                  </div>
+                ))}
+                {people.members.length === 0 && people.pending.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No one else has access yet.</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="my-2 border-t border-border" />
 
           <form className="space-y-3" onSubmit={onShareSubmit}>
             <div className="space-y-1">
