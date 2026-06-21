@@ -10,14 +10,23 @@ import { useAppStore } from "@/lib/store";
 import { addDays } from "date-fns";
 import { buildUpcomingItems, computeNextOccurrence } from "@/lib/alerts";
 import type { UpcomingItem } from "@/lib/alerts";
-import { LifetimeChart, freqTimesPerYear } from "@/components/LifetimeChart";
-import type { LineItem } from "@/components/LifetimeChart";
+import { freqTimesPerYear } from "@/lib/lifetimeChartMath";
+import type { LineItem } from "@/lib/lifetimeChartMath";
 import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check } from "lucide-react";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { fmtPct } from "@/lib/format";
 import { HashHighlight } from "@/components/HashHighlight";
 import { useMembers } from "@/hooks/useMembers";
 import { toast } from "sonner";
+import { OnboardingWizard } from "@/components/OnboardingWizard";
+
+// Lazy-loaded: LifetimeChart pulls in recharts, by far the heaviest single
+// dependency in this route's bundle. Deferring it means the rest of the
+// dashboard (KPI cards, due-soon list, cash flow) paints and becomes
+// interactive without waiting on recharts to download and parse first.
+const LifetimeChart = lazy(() =>
+  import("@/components/LifetimeChart").then((m) => ({ default: m.LifetimeChart }))
+);
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -37,7 +46,10 @@ function Dashboard() {
   const queryClient = useQueryClient();
   const cashFlowRef = useRef<any>(null);
   const needsAttentionRef = useRef<any>(null);
+  const lifetimeChartRef = useRef<any>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const autoShownOnboardingRef = useRef(false);
 
   function scrollTo(ref: any, key: string) {
     if (!ref.current) return;
@@ -92,7 +104,7 @@ function Dashboard() {
       if (!activeHouseholdId) return null;
       const { data } = await supabase
         .from("app_settings")
-        .select("monthly_income, monthly_expenses, currency, mortgage_days, insurance_days, fd_days, warranty_days")
+        .select("monthly_income, monthly_expenses, currency, mortgage_days, insurance_days, fd_days, warranty_days, onboarding_dismissed")
         .eq("household_id", activeHouseholdId)
         .maybeSingle();
       return data;
@@ -139,6 +151,53 @@ function Dashboard() {
   const savings = data?.savings ?? [];
   const inventoryItems = data?.inventoryItems ?? [];
   const otherAssets = data?.otherAssets ?? [];
+
+  // Household has zero records of any kind — used to gate the onboarding
+  // wizard's auto-show so it only ever appears unprompted for a genuinely
+  // fresh household, never for an existing populated one (regardless of the
+  // onboarding_dismissed default value on app_settings).
+  const isEmptyHousehold =
+    !!data &&
+    properties.length === 0 &&
+    loans.length === 0 &&
+    insurance.length === 0 &&
+    investments.length === 0 &&
+    savings.length === 0 &&
+    inventoryItems.length === 0 &&
+    otherAssets.length === 0;
+
+  // Auto-show once per page load for a fresh, not-yet-dismissed household.
+  useEffect(() => {
+    if (autoShownOnboardingRef.current) return;
+    if (appSettings === undefined || data === undefined) return; // still loading
+    if (!appSettings?.onboarding_dismissed && isEmptyHousehold) {
+      setOnboardingOpen(true);
+      autoShownOnboardingRef.current = true;
+    }
+  }, [appSettings, isEmptyHousehold, data]);
+
+  // Manual re-open from Settings → About → "Quick Start Guide" (links to /#onboarding),
+  // same hash-link pattern HashHighlight already uses elsewhere in this app.
+  useEffect(() => {
+    const check = () => {
+      if (window.location.hash === "#onboarding") setOnboardingOpen(true);
+    };
+    check();
+    window.addEventListener("hashchange", check);
+    return () => window.removeEventListener("hashchange", check);
+  }, []);
+
+  async function dismissOnboardingForever() {
+    setOnboardingOpen(false);
+    if (!activeHouseholdId) return;
+    // upsert, not update — a fresh household (the exact case this wizard
+    // targets) often has no app_settings row yet, and a plain update would
+    // silently affect 0 rows, leaving the dismissal unpersisted.
+    await supabase
+      .from("app_settings")
+      .upsert({ household_id: activeHouseholdId, onboarding_dismissed: true }, { onConflict: "household_id" });
+    queryClient.invalidateQueries({ queryKey: ["app_settings", activeHouseholdId] });
+  }
 
   const propertyValue = properties.reduce((s: number, p: any) => s + (Number(p.current_value) || 0), 0);
   const investmentsValue = investments.reduce((s: number, i: any) => s + (Number(i.current_value) || 0), 0);
@@ -530,14 +589,14 @@ function Dashboard() {
               const dateClass = u.daysLeft < 0 ? "text-urgent" : isUrgent ? "text-urgent" : "text-primary";
               const dateLabel = u.daysLeft < 0 ? `${Math.abs(u.daysLeft)}d overdue` : isUrgent ? `${u.daysLeft}d left` : fmtDate(u.date);
               return (
-               <li key={i} className="flex min-w-0 items-center gap-3 py-2.5 text-sm -mx-2 px-2 overflow-hidden">
+               <li key={i} className="flex min-w-0 items-start gap-3 py-2.5 text-sm -mx-2 px-2 overflow-hidden">
                   {editMode ? (
-                    <div className="flex min-w-0 flex-1 items-center gap-3">
-                      <span className={`w-20 shrink-0 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
-                      <u.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate">{u.label}</span>
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <span className={`w-20 shrink-0 pt-0.5 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
+                      <u.icon className="mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 line-clamp-2 break-words">{u.label}</span>
                       <MemberTag memberId={u.member_id} />
-                      {u.amount != null && <span className="shrink-0 font-semibold">{fmtMoney(u.amount)}</span>}
+                      {u.amount != null && <span className="shrink-0 pt-0.5 font-semibold">{fmtMoney(u.amount)}</span>}
                       <button
                         onClick={() => dismissItem(u)}
                         className={`ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${isDismissing ? "border-muted text-muted-foreground" : "border-settled text-settled"}`}
@@ -546,13 +605,13 @@ function Dashboard() {
                       </button>
                     </div>
                   ) : (
-                    <Link to={u.href as any} hash={`record-${u.recordId}`} className="flex min-w-0 flex-1 items-center gap-3 hover:bg-accent/40 rounded overflow-hidden">
-                      <span className={`w-20 shrink-0 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
-                      <u.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate">{u.label}</span>
+                    <Link to={u.href as any} hash={`record-${u.recordId}`} className="flex min-w-0 flex-1 items-start gap-3 hover:bg-accent/40 rounded overflow-hidden">
+                      <span className={`w-20 shrink-0 pt-0.5 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
+                      <u.icon className="mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 line-clamp-2 break-words">{u.label}</span>
                       <MemberTag memberId={u.member_id} />
-                      {u.amount != null && <span className="shrink-0 font-semibold">{fmtMoney(u.amount)}</span>}
-                      <ChevronRight className="h-4 w-4 shrink-0 text-primary" />
+                      {u.amount != null && <span className="shrink-0 pt-0.5 font-semibold">{fmtMoney(u.amount)}</span>}
+                      <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                     </Link>
                   )}
                 </li>
@@ -675,22 +734,34 @@ function Dashboard() {
       />
 
       {/* LIFETIME CHART */}
-      <section className="rounded-2xl border border-border bg-card p-4">
+      <section ref={lifetimeChartRef} className={`scroll-mt-28 rounded-2xl border border-border bg-card p-4 transition-all ${highlight === "lifetime-chart" ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}>
         <h2 className="mb-1 text-sm font-bold">Lifetime Net Worth</h2>
         <p className="mb-3 text-xs text-muted-foreground">Projected trajectory based on your current records.</p>
-        <LifetimeChart
-          properties={properties}
-          loans={loans}
-          insurance={insurance}
-          savings={savings}
-          investments={investments}
-          members={members}
-          startingNetWorth={netWorth}
-          monthlyIncome={salaryIncome}
-          monthlyExpenses={baseExpenses}
-          appSettings={appSettings}
-        />
+        <Suspense fallback={<div className="h-64 w-full animate-pulse rounded-xl bg-muted/40" />}>
+          <LifetimeChart
+            properties={properties}
+            loans={loans}
+            insurance={insurance}
+            savings={savings}
+            investments={investments}
+            members={members}
+            startingNetWorth={netWorth}
+            monthlyIncome={salaryIncome}
+            monthlyExpenses={baseExpenses}
+            appSettings={appSettings}
+          />
+        </Suspense>
       </section>
+
+      <OnboardingWizard
+        open={onboardingOpen}
+        onOpenChange={setOnboardingOpen}
+        hasProperty={properties.length > 0}
+        hasInsurance={insurance.length > 0}
+        hasInventoryItem={inventoryItems.length > 0}
+        onDismissForever={dismissOnboardingForever}
+        onScrollToLifetimeChart={() => scrollTo(lifetimeChartRef, "lifetime-chart")}
+      />
     </div>
   );
 }
