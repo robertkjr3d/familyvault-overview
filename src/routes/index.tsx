@@ -10,7 +10,7 @@ import { useAppStore } from "@/lib/store";
 import { addDays } from "date-fns";
 import { buildUpcomingItems, computeNextOccurrence } from "@/lib/alerts";
 import type { UpcomingItem } from "@/lib/alerts";
-import { LifetimeChart } from "@/components/LifetimeChart";
+import { LifetimeChart, freqTimesPerYear } from "@/components/LifetimeChart";
 import type { LineItem } from "@/components/LifetimeChart";
 import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check } from "lucide-react";
 import { useState, useRef } from "react";
@@ -256,10 +256,10 @@ function Dashboard() {
       .map((p: any) => ({ label: `${p.name ?? "Property"} rental`, amount: Number(p.monthly_rent) || 0, href: `/property#record-${p.id}` })),
     ...insurance
       .filter((p: any) => insurancePayoutMonthly(p) > 0)
-      .map((p: any) => ({ label: `${p.name ?? "Insurance"} payout`, amount: insurancePayoutMonthly(p), href: `/insurance#record-${p.id}` })),
+      .map((p: any) => ({ label: `${p.name ?? "Insurance"} payout`, amount: insurancePayoutMonthly(p), href: `/insurance#record-${p.id}`, timesPerYear: freqTimesPerYear(p.payout_frequency) })),
     ...investments
       .filter((inv: any) => investmentPayoutMonthly(inv) > 0)
-      .map((inv: any) => ({ label: `${inv.name ?? "ILP"} payout`, amount: investmentPayoutMonthly(inv), href: `/investments#record-${inv.id}` })),
+      .map((inv: any) => ({ label: `${inv.name ?? "ILP"} payout`, amount: investmentPayoutMonthly(inv), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.payout_frequency) })),
   ];
 
   const outflowDetailItems: LineItem[] = [
@@ -277,10 +277,10 @@ function Dashboard() {
       .map((l: any) => ({ label: `${l.bank ?? "Loan"} repayment`, amount: Number(l.monthly_payment) || 0, href: `/loans#record-${l.id}` })),
     ...insurance
       .filter((p: any) => insuranceMonthly(p) > 0)
-      .map((p: any) => ({ label: `${p.name ?? "Insurance"} premium`, amount: insuranceMonthly(p), href: `/insurance#record-${p.id}` })),
+      .map((p: any) => ({ label: `${p.name ?? "Insurance"} premium`, amount: insuranceMonthly(p), href: `/insurance#record-${p.id}`, timesPerYear: freqTimesPerYear(p.frequency) })),
     ...investments
       .filter((inv: any) => investmentPremiumMonthly(inv) > 0)
-      .map((inv: any) => ({ label: `${inv.name ?? "ILP"} premium`, amount: investmentPremiumMonthly(inv), href: `/investments#record-${inv.id}` })),
+      .map((inv: any) => ({ label: `${inv.name ?? "ILP"} premium`, amount: investmentPremiumMonthly(inv), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.premium_frequency) })),
     ...(baseExpenses > 0 ? [{ label: "Other expenses (Settings)", amount: baseExpenses, href: "/settings" }] : []),
   ];
 
@@ -719,10 +719,22 @@ function BreakdownRow({ label, value, bold, className }: { label: string; value:
 function CashFlowItemRow({ it, color }: { it: LineItem; color: "settled" | "urgent" }) {
   const sign = color === "settled" ? "+" : "−";
   const textClass = color === "settled" ? "font-medium text-settled" : "font-medium text-urgent";
+  // it.amount is already the monthly figure. If the source record's actual
+  // frequency isn't monthly (timesPerYear !== 12), that monthly figure was
+  // derived by dividing the annual total by 12 — show that conversion,
+  // same convention as the ×N / per-occurrence breakdown in Year Detail.
+  const showAnnualConversion = it.timesPerYear !== undefined && it.timesPerYear !== 12;
   const inner = (
     <div className="flex justify-between gap-2 py-0.5">
       <span className="text-muted-foreground">{it.label}</span>
-      <span className={textClass}>{sign}{fmtMoney(it.amount)}</span>
+      <span className="text-right">
+        <span className={textClass}>{sign}{fmtMoney(it.amount)}</span>
+        {showAnnualConversion && (
+          <span className="block text-[9px] font-normal text-muted-foreground/70">
+            {fmtMoney(it.amount * 12)}/yr ÷ 12
+          </span>
+        )}
+      </span>
     </div>
   );
   if (it.href) {
