@@ -50,8 +50,28 @@ type SheetSpec = {
   rows: ExportRow[];
 };
 
-function widthFor(header: string): number {
-  return Math.min(40, Math.max(12, header.length + 4));
+// Column width is based on the field's TYPE — i.e. what the actual data looks
+// like — not the header text length. A long header like "Current estimated
+// value" holds short numbers and shouldn't force a wide column; a short
+// header like "Action" holds free-text notes and needs a wide one. The header
+// row has text-wrapping turned on (see assembly loop below) so a long header
+// on a narrow numeric/date column wraps to two lines instead of being clipped.
+function widthFor(f: FieldDef): number {
+  const headerLen = f.label.length;
+  if (f.money) return clamp(14, headerLen + 2, 18);
+  if (f.type === "date") return 14;
+  if (f.type === "number") return clamp(10, headerLen + 2, 16);
+  if (f.type === "chips") return 30;
+  if (f.type === "select" || f.type === "member" || f.type === "property_select") {
+    return clamp(16, headerLen + 4, 26);
+  }
+  // text / textarea — free-form notes are typically the longest actual
+  // content in the sheet (e.g. "Action": "Ask UOB for repricing rate May 2026")
+  return clamp(30, headerLen + 12, 48);
+}
+
+function clamp(min: number, value: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function numFmtFor(f: FieldDef): string | undefined {
@@ -92,7 +112,7 @@ function buildRecordSheet(
 ): SheetSpec {
   const cfg = recordConfigs[configKey];
   const columns = [
-    ...cfg.fields.map((f) => ({ header: f.label, key: f.key, width: widthFor(f.label), numFmt: numFmtFor(f) })),
+    ...cfg.fields.map((f) => ({ header: f.label, key: f.key, width: widthFor(f), numFmt: numFmtFor(f) })),
     { header: "Status", key: "__status", width: 12 },
     { header: "Last Updated In App", key: "__updated_at", width: 20, numFmt: "dd mmm yyyy" },
   ];
@@ -248,6 +268,8 @@ async function writeWorkbook(sheets: SheetSpec[]) {
     ws.columns = spec.columns.map((c) => ({ header: c.header, key: c.key, width: c.width }));
     ws.getRow(1).font = { bold: true };
     ws.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8E8E8" } };
+    ws.getRow(1).alignment = { wrapText: true, vertical: "middle" };
+    ws.getRow(1).height = 30;
     ws.views = [{ state: "frozen", ySplit: 1 }];
     if (spec.rows.length > 0) {
       ws.addRows(spec.rows);
