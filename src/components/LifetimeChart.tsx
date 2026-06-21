@@ -8,6 +8,7 @@ import {
 } from "recharts";
 import { useToday } from "@/lib/today";
 import { YearDetailPanel } from "@/components/YearDetailPanel";
+import { type LineItem, type ChartPoint, freqTimesPerYear, fmt } from "@/lib/lifetimeChartMath";
 
 type Props = {
   properties: any[];
@@ -20,29 +21,6 @@ type Props = {
   monthlyIncome: number;
   monthlyExpenses: number;
   appSettings: any;
-};
-
-export type LineItem = {
-  label: string;
-  amount: number;
-  href?: string;
-  // How many times per year this item recurs (12 = monthly, 4 = quarterly,
-  // 2 = semi-annual, 1 = annual or a single one-off occurrence this year).
-  // Optional — defaults to 1 (annual) wherever omitted.
-  timesPerYear?: number;
-};
-
-export type ChartPoint = {
-  year: number;
-  netWorth: number;
-  annualNet: number;
-  annualIn: number;
-  annualOut: number;
-  inflowItems: LineItem[];
-  outflowItems: LineItem[];
-  propAppreciation: number;
-  investGrowth: number;
-  events: string[];
 };
 
 function insuranceAnnual(ins: any): number {
@@ -69,25 +47,6 @@ function propertyTotalCosts(p: any): number {
   const itemised = ["cost_management", "cost_property_tax", "cost_fire_insurance", "cost_maintenance", "cost_other"]
     .reduce((s, k) => s + (Number(p[k]) || 0), 0);
   return itemised || (Number(p.monthly_costs) || 0);
-}
-
-// Maps a frequency string (e.g. insurance/ILP "frequency" or "payout_frequency"
-// fields) to how many times per year it occurs, for the Year Detail frequency column.
-// Defaults to 1 (annual / single occurrence) for unrecognised or one-off values.
-export function freqTimesPerYear(freq: string | null | undefined): number {
-  const f = (freq || "annual").toLowerCase();
-  if (f.includes("month")) return 12;
-  if (f.includes("quart")) return 4;
-  if (f.includes("semi") || f.includes("half")) return 2;
-  return 1;
-}
-
-export function fmt(v: number): string {
-  const abs = Math.abs(v);
-  const sign = v < 0 ? "-" : "";
-  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(0)}k`;
-  return `${sign}$${abs.toFixed(0)}`;
 }
 
 export function LifetimeChart({
