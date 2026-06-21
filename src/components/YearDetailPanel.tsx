@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { fmt } from "@/components/LifetimeChart";
-import type { ChartPoint, LineItem } from "@/components/LifetimeChart";
+import { fmt } from "@/lib/lifetimeChartMath";
+import type { ChartPoint, LineItem } from "@/lib/lifetimeChartMath";
 
 type Props = {
   data: ChartPoint[];
