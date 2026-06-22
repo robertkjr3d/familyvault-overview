@@ -88,6 +88,105 @@ export function propertyTotalCosts(p: any): number {
   return itemised || (Number(p.monthly_costs) || 0);
 }
 
+// ─── Current-month cash flow helpers ──────────────────────────────────────────
+// These mirror the annual projection helpers above but answer "what is the
+// monthly cash impact RIGHT NOW?" rather than "what is the annual figure for
+// the projection?" They live here so both the dashboard (index.tsx) and any
+// future test suite can share one source of truth.
+//
+// All functions that depend on the current date take `today: Date` explicitly —
+// this makes them pure and directly testable without mocking Date.now().
+
+/**
+ * Monthly premium cost for an insurance policy.
+ * Returns 0 for one-off or single premiums (no recurring cost).
+ * No date-range check — the dashboard already filters to active policies upstream.
+ */
+export function insuranceMonthly(ins: any): number {
+  const premium = Number(ins.premium) || 0;
+  const freq = (ins.frequency ?? "").toLowerCase();
+  if (freq === "one-off" || freq === "single") return 0;
+  if (freq === "monthly") return premium;
+  if (freq === "quarterly") return premium / 3;
+  if (freq === "half-yearly" || freq === "semi-annual") return premium / 6;
+  if (freq === "annual" || freq === "yearly" || freq === "") return premium / 12;
+  return premium / 12;
+}
+
+/**
+ * Monthly premium cost for an ILP/Endowment investment.
+ * Returns 0 if: not an ILP/Endowment type, no premium set, premium hasn't
+ * started yet, or the premium period has already ended.
+ */
+export function investmentPremiumMonthly(inv: any, today: Date): number {
+  if (inv.group_name !== "ILP (Investment-Linked Policy)" && inv.group_name !== "Endowment") return 0;
+  const premium = Number(inv.premium_amount) || 0;
+  if (!premium || !inv.premium_start_date) return 0;
+  if (new Date(inv.premium_start_date).getTime() > today.getTime()) return 0;
+  if (inv.premium_end_date && new Date(inv.premium_end_date).getTime() < today.getTime()) return 0;
+  const freq = (inv.premium_frequency ?? "").toLowerCase();
+  if (freq === "one-off" || freq === "single") return 0;
+  if (freq === "monthly") return premium;
+  if (freq === "quarterly") return premium / 3;
+  if (freq === "half-yearly" || freq === "semi-annual") return premium / 6;
+  if (freq === "annual" || freq === "yearly" || freq === "") return premium / 12;
+  return premium / 12;
+}
+
+/**
+ * Monthly payout inflow from an active insurance policy.
+ * One-off payouts only contribute in the exact calendar month/year they occur.
+ * Recurring payouts contribute every month between payout_start_date and
+ * payout_end_date (or indefinitely if no end date).
+ */
+export function insurancePayoutMonthly(ins: any, today: Date): number {
+  const amount = Number(ins.payout_amount) || 0;
+  if (!amount || !ins.payout_start_date) return 0;
+  const startTime = new Date(ins.payout_start_date).getTime();
+  if (startTime > today.getTime()) return 0;
+  const freq = (ins.payout_frequency ?? "").toLowerCase();
+  const isOneOff = freq === "one-off" || freq === "single" || freq === "";
+  if (isOneOff) {
+    const payoutDate = new Date(ins.payout_start_date);
+    const sameMonthYear = payoutDate.getFullYear() === today.getFullYear()
+      && payoutDate.getMonth() === today.getMonth();
+    return sameMonthYear ? amount : 0;
+  }
+  if (ins.payout_end_date && new Date(ins.payout_end_date).getTime() < today.getTime()) return 0;
+  if (freq === "monthly") return amount;
+  if (freq === "quarterly") return amount / 3;
+  if (freq === "half-yearly" || freq === "semi-annual") return amount / 6;
+  if (freq === "annual" || freq === "yearly") return amount / 12;
+  return amount / 12;
+}
+
+/**
+ * Monthly payout inflow from an active ILP/Endowment investment.
+ * Same logic as insurancePayoutMonthly but reads ILP-specific fields.
+ */
+export function investmentPayoutMonthly(inv: any, today: Date): number {
+  const isILP = inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
+  if (!isILP) return 0;
+  const amount = Number(inv.payout_amount) || 0;
+  if (!amount || !inv.payout_start_date) return 0;
+  const startTime = new Date(inv.payout_start_date).getTime();
+  if (startTime > today.getTime()) return 0;
+  const freq = (inv.payout_frequency ?? "").toLowerCase();
+  const isOneOff = freq === "one-off" || freq === "single" || freq === "";
+  if (isOneOff) {
+    const payoutDate = new Date(inv.payout_start_date);
+    const sameMonthYear = payoutDate.getFullYear() === today.getFullYear()
+      && payoutDate.getMonth() === today.getMonth();
+    return sameMonthYear ? amount : 0;
+  }
+  if (inv.payout_end_date && new Date(inv.payout_end_date).getTime() < today.getTime()) return 0;
+  if (freq === "monthly") return amount;
+  if (freq === "quarterly") return amount / 3;
+  if (freq === "half-yearly" || freq === "semi-annual") return amount / 6;
+  if (freq === "annual" || freq === "yearly") return amount / 12;
+  return amount / 12;
+}
+
 export type LifetimeProjectionInput = {
   properties: any[];
   loans: any[];
