@@ -21,6 +21,8 @@ import { useAuthSession } from "@/hooks/useAuthSession";
 import { acceptHouseholdInvite } from "@/lib/householdInvites";
 import { useAppStore } from "@/lib/store";
 import { toast } from "sonner";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { setupGlobalErrorHandlers } from "@/lib/errorLogger";
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
@@ -75,6 +77,10 @@ function RootComponent() {
   // Legal pages must be readable before signing in — that's the whole point
   // of a privacy policy / terms page. Bypass the auth gate for just these two.
   const isPublicRoute = pathname === "/privacy" || pathname === "/terms";
+
+  useEffect(() => {
+    setupGlobalErrorHandlers();
+  }, []);
 
   useEffect(() => {
     if (!session?.user?.id || typeof window === "undefined") {
@@ -141,14 +147,16 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen pb-36">
-        <AppHeader />
-        <main className="mx-auto max-w-3xl px-4 py-4">
-          <Outlet />
-        </main>
-        <BottomTabs />
-        <Toaster position="bottom-right" richColors closeButton offset={{ bottom: 80 }} duration={1000} />
-      </div>
+      <ErrorBoundary>
+        <div className="min-h-screen pb-36">
+          <AppHeader />
+          <main className="mx-auto max-w-3xl px-4 py-4">
+            <Outlet />
+          </main>
+          <BottomTabs />
+          <Toaster position="bottom-right" richColors closeButton offset={{ bottom: 80 }} duration={1000} />
+        </div>
+      </ErrorBoundary>
     </QueryClientProvider>
   );
 }
