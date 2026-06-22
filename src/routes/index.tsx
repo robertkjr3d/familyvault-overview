@@ -10,7 +10,7 @@ import { useAppStore } from "@/lib/store";
 import { addDays } from "date-fns";
 import { buildUpcomingItems, computeNextOccurrence } from "@/lib/alerts";
 import type { UpcomingItem } from "@/lib/alerts";
-import { freqTimesPerYear } from "@/lib/lifetimeChartMath";
+import { freqTimesPerYear, propertyTotalCosts } from "@/lib/lifetimeChartMath";
 import type { LineItem } from "@/lib/lifetimeChartMath";
 import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check } from "lucide-react";
 import { useState, useRef, useEffect, lazy, Suspense } from "react";
@@ -289,11 +289,7 @@ function Dashboard() {
   const mortgagedPropertyIds = new Set(
     loans.filter((l: any) => l.property_id).map((l: any) => l.property_id)
   );
-  function propertyTotalCosts(p: any): number {
-    const itemised = ["cost_management", "cost_property_tax", "cost_fire_insurance", "cost_maintenance", "cost_other"]
-      .reduce((s, k) => s + (Number(p[k]) || 0), 0);
-    return itemised || (Number(p.monthly_costs) || 0);
-  }
+  
   const propertyOut = properties.reduce((s: number, p: any) => {
     const costs = propertyTotalCosts(p);
     const mortgage = mortgagedPropertyIds.has(p.id) ? 0 : (Number(p.monthly_payment) || 0);
