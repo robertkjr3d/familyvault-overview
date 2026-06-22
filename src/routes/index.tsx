@@ -10,7 +10,7 @@ import { useAppStore } from "@/lib/store";
 import { addDays } from "date-fns";
 import { buildUpcomingItems, computeNextOccurrence } from "@/lib/alerts";
 import type { UpcomingItem } from "@/lib/alerts";
-import { freqTimesPerYear, propertyTotalCosts } from "@/lib/lifetimeChartMath";
+import { freqTimesPerYear, propertyTotalCosts, insuranceMonthly, investmentPremiumMonthly, insurancePayoutMonthly, investmentPayoutMonthly } from "@/lib/lifetimeChartMath";
 import type { LineItem } from "@/lib/lifetimeChartMath";
 import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check } from "lucide-react";
 import { useState, useRef, useEffect, lazy, Suspense } from "react";
@@ -209,87 +209,15 @@ function Dashboard() {
 
   const salaryIncome = Number(appSettings?.monthly_income) || 0;
   const rentalIncome = properties.reduce((s: number, p: any) => s + (Number(p.monthly_rent) || 0), 0);
-  const insurancePayoutIn = insurance.reduce((s: number, p: any) => s + insurancePayoutMonthly(p), 0);
-  const investmentPayoutIn = investments.reduce((s: number, inv: any) => s + investmentPayoutMonthly(inv), 0);
+  const insurancePayoutIn = insurance.reduce((s: number, p: any) => s + insurancePayoutMonthly(p, today), 0);
+  const investmentPayoutIn = investments.reduce((s: number, inv: any) => s + investmentPayoutMonthly(inv, today), 0);
   const monthlyIn = salaryIncome + rentalIncome + insurancePayoutIn + investmentPayoutIn;
 
-  function insuranceMonthly(p: any): number {
-    const premium = Number(p.premium) || 0;
-    const freq = (p.frequency ?? "").toLowerCase();
-    if (freq === "one-off" || freq === "single") return 0;
-    if (freq === "monthly") return premium;
-    if (freq === "quarterly") return premium / 3;
-    if (freq === "half-yearly" || freq === "semi-annual") return premium / 6;
-    if (freq === "annual" || freq === "yearly" || freq === "") return premium / 12;
-    return premium / 12;
-  }
 
-  // ILP/Endowment premiums currently being paid — treated as a monthly outflow.
-  function investmentPremiumMonthly(inv: any): number {
-    if (inv.group_name !== "ILP (Investment-Linked Policy)" && inv.group_name !== "Endowment") return 0;
-    const premium = Number(inv.premium_amount) || 0;
-    if (!premium || !inv.premium_start_date) return 0;
-    if (new Date(inv.premium_start_date).getTime() > today.getTime()) return 0;
-    if (inv.premium_end_date && new Date(inv.premium_end_date).getTime() < today.getTime()) return 0;
-    const freq = (inv.premium_frequency ?? "").toLowerCase();
-    if (freq === "one-off" || freq === "single") return 0;
-    if (freq === "monthly") return premium;
-    if (freq === "quarterly") return premium / 3;
-    if (freq === "half-yearly" || freq === "semi-annual") return premium / 6;
-    if (freq === "annual" || freq === "yearly" || freq === "") return premium / 12;
-    return premium / 12;
-  }
-
-  // Insurance payouts currently active — treated as a monthly inflow.
-  // One-off payouts only count in the month they occur; recurring payouts count
-  // for every month between payout_start_date and payout_end_date (or indefinitely if no end date).
-  function insurancePayoutMonthly(p: any): number {
-    const amount = Number(p.payout_amount) || 0;
-    if (!amount || !p.payout_start_date) return 0;
-    const startTime = new Date(p.payout_start_date).getTime();
-    if (startTime > today.getTime()) return 0;
-    const freq = (p.payout_frequency ?? "").toLowerCase();
-    const isOneOff = freq === "one-off" || freq === "single" || freq === "";
-    if (isOneOff) {
-      // Only counts as "this month's" inflow during the actual payout month/year
-      const payoutDate = new Date(p.payout_start_date);
-      return payoutDate.getFullYear() === today.getFullYear() && payoutDate.getMonth() === today.getMonth() ? amount : 0;
-    }
-    if (p.payout_end_date && new Date(p.payout_end_date).getTime() < today.getTime()) return 0;
-    if (freq === "monthly") return amount;
-    if (freq === "quarterly") return amount / 3;
-    if (freq === "half-yearly" || freq === "semi-annual") return amount / 6;
-    if (freq === "annual" || freq === "yearly") return amount / 12;
-    return amount / 12;
-  }
-
-  // ILP/Endowment payouts currently active — treated as a monthly inflow. Same logic as insurance payouts.
-  function investmentPayoutMonthly(inv: any): number {
-    const isILP = inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
-    if (!isILP) return 0;
-    const amount = Number(inv.payout_amount) || 0;
-    if (!amount || !inv.payout_start_date) return 0;
-    const startTime = new Date(inv.payout_start_date).getTime();
-    if (startTime > today.getTime()) return 0;
-    const freq = (inv.payout_frequency ?? "").toLowerCase();
-    const isOneOff = freq === "one-off" || freq === "single" || freq === "";
-    if (isOneOff) {
-      const payoutDate = new Date(inv.payout_start_date);
-      return payoutDate.getFullYear() === today.getFullYear() && payoutDate.getMonth() === today.getMonth() ? amount : 0;
-    }
-    if (inv.payout_end_date && new Date(inv.payout_end_date).getTime() < today.getTime()) return 0;
-    if (freq === "monthly") return amount;
-    if (freq === "quarterly") return amount / 3;
-    if (freq === "half-yearly" || freq === "semi-annual") return amount / 6;
-    if (freq === "annual" || freq === "yearly") return amount / 12;
-    return amount / 12;
-  }
-
-  // Properties with a linked mortgage loan should not double-count monthly_payment
+    // Properties with a linked mortgage loan should not double-count monthly_payment
   const mortgagedPropertyIds = new Set(
     loans.filter((l: any) => l.property_id).map((l: any) => l.property_id)
   );
-  
   const propertyOut = properties.reduce((s: number, p: any) => {
     const costs = propertyTotalCosts(p);
     const mortgage = mortgagedPropertyIds.has(p.id) ? 0 : (Number(p.monthly_payment) || 0);
@@ -297,7 +225,7 @@ function Dashboard() {
   }, 0);
   const loanOut = loans.reduce((s: number, l: any) => s + (Number(l.monthly_payment) || 0), 0);
   const insuranceOut = insurance.reduce((s: number, p: any) => s + insuranceMonthly(p), 0);
-  const investmentPremiumOut = investments.reduce((s: number, inv: any) => s + investmentPremiumMonthly(inv), 0);
+  const investmentPremiumOut = investments.reduce((s: number, inv: any) => s + investmentPremiumMonthly(inv, today), 0);
   const baseExpenses = Number(appSettings?.monthly_expenses) || 0;
   const monthlyOut = propertyOut + loanOut + insuranceOut + investmentPremiumOut + baseExpenses;
   const netCashFlow = monthlyIn - monthlyOut;
@@ -310,11 +238,11 @@ function Dashboard() {
       .filter((p: any) => (Number(p.monthly_rent) || 0) > 0)
       .map((p: any) => ({ label: `${p.name ?? "Property"} rental`, amount: Number(p.monthly_rent) || 0, href: `/property#record-${p.id}` })),
     ...insurance
-      .filter((p: any) => insurancePayoutMonthly(p) > 0)
-      .map((p: any) => ({ label: `${p.name ?? "Insurance"} payout`, amount: insurancePayoutMonthly(p), href: `/insurance#record-${p.id}`, timesPerYear: freqTimesPerYear(p.payout_frequency) })),
+      .filter((p: any) => insurancePayoutMonthly(p, today) > 0)
+      .map((p: any) => ({ label: `${p.name ?? "Insurance"} payout`, amount: insurancePayoutMonthly(p, today), href: `/insurance#record-${p.id}`, timesPerYear: freqTimesPerYear(p.payout_frequency) })),
     ...investments
-      .filter((inv: any) => investmentPayoutMonthly(inv) > 0)
-      .map((inv: any) => ({ label: `${inv.name ?? "ILP"} payout`, amount: investmentPayoutMonthly(inv), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.payout_frequency) })),
+      .filter((inv: any) => investmentPayoutMonthly(inv, today) > 0)
+      .map((inv: any) => ({ label: `${inv.name ?? "ILP"} payout`, amount: investmentPayoutMonthly(inv, today), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.payout_frequency) })),
   ];
 
   const outflowDetailItems: LineItem[] = [
@@ -334,8 +262,8 @@ function Dashboard() {
       .filter((p: any) => insuranceMonthly(p) > 0)
       .map((p: any) => ({ label: `${p.name ?? "Insurance"} premium`, amount: insuranceMonthly(p), href: `/insurance#record-${p.id}`, timesPerYear: freqTimesPerYear(p.frequency) })),
     ...investments
-      .filter((inv: any) => investmentPremiumMonthly(inv) > 0)
-      .map((inv: any) => ({ label: `${inv.name ?? "ILP"} premium`, amount: investmentPremiumMonthly(inv), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.premium_frequency) })),
+      .filter((inv: any) => investmentPremiumMonthly(inv, today) > 0)
+      .map((inv: any) => ({ label: `${inv.name ?? "ILP"} premium`, amount: investmentPremiumMonthly(inv, today), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.premium_frequency) })),
     ...(baseExpenses > 0 ? [{ label: "Other expenses (Settings)", amount: baseExpenses, href: "/settings" }] : []),
   ];
 
