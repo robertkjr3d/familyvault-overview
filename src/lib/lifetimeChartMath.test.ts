@@ -5,9 +5,17 @@ import {
   insuranceAnnual,
   investmentPremiumAnnual,
   propertyTotalCosts,
+  insuranceMonthly,
+  investmentPremiumMonthly,
+  insurancePayoutMonthly,
+  investmentPayoutMonthly,
   projectLifetimeChart,
   type LifetimeProjectionInput,
 } from "./lifetimeChartMath";
+
+// Fixed reference date for all tests that need "today" — keeps tests
+// deterministic regardless of when they actually run.
+const TODAY = new Date("2026-06-22T00:00:00Z");
 
 // ─── freqTimesPerYear ────────────────────────────────────────────────────────
 
@@ -645,5 +653,198 @@ describe("projectLifetimeChart", () => {
       const itemisedOut = d.outflowItems.reduce((s, it) => s + it.amount, 0);
       expect(Math.abs(itemisedOut - d.annualOut)).toBeLessThanOrEqual(1);
     });
+  });
+});
+
+// ─── insuranceMonthly ─────────────────────────────────────────────────────────
+
+describe("insuranceMonthly", () => {
+  it("returns the premium as-is for monthly frequency", () => {
+    expect(insuranceMonthly({ premium: 200, frequency: "monthly" })).toBe(200);
+  });
+
+  it("divides quarterly premium by 3", () => {
+    expect(insuranceMonthly({ premium: 900, frequency: "quarterly" })).toBe(300);
+  });
+
+  it("divides semi-annual premium by 6", () => {
+    expect(insuranceMonthly({ premium: 1200, frequency: "half-yearly" })).toBe(200);
+    expect(insuranceMonthly({ premium: 1200, frequency: "semi-annual" })).toBe(200);
+  });
+
+  it("divides annual premium by 12", () => {
+    expect(insuranceMonthly({ premium: 2400, frequency: "annual" })).toBe(200);
+    expect(insuranceMonthly({ premium: 2400, frequency: "yearly" })).toBe(200);
+  });
+
+  it("returns 0 for one-off and single (no recurring cost)", () => {
+    expect(insuranceMonthly({ premium: 5000, frequency: "one-off" })).toBe(0);
+    expect(insuranceMonthly({ premium: 5000, frequency: "single" })).toBe(0);
+  });
+
+  it("defaults to dividing by 12 when frequency is missing or empty", () => {
+    expect(insuranceMonthly({ premium: 1200, frequency: "" })).toBe(100);
+    expect(insuranceMonthly({ premium: 1200 })).toBe(100);
+  });
+});
+
+// ─── investmentPremiumMonthly ─────────────────────────────────────────────────
+
+describe("investmentPremiumMonthly", () => {
+  const ACTIVE_ILP = {
+    group_name: "ILP (Investment-Linked Policy)",
+    premium_amount: 600,
+    premium_frequency: "monthly",
+    premium_start_date: "2024-01-01",
+  };
+
+  it("returns monthly premium for an active ILP with monthly frequency", () => {
+    expect(investmentPremiumMonthly(ACTIVE_ILP, TODAY)).toBe(600);
+  });
+
+  it("divides annual ILP premium by 12", () => {
+    const inv = { ...ACTIVE_ILP, premium_amount: 7200, premium_frequency: "annual" };
+    expect(investmentPremiumMonthly(inv, TODAY)).toBe(600);
+  });
+
+  it("returns 0 for non-ILP/Endowment investments", () => {
+    const inv = { ...ACTIVE_ILP, group_name: "Unit Trusts" };
+    expect(investmentPremiumMonthly(inv, TODAY)).toBe(0);
+  });
+
+  it("returns 0 when premium hasn't started yet", () => {
+    const inv = { ...ACTIVE_ILP, premium_start_date: "2027-01-01" };
+    expect(investmentPremiumMonthly(inv, TODAY)).toBe(0);
+  });
+
+  it("returns 0 when premium period has already ended", () => {
+    const inv = { ...ACTIVE_ILP, premium_end_date: "2025-12-31" };
+    expect(investmentPremiumMonthly(inv, TODAY)).toBe(0);
+  });
+
+  it("includes the premium in the end month itself (end date in the same month as today)", () => {
+    // end_date of 2026-06-30 should still count for June 2026
+    const inv = { ...ACTIVE_ILP, premium_end_date: "2026-06-30" };
+    expect(investmentPremiumMonthly(inv, TODAY)).toBe(600);
+  });
+
+  it("returns 0 for one-off ILP single premium", () => {
+    const inv = { ...ACTIVE_ILP, premium_frequency: "one-off" };
+    expect(investmentPremiumMonthly(inv, TODAY)).toBe(0);
+  });
+
+  it("returns 0 when premium_amount is missing", () => {
+    const inv = { ...ACTIVE_ILP, premium_amount: 0 };
+    expect(investmentPremiumMonthly(inv, TODAY)).toBe(0);
+  });
+
+  it("also works for Endowment group_name", () => {
+    const inv = { ...ACTIVE_ILP, group_name: "Endowment" };
+    expect(investmentPremiumMonthly(inv, TODAY)).toBe(600);
+  });
+});
+
+// ─── insurancePayoutMonthly ───────────────────────────────────────────────────
+
+describe("insurancePayoutMonthly", () => {
+  const ANNUAL_PAYOUT = {
+    payout_amount: 12000,
+    payout_frequency: "annual",
+    payout_start_date: "2025-01-01",
+  };
+
+  it("returns monthly equivalent of an annual payout that is currently active", () => {
+    expect(insurancePayoutMonthly(ANNUAL_PAYOUT, TODAY)).toBe(1000);
+  });
+
+  it("returns monthly amount for a monthly payout", () => {
+    const ins = { payout_amount: 500, payout_frequency: "monthly", payout_start_date: "2025-01-01" };
+    expect(insurancePayoutMonthly(ins, TODAY)).toBe(500);
+  });
+
+  it("divides quarterly payout by 3", () => {
+    const ins = { payout_amount: 900, payout_frequency: "quarterly", payout_start_date: "2025-01-01" };
+    expect(insurancePayoutMonthly(ins, TODAY)).toBeCloseTo(300, 1);
+  });
+
+  it("returns 0 when payout hasn't started yet", () => {
+    const ins = { ...ANNUAL_PAYOUT, payout_start_date: "2027-01-01" };
+    expect(insurancePayoutMonthly(ins, TODAY)).toBe(0);
+  });
+
+  it("returns 0 when recurring payout has ended", () => {
+    const ins = { ...ANNUAL_PAYOUT, payout_end_date: "2025-12-31" };
+    expect(insurancePayoutMonthly(ins, TODAY)).toBe(0);
+  });
+
+  it("counts a one-off payout only in its exact calendar month", () => {
+    // June 2026 — same month as TODAY
+    const ins = { payout_amount: 50000, payout_frequency: "one-off", payout_start_date: "2026-06-15" };
+    expect(insurancePayoutMonthly(ins, TODAY)).toBe(50000);
+  });
+
+  it("returns 0 for a one-off payout in a different month", () => {
+    const ins = { payout_amount: 50000, payout_frequency: "one-off", payout_start_date: "2026-05-01" };
+    expect(insurancePayoutMonthly(ins, TODAY)).toBe(0);
+  });
+
+  it("treats empty payout_frequency string as one-off", () => {
+    // payout_frequency: "" → isOneOff = true → only counts in exact month
+    const ins = { payout_amount: 10000, payout_frequency: "", payout_start_date: "2026-06-01" };
+    expect(insurancePayoutMonthly(ins, TODAY)).toBe(10000);
+  });
+
+  it("returns 0 when payout_amount is 0 or missing", () => {
+    expect(insurancePayoutMonthly({ payout_amount: 0, payout_start_date: "2025-01-01" }, TODAY)).toBe(0);
+    expect(insurancePayoutMonthly({ payout_start_date: "2025-01-01" }, TODAY)).toBe(0);
+  });
+
+  it("returns 0 when payout_start_date is missing", () => {
+    expect(insurancePayoutMonthly({ payout_amount: 5000, payout_frequency: "annual" }, TODAY)).toBe(0);
+  });
+});
+
+// ─── investmentPayoutMonthly ──────────────────────────────────────────────────
+
+describe("investmentPayoutMonthly", () => {
+  const ACTIVE_ILP_PAYOUT = {
+    group_name: "ILP (Investment-Linked Policy)",
+    payout_amount: 12000,
+    payout_frequency: "annual",
+    payout_start_date: "2025-01-01",
+  };
+
+  it("returns monthly equivalent of an active annual ILP payout", () => {
+    expect(investmentPayoutMonthly(ACTIVE_ILP_PAYOUT, TODAY)).toBe(1000);
+  });
+
+  it("returns 0 for non-ILP/Endowment investments", () => {
+    const inv = { ...ACTIVE_ILP_PAYOUT, group_name: "Unit Trusts" };
+    expect(investmentPayoutMonthly(inv, TODAY)).toBe(0);
+  });
+
+  it("returns 0 when payout hasn't started yet", () => {
+    const inv = { ...ACTIVE_ILP_PAYOUT, payout_start_date: "2028-01-01" };
+    expect(investmentPayoutMonthly(inv, TODAY)).toBe(0);
+  });
+
+  it("returns 0 when payout has ended", () => {
+    const inv = { ...ACTIVE_ILP_PAYOUT, payout_end_date: "2026-01-01" };
+    expect(investmentPayoutMonthly(inv, TODAY)).toBe(0);
+  });
+
+  it("counts a one-off ILP payout only in the exact calendar month", () => {
+    const inv = { ...ACTIVE_ILP_PAYOUT, payout_frequency: "one-off", payout_start_date: "2026-06-10" };
+    expect(investmentPayoutMonthly(inv, TODAY)).toBe(12000);
+  });
+
+  it("returns 0 for a one-off ILP payout in a different month", () => {
+    const inv = { ...ACTIVE_ILP_PAYOUT, payout_frequency: "one-off", payout_start_date: "2026-05-01" };
+    expect(investmentPayoutMonthly(inv, TODAY)).toBe(0);
+  });
+
+  it("works for Endowment group_name", () => {
+    const inv = { ...ACTIVE_ILP_PAYOUT, group_name: "Endowment" };
+    expect(investmentPayoutMonthly(inv, TODAY)).toBe(1000);
   });
 });
