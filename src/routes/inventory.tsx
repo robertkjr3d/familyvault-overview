@@ -930,26 +930,26 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
   ) : null;
 
   const subfolderGrid = subfolders.length > 0 ? (
-    <div className="grid grid-cols-5 gap-2">
+    <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
       {subfolders.map((sf) => (
         <button
           key={sf.id}
           onClick={() => onOpenSubfolder(sf)}
-          className="group overflow-hidden rounded-xl border border-border bg-card text-left shadow-sm transition hover:shadow-md"
+          className="group overflow-hidden rounded-2xl border border-border bg-card text-left shadow-sm transition hover:shadow-md"
         >
           <div className="relative aspect-square w-full overflow-hidden bg-muted">
             {sf.photo_url ? (
               <img src={sf.photo_url} alt={sf.name} className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
-                <FolderIcon className="h-7 w-7 text-muted-foreground" />
+                <FolderIcon className="h-10 w-10 text-muted-foreground" />
               </div>
             )}
-            <span className="absolute right-1 top-1 rounded-full bg-background/85 px-1.5 py-0.5 text-[9px] font-semibold leading-none">
+            <span className="absolute right-2 top-2 rounded-full bg-background/85 px-2 py-0.5 text-[10px] font-semibold">
               {itemCountBySf.get(sf.id) ?? 0}
             </span>
           </div>
-          <div className="truncate px-2 py-1.5 text-[10px] font-semibold">{sf.name}</div>
+          <div className="p-2.5 text-sm font-semibold">{sf.name}</div>
         </button>
       ))}
     </div>
@@ -989,11 +989,10 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
 
   return (
     <>
-    <Sheet open onOpenChange={(v) => !v && onClose()}>
+    <Sheet open onOpenChange={(v) => { if (!v && !lightboxUrl) onClose(); }}>
       <SheetContent
         side="bottom"
         className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl"
-        onPointerDownOutside={(e) => { if (lightboxUrl) e.preventDefault(); }}
       >
         {backButton}
         <SheetHeader>
