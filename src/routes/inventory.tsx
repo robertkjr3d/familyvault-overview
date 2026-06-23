@@ -96,7 +96,6 @@ function InventoryPage() {
 
   const [hashHandled, setHashHandled] = useState(false);
   const [generatingDocx, setGeneratingDocx] = useState(false);
-  const [lightboxUrl, setLightboxUrl] = useState("");
   useEffect(() => {
     if (hashHandled) return;
     if (allItems.length === 0 || folders.length === 0) return;
@@ -529,25 +528,6 @@ function InventoryPage() {
           Full backup with embedded photos. Can take up to a minute for large inventories — don't close the page while it's generating.
         </p>
       </div>
-      {lightboxUrl ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
-          onClick={() => setLightboxUrl("")}
-        >
-          <img
-            src={lightboxUrl}
-            alt="Full size"
-            className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
-          />
-          <button
-            className="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
-            onClick={() => setLightboxUrl("")}
-            aria-label="Close"
-          >
-            ✕
-          </button>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -794,7 +774,18 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
   const [showAddSubfolder, setShowAddSubfolder] = useState(false);
   const [showMoveFolder, setShowMoveFolder] = useState(false);
   const [movingItem, setMovingItem] = useState<Item | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Item count per subfolder — used for the count badge on subfolder cards.
+  // Computed here because FolderSheet already has allItems as a prop.
+  const itemCountBySf = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const sf of subfolders) {
+      m.set(sf.id, allItems.filter((it) => it.folder_id === sf.id).length);
+    }
+    return m;
+  }, [subfolders, allItems]);
 
   const backButton = parentFolder ? (
     <button
@@ -939,23 +930,26 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
   ) : null;
 
   const subfolderGrid = subfolders.length > 0 ? (
-    <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+    <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
       {subfolders.map((sf) => (
         <button
           key={sf.id}
           onClick={() => onOpenSubfolder(sf)}
           className="group overflow-hidden rounded-xl border border-border bg-card text-left shadow-sm transition hover:shadow-md"
         >
-          <div className="relative aspect-square w-full overflow-hidden bg-muted">
+          <div className="relative h-14 w-full overflow-hidden bg-muted">
             {sf.photo_url ? (
               <img src={sf.photo_url} alt={sf.name} className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
-                <FolderIcon className="h-4 w-4 text-muted-foreground" />
+                <FolderIcon className="h-7 w-7 text-muted-foreground" />
               </div>
             )}
+            <span className="absolute right-1 top-1 rounded-full bg-background/85 px-1.5 py-0.5 text-[9px] font-semibold leading-none">
+              {itemCountBySf.get(sf.id) ?? 0}
+            </span>
           </div>
-          <div className="truncate p-1 text-[10px] font-semibold">{sf.name}</div>
+          <div className="truncate px-2 py-1.5 text-[10px] font-semibold">{sf.name}</div>
         </button>
       ))}
     </div>
@@ -975,7 +969,26 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
     </div>
   );
 
+  const lightboxOverlay = lightboxUrl ? (
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-4"
+      onClick={() => setLightboxUrl("")}
+    >
+      <img
+        src={lightboxUrl}
+        alt="Full size"
+        className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
+      />
+      <button
+        className="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
+        onClick={() => setLightboxUrl("")}
+        aria-label="Close"
+      >✕</button>
+    </div>
+  ) : null;
+
   return (
+    <>
     <Sheet open onOpenChange={(v) => !v && onClose()}>
       <SheetContent side="bottom" className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl">
         {backButton}
@@ -1111,6 +1124,8 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
         {moveFolderSheet}
       </SheetContent>
     </Sheet>
+    {lightboxOverlay}
+    </>
   );
 }
 
@@ -1215,24 +1230,32 @@ function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => voi
       </div>
       <div className="space-y-2">
         <Label className="text-xs">Photo (optional)</Label>
-        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)} />
+        <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)} />
         {photoFile ? (
-          <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
-            <Camera className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="flex-1 truncate text-xs">{photoFile.name}</span>
+          <div className="relative inline-block">
+            <img
+              src={URL.createObjectURL(photoFile)}
+              alt=""
+              className="h-28 w-28 rounded-xl object-cover border border-border shadow-sm"
+            />
             <button
               type="button"
               onClick={() => { setPhotoFile(null); if (fileRef.current) fileRef.current.value = ""; }}
-              className="rounded-full p-0.5 text-urgent hover:bg-urgent/10"
+              className="absolute -right-2 -top-2 rounded-full bg-destructive p-0.5 text-white shadow"
               aria-label="Remove photo"
             >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
         ) : (
-          <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
-            <Camera className="mr-1 h-3.5 w-3.5" /> Add photo
-          </Button>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition"
+          >
+            <Camera className="h-5 w-5" />
+            <span className="text-[10px] font-medium">Add photo</span>
+          </button>
         )}
       </div>
       <div className="flex gap-2">
