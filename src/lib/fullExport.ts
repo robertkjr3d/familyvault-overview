@@ -50,7 +50,95 @@ type SheetSpec = {
   rows: ExportRow[];
 };
 
-// Column width is based on the field's TYPE — i.e. what the actual data looks
+// ─── Column width overrides ────────────────────────────────────────────────────
+// The generic widthFor() formula (below) sizes by field type. These overrides
+// apply on top of it for specific fields where the formula produces a column
+// that's too wide given the actual data (e.g. "Interest rate %" is a short
+// 2-decimal number, not a paragraph of text).
+//
+// Two tiers:
+//  SHEET_OVERRIDES[configKey][fieldKey] — sheet-specific (takes precedence)
+//  GLOBAL_OVERRIDES[fieldKey]           — applied when no sheet-specific entry
+//
+// Width units are Excel character widths (≈ 1 character at 11pt Calibri).
+// Adjusted by Azariah Jun 2026 session to remove wasted whitespace.
+
+const SHEET_OVERRIDES: Record<string, Record<string, number>> = {
+  properties: {
+    name: 20,
+    member_id: 13,
+    purpose: 13,
+    currency: 8,
+    purchase_price: 12,
+    purchase_date: 12,
+    current_value: 11,
+    mortgage_bank: 12,
+    mortgage_balance: 15,
+    monthly_payment: 12,
+    interest_rate: 6,
+    rate_type: 8,
+    market_rent: 14,
+    cost_management: 14,
+    cost_property_tax: 10,
+    cost_fire_insurance: 12,
+    cost_other_label: 12,
+    strategy: 17,
+    beneficiary: 12,
+  },
+  loans: {
+    purpose: 8,
+    member_id: 9,
+    original_amount: 10,
+    balance: 13,
+    term_years: 9,
+    rate: 13,
+    rate_label: 8,
+    monthly_payment: 13,
+    reprice_date: 11,
+    property_id: 23,
+  },
+  insurance_policies: {
+    also_covers: 17,
+    provider: 12,
+    member_id: 11,
+    policy_number: 15,
+    coverage: 20,
+    currency: 8,
+    frequency: 16,
+    payout_frequency: 15,
+    beneficiary: 12,
+  },
+  savings_accounts: {
+    institution: 20,
+    member_id: 13,
+    joint_member_id: 18,
+    account_number: 13,
+  },
+};
+
+// Applied to any sheet that doesn't have a sheet-specific entry for the field.
+// Keeps common fields (currency, interest_rate, last_updated, coverage)
+// consistently sized across all tabs without repeating the override on each.
+const GLOBAL_OVERRIDES: Record<string, number> = {
+  currency: 8,
+  interest_rate: 6,
+  last_updated: 10,
+  coverage: 20,
+  beneficiary: 12,
+};
+
+// Status and Last Updated columns are appended by buildRecordSheet
+// (not driven by recordConfigs), so they get their own constants.
+const STATUS_COL_WIDTH = 8;       // "Status": fits "Settled" / "Urgent"
+const UPDATED_AT_COL_WIDTH = 16;  // "Last Updated In App": date, no need for 20
+
+function resolvedWidth(f: FieldDef, configKey: string): number {
+  return SHEET_OVERRIDES[configKey]?.[f.key]
+    ?? GLOBAL_OVERRIDES[f.key]
+    ?? widthFor(f);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // like — not the header text length. A long header like "Current estimated
 // value" holds short numbers and shouldn't force a wide column; a short
 // header like "Action" holds free-text notes and needs a wide one. The header
@@ -112,9 +200,9 @@ function buildRecordSheet(
 ): SheetSpec {
   const cfg = recordConfigs[configKey];
   const columns = [
-    ...cfg.fields.map((f) => ({ header: f.label, key: f.key, width: widthFor(f), numFmt: numFmtFor(f) })),
-    { header: "Status", key: "__status", width: 12 },
-    { header: "Last Updated In App", key: "__updated_at", width: 20, numFmt: "dd mmm yyyy" },
+    ...cfg.fields.map((f) => ({ header: f.label, key: f.key, width: resolvedWidth(f, configKey), numFmt: numFmtFor(f) })),
+    { header: "Status", key: "__status", width: STATUS_COL_WIDTH },
+    { header: "Last Updated In App", key: "__updated_at", width: UPDATED_AT_COL_WIDTH, numFmt: "dd mmm yyyy" },
   ];
   const outRows: ExportRow[] = rows.map((r) => {
     const out: ExportRow = {};
