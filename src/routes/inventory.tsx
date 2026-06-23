@@ -930,14 +930,14 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
   ) : null;
 
   const subfolderGrid = subfolders.length > 0 ? (
-    <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
+    <div className="grid grid-cols-5 gap-2">
       {subfolders.map((sf) => (
         <button
           key={sf.id}
           onClick={() => onOpenSubfolder(sf)}
           className="group overflow-hidden rounded-xl border border-border bg-card text-left shadow-sm transition hover:shadow-md"
         >
-          <div className="relative h-14 w-full overflow-hidden bg-muted">
+          <div className="relative aspect-square w-full overflow-hidden bg-muted">
             {sf.photo_url ? (
               <img src={sf.photo_url} alt={sf.name} className="h-full w-full object-cover" />
             ) : (
@@ -990,7 +990,11 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
   return (
     <>
     <Sheet open onOpenChange={(v) => !v && onClose()}>
-      <SheetContent side="bottom" className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl">
+      <SheetContent
+        side="bottom"
+        className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl"
+        onPointerDownOutside={(e) => { if (lightboxUrl) e.preventDefault(); }}
+      >
         {backButton}
         <SheetHeader>
           <SheetTitle className="flex items-center justify-between pr-8">
