@@ -96,6 +96,7 @@ function InventoryPage() {
 
   const [hashHandled, setHashHandled] = useState(false);
   const [generatingDocx, setGeneratingDocx] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState("");
   useEffect(() => {
     if (hashHandled) return;
     if (allItems.length === 0 || folders.length === 0) return;
@@ -528,6 +529,25 @@ function InventoryPage() {
           Full backup with embedded photos. Can take up to a minute for large inventories — don't close the page while it's generating.
         </p>
       </div>
+      {lightboxUrl ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
+          onClick={() => setLightboxUrl("")}
+        >
+          <img
+            src={lightboxUrl}
+            alt="Full size"
+            className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
+          />
+          <button
+            className="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
+            onClick={() => setLightboxUrl("")}
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -539,6 +559,8 @@ function ChecklistSection({ table, queryKey, title, items }: { table: string; qu
   const [open, setOpen] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState("");
+  const [editingLabel, setEditingLabel] = useState("");
 
   const done = items.filter((g: any) => g.checked).length;
 
@@ -568,6 +590,14 @@ function ChecklistSection({ table, queryKey, title, items }: { table: string; qu
     qc.invalidateQueries({ queryKey: [queryKey, activeHouseholdId] });
   }
 
+  async function saveEdit(id: string) {
+    if (!editingLabel.trim()) { setEditingId(""); return; }
+    await supabase.from(table).update({ label: editingLabel.trim() }).eq("id", id);
+    setEditingId("");
+    setEditingLabel("");
+    qc.invalidateQueries({ queryKey: [queryKey, activeHouseholdId] });
+  }
+
   return (
     <section className="rounded-2xl border border-border bg-muted/40">
       <button
@@ -589,26 +619,51 @@ function ChecklistSection({ table, queryKey, title, items }: { table: string; qu
             <p className="py-2 text-center text-xs text-muted-foreground">No items yet.</p>
           ) : (
             <ul className="space-y-2">
-              {items.map((g: any) => (
-                <li key={g.id} className="flex items-center gap-3 text-sm">
-                  <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
-                    <input
-                      type="checkbox"
-                      defaultChecked={g.checked}
-                      onChange={(e) => toggle(g.id, e.target.checked)}
-                      className="h-4 w-4 shrink-0 rounded border-border"
-                    />
-                    <span className={`truncate ${g.checked ? "text-muted-foreground line-through" : ""}`}>{g.label}</span>
-                  </label>
-                  <button
-                    onClick={() => deleteItem(g.id)}
-                    className="shrink-0 rounded-md p-1 text-urgent hover:bg-urgent/10"
-                    aria-label="Delete item"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </li>
-              ))}
+              {items.map((g: any) => {
+                const isEditing = editingId === g.id;
+                const rowContent = isEditing ? (
+                  <input
+                    autoFocus
+                    value={editingLabel}
+                    onChange={(e) => setEditingLabel(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveEdit(g.id);
+                      if (e.key === "Escape") { setEditingId(""); setEditingLabel(""); }
+                    }}
+                    onBlur={() => saveEdit(g.id)}
+                    className="min-w-0 flex-1 rounded border border-input bg-background px-2 py-0.5 text-sm"
+                  />
+                ) : (
+                  <span className={`truncate ${g.checked ? "text-muted-foreground line-through" : ""}`}>{g.label}</span>
+                );
+                return (
+                  <li key={g.id} className="flex items-center gap-3 text-sm">
+                    <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+                      <input
+                        type="checkbox"
+                        defaultChecked={g.checked}
+                        onChange={(e) => toggle(g.id, e.target.checked)}
+                        className="h-4 w-4 shrink-0 rounded border-border"
+                      />
+                      {rowContent}
+                    </label>
+                    <button
+                      onClick={() => { setEditingId(g.id); setEditingLabel(g.label); }}
+                      className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent"
+                      aria-label="Edit item"
+                    >
+                      <span className="text-sm">✏️</span>
+                    </button>
+                    <button
+                      onClick={() => deleteItem(g.id)}
+                      className="shrink-0 rounded-md p-1 text-urgent hover:bg-urgent/10"
+                      aria-label="Delete item"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
           <div className="flex gap-2">
@@ -1007,7 +1062,13 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
                     )}
                   </div>
                   {it.photo_url && (
-                    <img src={it.photo_url} alt="" className="h-14 w-14 rounded-md object-cover" />
+                    <img
+                      src={it.photo_url}
+                      alt=""
+                      className="h-14 w-14 rounded-md object-cover cursor-pointer"
+                      onClick={() => setLightboxUrl(it.photo_url ?? "")}
+                      title="Tap to enlarge"
+                    />
                   )}
                   <div className="flex gap-1">
                     <button
