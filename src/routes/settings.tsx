@@ -11,7 +11,7 @@ import { runFullExport } from "@/lib/fullExport";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
-  head: () => ({ meta: [{ title: "Settings — FamilyVault" }] }),
+  head: () => ({ meta: [{ title: "Settings — FamilyHub SG" }] }),
 });
 
 const ACCENT_PRESETS = [
@@ -227,12 +227,12 @@ function SettingsPage() {
       // --- Title & disclaimer ---
       children.push(new Paragraph({ text: "Asset & Liability Summary", heading: HeadingLevel.TITLE }));
       children.push(new Paragraph({
-        children: [new TextRun({ text: `Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} via FamilyVault`, italics: true, color: "666666" })],
+        children: [new TextRun({ text: `Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} via FamilyHub SG`, italics: true, color: "666666" })],
       }));
       children.push(new Paragraph({ text: "" }));
       children.push(new Paragraph({
         children: [new TextRun({
-          text: "This document is a reference summary of assets and liabilities recorded in FamilyVault. It is intended to assist with estate planning discussions (e.g. as an attachment alongside a will) and does NOT constitute a legal will or binding instruction. Always consult a qualified lawyer or financial advisor for legal estate planning.",
+          text: "This document is a reference summary of assets and liabilities recorded in FamilyHub SG. It is intended to assist with estate planning discussions (e.g. as an attachment alongside a will) and does NOT constitute a legal will or binding instruction. Always consult a qualified lawyer or financial advisor for legal estate planning.",
           italics: true, color: "999999",
         })],
       }));
@@ -341,7 +341,7 @@ function SettingsPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `familyvault-asset-summary-${new Date().toISOString().slice(0, 10)}.docx`;
+      a.download = `familyhubsg-asset-summary-${new Date().toISOString().slice(0, 10)}.docx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -682,7 +682,7 @@ function SettingsPage() {
       {/* About */}
       <section className="rounded-2xl border border-border bg-card p-4 text-sm">
         <h2 className="mb-2 text-sm font-bold">About</h2>
-        <p className="font-semibold">FamilyVault</p>
+        <p className="font-semibold">FamilyHub SG</p>
         <p className="text-muted-foreground">Your one stop for everything family — all in one place.</p>
         <p className="mt-2 text-xs text-muted-foreground">Version 1.0.0</p>
         <p className="mt-2 text-xs italic text-muted-foreground">
@@ -692,7 +692,7 @@ function SettingsPage() {
           <a href="/#onboarding" className="font-semibold text-primary underline">Quick Start Guide</a>
           <a href="/privacy" className="font-semibold text-primary underline">Privacy Policy</a>
           <a href="/terms" className="font-semibold text-primary underline">Terms of Service</a>
-          <a href="mailto:aza_tan@yahoo.com.sg" className="font-semibold text-primary underline">Contact Us</a>
+          <a href="mailto:support@familyhubsg.com" className="font-semibold text-primary underline">Contact Us</a>
         </div>
       </section>
     </div>
