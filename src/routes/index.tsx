@@ -7,7 +7,7 @@ import { MemberFilterBar } from "@/components/MemberFilterBar";
 import { MemberTag } from "@/components/MemberTag";
 import { StatusBadge } from "@/components/StatusToggle";
 import { useAppStore } from "@/lib/store";
-import { addDays } from "date-fns";
+import { addDays, format, parseISO } from "date-fns";
 import { buildUpcomingItems, computeNextOccurrence } from "@/lib/alerts";
 import type { UpcomingItem } from "@/lib/alerts";
 import { freqTimesPerYear, propertyTotalCosts, insuranceMonthly, investmentPremiumMonthly, insurancePayoutMonthly, investmentPayoutMonthly } from "@/lib/lifetimeChartMath";
@@ -511,7 +511,7 @@ function Dashboard() {
               const itemKey = `${u.sourceType}::${u.recordId}`;
               const isDismissing = dismissing === itemKey;
               const dateClass = u.daysLeft < 0 ? "text-urgent" : isUrgent ? "text-urgent" : "text-primary";
-              const dateLabel = u.daysLeft < 0 ? `${Math.abs(u.daysLeft)}d overdue` : isUrgent ? `${u.daysLeft}d left` : fmtDate(u.date);
+              const dateLabel = u.daysLeft < 0 ? `${Math.abs(u.daysLeft)}d overdue` : isUrgent ? `${u.daysLeft}d left` : format(parseISO(u.date), "d MMM");
               return (
                <li key={i} className="flex min-w-0 items-start gap-3 py-2.5 text-sm -mx-2 px-2 overflow-hidden">
                   {editMode ? (
