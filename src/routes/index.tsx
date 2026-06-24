@@ -515,27 +515,31 @@ function Dashboard() {
               return (
                <li key={i} className="flex min-w-0 items-start gap-3 py-2.5 text-sm -mx-2 px-2 overflow-hidden">
                   {editMode ? (
-                    <div className="flex min-w-0 flex-1 items-start gap-3">
-                      <span className={`w-20 shrink-0 pt-0.5 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
-                      <u.icon className="mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 flex-1 line-clamp-2 break-words">{u.label}</span>
-                      <MemberTag memberId={u.member_id} />
-                      {u.amount != null && <span className="shrink-0 pt-0.5 font-semibold">{fmtMoney(u.amount)}</span>}
-                      <button
-                        onClick={() => dismissItem(u)}
-                        className={`ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${isDismissing ? "border-muted text-muted-foreground" : "border-settled text-settled"}`}
-                      >
-                        <Check className="h-4 w-4" />
-                      </button>
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className={`shrink-0 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
+                        <u.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <MemberTag memberId={u.member_id} />
+                        {u.amount != null && <span className="ml-auto shrink-0 font-semibold text-xs">{fmtMoney(u.amount)}</span>}
+                        <button
+                          onClick={() => dismissItem(u)}
+                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${isDismissing ? "border-muted text-muted-foreground" : "border-settled text-settled"}`}
+                        >
+                          <Check className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <span className="min-w-0 break-words text-sm">{u.label}</span>
                     </div>
                   ) : (
-                    <Link to={u.href as any} hash={`record-${u.recordId}`} className="flex min-w-0 flex-1 items-start gap-3 hover:bg-accent/40 rounded overflow-hidden">
-                      <span className={`w-20 shrink-0 pt-0.5 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
-                      <u.icon className="mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 flex-1 line-clamp-2 break-words">{u.label}</span>
-                      <MemberTag memberId={u.member_id} />
-                      {u.amount != null && <span className="shrink-0 pt-0.5 font-semibold">{fmtMoney(u.amount)}</span>}
-                      <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                    <Link to={u.href as any} hash={`record-${u.recordId}`} className="flex min-w-0 flex-1 flex-col gap-0.5 hover:bg-accent/40 rounded overflow-hidden px-1">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className={`shrink-0 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
+                        <u.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <MemberTag memberId={u.member_id} />
+                        {u.amount != null && <span className="ml-auto shrink-0 font-semibold text-xs">{fmtMoney(u.amount)}</span>}
+                        <ChevronRight className="h-4 w-4 shrink-0 text-primary" />
+                      </div>
+                      <span className="min-w-0 break-words text-sm">{u.label}</span>
                     </Link>
                   )}
                 </li>
