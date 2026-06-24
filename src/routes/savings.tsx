@@ -27,7 +27,7 @@ import { useEntityCounts } from "@/lib/useEntityCounts";
 
 export const Route = createFileRoute("/savings")({
   component: SavingsPage,
-  head: () => ({ meta: [{ title: "Savings — FamilyVault" }] }),
+  head: () => ({ meta: [{ title: "Savings — FamilyHub SG" }] }),
 });
 
 const GROUP_ORDER = [
