@@ -123,7 +123,7 @@ export function RecordCard({
         highlight && "ring-2 ring-primary",
       )}
     >
-      {/* Icon cluster — top right */}
+      {/* Icon cluster — top right, absolute */}
       <div className="absolute right-2 top-2 z-10 flex gap-0.5">
         {onEdit && (
           <button
@@ -157,36 +157,39 @@ export function RecordCard({
         )}
       </div>
 
-      {/* rightMeta — absolutely positioned directly below icon cluster, flush right */}
-      {rightMeta && (
-        <div className="absolute right-2 top-9 z-10 flex flex-col items-end">
-          {rightMeta}
-        </div>
-      )}
-
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full cursor-pointer flex-col gap-1.5 px-4 pt-4 pb-6 pr-[90px] text-left"
+        className="flex w-full cursor-pointer items-stretch gap-0 text-left"
       >
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-sm font-semibold leading-tight">{title}</h3>
-          <MemberTag memberId={memberId} />
-          {secondaryMemberId && <MemberTag memberId={secondaryMemberId} />}
-        </div>
-        {subtitle && <div className="text-xs text-muted-foreground">{subtitle}</div>}
-        {tags && tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {tags.map((t) => (
-              <span key={t} className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                {t}
-              </span>
-            ))}
+        {/* Left column — text content */}
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5 px-4 pb-6 pt-4 pr-[120px]">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold leading-tight">{title}</h3>
+            <MemberTag memberId={memberId} />
+            {secondaryMemberId && <MemberTag memberId={secondaryMemberId} />}
           </div>
-        )}
-        {action && (
-          <p className="text-sm text-foreground/90">
-            <span className="font-medium text-primary">Action:</span> {action}
-          </p>
+          {subtitle && <div className="text-xs text-muted-foreground">{subtitle}</div>}
+          {tags && tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {tags.map((t) => (
+                <span key={t} className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  {t}
+                </span>
+              ))}
+            </div>
+          )}
+          {action && (
+            <p className="text-sm text-foreground/90">
+              <span className="font-medium text-primary">Action:</span> {action}
+            </p>
+          )}
+        </div>
+
+        {/* Right column — amounts, in-flow so card height expands to fit */}
+        {rightMeta && (
+          <div className="flex w-[88px] shrink-0 flex-col items-end pr-3 pb-6 pt-14">
+            {rightMeta}
+          </div>
         )}
       </button>
 
