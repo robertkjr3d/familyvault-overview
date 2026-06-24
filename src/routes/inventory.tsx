@@ -710,7 +710,7 @@ function AddFolderSheet({ open, onClose, parentId }: { open: boolean; onClose: (
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && (reset(), onClose())}>
-      <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] overflow-y-auto">
+      <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] overflow-y-auto" aria-describedby={undefined}>
         <SheetHeader><SheetTitle>{sheetTitle}</SheetTitle></SheetHeader>
         <div className="mt-4 space-y-4 pb-6">
           <div>
@@ -994,6 +994,7 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
       <SheetContent
         side="bottom"
         className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl"
+        aria-describedby={undefined}
       >
         {backButton}
         <SheetHeader>
@@ -1083,7 +1084,7 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
                       src={it.photo_url}
                       alt=""
                       className="h-14 w-14 rounded-md object-cover cursor-pointer"
-                      onClick={() => setLightboxUrl(it.photo_url ?? "")}
+                      onPointerDown={(e) => { e.stopPropagation(); setLightboxUrl(it.photo_url ?? ""); }}
                       title="Tap to enlarge"
                     />
                   )}
@@ -1143,7 +1144,7 @@ function MovePickerSheet({ title, options, onPick, onClose }: { title: string; o
 
   return (
     <Sheet open onOpenChange={(v) => !v && onClose()}>
-      <SheetContent side="bottom" className="max-h-[80vh] overflow-y-auto rounded-t-2xl">
+      <SheetContent side="bottom" className="max-h-[80vh] overflow-y-auto rounded-t-2xl" aria-describedby={undefined}>
         <SheetHeader><SheetTitle>{title}</SheetTitle></SheetHeader>
         <div className="mt-3 space-y-1 pb-6">
           {emptyState}
