@@ -2,12 +2,12 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/terms")({
   component: TermsPage,
-  head: () => ({ meta: [{ title: "Terms of Service — FamilyVault" }] }),
+  head: () => ({ meta: [{ title: "Terms of Service — FamilyHub SG" }] }),
 });
 
 const LAST_UPDATED = "20 June 2026";
 // Placeholder — replace with a real, monitored inbox. See chat for details.
-const CONTACT_EMAIL = "aza_tan@yahoo.com.sg";
+const CONTACT_EMAIL = "support@familyhubsg.com";
 
 function TermsPage() {
   return (
@@ -25,18 +25,18 @@ function TermsPage() {
       <main className="mx-auto max-w-2xl space-y-5 px-4 py-6 text-sm leading-relaxed text-foreground">
         <Section title="Agreement">
           <p>
-            By creating an account or using FamilyVault, you agree to these terms. If you don't
+            By creating an account or using FamilyHub SG, you agree to these terms. If you don't
             agree, please don't use the app.
           </p>
         </Section>
 
-        <Section title="What FamilyVault is — and isn't">
+        <Section title="What FamilyHub SG is — and isn't">
           <p>
-            FamilyVault is a personal record-keeping tool for tracking household finances,
+            FamilyHub SG is a personal record-keeping tool for tracking household finances,
             insurance, property, investments, health notes, and inventory in one place.
           </p>
           <p>
-            FamilyVault is not a licensed financial adviser, insurer, bank, or law firm.
+            FamilyHub SG is not a licensed financial adviser, insurer, bank, or law firm.
             Calculations shown in the app (such as net worth projections, cash flow estimates, or
             insurance coverage ratios) are indicative only, based entirely on the figures you
             enter, and are not financial, tax, legal, or insurance advice. Always confirm
@@ -55,7 +55,7 @@ function TermsPage() {
 
         <Section title="Acceptable use">
           <p>
-            Use FamilyVault only for lawful, personal household record-keeping. Don't attempt to
+            Use FamilyHub SG only for lawful, personal household record-keeping. Don't attempt to
             access another household's data, disrupt the service, or use the app in a way that
             could harm other users.
           </p>
@@ -63,7 +63,7 @@ function TermsPage() {
 
         <Section title="No warranty">
           <p>
-            FamilyVault is provided "as is." We work to keep it reliable and your data intact,
+            FamilyHub SG is provided "as is." We work to keep it reliable and your data intact,
             but we don't guarantee the app will be error-free, uninterrupted, or available at all
             times, and we're not liable for losses arising from reliance on figures or
             calculations shown in the app.
@@ -72,7 +72,7 @@ function TermsPage() {
 
         <Section title="Limitation of liability">
           <p>
-            To the fullest extent permitted by law, FamilyVault and its operator aren't liable for
+            To the fullest extent permitted by law, FamilyHub SG and its operator aren't liable for
             indirect, incidental, or consequential damages arising from your use of the app.
             Nothing in these terms limits liability that can't be excluded under applicable law.
           </p>
@@ -80,7 +80,7 @@ function TermsPage() {
 
         <Section title="Ending your use">
           <p>
-            You can stop using FamilyVault at any time. To request deletion of your account and
+            You can stop using FamilyHub SG at any time. To request deletion of your account and
             data, contact us at the email below.
           </p>
         </Section>
@@ -107,7 +107,7 @@ function TermsPage() {
         </p>
 
         <Link to="/" className="inline-block pt-2 text-sm font-semibold text-primary underline">
-          ← Back to FamilyVault
+          ← Back to FamilyHub SG
         </Link>
       </main>
     </div>
