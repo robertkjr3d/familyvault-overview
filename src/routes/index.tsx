@@ -30,7 +30,7 @@ const LifetimeChart = lazy(() =>
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
-  head: () => ({ meta: [{ title: "Home — FamilyVault" }] }),
+  head: () => ({ meta: [{ title: "Home — FamilyHub SG" }] }),
 });
 
 function Dashboard() {
@@ -515,15 +515,13 @@ function Dashboard() {
               return (
                <li key={i} className="flex min-w-0 items-start gap-2 py-2.5 -mx-2 px-2 overflow-hidden">
                   {editMode ? (
-                    <div className="flex min-w-0 flex-1 flex-col gap-0.5 md:flex-row md:items-center md:gap-3">
-                      <div className="flex min-w-0 items-center gap-2">
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <div className="flex w-full min-w-0 items-center gap-2">
                         <span className={`w-12 shrink-0 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
                         <u.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         <span className="hidden min-w-0 flex-1 line-clamp-1 text-sm md:block">{u.label}</span>
-                        <div className="ml-auto flex shrink-0 items-center gap-1.5">
-                          <MemberTag memberId={u.member_id} />
-                          {u.amount != null && <span className="shrink-0 text-xs font-semibold">{fmtMoney(u.amount)}</span>}
-                        </div>
+                        <MemberTag memberId={u.member_id} />
+                        {u.amount != null && <span className="shrink-0 text-xs font-semibold">{fmtMoney(u.amount)}</span>}
                         <button
                           onClick={() => dismissItem(u)}
                           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${isDismissing ? "border-muted text-muted-foreground" : "border-settled text-settled"}`}
@@ -534,15 +532,13 @@ function Dashboard() {
                       <span className="min-w-0 break-words text-sm md:hidden">{u.label}</span>
                     </div>
                   ) : (
-                    <Link to={u.href as any} hash={`record-${u.recordId}`} className="flex min-w-0 flex-1 flex-col gap-0.5 hover:bg-accent/40 rounded overflow-hidden md:flex-row md:items-center md:gap-3">
-                      <div className="flex min-w-0 items-center gap-2">
+                    <Link to={u.href as any} hash={`record-${u.recordId}`} className="flex min-w-0 flex-1 flex-col gap-0.5 hover:bg-accent/40 rounded overflow-hidden">
+                      <div className="flex w-full min-w-0 items-center gap-2">
                         <span className={`w-12 shrink-0 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
                         <u.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         <span className="hidden min-w-0 flex-1 line-clamp-1 text-sm md:block">{u.label}</span>
-                        <div className="ml-auto flex shrink-0 items-center gap-1.5">
-                          <MemberTag memberId={u.member_id} />
-                          {u.amount != null && <span className="shrink-0 text-xs font-semibold">{fmtMoney(u.amount)}</span>}
-                        </div>
+                        <MemberTag memberId={u.member_id} />
+                        {u.amount != null && <span className="shrink-0 text-xs font-semibold">{fmtMoney(u.amount)}</span>}
                         <ChevronRight className="h-4 w-4 shrink-0 text-primary" />
                       </div>
                       <span className="min-w-0 break-words text-sm md:hidden">{u.label}</span>
