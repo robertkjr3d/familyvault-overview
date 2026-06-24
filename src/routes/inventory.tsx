@@ -973,16 +973,19 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
   const lightboxOverlay = lightboxUrl ? (
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4"
+      style={{ pointerEvents: 'auto' }}
       onPointerDown={() => { lightboxOpenRef.current = false; setLightboxUrl(""); }}
     >
       <img
         src={lightboxUrl}
         alt="Full size"
+        draggable="false"
         className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
         onPointerDown={(e) => e.stopPropagation()}
       />
       <button
         className="absolute right-4 top-4 z-[10000] rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
+        style={{ pointerEvents: 'auto' }}
         onPointerDown={(e) => { e.stopPropagation(); lightboxOpenRef.current = false; setLightboxUrl(""); }}
         aria-label="Close"
       >✕</button>
