@@ -166,7 +166,7 @@ export function RecordCard({
 
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full cursor-pointer flex-col gap-1.5 p-4 pr-[90px] text-left"
+        className="flex w-full cursor-pointer flex-col gap-1.5 px-4 pt-4 pb-6 pr-[90px] text-left"
       >
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-sm font-semibold leading-tight">{title}</h3>
@@ -184,7 +184,7 @@ export function RecordCard({
           </div>
         )}
         {action && (
-          <p className="pr-2 text-sm text-foreground/90">
+          <p className="text-sm text-foreground/90">
             <span className="font-medium text-primary">Action:</span> {action}
           </p>
         )}
