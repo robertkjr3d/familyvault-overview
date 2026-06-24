@@ -2,12 +2,12 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/privacy")({
   component: PrivacyPage,
-  head: () => ({ meta: [{ title: "Privacy Policy — FamilyVault" }] }),
+  head: () => ({ meta: [{ title: "Privacy Policy — FamilyHub SG" }] }),
 });
 
 const LAST_UPDATED = "20 June 2026";
 // Placeholder — replace with a real, monitored inbox. See chat for details.
-const CONTACT_EMAIL = "aza_tan@yahoo.com.sg";
+const CONTACT_EMAIL = "support@familyhubsg.com";
 
 function PrivacyPage() {
   return (
@@ -15,7 +15,7 @@ function PrivacyPage() {
       <header className="border-b border-border bg-card/90 px-4 py-4">
         <div className="mx-auto max-w-2xl">
           <Link to="/" className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            FamilyVault
+            FamilyHub SG
           </Link>
           <h1 className="mt-1 text-xl font-bold tracking-tight">Privacy Policy</h1>
           <p className="mt-0.5 text-xs text-muted-foreground">Last updated: {LAST_UPDATED}</p>
@@ -25,7 +25,7 @@ function PrivacyPage() {
       <main className="mx-auto max-w-2xl space-y-5 px-4 py-6 text-sm leading-relaxed text-foreground">
         <Section title="What this is">
           <p>
-            FamilyVault is a household finance and document tracker. This policy explains what
+            FamilyHub SG is a household finance and household tracker. This policy explains what
             information we collect when you use it, how it's stored, who can see it, and how to
             reach us with questions or requests.
           </p>
@@ -47,11 +47,11 @@ function PrivacyPage() {
         <Section title="How your data is stored and protected">
           <p>
             Your data is stored with Supabase (database, authentication, and file storage) and the
-            app itself is served via Cloudflare. Connections to FamilyVault are encrypted in
+            app itself is served via Cloudflare. Connections to FamilyHub SG are encrypted in
             transit (HTTPS).
           </p>
           <p>
-            FamilyVault is built around households. Each household's data is kept separate from
+            FamilyHub SG is built around households. Each household's data is kept separate from
             every other household by database-level access rules — your data isn't visible to
             other households using the app. If you invite someone to join your household, they
             gain the level of access you grant them to that household's data.
@@ -60,9 +60,9 @@ function PrivacyPage() {
 
         <Section title="Who can see your data">
           <p>
-            Only people you've explicitly invited into your household, plus FamilyVault's
+            Only people you've explicitly invited into your household, plus FamilyHub SG's
             operator for the limited purpose of running and maintaining the service. We do not
-            sell your data, and we do not share it with advertisers — FamilyVault does not run
+            sell your data, and we do not share it with advertisers — FamilyHub SG does not run
             ads or third-party analytics or tracking scripts.
           </p>
           <p>
@@ -74,7 +74,7 @@ function PrivacyPage() {
 
         <Section title="Cookies and local storage">
           <p>
-            FamilyVault uses your browser's local storage to keep you signed in and to remember a
+            FamilyHub SG uses your browser's local storage to keep you signed in and to remember a
             small number of display preferences (such as light/dark mode and reminder thresholds).
             We don't use advertising or cross-site tracking cookies.
           </p>
@@ -90,7 +90,7 @@ function PrivacyPage() {
 
         <Section title="Children's information">
           <p>
-            FamilyVault is intended for use by adults managing household records. A parent or
+            FamilyHub SG is intended for use by adults managing household records. A parent or
             guardian may enter information about their children (for example, a child's health
             note) as part of managing the household — FamilyVault itself does not knowingly
             collect information directly from children.
@@ -111,12 +111,12 @@ function PrivacyPage() {
         </Section>
 
         <p className="pt-2 text-xs text-muted-foreground">
-          This policy is provided as general information about how FamilyVault handles data and
+          This policy is provided as general information about how FamilyHub SG handles data and
           is not a substitute for legal advice.
         </p>
 
         <Link to="/" className="inline-block pt-2 text-sm font-semibold text-primary underline">
-          ← Back to FamilyVault
+          ← Back to FamilyHub SG
         </Link>
       </main>
     </div>
