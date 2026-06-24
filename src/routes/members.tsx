@@ -11,7 +11,7 @@ import { Trash2, Save, UserPlus } from "lucide-react";
 
 export const Route = createFileRoute("/members")({
   component: MembersPage,
-  head: () => ({ meta: [{ title: "Members - FamilyVault" }] }),
+  head: () => ({ meta: [{ title: "Members - FamilyHub SG" }] }),
 });
 
 type MemberRow = {
