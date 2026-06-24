@@ -18,7 +18,7 @@ import { RemindersList } from "@/components/RemindersList";
 
 export const Route = createFileRoute("/health")({
   component: HealthPage,
-  head: () => ({ meta: [{ title: "Health — FamilyVault" }] }),
+  head: () => ({ meta: [{ title: "Health — FamilyHub SG" }] }),
 });
 
 function HealthPage() {
