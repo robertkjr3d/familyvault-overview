@@ -123,12 +123,14 @@ export function RecordCard({
         highlight && "ring-2 ring-primary",
       )}
     >
+      {/* Icon cluster — top right */}
       <div className="absolute right-2 top-2 z-10 flex gap-0.5">
         {onEdit && (
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
             className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-background/60 hover:text-foreground"
             aria-label="Edit"
+            title="Edit"
           >
             <Pencil className="h-[18px] w-[18px]" />
           </button>
@@ -138,6 +140,7 @@ export function RecordCard({
             onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
             className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-background/60 hover:text-foreground"
             aria-label="Duplicate"
+            title="Duplicate"
           >
             <Copy className="h-[18px] w-[18px]" />
           </button>
@@ -147,15 +150,23 @@ export function RecordCard({
             onClick={(e) => { e.stopPropagation(); if (confirm("Delete this record?")) onDelete(); }}
             className="cursor-pointer rounded-md p-1 text-urgent hover:bg-urgent/10"
             aria-label="Delete"
+            title="Delete"
           >
             <Trash2 className="h-[18px] w-[18px]" />
           </button>
         )}
       </div>
 
+      {/* rightMeta — absolutely positioned directly below icon cluster, flush right */}
+      {rightMeta && (
+        <div className="absolute right-2 top-9 z-10 flex flex-col items-end">
+          {rightMeta}
+        </div>
+      )}
+
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full cursor-pointer flex-col gap-1.5 p-4 pr-20 text-left"
+        className="flex w-full cursor-pointer flex-col gap-1.5 p-4 pr-[90px] text-left"
       >
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-sm font-semibold leading-tight">{title}</h3>
@@ -173,14 +184,9 @@ export function RecordCard({
           </div>
         )}
         {action && (
-          <p className="text-sm text-foreground/90">
+          <p className="pr-2 text-sm text-foreground/90">
             <span className="font-medium text-primary">Action:</span> {action}
           </p>
-        )}
-        {rightMeta && (
-          <div className="flex justify-end pt-0.5">
-            {rightMeta}
-          </div>
         )}
       </button>
 
