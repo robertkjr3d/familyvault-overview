@@ -776,6 +776,7 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
   const [showMoveFolder, setShowMoveFolder] = useState(false);
   const [movingItem, setMovingItem] = useState<Item | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState("");
+  const lightboxOpenRef = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Item count per subfolder — used for the count badge on subfolder cards.
@@ -973,7 +974,7 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
   const lightboxOverlay = lightboxUrl ? createPortal(
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4"
-      onPointerDown={() => setLightboxUrl("")}
+      onPointerDown={() => { lightboxOpenRef.current = false; setLightboxUrl(""); }}
     >
       <img
         src={lightboxUrl}
@@ -983,7 +984,7 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
       />
       <button
         className="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
-        onPointerDown={(e) => { e.stopPropagation(); setLightboxUrl(""); }}
+        onPointerDown={(e) => { e.stopPropagation(); lightboxOpenRef.current = false; setLightboxUrl(""); }}
         aria-label="Close"
       >✕</button>
     </div>,
@@ -992,7 +993,7 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
 
   return (
     <>
-    <Sheet open onOpenChange={(v) => { if (!v && !lightboxUrl) onClose(); }}>
+    <Sheet open onOpenChange={(v) => { if (!v && !lightboxOpenRef.current) onClose(); }}>
       <SheetContent
         side="bottom"
         className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl"
@@ -1086,7 +1087,7 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
                       src={it.photo_url}
                       alt=""
                       className="h-14 w-14 rounded-md object-cover cursor-pointer"
-                      onPointerDown={(e) => { e.stopPropagation(); setLightboxUrl(it.photo_url ?? ""); }}
+                      onPointerDown={(e) => { e.stopPropagation(); lightboxOpenRef.current = true; setLightboxUrl(it.photo_url ?? ""); }}
                       title="Tap to enlarge"
                     />
                   )}
