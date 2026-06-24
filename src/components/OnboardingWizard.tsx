@@ -48,7 +48,7 @@ export function OnboardingWizard({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="max-h-[88vh] overflow-y-auto rounded-t-2xl">
         <SheetHeader>
-          <SheetTitle>Welcome to FamilyVault 👋</SheetTitle>
+          <SheetTitle>Welcome to FamilyHub SG 👋</SheetTitle>
         </SheetHeader>
         <p className="mt-1 text-xs text-muted-foreground">
           Four quick things that show you what this actually does for you — under a minute each, any order, skip whatever you like.
