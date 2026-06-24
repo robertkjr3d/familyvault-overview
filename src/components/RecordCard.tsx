@@ -155,33 +155,33 @@ export function RecordCard({
 
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full cursor-pointer items-start gap-3 p-4 pr-20 text-left"
+        className="flex w-full cursor-pointer flex-col gap-1.5 p-4 pr-20 text-left"
       >
-        <div className="flex-1 space-y-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-semibold leading-tight">{title}</h3>
-            <MemberTag memberId={memberId} />
-            {secondaryMemberId && <MemberTag memberId={secondaryMemberId} />}
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-sm font-semibold leading-tight">{title}</h3>
+          <MemberTag memberId={memberId} />
+          {secondaryMemberId && <MemberTag memberId={secondaryMemberId} />}
+        </div>
+        {subtitle && <div className="text-xs text-muted-foreground">{subtitle}</div>}
+        {tags && tags.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {tags.map((t) => (
+              <span key={t} className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                {t}
+              </span>
+            ))}
           </div>
-          {subtitle && <div className="text-xs text-muted-foreground">{subtitle}</div>}
-          {tags && tags.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {tags.map((t) => (
-                <span key={t} className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                  {t}
-                </span>
-              ))}
-            </div>
-          )}
-          {action && (
-            <p className="line-clamp-2 text-sm text-foreground/90">
-              <span className="font-medium text-primary">Action:</span> {action}
-            </p>
-          )}
-        </div>
-       <div className="flex flex-col items-end gap-2 pt-7">
-          {rightMeta}
-        </div>
+        )}
+        {action && (
+          <p className="text-sm text-foreground/90">
+            <span className="font-medium text-primary">Action:</span> {action}
+          </p>
+        )}
+        {rightMeta && (
+          <div className="flex justify-end pt-0.5">
+            {rightMeta}
+          </div>
+        )}
       </button>
 
       <div className="flex w-full items-center justify-between gap-2 border-t border-border/40 px-4 py-2">
