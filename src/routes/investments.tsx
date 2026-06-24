@@ -26,7 +26,7 @@ import { useEntityCounts } from "@/lib/useEntityCounts";
 
 export const Route = createFileRoute("/investments")({
   component: InvestmentsPage,
-  head: () => ({ meta: [{ title: "Investments — FamilyVault" }] }),
+  head: () => ({ meta: [{ title: "Investments — FamilyHub SG" }] }),
 });
 
 function staleDays(lastUpdated: string | null | undefined) {
