@@ -3,8 +3,10 @@
 // lived only in src/routes/inventory.tsx; extracted here so the onboarding
 // wizard's "add one inventory item" step can reuse the exact same behaviour
 // instead of duplicating it.
-const MAX_PHOTO_DIMENSION = 1280;
-const PHOTO_JPEG_QUALITY = 0.8;
+// Target: max ~200KB per photo. At 900px / 0.72 quality a typical photo
+// compresses to 100-200KB, well within Supabase free-tier storage limits.
+const MAX_PHOTO_DIMENSION = 900;
+const PHOTO_JPEG_QUALITY = 0.72;
 
 export function compressImage(file: File): Promise<File> {
   return new Promise((resolve) => {
