@@ -520,7 +520,7 @@ function Dashboard() {
                         <span className={`w-12 shrink-0 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
                         <u.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         <span className="hidden min-w-0 flex-1 line-clamp-1 text-sm md:block">{u.label}</span>
-                        <div className="ml-auto flex shrink-0 items-center gap-1.5 md:ml-0">
+                        <div className="ml-auto flex shrink-0 items-center gap-1.5">
                           <MemberTag memberId={u.member_id} />
                           {u.amount != null && <span className="shrink-0 text-xs font-semibold">{fmtMoney(u.amount)}</span>}
                         </div>
@@ -539,7 +539,7 @@ function Dashboard() {
                         <span className={`w-12 shrink-0 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
                         <u.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         <span className="hidden min-w-0 flex-1 line-clamp-1 text-sm md:block">{u.label}</span>
-                        <div className="ml-auto flex shrink-0 items-center gap-1.5 md:ml-0">
+                        <div className="ml-auto flex shrink-0 items-center gap-1.5">
                           <MemberTag memberId={u.member_id} />
                           {u.amount != null && <span className="shrink-0 text-xs font-semibold">{fmtMoney(u.amount)}</span>}
                         </div>
