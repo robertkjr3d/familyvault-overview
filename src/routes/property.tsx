@@ -23,7 +23,7 @@ import { useEntityCounts } from "@/lib/useEntityCounts";
 
 export const Route = createFileRoute("/property")({
   component: PropertyPage,
-  head: () => ({ meta: [{ title: "Property — FamilyVault" }] }),
+  head: () => ({ meta: [{ title: "Property — FamilyHub SG" }] }),
 });
 
 function totalCosts(p: any) {
