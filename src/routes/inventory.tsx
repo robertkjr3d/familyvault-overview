@@ -1084,8 +1084,9 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
                     <img
                       src={it.photo_url}
                       alt=""
-                      className="h-14 w-14 rounded-md object-cover cursor-pointer"
-                      onPointerDown={(e) => { e.stopPropagation(); lightboxOpenRef.current = true; setLightboxUrl(it.photo_url ?? ""); }}
+                      draggable="false"
+                      className="h-14 w-14 rounded-md object-cover cursor-pointer touch-none select-none"
+                      onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); lightboxOpenRef.current = true; setLightboxUrl(it.photo_url ?? ""); }}
                       title="Tap to enlarge"
                     />
                   )}
