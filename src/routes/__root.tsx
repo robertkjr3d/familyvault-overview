@@ -29,7 +29,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1" },
-      { title: "FamilyVault" },
+      { title: "FamilyHub SG" },
       { name: "description", content: "One glance — finance, insurance, health, home." },
       { name: "theme-color", content: "#fbf8f0" },
     ],
@@ -195,7 +195,7 @@ function SignInScreen() {
     <div className="flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-sm">
         <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-          FamilyVault
+          FamilyHub SG
         </div>
         <h1 className="mt-1 text-2xl font-bold tracking-tight">Sign in</h1>
         <p className="mt-2 text-sm text-muted-foreground">
