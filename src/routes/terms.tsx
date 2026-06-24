@@ -15,7 +15,7 @@ function TermsPage() {
       <header className="border-b border-border bg-card/90 px-4 py-4">
         <div className="mx-auto max-w-2xl">
           <Link to="/" className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-            FamilyVault
+            FamilyHub SG
           </Link>
           <h1 className="mt-1 text-xl font-bold tracking-tight">Terms of Service</h1>
           <p className="mt-0.5 text-xs text-muted-foreground">Last updated: {LAST_UPDATED}</p>
