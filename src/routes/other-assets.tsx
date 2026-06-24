@@ -21,7 +21,7 @@ import { useEntityCounts } from "@/lib/useEntityCounts";
 
 export const Route = createFileRoute("/other-assets")({
   component: OtherAssetsPage,
-  head: () => ({ meta: [{ title: "Other Assets — FamilyVault" }] }),
+  head: () => ({ meta: [{ title: "Other Assets — FamilyHub SG" }] }),
 });
 
 function OtherAssetsPage() {
