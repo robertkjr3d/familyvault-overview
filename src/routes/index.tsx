@@ -7,7 +7,7 @@ import { MemberFilterBar } from "@/components/MemberFilterBar";
 import { MemberTag } from "@/components/MemberTag";
 import { StatusBadge } from "@/components/StatusToggle";
 import { useAppStore } from "@/lib/store";
-import { addDays, format, parseISO } from "date-fns";
+import { addDays } from "date-fns";
 import { buildUpcomingItems, computeNextOccurrence } from "@/lib/alerts";
 import type { UpcomingItem } from "@/lib/alerts";
 import { freqTimesPerYear, propertyTotalCosts, insuranceMonthly, investmentPremiumMonthly, insurancePayoutMonthly, investmentPayoutMonthly } from "@/lib/lifetimeChartMath";
@@ -511,37 +511,31 @@ function Dashboard() {
               const itemKey = `${u.sourceType}::${u.recordId}`;
               const isDismissing = dismissing === itemKey;
               const dateClass = u.daysLeft < 0 ? "text-urgent" : isUrgent ? "text-urgent" : "text-primary";
-              const dateLabel = u.daysLeft < 0 ? `${Math.abs(u.daysLeft)}d overdue` : isUrgent ? `${u.daysLeft}d left` : format(parseISO(u.date), "d MMM");
+              const dateLabel = u.daysLeft < 0 ? `${Math.abs(u.daysLeft)}d overdue` : isUrgent ? `${u.daysLeft}d left` : fmtDate(u.date);
               return (
                <li key={i} className="flex min-w-0 items-start gap-3 py-2.5 text-sm -mx-2 px-2 overflow-hidden">
                   {editMode ? (
-                    <div className="flex min-w-0 flex-1 flex-col gap-0.5 md:flex-row md:items-center md:gap-2">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className={`shrink-0 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
-                        <u.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        <span className="hidden min-w-0 flex-1 truncate text-sm md:inline">{u.label}</span>
-                        <MemberTag memberId={u.member_id} />
-                        {u.amount != null && <span className="ml-auto shrink-0 text-xs font-semibold md:ml-0">{fmtMoney(u.amount)}</span>}
-                        <button
-                          onClick={() => dismissItem(u)}
-                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${isDismissing ? "border-muted text-muted-foreground" : "border-settled text-settled"}`}
-                        >
-                          <Check className="h-4 w-4" />
-                        </button>
-                      </div>
-                      <span className="min-w-0 break-words text-sm md:hidden">{u.label}</span>
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <span className={`w-20 shrink-0 pt-0.5 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
+                      <u.icon className="mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 line-clamp-2 break-words">{u.label}</span>
+                      <MemberTag memberId={u.member_id} />
+                      {u.amount != null && <span className="shrink-0 pt-0.5 font-semibold">{fmtMoney(u.amount)}</span>}
+                      <button
+                        onClick={() => dismissItem(u)}
+                        className={`ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${isDismissing ? "border-muted text-muted-foreground" : "border-settled text-settled"}`}
+                      >
+                        <Check className="h-4 w-4" />
+                      </button>
                     </div>
                   ) : (
-                    <Link to={u.href as any} hash={`record-${u.recordId}`} className="flex min-w-0 flex-1 flex-col gap-0.5 hover:bg-accent/40 rounded overflow-hidden px-1 md:flex-row md:items-center md:gap-2">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className={`shrink-0 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
-                        <u.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        <span className="hidden min-w-0 flex-1 truncate text-sm md:inline">{u.label}</span>
-                        <MemberTag memberId={u.member_id} />
-                        {u.amount != null && <span className="ml-auto shrink-0 text-xs font-semibold md:ml-0">{fmtMoney(u.amount)}</span>}
-                        <ChevronRight className="h-4 w-4 shrink-0 text-primary" />
-                      </div>
-                      <span className="min-w-0 break-words text-sm md:hidden">{u.label}</span>
+                    <Link to={u.href as any} hash={`record-${u.recordId}`} className="flex min-w-0 flex-1 items-start gap-3 hover:bg-accent/40 rounded overflow-hidden">
+                      <span className={`w-20 shrink-0 pt-0.5 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
+                      <u.icon className="mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 line-clamp-2 break-words">{u.label}</span>
+                      <MemberTag memberId={u.member_id} />
+                      {u.amount != null && <span className="shrink-0 pt-0.5 font-semibold">{fmtMoney(u.amount)}</span>}
+                      <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                     </Link>
                   )}
                 </li>
