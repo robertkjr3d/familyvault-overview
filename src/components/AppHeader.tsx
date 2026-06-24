@@ -243,7 +243,7 @@ export function AppHeader() {
       <header className="sticky top-0 z-30 border-b border-border bg-card/90 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">FamilyVault</div>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">FamilyHub SG</div>
             <h1 className="text-lg font-bold tracking-tight">{settings?.family_name ?? "Our Family"}</h1>
             {user?.email && (
               <p className="mt-0.5 text-[11px] text-muted-foreground">{user.email}</p>
