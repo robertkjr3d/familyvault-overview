@@ -458,7 +458,7 @@ function InventoryPage() {
                     {totalCountByFolder.get(f.id) ?? 0}
                   </span>
                 </div>
-                <div className="p-2.5 text-sm font-semibold">{f.name}</div>
+                <div className="p-2.5 text-sm font-semibold truncate">{f.name}</div>
               </button>
             ))}
           </div>
@@ -949,7 +949,7 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
               {itemCountBySf.get(sf.id) ?? 0}
             </span>
           </div>
-          <div className="p-2.5 text-sm font-semibold">{sf.name}</div>
+          <div className="p-2.5 text-sm font-semibold truncate">{sf.name}</div>
         </button>
       ))}
     </div>
@@ -972,16 +972,17 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
   const lightboxOverlay = lightboxUrl ? (
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-4"
-      onClick={() => setLightboxUrl("")}
+      onPointerDown={() => setLightboxUrl("")}
     >
       <img
         src={lightboxUrl}
         alt="Full size"
         className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
+        onPointerDown={(e) => e.stopPropagation()}
       />
       <button
         className="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
-        onClick={() => setLightboxUrl("")}
+        onPointerDown={(e) => { e.stopPropagation(); setLightboxUrl(""); }}
         aria-label="Close"
       >✕</button>
     </div>
