@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, Plus, Search, Trash2, ChevronDown, Folder as FolderIcon, X, Pencil, ArrowRightLeft, Bell } from "lucide-react";
 import { HashHighlight } from "@/components/HashHighlight";
@@ -969,9 +970,9 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
     </div>
   );
 
-  const lightboxOverlay = lightboxUrl ? (
+  const lightboxOverlay = lightboxUrl ? createPortal(
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4"
       onPointerDown={() => setLightboxUrl("")}
     >
       <img
@@ -985,7 +986,8 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
         onPointerDown={(e) => { e.stopPropagation(); setLightboxUrl(""); }}
         aria-label="Close"
       >✕</button>
-    </div>
+    </div>,
+    document.body
   ) : null;
 
   return (
