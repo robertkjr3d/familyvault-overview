@@ -18,7 +18,7 @@ import { compressImage } from "@/lib/imageCompression";
 
 export const Route = createFileRoute("/inventory")({
   component: InventoryPage,
-  head: () => ({ meta: [{ title: "Inventory — FamilyVault" }] }),
+  head: () => ({ meta: [{ title: "Inventory — FamilyHub SG" }] }),
 });
 
 type Folder = { id: string; name: string; parent_id: string | null; photo_url: string | null; sort_order: number };
@@ -312,7 +312,7 @@ function InventoryPage() {
       }
 
       const children: any[] = [];
-      children.push(new Paragraph({ text: "FamilyVault Inventory", heading: HeadingLevel.TITLE }));
+      children.push(new Paragraph({ text: "FamilyHub SG Inventory", heading: HeadingLevel.TITLE }));
       children.push(new Paragraph({
         children: [new TextRun({ text: `Exported ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`, italics: true, color: "666666" })],
       }));
