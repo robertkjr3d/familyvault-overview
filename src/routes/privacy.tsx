@@ -92,7 +92,7 @@ function PrivacyPage() {
           <p>
             FamilyHub SG is intended for use by adults managing household records. A parent or
             guardian may enter information about their children (for example, a child's health
-            note) as part of managing the household — FamilyVault itself does not knowingly
+            note) as part of managing the household — FamilyHub SG itself does not knowingly
             collect information directly from children.
           </p>
         </Section>
