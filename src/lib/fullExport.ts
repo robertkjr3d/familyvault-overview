@@ -20,7 +20,7 @@ import type { Member } from "@/hooks/useMembers";
 // in Supabase Storage, not in these tables. This export includes the stored
 // file *reference* where one exists (e.g. inventory photo URL) but does NOT
 // download the actual files. A signed/storage URL may stop working once the
-// household is no longer using FamilyVault. True "take my files and leave"
+// household is no longer using FamilyHub SG. True "take my files and leave"
 // portability needs a separate zip-of-files export — not built yet.
 
 const STATUS_LABEL: Record<string, string> = {
@@ -320,14 +320,14 @@ async function writeWorkbook(sheets: SheetSpec[]) {
   const mod: any = await import("https://esm.sh/exceljs@4.4.0");
   const ExcelJS = mod.default ?? mod;
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "FamilyVault";
+  workbook.creator = "FamilyHub SG";
   workbook.created = new Date();
 
   // Read Me sheet — first tab, sets expectations honestly.
   const readMe = workbook.addWorksheet("Read Me");
   readMe.columns = [{ width: 100 }];
   const readMeLines = [
-    "FamilyVault — Full Data Export",
+    "FamilyHub SG — Full Data Export",
     `Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`,
     "",
     "What's included: every record from every tab in the app — Properties, Loans, Insurance, Investments,",
@@ -337,7 +337,7 @@ async function writeWorkbook(sheets: SheetSpec[]) {
     "",
     "What's NOT included: the actual photo and document FILES (e.g. inventory item photos, insurance policy",
     "PDFs). Only their stored web links are included where present (see the Inventory sheet's Photo URL",
-    "column). Those links point back to FamilyVault's storage and may stop working if this household",
+    "column). Those links point back to FamilyHub SG's storage and may stop working if this household",
     "later stops using the app. If you want to keep the actual files long-term, download them individually",
     "from within the app — this spreadsheet is not a substitute for that.",
     "",
