@@ -43,6 +43,11 @@ function InventoryPage() {
   const [pageLightboxUrl, setPageLightboxUrl] = useState("");
   const pageLightboxRef = useRef(false);
 
+  function closePageLightbox() {
+    pageLightboxRef.current = false;
+    setPageLightboxUrl("");
+  }
+
   const { data: folders = [] } = useQuery({
     queryKey: ["folders", activeHouseholdId],
     enabled: !!activeHouseholdId,
@@ -536,24 +541,21 @@ function InventoryPage() {
       </div>
       {pageLightboxUrl && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center"
-          style={{ pointerEvents: 'auto' }}
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90"
+          style={{ pointerEvents: 'auto', touchAction: 'pinch-zoom' }}
+          onPointerUp={(e) => { if (e.target === e.currentTarget) closePageLightbox(); }}
         >
-          <div
-            className="absolute inset-0 bg-black/90"
-            onPointerUp={() => { pageLightboxRef.current = false; setPageLightboxUrl(""); }}
-          />
           <img
             src={pageLightboxUrl}
             alt="Full size"
             draggable="false"
-            className="relative z-10 max-h-full max-w-full rounded-xl object-contain shadow-2xl p-4"
-            style={{ touchAction: 'pinch-zoom', pointerEvents: 'auto' }}
+            className="relative max-h-full max-w-full rounded-xl object-contain shadow-2xl p-4"
+            style={{ touchAction: 'pinch-zoom', pointerEvents: 'none' }}
           />
           <button
             className="absolute right-4 top-4 z-[10000] rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
             style={{ pointerEvents: 'auto' }}
-            onPointerUp={(e) => { e.stopPropagation(); pageLightboxRef.current = false; setPageLightboxUrl(""); }}
+            onPointerUp={(e) => { e.stopPropagation(); closePageLightbox(); }}
             aria-label="Close"
           >✕</button>
         </div>
@@ -808,6 +810,11 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
   const lightboxOpenRef = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  function closeLightbox() {
+    lightboxOpenRef.current = false;
+    setLightboxUrl("");
+  }
+
   // Item count per subfolder — used for the count badge on subfolder cards.
   // Computed here because FolderSheet already has allItems as a prop.
   const itemCountBySf = useMemo(() => {
@@ -1004,29 +1011,35 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
     </div>
   );
 
+  const lightboxBackdropRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = lightboxBackdropRef.current;
+    if (!el) return;
+    let pdOnBackdrop = false;
+    const onPD = (e: PointerEvent) => { pdOnBackdrop = e.target === el; };
+    const onPU = (e: PointerEvent) => { if (pdOnBackdrop && e.target === el) closeLightbox(); pdOnBackdrop = false; };
+    el.addEventListener("pointerdown", onPD);
+    el.addEventListener("pointerup", onPU);
+    return () => { el.removeEventListener("pointerdown", onPD); el.removeEventListener("pointerup", onPU); };
+  }, [!!lightboxUrl]);
+
   const lightboxOverlay = lightboxUrl ? (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center"
-      style={{ pointerEvents: 'auto' }}
+      ref={lightboxBackdropRef}
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90"
+      style={{ pointerEvents: 'auto', touchAction: 'pinch-zoom' }}
     >
-      {/* Backdrop — tapping closes */}
-      <div
-        className="absolute inset-0 bg-black/90"
-        onPointerUp={() => { lightboxOpenRef.current = false; setLightboxUrl(""); }}
-      />
-      {/* Image — sits above backdrop, pinch-zoom handled natively by browser */}
       <img
         src={lightboxUrl}
         alt="Full size"
         draggable="false"
-        className="relative z-10 max-h-full max-w-full rounded-xl object-contain shadow-2xl p-4"
-        style={{ touchAction: 'pinch-zoom', pointerEvents: 'auto' }}
+        className="relative max-h-full max-w-full rounded-xl object-contain shadow-2xl p-4"
+        style={{ touchAction: 'pinch-zoom', pointerEvents: 'none' }}
       />
-      {/* X button */}
       <button
         className="absolute right-4 top-4 z-[10000] rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
         style={{ pointerEvents: 'auto' }}
-        onPointerUp={(e) => { e.stopPropagation(); lightboxOpenRef.current = false; setLightboxUrl(""); }}
+        onPointerUp={(e) => { e.stopPropagation(); closeLightbox(); }}
         aria-label="Close"
       >✕</button>
     </div>
@@ -1039,6 +1052,8 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
         side="bottom"
         className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl"
         aria-describedby={undefined}
+        onPointerDownOutside={(e) => { if (lightboxOpenRef.current) e.preventDefault(); }}
+        onInteractOutside={(e) => { if (lightboxOpenRef.current) e.preventDefault(); }}
       >
         {backButton}
         <SheetHeader>
@@ -1088,7 +1103,8 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
             alt=""
             draggable="false"
             className="mt-3 w-full rounded-xl object-contain max-h-48 cursor-pointer touch-none select-none"
-            onPointerUp={(e) => { e.stopPropagation(); e.preventDefault(); lightboxOpenRef.current = true; setLightboxUrl(folder.photo_url ?? ""); }}
+            onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as any)._pdSelf = true; }}
+            onPointerUp={(e) => { e.stopPropagation(); if ((e.currentTarget as any)._pdSelf) { (e.currentTarget as any)._pdSelf = false; lightboxOpenRef.current = true; setLightboxUrl(folder.photo_url ?? ""); } }}
             title="Tap to enlarge"
           />
         )}
@@ -1136,7 +1152,8 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
                       alt=""
                       draggable="false"
                       className="h-14 w-14 rounded-md object-cover cursor-pointer touch-none select-none"
-                      onPointerUp={(e) => { e.stopPropagation(); e.preventDefault(); lightboxOpenRef.current = true; setLightboxUrl(it.photo_url ?? ""); }}
+                      onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as any)._pdSelf = true; }}
+                      onPointerUp={(e) => { e.stopPropagation(); if ((e.currentTarget as any)._pdSelf) { (e.currentTarget as any)._pdSelf = false; lightboxOpenRef.current = true; setLightboxUrl(it.photo_url ?? ""); } }}
                       title="Tap to enlarge"
                     />
                   )}
