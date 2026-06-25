@@ -453,9 +453,7 @@ function InventoryPage() {
                     <img
                       src={f.photo_url}
                       alt={f.name}
-                      draggable="false"
-                      className="h-full w-full object-cover touch-none select-none"
-                      onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); pageLightboxRef.current = true; setPageLightboxUrl(f.photo_url ?? ""); }}
+                      className="h-full w-full object-cover"
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
@@ -539,8 +537,8 @@ function InventoryPage() {
       {pageLightboxUrl && (
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4"
-          style={{ pointerEvents: 'auto' }}
-          onPointerDown={() => { pageLightboxRef.current = false; setPageLightboxUrl(""); }}
+          style={{ pointerEvents: 'auto', touchAction: 'pinch-zoom' }}
+          onPointerUp={(e) => { if (e.target === e.currentTarget) { pageLightboxRef.current = false; setPageLightboxUrl(""); } }}
         >
           <img
             src={pageLightboxUrl}
@@ -549,11 +547,12 @@ function InventoryPage() {
             className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
             style={{ touchAction: 'pinch-zoom' }}
             onPointerDown={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
           />
           <button
             className="absolute right-4 top-4 z-[10000] rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
             style={{ pointerEvents: 'auto' }}
-            onPointerDown={(e) => { e.stopPropagation(); pageLightboxRef.current = false; setPageLightboxUrl(""); }}
+            onPointerUp={(e) => { e.stopPropagation(); pageLightboxRef.current = false; setPageLightboxUrl(""); }}
             aria-label="Close"
           >✕</button>
         </div>
@@ -973,9 +972,7 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
               <img
                 src={sf.photo_url}
                 alt={sf.name}
-                draggable="false"
-                className="h-full w-full object-cover touch-none select-none"
-                onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); lightboxOpenRef.current = true; setLightboxUrl(sf.photo_url ?? ""); }}
+                className="h-full w-full object-cover"
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
@@ -1009,8 +1006,8 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
   const lightboxOverlay = lightboxUrl ? (
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4"
-      style={{ pointerEvents: 'auto' }}
-      onPointerDown={() => { lightboxOpenRef.current = false; setLightboxUrl(""); }}
+      style={{ pointerEvents: 'auto', touchAction: 'pinch-zoom' }}
+      onPointerUp={(e) => { if (e.target === e.currentTarget) { lightboxOpenRef.current = false; setLightboxUrl(""); } }}
     >
       <img
         src={lightboxUrl}
@@ -1019,11 +1016,12 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
         className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
         style={{ touchAction: 'pinch-zoom' }}
         onPointerDown={(e) => e.stopPropagation()}
+        onPointerUp={(e) => e.stopPropagation()}
       />
       <button
         className="absolute right-4 top-4 z-[10000] rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
         style={{ pointerEvents: 'auto' }}
-        onPointerDown={(e) => { e.stopPropagation(); lightboxOpenRef.current = false; setLightboxUrl(""); }}
+        onPointerUp={(e) => { e.stopPropagation(); lightboxOpenRef.current = false; setLightboxUrl(""); }}
         aria-label="Close"
       >✕</button>
     </div>
@@ -1080,7 +1078,14 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
         />
 
         {folder.photo_url && (
-          <img src={folder.photo_url} alt="" className="mt-3 w-full rounded-xl object-contain max-h-48" />
+          <img
+            src={folder.photo_url}
+            alt=""
+            draggable="false"
+            className="mt-3 w-full rounded-xl object-contain max-h-48 cursor-pointer touch-none select-none"
+            onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); lightboxOpenRef.current = true; setLightboxUrl(folder.photo_url ?? ""); }}
+            title="Tap to enlarge"
+          />
         )}
 
         <div className="mt-4">{subfoldersSection}</div>
