@@ -1012,29 +1012,67 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
   );
 
   const lightboxBackdropRef = useRef<HTMLDivElement>(null);
+  const lightboxImgRef = useRef<HTMLImageElement>(null);
+
   useEffect(() => {
-    const el = lightboxBackdropRef.current;
-    if (!el) return;
+    const backdrop = lightboxBackdropRef.current;
+    const img = lightboxImgRef.current;
+    if (!backdrop || !img) return;
+
+    // Backdrop tap-to-close (native, so no React synthetic interference)
     let pdOnBackdrop = false;
-    const onPD = (e: PointerEvent) => { pdOnBackdrop = e.target === el; };
-    const onPU = (e: PointerEvent) => { if (pdOnBackdrop && e.target === el) closeLightbox(); pdOnBackdrop = false; };
-    el.addEventListener("pointerdown", onPD);
-    el.addEventListener("pointerup", onPU);
-    return () => { el.removeEventListener("pointerdown", onPD); el.removeEventListener("pointerup", onPU); };
+    const onPD = (e: PointerEvent) => { pdOnBackdrop = e.target === backdrop; };
+    const onPU = (e: PointerEvent) => { if (pdOnBackdrop && e.target === backdrop) closeLightbox(); pdOnBackdrop = false; };
+    backdrop.addEventListener("pointerdown", onPD);
+    backdrop.addEventListener("pointerup", onPU);
+
+    // Pinch-zoom on the image via touch events
+    let scale = 1;
+    let initialDist = 0;
+    let startScale = 1;
+
+    const dist = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) { initialDist = dist(e.touches); startScale = scale; }
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        scale = Math.min(5, Math.max(1, startScale * dist(e.touches) / initialDist));
+        img.style.transform = `scale(${scale})`;
+      }
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2 && scale < 1.05) { scale = 1; img.style.transform = "scale(1)"; }
+    };
+
+    img.addEventListener("touchstart", onTouchStart, { passive: true });
+    img.addEventListener("touchmove", onTouchMove, { passive: false });
+    img.addEventListener("touchend", onTouchEnd, { passive: true });
+
+    return () => {
+      backdrop.removeEventListener("pointerdown", onPD);
+      backdrop.removeEventListener("pointerup", onPU);
+      img.removeEventListener("touchstart", onTouchStart);
+      img.removeEventListener("touchmove", onTouchMove);
+      img.removeEventListener("touchend", onTouchEnd);
+    };
   }, [!!lightboxUrl]);
 
   const lightboxOverlay = lightboxUrl ? (
     <div
       ref={lightboxBackdropRef}
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90"
-      style={{ pointerEvents: 'auto', touchAction: 'pinch-zoom' }}
+      style={{ pointerEvents: 'auto' }}
     >
       <img
+        ref={lightboxImgRef}
         src={lightboxUrl}
         alt="Full size"
         draggable="false"
         className="relative max-h-full max-w-full rounded-xl object-contain shadow-2xl p-4"
-        style={{ touchAction: 'pinch-zoom', pointerEvents: 'none' }}
+        style={{ touchAction: 'none', pointerEvents: 'none', transformOrigin: 'center', transition: 'transform 0.05s' }}
       />
       <button
         className="absolute right-4 top-4 z-[10000] rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
@@ -1103,8 +1141,8 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
             alt=""
             draggable="false"
             className="mt-3 w-full rounded-xl object-contain max-h-48 cursor-pointer touch-none select-none"
-            onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as any)._pdSelf = true; }}
-            onPointerUp={(e) => { e.stopPropagation(); if ((e.currentTarget as any)._pdSelf) { (e.currentTarget as any)._pdSelf = false; lightboxOpenRef.current = true; setLightboxUrl(folder.photo_url ?? ""); } }}
+            onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as any)._pdX = e.clientX; (e.currentTarget as any)._pdY = e.clientY; }}
+            onPointerUp={(e) => { e.stopPropagation(); const dx = e.clientX - (e.currentTarget as any)._pdX; const dy = e.clientY - (e.currentTarget as any)._pdY; if (Math.hypot(dx, dy) < 8) { lightboxOpenRef.current = true; setLightboxUrl(folder.photo_url ?? ""); } }}
             title="Tap to enlarge"
           />
         )}
@@ -1152,8 +1190,8 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
                       alt=""
                       draggable="false"
                       className="h-14 w-14 rounded-md object-cover cursor-pointer touch-none select-none"
-                      onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as any)._pdSelf = true; }}
-                      onPointerUp={(e) => { e.stopPropagation(); if ((e.currentTarget as any)._pdSelf) { (e.currentTarget as any)._pdSelf = false; lightboxOpenRef.current = true; setLightboxUrl(it.photo_url ?? ""); } }}
+                      onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as any)._pdX = e.clientX; (e.currentTarget as any)._pdY = e.clientY; }}
+                      onPointerUp={(e) => { e.stopPropagation(); const dx = e.clientX - (e.currentTarget as any)._pdX; const dy = e.clientY - (e.currentTarget as any)._pdY; if (Math.hypot(dx, dy) < 8) { lightboxOpenRef.current = true; setLightboxUrl(it.photo_url ?? ""); } }}
                       title="Tap to enlarge"
                     />
                   )}
