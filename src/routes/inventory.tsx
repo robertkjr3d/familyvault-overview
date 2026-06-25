@@ -40,6 +40,8 @@ function InventoryPage() {
   const [openFolderId, setOpenFolderId] = useState<string | null>(null);
   const [openSubfolderId, setOpenSubfolderId] = useState<string | null>(null);
   const [showAddFolder, setShowAddFolder] = useState(false);
+  const [pageLightboxUrl, setPageLightboxUrl] = useState("");
+  const pageLightboxRef = useRef(false);
 
   const { data: folders = [] } = useQuery({
     queryKey: ["folders", activeHouseholdId],
@@ -368,7 +370,7 @@ function InventoryPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `familyvault-inventory-${new Date().toISOString().slice(0, 10)}.docx`;
+      a.download = `familyhubsg-inventory-${new Date().toISOString().slice(0, 10)}.docx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -448,7 +450,13 @@ function InventoryPage() {
               >
                 <div className="relative aspect-square w-full overflow-hidden bg-muted">
                   {f.photo_url ? (
-                    <img src={f.photo_url} alt={f.name} className="h-full w-full object-cover" />
+                    <img
+                      src={f.photo_url}
+                      alt={f.name}
+                      draggable="false"
+                      className="h-full w-full object-cover touch-none select-none"
+                      onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); pageLightboxRef.current = true; setPageLightboxUrl(f.photo_url ?? ""); }}
+                    />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
                       <FolderIcon className="h-10 w-10 text-muted-foreground" />
@@ -528,6 +536,28 @@ function InventoryPage() {
           Full backup with embedded photos. Can take up to a minute for large inventories — don't close the page while it's generating.
         </p>
       </div>
+      {pageLightboxUrl && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4"
+          style={{ pointerEvents: 'auto' }}
+          onPointerDown={() => { pageLightboxRef.current = false; setPageLightboxUrl(""); }}
+        >
+          <img
+            src={pageLightboxUrl}
+            alt="Full size"
+            draggable="false"
+            className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
+            style={{ touchAction: 'pinch-zoom' }}
+            onPointerDown={(e) => e.stopPropagation()}
+          />
+          <button
+            className="absolute right-4 top-4 z-[10000] rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
+            style={{ pointerEvents: 'auto' }}
+            onPointerDown={(e) => { e.stopPropagation(); pageLightboxRef.current = false; setPageLightboxUrl(""); }}
+            aria-label="Close"
+          >✕</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -931,7 +961,7 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
   ) : null;
 
   const subfolderGrid = subfolders.length > 0 ? (
-    <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+    <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 md:grid-cols-6">
       {subfolders.map((sf) => (
         <button
           key={sf.id}
@@ -940,7 +970,13 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
         >
           <div className="relative aspect-square w-full overflow-hidden bg-muted">
             {sf.photo_url ? (
-              <img src={sf.photo_url} alt={sf.name} className="h-full w-full object-cover" />
+              <img
+                src={sf.photo_url}
+                alt={sf.name}
+                draggable="false"
+                className="h-full w-full object-cover touch-none select-none"
+                onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); lightboxOpenRef.current = true; setLightboxUrl(sf.photo_url ?? ""); }}
+              />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
                 <FolderIcon className="h-10 w-10 text-muted-foreground" />
@@ -981,6 +1017,7 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
         alt="Full size"
         draggable="false"
         className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
+        style={{ touchAction: 'pinch-zoom' }}
         onPointerDown={(e) => e.stopPropagation()}
       />
       <button
