@@ -536,18 +536,19 @@ function InventoryPage() {
       </div>
       {pageLightboxUrl && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4"
-          style={{ pointerEvents: 'auto', touchAction: 'pinch-zoom' }}
-          onPointerUp={(e) => { if (e.target === e.currentTarget) { pageLightboxRef.current = false; setPageLightboxUrl(""); } }}
+          className="fixed inset-0 z-[9999] flex items-center justify-center"
+          style={{ pointerEvents: 'auto' }}
         >
+          <div
+            className="absolute inset-0 bg-black/90"
+            onPointerUp={() => { pageLightboxRef.current = false; setPageLightboxUrl(""); }}
+          />
           <img
             src={pageLightboxUrl}
             alt="Full size"
             draggable="false"
-            className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
-            style={{ touchAction: 'pinch-zoom' }}
-            onPointerDown={(e) => e.stopPropagation()}
-            onPointerUp={(e) => e.stopPropagation()}
+            className="relative z-10 max-h-full max-w-full rounded-xl object-contain shadow-2xl p-4"
+            style={{ touchAction: 'pinch-zoom', pointerEvents: 'auto' }}
           />
           <button
             className="absolute right-4 top-4 z-[10000] rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
@@ -1005,19 +1006,23 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
 
   const lightboxOverlay = lightboxUrl ? (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4"
-      style={{ pointerEvents: 'auto', touchAction: 'pinch-zoom' }}
-      onPointerUp={(e) => { if (e.target === e.currentTarget) { lightboxOpenRef.current = false; setLightboxUrl(""); } }}
+      className="fixed inset-0 z-[9999] flex items-center justify-center"
+      style={{ pointerEvents: 'auto' }}
     >
+      {/* Backdrop — tapping closes */}
+      <div
+        className="absolute inset-0 bg-black/90"
+        onPointerUp={() => { lightboxOpenRef.current = false; setLightboxUrl(""); }}
+      />
+      {/* Image — sits above backdrop, pinch-zoom handled natively by browser */}
       <img
         src={lightboxUrl}
         alt="Full size"
         draggable="false"
-        className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
-        style={{ touchAction: 'pinch-zoom' }}
-        onPointerDown={(e) => e.stopPropagation()}
-        onPointerUp={(e) => e.stopPropagation()}
+        className="relative z-10 max-h-full max-w-full rounded-xl object-contain shadow-2xl p-4"
+        style={{ touchAction: 'pinch-zoom', pointerEvents: 'auto' }}
       />
+      {/* X button */}
       <button
         className="absolute right-4 top-4 z-[10000] rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
         style={{ pointerEvents: 'auto' }}
@@ -1083,7 +1088,7 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
             alt=""
             draggable="false"
             className="mt-3 w-full rounded-xl object-contain max-h-48 cursor-pointer touch-none select-none"
-            onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); lightboxOpenRef.current = true; setLightboxUrl(folder.photo_url ?? ""); }}
+            onPointerUp={(e) => { e.stopPropagation(); e.preventDefault(); lightboxOpenRef.current = true; setLightboxUrl(folder.photo_url ?? ""); }}
             title="Tap to enlarge"
           />
         )}
@@ -1131,7 +1136,7 @@ function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfo
                       alt=""
                       draggable="false"
                       className="h-14 w-14 rounded-md object-cover cursor-pointer touch-none select-none"
-                      onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); lightboxOpenRef.current = true; setLightboxUrl(it.photo_url ?? ""); }}
+                      onPointerUp={(e) => { e.stopPropagation(); e.preventDefault(); lightboxOpenRef.current = true; setLightboxUrl(it.photo_url ?? ""); }}
                       title="Tap to enlarge"
                     />
                   )}
