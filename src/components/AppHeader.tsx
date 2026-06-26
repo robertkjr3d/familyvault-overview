@@ -1,22 +1,22 @@
-import { useEffect, useMemo, useState } from “react”;
-import { Bell, Crown, Share2 } from “lucide-react”;
-import { useMutation, useQuery, useQueryClient } from “@tanstack/react-query”;
-import { supabase } from “@/integrations/supabase/client”;
-import { useToday } from “@/lib/today”;
-import { AlertsSheet } from “./AlertsSheet”;
-import { buildUpcomingItems } from “@/lib/alerts”;
-import { useAuthSession } from “@/hooks/useAuthSession”;
-import { useAppStore } from “@/lib/store”;
-import { toast } from “sonner”;
+import { useEffect, useMemo, useState } from "react";
+import { Bell, Crown, Share2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useToday } from "@/lib/today";
+import { AlertsSheet } from "./AlertsSheet";
+import { buildUpcomingItems } from "@/lib/alerts";
+import { useAuthSession } from "@/hooks/useAuthSession";
+import { useAppStore } from "@/lib/store";
+import { toast } from "sonner";
 import {
 Select,
 SelectContent,
 SelectItem,
 SelectTrigger,
 SelectValue,
-} from “@/components/ui/select”;
-import { Button } from “@/components/ui/button”;
-import { Input } from “@/components/ui/input”;
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
 Dialog,
 DialogContent,
@@ -24,8 +24,8 @@ DialogDescription,
 DialogFooter,
 DialogHeader,
 DialogTitle,
-} from “@/components/ui/dialog”;
-import { sendHouseholdInvite, transferHouseholdOwnership, listHouseholdPeople, removeHouseholdMember } from “@/lib/householdInvites”;
+} from "@/components/ui/dialog";
+import { sendHouseholdInvite, transferHouseholdOwnership, listHouseholdPeople, removeHouseholdMember } from "@/lib/householdInvites";
 
 export function AppHeader() {
 const { simulated, today } = useToday();
@@ -34,37 +34,35 @@ const queryClient = useQueryClient();
 const [alertsOpen, setAlertsOpen] = useState(false);
 const shareOpen = useAppStore((s) => s.shareOpen);
 const setShareOpen = useAppStore((s) => s.setShareOpen);
-const [shareEmail, setShareEmail] = useState(””);
-const [shareRole, setShareRole] = useState<“member” | “viewer”>(“member”);
-const [transferEmail, setTransferEmail] = useState(””);
+const [shareEmail, setShareEmail] = useState("");
+const [shareRole, setShareRole] = useState<"member" | "viewer">("member");
+const [transferEmail, setTransferEmail] = useState("");
 const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
 const setActiveHouseholdId = useAppStore((s) => s.setActiveHouseholdId);
 
 const { data: memberships = [] } = useQuery({
-queryKey: [“household-memberships”, user?.id],
+queryKey: ["household-memberships", user?.id],
 enabled: !!user?.id,
 queryFn: async () => {
 const { data, error } = await supabase
-.from(“household_users” as any)
-.select(“household_id, role, households(id, name)”)
-.eq(“user_id”, user!.id);
+.from("household_users" as any)
+.select("household_id, role, households(id, name)")
+.eq("user_id", user!.id);
 if (error) throw error;
 
-```
   return (data ?? []) as Array<{
     household_id: string;
     role: "owner" | "member" | "viewer";
     households: { id: string; name: string } | null;
   }>;
 },
-```
 
 });
 
 const households = useMemo(
 () =>
 memberships
-.map((m) => ({ id: m.household_id, name: m.households?.name ?? “Household”, role: m.role }))
+.map((m) => ({ id: m.household_id, name: m.households?.name ?? "Household", role: m.role }))
 .filter((h, i, arr) => arr.findIndex((x) => x.id === h.id) === i),
 [memberships]
 );
@@ -72,13 +70,13 @@ memberships
 const selectedHouseholdId = activeHouseholdId ?? households[0]?.id ?? null;
 const selectedHousehold = households.find((h) => h.id === selectedHouseholdId) ?? null;
 const selectedMembership = memberships.find((m) => m.household_id === selectedHouseholdId);
-const canShareActiveHousehold = selectedMembership?.role === “owner”;
+const canShareActiveHousehold = selectedMembership?.role === "owner";
 
 useEffect(() => {
 if (households.length === 0) return;
 // Correct two cases: no household selected yet (fresh login, empty
 // localStorage), AND a selected household that no longer matches any of
-// the user’s current memberships (stale id left over in localStorage —
+// the user's current memberships (stale id left over in localStorage —
 // e.g. from earlier testing, a recreated household, or a different
 // account having used this browser). Both cases previously left
 // activeHouseholdId pointing at something invalid, which made the
@@ -91,29 +89,28 @@ setActiveHouseholdId(households[0].id);
 }, [activeHouseholdId, households, setActiveHouseholdId]);
 
 const { data: settings } = useQuery({
-queryKey: [“app_settings”, selectedHouseholdId],
+queryKey: ["app_settings", selectedHouseholdId],
 enabled: !!selectedHouseholdId,
 queryFn: async () => {
 const { data } = await supabase
-.from(“app_settings”)
-.select(”*”)
-.eq(“household_id”, selectedHouseholdId!)
+.from("app_settings")
+.select("*")
+.eq("household_id", selectedHouseholdId!)
 .maybeSingle();
 return data;
 },
 });
 
-// 30-day horizon, same source-of-truth as the AlertsSheet (“Due Soon” list) and
-// the dashboard’s 90-day view. Any new alert source only needs to be added once,
+// 30-day horizon, same source-of-truth as the AlertsSheet ("Due Soon" list) and
+// the dashboard's 90-day view. Any new alert source only needs to be added once,
 // in src/lib/alerts.ts.
 const { data: alertCount = 0 } = useQuery({
-queryKey: [“alert-count”, selectedHouseholdId],
+queryKey: ["alert-count", selectedHouseholdId],
 enabled: !!selectedHouseholdId,
 queryFn: async () => {
 const today = new Date();
 const householdId = selectedHouseholdId!;
 
-```
   const [properties, loans, insurance, investments, savings, inventoryItems, reminders, dismissed] = await Promise.all([
     supabase.from("properties").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
     supabase.from("loans").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
@@ -144,12 +141,11 @@ const householdId = selectedHouseholdId!;
   return allItems.filter((item) => !dismissedKeys.has(`${item.sourceType}::${item.recordId}::${item.date}`)).length;
 },
 refetchInterval: 5_000,
-```
 
 });
 
 const { data: people, isLoading: peopleLoading } = useQuery({
-queryKey: [“household-people”, selectedHouseholdId],
+queryKey: ["household-people", selectedHouseholdId],
 enabled: shareOpen && !!selectedHouseholdId,
 queryFn: async () => {
 const result = await listHouseholdPeople({ data: { householdId: selectedHouseholdId! } });
@@ -158,12 +154,11 @@ return result;
 });
 
 const shareMutation = useMutation({
-mutationFn: async ({ email, role }: { email: string; role: “member” | “viewer” }) => {
+mutationFn: async ({ email, role }: { email: string; role: "member" | "viewer" }) => {
 if (!selectedHouseholdId) {
-throw new Error(“Select a household first.”);
+throw new Error("Select a household first.");
 }
 
-```
   const result = await sendHouseholdInvite({
     data: {
       householdId: selectedHouseholdId,
@@ -184,17 +179,15 @@ onError: (error: unknown) => {
   const message = error instanceof Error ? error.message : "Unable to share access.";
   toast.error(message);
 },
-```
 
 });
 
 const transferOwnershipMutation = useMutation({
 mutationFn: async ({ email }: { email: string }) => {
 if (!selectedHouseholdId) {
-throw new Error(“Select a household first.”);
+throw new Error("Select a household first.");
 }
 
-```
   const result = await transferHouseholdOwnership({
     data: {
       householdId: selectedHouseholdId,
@@ -214,21 +207,20 @@ onError: (error: unknown) => {
   const message = error instanceof Error ? error.message : "Unable to transfer ownership.";
   toast.error(message);
 },
-```
 
 });
 
 const removeMemberMutation = useMutation({
 mutationFn: async ({ email }: { email: string }) => {
-if (!selectedHouseholdId) throw new Error(“Select a household first.”);
+if (!selectedHouseholdId) throw new Error("Select a household first.");
 return removeHouseholdMember({ data: { householdId: selectedHouseholdId, email } });
 },
 onSuccess: (_data, { email }) => {
 toast.success(`Removed ${email}`);
-queryClient.invalidateQueries({ queryKey: [“household-people”, selectedHouseholdId] });
+queryClient.invalidateQueries({ queryKey: ["household-people", selectedHouseholdId] });
 },
 onError: (error: unknown) => {
-const message = error instanceof Error ? error.message : “Could not remove member.”;
+const message = error instanceof Error ? error.message : "Could not remove member.";
 toast.error(message);
 },
 });
@@ -237,7 +229,7 @@ function onShareSubmit(e: React.FormEvent<HTMLFormElement>) {
 e.preventDefault();
 const normalized = shareEmail.trim().toLowerCase();
 if (!normalized) {
-toast.error(“Enter an email address.”);
+toast.error("Enter an email address.");
 return;
 }
 shareMutation.mutate({ email: normalized, role: shareRole });
@@ -247,17 +239,17 @@ function onTransferSubmit(e: React.FormEvent<HTMLFormElement>) {
 e.preventDefault();
 const normalized = transferEmail.trim().toLowerCase();
 if (!normalized) {
-toast.error(“Enter an email address.”);
+toast.error("Enter an email address.");
 return;
 }
 transferOwnershipMutation.mutate({ email: normalized });
 }
 
-// Real date — always today’s actual date, never the simulated test date
-const realDateLabel = new Date().toLocaleDateString(“en-GB”, {
-day: “numeric”,
-month: “short”,
-year: “numeric”,
+// Real date — always today's actual date, never the simulated test date
+const realDateLabel = new Date().toLocaleDateString("en-GB", {
+day: "numeric",
+month: "short",
+year: "numeric",
 });
 
 return (
@@ -271,7 +263,7 @@ return (
 <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
 <div>
 <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">FamilyHub SG</div>
-<h1 className="text-lg font-bold tracking-tight">{settings?.family_name ?? “Our Family”}</h1>
+<h1 className="text-lg font-bold tracking-tight">{settings?.family_name ?? "Our Family"}</h1>
 {user?.email && (
 <p className="mt-0.5 text-[11px] text-muted-foreground">{user.email}</p>
 )}
@@ -280,12 +272,11 @@ return (
 </p>
 </div>
 <div className="flex items-center gap-1.5">
-{/* Today’s real date — hidden on mobile to save space */}
+{/* Today's real date — hidden on mobile to save space */}
 <span className="hidden shrink-0 select-none text-[11px] font-medium tabular-nums text-muted-foreground sm:inline">
 {realDateLabel}
 </span>
 
-```
         {/* DEMO badge — clearly visible when viewing Demo Household */}
         {selectedHousehold?.name === "Demo Household — FamilyHub SG" && (
           <span className="shrink-0 rounded-full bg-review px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-review-foreground">
@@ -352,7 +343,7 @@ return (
 
       <div className="space-y-1.5">
         <p className="text-xs font-medium text-muted-foreground">Who has access</p>
-        {peopleLoading && <p className="text-xs text-muted-foreground">Loading…</p>}
+        {peopleLoading && <p className="text-xs text-muted-foreground">Loading...</p>}
         {!peopleLoading && people && (
           <div className="space-y-1 rounded-lg border border-border p-2">
             {people.members.map((m) => (
@@ -460,7 +451,6 @@ return (
     </DialogContent>
   </Dialog>
 </>
-```
 
 );
 }

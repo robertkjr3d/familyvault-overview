@@ -1,25 +1,25 @@
-import { createFileRoute } from “@tanstack/react-router”;
-import { useQuery, useQueryClient } from “@tanstack/react-query”;
-import { supabase } from “@/integrations/supabase/client”;
-import { useEffect, useMemo, useRef, useState } from “react”;
-import { createPortal } from “react-dom”;
-import { Camera, Plus, Search, Trash2, ChevronDown, Folder as FolderIcon, X, Pencil, ArrowRightLeft, Bell } from “lucide-react”;
-import { HashHighlight } from “@/components/HashHighlight”;
-import { ReminderButton } from “@/components/ReminderButton”;
-import { RemindersList } from “@/components/RemindersList”;
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from “@/components/ui/sheet”;
-import { Button } from “@/components/ui/button”;
-import { Input } from “@/components/ui/input”;
-import { Label } from “@/components/ui/label”;
-import { Textarea } from “@/components/ui/textarea”;
-import { toast } from “sonner”;
-import { fmtDate } from “@/lib/format”;
-import { useAppStore } from “@/lib/store”;
-import { compressImage } from “@/lib/imageCompression”;
+import { createFileRoute } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Camera, Plus, Search, Trash2, ChevronDown, Folder as FolderIcon, X, Pencil, ArrowRightLeft, Bell } from "lucide-react";
+import { HashHighlight } from "@/components/HashHighlight";
+import { ReminderButton } from "@/components/ReminderButton";
+import { RemindersList } from "@/components/RemindersList";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import { fmtDate } from "@/lib/format";
+import { useAppStore } from "@/lib/store";
+import { compressImage } from "@/lib/imageCompression";
 
-export const Route = createFileRoute(”/inventory”)({
+export const Route = createFileRoute("/inventory")({
 component: InventoryPage,
-head: () => ({ meta: [{ title: “Inventory — FamilyHub SG” }] }),
+head: () => ({ meta: [{ title: "Inventory — FamilyHub SG" }] }),
 });
 
 type Folder = { id: string; name: string; parent_id: string | null; photo_url: string | null; sort_order: number };
@@ -36,16 +36,16 @@ photo_url: string | null;
 function InventoryPage() {
 const qc = useQueryClient();
 const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
-const [search, setSearch] = useState(””);
+const [search, setSearch] = useState("");
 const [openFolderId, setOpenFolderId] = useState<string | null>(null);
 const [openSubfolderId, setOpenSubfolderId] = useState<string | null>(null);
 const [showAddFolder, setShowAddFolder] = useState(false);
-const [pageLightboxUrl, setPageLightboxUrl] = useState(””);
+const [pageLightboxUrl, setPageLightboxUrl] = useState("");
 const pageLightboxRef = useRef(false);
 
 function closePageLightbox() {
 pageLightboxRef.current = false;
-setPageLightboxUrl(””);
+setPageLightboxUrl("");
 }
 
 // Callback ref: attaches pinch-zoom listeners immediately when the lightbox img enters DOM.
@@ -67,53 +67,53 @@ img.style.transform = `scale(${scale})`;
 }
 };
 const onTouchEnd = () => {
-if (scale < 1.05) { scale = 1; img.style.transform = “scale(1)”; }
+if (scale < 1.05) { scale = 1; img.style.transform = "scale(1)"; }
 };
-img.addEventListener(“touchstart”, onTouchStart, { passive: true });
-img.addEventListener(“touchmove”, onTouchMove, { passive: false });
-img.addEventListener(“touchend”, onTouchEnd, { passive: true });
+img.addEventListener("touchstart", onTouchStart, { passive: true });
+img.addEventListener("touchmove", onTouchMove, { passive: false });
+img.addEventListener("touchend", onTouchEnd, { passive: true });
 };
 
 const { data: folders = [] } = useQuery({
-queryKey: [“folders”, activeHouseholdId],
+queryKey: ["folders", activeHouseholdId],
 enabled: !!activeHouseholdId,
 queryFn: async () => {
 if (!activeHouseholdId) return [];
 const { data } = await supabase
-.from(“inventory_folders”)
-.select(”*”)
-.eq(“household_id”, activeHouseholdId)
-.order(“sort_order”);
+.from("inventory_folders")
+.select("*")
+.eq("household_id", activeHouseholdId)
+.order("sort_order");
 return (data ?? []) as Folder[];
 },
 });
 
 const { data: allItems = [] } = useQuery({
-queryKey: [“inventory_items”, activeHouseholdId],
+queryKey: ["inventory_items", activeHouseholdId],
 enabled: !!activeHouseholdId,
 queryFn: async () => {
 if (!activeHouseholdId) return [];
-const { data } = await supabase.from(“inventory_items”).select(”*”).eq(“household_id”, activeHouseholdId).order(“name”);
+const { data } = await supabase.from("inventory_items").select("*").eq("household_id", activeHouseholdId).order("name");
 return (data ?? []) as Item[];
 },
 });
 
 const { data: gobag = [] } = useQuery({
-queryKey: [“gobag”, activeHouseholdId],
+queryKey: ["gobag", activeHouseholdId],
 enabled: !!activeHouseholdId,
 queryFn: async () => {
 if (!activeHouseholdId) return [];
-const { data } = await supabase.from(“gobag_items”).select(”*”).eq(“household_id”, activeHouseholdId).order(“sort_order”);
+const { data } = await supabase.from("gobag_items").select("*").eq("household_id", activeHouseholdId).order("sort_order");
 return data ?? [];
 },
 });
 
 const { data: travelChecklist = [] } = useQuery({
-queryKey: [“travel_checklist”, activeHouseholdId],
+queryKey: ["travel_checklist", activeHouseholdId],
 enabled: !!activeHouseholdId,
 queryFn: async () => {
 if (!activeHouseholdId) return [];
-const { data } = await supabase.from(“travel_checklist_items”).select(”*”).eq(“household_id”, activeHouseholdId).order(“sort_order”);
+const { data } = await supabase.from("travel_checklist_items").select("*").eq("household_id", activeHouseholdId).order("sort_order");
 return data ?? [];
 },
 });
@@ -181,24 +181,23 @@ const opts: { id: string; label: string }[] = [];
 topLevelFolders.forEach((f) => {
 opts.push({ id: f.id, label: f.name });
 const children = childrenByParent.get(f.id) ?? [];
-children.forEach((c) => opts.push({ id: c.id, label: f.name + “ > “ + c.name }));
+children.forEach((c) => opts.push({ id: c.id, label: f.name + " > " + c.name }));
 });
 return opts;
 }, [topLevelFolders, childrenByParent]);
 
 function csvCell(v: string | null | undefined): string {
-const s = (v ?? “”).replace(/\r?\n/g, “ “);
-if (s.includes(”,”) || s.includes(’”’)) {
-return ‘”’ + s.replace(/”/g, ‘””’) + ‘”’;
+const s = (v ?? "").replace(/\r?\n/g, " ");
+if (s.includes(",") || s.includes('"')) {
+return '"' + s.replace(/"/g, '""') + '"';
 }
 return s;
 }
 
 function exportCsv() {
 const rows: string[] = [];
-rows.push([“Location”, “Location photo URL”, “Subfolder”, “Subfolder photo URL”, “Item name”, “Category”, “Action / Notes”, “Warranty/Expiry date”, “Item photo URL”].map(csvCell).join(”,”));
+rows.push(["Location", "Location photo URL", "Subfolder", "Subfolder photo URL", "Item name", "Category", "Action / Notes", "Warranty/Expiry date", "Item photo URL"].map(csvCell).join(","));
 
-```
 function buildRow(locName: string, locPhoto: string | null | undefined, subName: string, subPhoto: string | null | undefined, itemName: string, category: string, notes: string, warranty: string, itemPhoto: string | null | undefined): string {
   return [locName, locPhoto ?? "", subName, subPhoto ?? "", itemName, category, notes, warranty, itemPhoto ?? ""].map(csvCell).join(",");
 }
@@ -236,17 +235,15 @@ document.body.appendChild(a);
 a.click();
 document.body.removeChild(a);
 URL.revokeObjectURL(url);
-```
 
 }
 
 function exportText() {
 const lines: string[] = [];
-lines.push(“FAMILYVAULT INVENTORY”);
+lines.push("FAMILYVAULT INVENTORY");
 lines.push(`Exported ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`);
-lines.push(””);
+lines.push("");
 
-```
 topLevelFolders.forEach((f) => {
   lines.push(f.name.toUpperCase());
   const directItems = allItems.filter((i) => i.folder_id === f.id);
@@ -288,7 +285,6 @@ document.body.appendChild(a);
 a.click();
 document.body.removeChild(a);
 URL.revokeObjectURL(url);
-```
 
 }
 
@@ -318,10 +314,9 @@ return results;
 async function exportDocx() {
 setGeneratingDocx(true);
 try {
-const docxLib: any = await import(“https://esm.sh/docx@9”);
+const docxLib: any = await import("https://esm.sh/docx@9");
 const { Document, Packer, Paragraph, TextRun, ImageRun, HeadingLevel } = docxLib;
 
-```
   // Collect every photo URL we need, fetch them all up front (with a concurrency cap)
   const photoUrls = new Set<string>();
   topLevelFolders.forEach((f) => {
@@ -419,7 +414,6 @@ const { Document, Packer, Paragraph, TextRun, ImageRun, HeadingLevel } = docxLib
 } finally {
   setGeneratingDocx(false);
 }
-```
 
 }
 
@@ -429,19 +423,18 @@ if (!q) return [];
 return allItems
 .filter((i) => i.name.toLowerCase().includes(q))
 .slice(0, 20)
-.map((i) => ({ item: i, path: folderById.get(i.folder_id)?.name ?? “Unknown” }));
+.map((i) => ({ item: i, path: folderById.get(i.folder_id)?.name ?? "Unknown" }));
 }, [q, allItems, folderById]);
 
 return (
 <div className="space-y-5 pb-24">
 <h1 className="text-2xl font-bold tracking-tight">Inventory</h1>
 
-```
   {/* Search */}
   <div className="relative">
     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
     <Input
-      placeholder="Search all items…"
+      placeholder="Search all items..."
       value={search}
       onChange={(e) => setSearch(e.target.value)}
       className="pl-9 h-11 text-base border-2 bg-white dark:bg-card focus:border-primary"
@@ -568,7 +561,7 @@ return (
       Clean outline by location and subfolder — good for Apple Notes (no photos).
     </p>
     <Button variant="outline" className="w-full" onClick={exportDocx} disabled={allItems.length === 0 || generatingDocx}>
-      {generatingDocx ? "Generating… please wait" : "Export master document (Word, with photos)"}
+      {generatingDocx ? "Generating... please wait" : "Export master document (Word, with photos)"}
     </Button>
     <p className="text-center text-[11px] text-muted-foreground">
       Full backup with embedded photos. Can take up to a minute for large inventories — don't close the page while it's generating.
@@ -598,7 +591,6 @@ return (
     document.body
   )}
 </div>
-```
 
 );
 }
@@ -608,15 +600,15 @@ function ChecklistSection({ table, queryKey, title, items }: { table: string; qu
 const qc = useQueryClient();
 const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
 const [open, setOpen] = useState(false);
-const [newLabel, setNewLabel] = useState(””);
+const [newLabel, setNewLabel] = useState("");
 const [adding, setAdding] = useState(false);
-const [editingId, setEditingId] = useState(””);
-const [editingLabel, setEditingLabel] = useState(””);
+const [editingId, setEditingId] = useState("");
+const [editingLabel, setEditingLabel] = useState("");
 
 const done = items.filter((g: any) => g.checked).length;
 
 async function toggle(id: string, checked: boolean) {
-await supabase.from(table).update({ checked }).eq(“id”, id);
+await supabase.from(table).update({ checked }).eq("id", id);
 qc.invalidateQueries({ queryKey: [queryKey, activeHouseholdId] });
 }
 
@@ -632,32 +624,32 @@ sort_order: maxSort + 1,
 });
 setAdding(false);
 if (error) { toast.error(error.message); return; }
-setNewLabel(””);
+setNewLabel("");
 qc.invalidateQueries({ queryKey: [queryKey, activeHouseholdId] });
 }
 
 async function deleteItem(id: string) {
-await supabase.from(table).delete().eq(“id”, id);
+await supabase.from(table).delete().eq("id", id);
 qc.invalidateQueries({ queryKey: [queryKey, activeHouseholdId] });
 }
 
 async function saveEdit(id: string) {
-if (!editingLabel.trim()) { setEditingId(””); return; }
-await supabase.from(table).update({ label: editingLabel.trim() }).eq(“id”, id);
-setEditingId(””);
-setEditingLabel(””);
+if (!editingLabel.trim()) { setEditingId(""); return; }
+await supabase.from(table).update({ label: editingLabel.trim() }).eq("id", id);
+setEditingId("");
+setEditingLabel("");
 qc.invalidateQueries({ queryKey: [queryKey, activeHouseholdId] });
 }
 
 return (
 <section className="rounded-2xl border border-border bg-muted/40">
 <button
-type=“button”
+type="button"
 onClick={() => setOpen((v) => !v)}
-className=“flex w-full items-center justify-between px-4 py-3 text-left”
+className="flex w-full items-center justify-between px-4 py-3 text-left"
 >
 <span className="text-sm font-semibold">
-{title} — {items.length} item{items.length === 1 ? “” : “s”}
+{title} — {items.length} item{items.length === 1 ? "" : "s"}
 {done > 0 && (
 <span className="ml-2 text-xs font-normal text-muted-foreground">({done} ✓)</span>
 )}
@@ -678,11 +670,11 @@ autoFocus
 value={editingLabel}
 onChange={(e) => setEditingLabel(e.target.value)}
 onKeyDown={(e) => {
-if (e.key === “Enter”) saveEdit(g.id);
-if (e.key === “Escape”) { setEditingId(””); setEditingLabel(””); }
+if (e.key === "Enter") saveEdit(g.id);
+if (e.key === "Escape") { setEditingId(""); setEditingLabel(""); }
 }}
 onBlur={() => saveEdit(g.id)}
-className=“min-w-0 flex-1 rounded border border-input bg-background px-2 py-0.5 text-sm”
+className="min-w-0 flex-1 rounded border border-input bg-background px-2 py-0.5 text-sm"
 />
 ) : (
 <span className={`truncate ${g.checked ? "text-muted-foreground line-through" : ""}`}>{g.label}</span>
@@ -691,24 +683,24 @@ return (
 <li key={g.id} className="flex items-center gap-3 text-sm">
 <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
 <input
-type=“checkbox”
+type="checkbox"
 defaultChecked={g.checked}
 onChange={(e) => toggle(g.id, e.target.checked)}
-className=“h-4 w-4 shrink-0 rounded border-border”
+className="h-4 w-4 shrink-0 rounded border-border"
 />
 {rowContent}
 </label>
 <button
 onClick={() => { setEditingId(g.id); setEditingLabel(g.label); }}
-className=“shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent”
-aria-label=“Edit item”
+className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent"
+aria-label="Edit item"
 >
 <span className="text-sm">✏️</span>
 </button>
 <button
 onClick={() => deleteItem(g.id)}
-className=“shrink-0 rounded-md p-1 text-urgent hover:bg-urgent/10”
-aria-label=“Delete item”
+className="shrink-0 rounded-md p-1 text-urgent hover:bg-urgent/10"
+aria-label="Delete item"
 >
 <Trash2 className="h-3.5 w-3.5" />
 </button>
@@ -721,11 +713,11 @@ aria-label=“Delete item”
 <Input
 value={newLabel}
 onChange={(e) => setNewLabel(e.target.value)}
-onKeyDown={(e) => { if (e.key === “Enter”) addItem(); }}
-placeholder=“Add an item…”
-className=“h-9 flex-1”
+onKeyDown={(e) => { if (e.key === "Enter") addItem(); }}
+placeholder="Add an item..."
+className="h-9 flex-1"
 />
-<Button size=“sm” onClick={addItem} disabled={adding || !newLabel.trim()}>
+<Button size="sm" onClick={addItem} disabled={adding || !newLabel.trim()}>
 <Plus className="h-3.5 w-3.5" />
 </Button>
 </div>
@@ -739,40 +731,40 @@ className=“h-9 flex-1”
 function AddFolderSheet({ open, onClose, parentId }: { open: boolean; onClose: () => void; parentId: string | null }) {
 const qc = useQueryClient();
 const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
-const [name, setName] = useState(””);
+const [name, setName] = useState("");
 const [photoFile, setPhotoFile] = useState<File | null>(null);
 const [preview, setPreview] = useState<string | null>(null);
 const [saving, setSaving] = useState(false);
 const fileRef = useRef<HTMLInputElement>(null);
-const sheetTitle = parentId ? “New Subfolder” : “New Location”;
+const sheetTitle = parentId ? "New Subfolder" : "New Location";
 
 function reset() {
-setName(””); setPhotoFile(null); setPreview(null);
-if (fileRef.current) fileRef.current.value = “”;
+setName(""); setPhotoFile(null); setPreview(null);
+if (fileRef.current) fileRef.current.value = "";
 }
 
 async function save() {
-if (!name.trim()) { toast.error(“Name this location”); return; }
-if (!activeHouseholdId) { toast.error(“Select a household first.”); return; }
+if (!name.trim()) { toast.error("Name this location"); return; }
+if (!activeHouseholdId) { toast.error("Select a household first."); return; }
 setSaving(true);
 try {
 let photo_url: string | null = null;
 if (photoFile) {
 const compressed = await compressImage(photoFile);
 const path = `${activeHouseholdId}/folders/${Date.now()}-${compressed.name}`;
-const { error: upErr } = await supabase.storage.from(“inventory-photos”).upload(path, compressed);
+const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
 if (upErr) throw upErr;
-photo_url = supabase.storage.from(“inventory-photos”).getPublicUrl(path).data.publicUrl;
+photo_url = supabase.storage.from("inventory-photos").getPublicUrl(path).data.publicUrl;
 }
-const { error } = await supabase.from(“inventory_folders”).insert({
+const { error } = await supabase.from("inventory_folders").insert({
 household_id: activeHouseholdId,
 name: name.trim(),
 photo_url,
 parent_id: parentId,
 });
 if (error) throw error;
-toast.success(“Location added”);
-qc.invalidateQueries({ queryKey: [“folders”] });
+toast.success("Location added");
+qc.invalidateQueries({ queryKey: ["folders"] });
 reset(); onClose();
 } catch (err: any) {
 toast.error(err.message);
@@ -788,16 +780,16 @@ return (
 <Label className="text-xs">Photo (optional)</Label>
 <div
 onClick={() => !preview && fileRef.current?.click()}
-className=“mt-1 flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/40 min-h-[80px]”
+className="mt-1 flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/40 min-h-[80px]"
 >
 {preview ? (
 <div className="relative w-full">
 <img src={preview} alt="" className="w-full h-auto object-contain max-h-48" />
 <button
-type=“button”
+type="button"
 onClick={(e) => { e.stopPropagation(); setPreview(null); setPhotoFile(null); }}
-className=“absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white”
-aria-label=“Remove photo”
+className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white"
+aria-label="Remove photo"
 >
 <X className="h-3.5 w-3.5" />
 </button>
@@ -811,9 +803,9 @@ aria-label=“Remove photo”
 </div>
 <input
 ref={fileRef}
-type=“file”
-accept=“image/*”
-className=“hidden”
+type="file"
+accept="image/*"
+className="hidden"
 onChange={(e) => {
 const f = e.target.files?.[0];
 if (!f) return;
@@ -824,11 +816,11 @@ setPreview(URL.createObjectURL(f));
 </div>
 <div className="space-y-1.5">
 <Label htmlFor="loc-name" className="text-xs">Name this location</Label>
-<Input id=“loc-name” value={name} onChange={(e) => setName(e.target.value)} placeholder=“e.g. Aza’s Room” />
+<Input id="loc-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Aza's Room" />
 </div>
 <div className="flex gap-2 pt-2">
 <Button variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
-<Button className="flex-1" onClick={save} disabled={saving}>{saving ? “Saving…” : “Create”}</Button>
+<Button className="flex-1" onClick={save} disabled={saving}>{saving ? "Saving..." : "Create"}</Button>
 </div>
 </div>
 </SheetContent>
@@ -845,13 +837,13 @@ const [editingItem, setEditingItem] = useState<Item | null>(null);
 const [showAddSubfolder, setShowAddSubfolder] = useState(false);
 const [showMoveFolder, setShowMoveFolder] = useState(false);
 const [movingItem, setMovingItem] = useState<Item | null>(null);
-const [lightboxUrl, setLightboxUrl] = useState(””);
+const [lightboxUrl, setLightboxUrl] = useState("");
 const lightboxOpenRef = useRef(false);
 const fileRef = useRef<HTMLInputElement>(null);
 
 function closeLightbox() {
 lightboxOpenRef.current = false;
-setLightboxUrl(””);
+setLightboxUrl("");
 }
 
 // Item count per subfolder — used for the count badge on subfolder cards.
@@ -878,77 +870,77 @@ const subfolderIds = subfolders.map((sf) => sf.id);
 const subfolderItems = allItems.filter((it) => subfolderIds.includes(it.folder_id));
 const totalItems = items.length + subfolderItems.length;
 if (!confirm(`Delete "${folder.name}" and everything inside — ${totalItems} item(s) and ${subfolderIds.length} subfolder(s)?`)) return;
-const itemIds = […items.map((it) => it.id), …subfolderItems.map((it) => it.id)];
-await supabase.from(“inventory_items”).delete().eq(“folder_id”, folder.id);
+const itemIds = [...items.map((it) => it.id), ...subfolderItems.map((it) => it.id)];
+await supabase.from("inventory_items").delete().eq("folder_id", folder.id);
 if (subfolderIds.length > 0) {
-await supabase.from(“inventory_items”).delete().in(“folder_id”, subfolderIds);
-await supabase.from(“inventory_folders”).delete().in(“id”, subfolderIds);
+await supabase.from("inventory_items").delete().in("folder_id", subfolderIds);
+await supabase.from("inventory_folders").delete().in("id", subfolderIds);
 }
-await supabase.from(“inventory_folders”).delete().eq(“id”, folder.id);
+await supabase.from("inventory_folders").delete().eq("id", folder.id);
 if (itemIds.length > 0) {
-await supabase.from(“reminders”).delete().eq(“entity_type”, “inventory”).in(“entity_id”, itemIds);
+await supabase.from("reminders").delete().eq("entity_type", "inventory").in("entity_id", itemIds);
 }
-toast.success(“Location deleted”);
-qc.invalidateQueries({ queryKey: [“folders”] });
-qc.invalidateQueries({ queryKey: [“inventory_items”] });
+toast.success("Location deleted");
+qc.invalidateQueries({ queryKey: ["folders"] });
+qc.invalidateQueries({ queryKey: ["inventory_items"] });
 onClose();
 }
 
 async function changePhoto(f: File) {
 if (!activeHouseholdId) {
-toast.error(“Select a household first.”);
+toast.error("Select a household first.");
 return;
 }
 const compressed = await compressImage(f);
 const path = `${activeHouseholdId}/folders/${Date.now()}-${compressed.name}`;
-const { error: upErr } = await supabase.storage.from(“inventory-photos”).upload(path, compressed);
+const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
 if (upErr) { toast.error(upErr.message); return; }
-const photo_url = supabase.storage.from(“inventory-photos”).getPublicUrl(path).data.publicUrl;
-await supabase.from(“inventory_folders”).update({ photo_url }).eq(“id”, folder.id);
-toast.success(“Photo updated”);
-qc.invalidateQueries({ queryKey: [“folders”] });
+const photo_url = supabase.storage.from("inventory-photos").getPublicUrl(path).data.publicUrl;
+await supabase.from("inventory_folders").update({ photo_url }).eq("id", folder.id);
+toast.success("Photo updated");
+qc.invalidateQueries({ queryKey: ["folders"] });
 }
 
 async function removeFolderPhoto() {
-if (!confirm(“Remove this photo?”)) return;
-const { error } = await supabase.from(“inventory_folders”).update({ photo_url: null }).eq(“id”, folder.id);
+if (!confirm("Remove this photo?")) return;
+const { error } = await supabase.from("inventory_folders").update({ photo_url: null }).eq("id", folder.id);
 if (error) { toast.error(error.message); return; }
-toast.success(“Photo removed”);
-qc.invalidateQueries({ queryKey: [“folders”] });
+toast.success("Photo removed");
+qc.invalidateQueries({ queryKey: ["folders"] });
 }
 
 async function delItem(id: string) {
-if (!confirm(“Delete this item?”)) return;
-await supabase.from(“inventory_items”).delete().eq(“id”, id);
-await supabase.from(“reminders”).delete().eq(“entity_type”, “inventory”).eq(“entity_id”, id);
-qc.invalidateQueries({ queryKey: [“inventory_items”] });
+if (!confirm("Delete this item?")) return;
+await supabase.from("inventory_items").delete().eq("id", id);
+await supabase.from("reminders").delete().eq("entity_type", "inventory").eq("entity_id", id);
+qc.invalidateQueries({ queryKey: ["inventory_items"] });
 }
 
 async function renameFolder() {
-const newName = window.prompt(“Rename location”, folder.name);
+const newName = window.prompt("Rename location", folder.name);
 if (newName === null) return;
 const trimmed = newName.trim();
 if (!trimmed || trimmed === folder.name) return;
-const { error } = await supabase.from(“inventory_folders”).update({ name: trimmed }).eq(“id”, folder.id);
+const { error } = await supabase.from("inventory_folders").update({ name: trimmed }).eq("id", folder.id);
 if (error) { toast.error(error.message); return; }
-toast.success(“Renamed”);
-qc.invalidateQueries({ queryKey: [“folders”] });
+toast.success("Renamed");
+qc.invalidateQueries({ queryKey: ["folders"] });
 }
 
 async function moveFolderTo(targetParentId: string | null) {
-const { error } = await supabase.from(“inventory_folders”).update({ parent_id: targetParentId }).eq(“id”, folder.id);
+const { error } = await supabase.from("inventory_folders").update({ parent_id: targetParentId }).eq("id", folder.id);
 if (error) { toast.error(error.message); return; }
-toast.success(“Moved”);
-qc.invalidateQueries({ queryKey: [“folders”] });
+toast.success("Moved");
+qc.invalidateQueries({ queryKey: ["folders"] });
 setShowMoveFolder(false);
 onClose();
 }
 
 async function moveItemTo(itemId: string, targetFolderId: string) {
-const { error } = await supabase.from(“inventory_items”).update({ folder_id: targetFolderId }).eq(“id”, itemId);
+const { error } = await supabase.from("inventory_items").update({ folder_id: targetFolderId }).eq("id", itemId);
 if (error) { toast.error(error.message); return; }
-toast.success(“Item moved”);
-qc.invalidateQueries({ queryKey: [“inventory_items”] });
+toast.success("Item moved");
+qc.invalidateQueries({ queryKey: ["inventory_items"] });
 setMovingItem(null);
 }
 
@@ -956,16 +948,16 @@ const canMoveFolder = parentFolder ? true : subfolders.length === 0;
 
 const folderMoveOptions = useMemo(() => {
 if (parentFolder) {
-const opts = [{ id: “**top**”, label: “Make a top-level location” }];
+const opts = [{ id: "**top**", label: "Make a top-level location" }];
 topLevelFolders.forEach((f) => {
-if (f.id !== parentFolder.id) opts.push({ id: f.id, label: “Move into “ + f.name });
+if (f.id !== parentFolder.id) opts.push({ id: f.id, label: "Move into " + f.name });
 });
 return opts;
 }
 if (subfolders.length === 0) {
 return topLevelFolders
 .filter((f) => f.id !== folder.id)
-.map((f) => ({ id: f.id, label: “Move into “ + f.name }));
+.map((f) => ({ id: f.id, label: "Move into " + f.name }));
 }
 return [];
 }, [parentFolder, topLevelFolders, subfolders, folder.id]);
@@ -982,7 +974,7 @@ className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semib
 const moveFolderButton = canMoveFolder ? (
 <button
 onClick={() => setShowMoveFolder(true)}
-className=“flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold hover:bg-accent”
+className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold hover:bg-accent"
 >
 <ArrowRightLeft className="h-3.5 w-3.5" /> Move
 </button>
@@ -990,7 +982,7 @@ className=“flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-sem
 
 const moveItemSheet = movingItem ? (
 <MovePickerSheet
-title={‘Move “’ + movingItem.name + ‘”’}
+title={'Move "' + movingItem.name + '"'}
 options={itemMoveOptions.filter((o) => o.id !== folder.id)}
 onPick={(id) => moveItemTo(movingItem.id, id)}
 onClose={() => setMovingItem(null)}
@@ -999,9 +991,9 @@ onClose={() => setMovingItem(null)}
 
 const moveFolderSheet = showMoveFolder ? (
 <MovePickerSheet
-title={‘Move “’ + folder.name + ‘”’}
+title={'Move "' + folder.name + '"'}
 options={folderMoveOptions}
-onPick={(id) => moveFolderTo(id === “**top**” ? null : id)}
+onPick={(id) => moveFolderTo(id === "**top**" ? null : id)}
 onClose={() => setShowMoveFolder(false)}
 />
 ) : null;
@@ -1012,7 +1004,7 @@ const subfolderGrid = subfolders.length > 0 ? (
 <button
 key={sf.id}
 onClick={() => onOpenSubfolder(sf)}
-className=“group overflow-hidden rounded-2xl border border-border bg-card text-left shadow-sm transition hover:shadow-md”
+className="group overflow-hidden rounded-2xl border border-border bg-card text-left shadow-sm transition hover:shadow-md"
 >
 <div className="relative aspect-square w-full overflow-hidden bg-muted">
 {sf.photo_url ? (
@@ -1042,7 +1034,7 @@ const subfoldersSection = parentFolder ? null : (
 <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
 Subfolders ({subfolders.length})
 </h3>
-<Button size=“sm” variant=“outline” onClick={() => setShowAddSubfolder(true)}>
+<Button size="sm" variant="outline" onClick={() => setShowAddSubfolder(true)}>
 <Plus className="mr-1 h-3.5 w-3.5" /> Add subfolder
 </Button>
 </div>
@@ -1069,11 +1061,11 @@ img.style.transform = `scale(${scale})`;
 }
 };
 const onTouchEnd = () => {
-if (scale < 1.05) { scale = 1; img.style.transform = “scale(1)”; }
+if (scale < 1.05) { scale = 1; img.style.transform = "scale(1)"; }
 };
-img.addEventListener(“touchstart”, onTouchStart, { passive: true });
-img.addEventListener(“touchmove”, onTouchMove, { passive: false });
-img.addEventListener(“touchend”, onTouchEnd, { passive: true });
+img.addEventListener("touchstart", onTouchStart, { passive: true });
+img.addEventListener("touchmove", onTouchMove, { passive: false });
+img.addEventListener("touchend", onTouchEnd, { passive: true });
 // No cleanup needed — element is removed from DOM when lightbox closes, listeners are garbage collected.
 };
 
@@ -1082,29 +1074,29 @@ if (!backdrop) return;
 let pdOnBackdrop = false;
 const onPD = (e: PointerEvent) => { pdOnBackdrop = e.target === backdrop; };
 const onPU = (e: PointerEvent) => { if (pdOnBackdrop && e.target === backdrop) closeLightbox(); pdOnBackdrop = false; };
-backdrop.addEventListener(“pointerdown”, onPD);
-backdrop.addEventListener(“pointerup”, onPU);
+backdrop.addEventListener("pointerdown", onPD);
+backdrop.addEventListener("pointerup", onPU);
 };
 
 const lightboxOverlay = lightboxUrl ? createPortal(
 <div
 ref={lightboxBackdropCallbackRef}
-className=“fixed inset-0 z-[9999] flex items-center justify-center bg-black/90”
-style={{ pointerEvents: ‘auto’ }}
+className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90"
+style={{ pointerEvents: 'auto' }}
 >
 <img
 ref={lightboxImgCallbackRef}
 src={lightboxUrl}
-alt=“Full size”
-draggable=“false”
-className=“relative max-h-full max-w-full rounded-xl object-contain shadow-2xl p-4”
-style={{ touchAction: ‘none’, transformOrigin: ‘center’, transition: ‘transform 0.05s’ }}
+alt="Full size"
+draggable="false"
+className="relative max-h-full max-w-full rounded-xl object-contain shadow-2xl p-4"
+style={{ touchAction: 'none', transformOrigin: 'center', transition: 'transform 0.05s' }}
 />
 <button
-className=“absolute right-4 top-4 z-[10000] rounded-full bg-white/20 p-2 text-white hover:bg-white/30”
-style={{ pointerEvents: ‘auto’ }}
+className="absolute right-4 top-4 z-[10000] rounded-full bg-white/20 p-2 text-white hover:bg-white/30"
+style={{ pointerEvents: 'auto' }}
 onPointerUp={(e) => { e.stopPropagation(); closeLightbox(); }}
-aria-label=“Close”
+aria-label="Close"
 >✕</button>
 </div>,
 document.body
@@ -1114,8 +1106,8 @@ return (
 <>
 <Sheet open onOpenChange={(v) => { if (!v && !lightboxOpenRef.current) onClose(); }}>
 <SheetContent
-side=“bottom”
-className=“max-h-[90vh] w-full overflow-y-auto rounded-t-2xl”
+side="bottom"
+className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl"
 aria-describedby={undefined}
 onPointerDownOutside={(e) => { if (lightboxOpenRef.current) e.preventDefault(); }}
 onInteractOutside={(e) => { if (lightboxOpenRef.current) e.preventDefault(); }}
@@ -1131,7 +1123,7 @@ onInteractOutside={(e) => { if (lightboxOpenRef.current) e.preventDefault(); }}
 <div className="absolute right-0 z-10 mt-1 w-48 overflow-hidden rounded-lg border border-border bg-popover shadow-lg">
 <button
 onClick={() => fileRef.current?.click()}
-className=“flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold hover:bg-accent”
+className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold hover:bg-accent"
 >
 <Camera className="h-3.5 w-3.5" /> Change photo
 </button>
@@ -1154,7 +1146,6 @@ className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semib
 </SheetTitle>
 </SheetHeader>
 
-```
     <input
       ref={fileRef}
       type="file"
@@ -1268,7 +1259,6 @@ className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semib
 </Sheet>
 {lightboxOverlay}
 </>
-```
 
 );
 }
@@ -1291,7 +1281,7 @@ return (
 <button
 key={o.id}
 onClick={() => onPick(o.id)}
-className=“block w-full rounded-md border border-border px-3 py-2 text-left text-sm hover:bg-accent”
+className="block w-full rounded-md border border-border px-3 py-2 text-left text-sm hover:bg-accent"
 >
 {o.label}
 </button>
@@ -1306,29 +1296,29 @@ className=“block w-full rounded-md border border-border px-3 py-2 text-left te
 function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => void }) {
 const qc = useQueryClient();
 const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
-const [name, setName] = useState(””);
-const [category, setCategory] = useState(””);
-const [action, setAction] = useState(””);
-const [warranty, setWarranty] = useState(””);
+const [name, setName] = useState("");
+const [category, setCategory] = useState("");
+const [action, setAction] = useState("");
+const [warranty, setWarranty] = useState("");
 const [photoFile, setPhotoFile] = useState<File | null>(null);
 const [saving, setSaving] = useState(false);
 const fileRef = useRef<HTMLInputElement>(null);
 
 async function save() {
-if (!name.trim()) { toast.error(“Item name required”); return; }
-if (!activeHouseholdId) { toast.error(“Select a household first.”); return; }
+if (!name.trim()) { toast.error("Item name required"); return; }
+if (!activeHouseholdId) { toast.error("Select a household first."); return; }
 setSaving(true);
 try {
 let photo_url: string | null = null;
 if (photoFile) {
 const compressed = await compressImage(photoFile);
 const path = `${activeHouseholdId}/items/${Date.now()}-${compressed.name}`;
-const { error: upErr } = await supabase.storage.from(“inventory-photos”).upload(path, compressed);
+const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
 if (upErr) throw upErr;
-photo_url = supabase.storage.from(“inventory-photos”).getPublicUrl(path).data.publicUrl;
+photo_url = supabase.storage.from("inventory-photos").getPublicUrl(path).data.publicUrl;
 }
 const { error } = await supabase
-.from(“inventory_items”)
+.from("inventory_items")
 .insert({
 folder_id: folderId,
 name: name.trim(),
@@ -1339,14 +1329,12 @@ photo_url,
 });
 if (error) throw error;
 
-```
   toast.success("Item added");
   qc.invalidateQueries({ queryKey: ["inventory_items"] });
   onDone();
 } catch (err: any) {
   toast.error(err.message);
 } finally { setSaving(false); }
-```
 
 }
 
@@ -1354,18 +1342,18 @@ return (
 <div className="space-y-3 rounded-xl border border-border bg-background p-3">
 <div className="space-y-1.5">
 <Label className="text-xs">Item name *</Label>
-<Input value={name} onChange={(e) => setName(e.target.value)} placeholder=“e.g. Europace Fan” />
+<Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Europace Fan" />
 </div>
 <div className="space-y-1.5">
 <Label className="text-xs">Category</Label>
-<Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder=“e.g. Electronics” />
+<Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Electronics" />
 </div>
 <div className="space-y-1.5">
 <Label className="text-xs flex items-center gap-1">Warranty/Expiry date <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" /></Label>
 <div className="relative flex items-center">
-<Input type=“date” value={warranty} onChange={(e) => setWarranty(e.target.value)} className=“h-7 w-full pr-8” />
+<Input type="date" value={warranty} onChange={(e) => setWarranty(e.target.value)} className="h-7 w-full pr-8" />
 {warranty && (
-<button type=“button” onClick={() => setWarranty(””)} className=“absolute right-2 flex items-center justify-center text-muted-foreground hover:text-foreground” aria-label=“Clear date”>
+<button type="button" onClick={() => setWarranty("")} className="absolute right-2 flex items-center justify-center text-muted-foreground hover:text-foreground" aria-label="Clear date">
 <X className="h-4 w-4" />
 </button>
 )}
@@ -1373,11 +1361,11 @@ return (
 </div>
 <div className="space-y-1.5">
 <Label className="text-xs">Action / notes</Label>
-<Textarea rows={2} value={action} onChange={(e) => setAction(e.target.value)} placeholder=“e.g. Service every 2 years” />
+<Textarea rows={2} value={action} onChange={(e) => setAction(e.target.value)} placeholder="e.g. Service every 2 years" />
 </div>
 <div className="space-y-2">
 <Label className="text-xs">Photo (optional)</Label>
-<input ref={fileRef} type=“file” accept=“image/*” capture=“environment” className=“hidden” onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)} />
+<input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)} />
 {photoFile ? (
 <div className="relative inline-block">
 <img
@@ -1386,19 +1374,19 @@ alt=""
 className="h-28 w-28 rounded-xl object-cover border border-border shadow-sm"
 />
 <button
-type=“button”
-onClick={() => { setPhotoFile(null); if (fileRef.current) fileRef.current.value = “”; }}
-className=“absolute -right-2 -top-2 rounded-full bg-destructive p-0.5 text-white shadow”
-aria-label=“Remove photo”
+type="button"
+onClick={() => { setPhotoFile(null); if (fileRef.current) fileRef.current.value = ""; }}
+className="absolute -right-2 -top-2 rounded-full bg-destructive p-0.5 text-white shadow"
+aria-label="Remove photo"
 >
 <X className="h-3.5 w-3.5" />
 </button>
 </div>
 ) : (
 <button
-type=“button”
+type="button"
 onClick={() => fileRef.current?.click()}
-className=“flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition”
+className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition"
 >
 <Camera className="h-5 w-5" />
 <span className="text-[10px] font-medium">Add photo</span>
@@ -1407,7 +1395,7 @@ className=“flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-x
 </div>
 <div className="flex gap-2">
 <Button variant="outline" className="flex-1" onClick={onDone}>Cancel</Button>
-<Button className="flex-1" onClick={save} disabled={saving}>{saving ? “Saving…” : “Add item”}</Button>
+<Button className="flex-1" onClick={save} disabled={saving}>{saving ? "Saving..." : "Add item"}</Button>
 </div>
 </div>
 );
@@ -1418,50 +1406,50 @@ function EditItemForm({ item, onDone }: { item: Item; onDone: () => void }) {
 const qc = useQueryClient();
 const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
 const [name, setName] = useState(item.name);
-const [category, setCategory] = useState(item.category ?? “”);
-const [action, setAction] = useState(item.action ?? “”);
-const [warranty, setWarranty] = useState(item.warranty_date ?? “”);
+const [category, setCategory] = useState(item.category ?? "");
+const [action, setAction] = useState(item.action ?? "");
+const [warranty, setWarranty] = useState(item.warranty_date ?? "");
 const [saving, setSaving] = useState(false);
 const fileRef = useRef<HTMLInputElement>(null);
 
 async function save() {
-if (!name.trim()) { toast.error(“Item name required”); return; }
+if (!name.trim()) { toast.error("Item name required"); return; }
 setSaving(true);
 const { error } = await supabase
-.from(“inventory_items”)
+.from("inventory_items")
 .update({
 name: name.trim(),
 category: category.trim() || null,
 action: action.trim() || null,
 warranty_date: warranty || null,
 })
-.eq(“id”, item.id);
+.eq("id", item.id);
 setSaving(false);
 if (error) { toast.error(error.message); return; }
-toast.success(“Item updated”);
-qc.invalidateQueries({ queryKey: [“inventory_items”] });
+toast.success("Item updated");
+qc.invalidateQueries({ queryKey: ["inventory_items"] });
 onDone();
 }
 
 async function removePhoto() {
-if (!confirm(“Remove this photo?”)) return;
-const { error } = await supabase.from(“inventory_items”).update({ photo_url: null }).eq(“id”, item.id);
+if (!confirm("Remove this photo?")) return;
+const { error } = await supabase.from("inventory_items").update({ photo_url: null }).eq("id", item.id);
 if (error) { toast.error(error.message); return; }
-toast.success(“Photo removed”);
-qc.invalidateQueries({ queryKey: [“inventory_items”] });
+toast.success("Photo removed");
+qc.invalidateQueries({ queryKey: ["inventory_items"] });
 }
 
 async function changeItemPhoto(f: File) {
-if (!activeHouseholdId) { toast.error(“Select a household first.”); return; }
+if (!activeHouseholdId) { toast.error("Select a household first."); return; }
 const compressed = await compressImage(f);
 const path = `${activeHouseholdId}/items/${Date.now()}-${compressed.name}`;
-const { error: upErr } = await supabase.storage.from(“inventory-photos”).upload(path, compressed);
+const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
 if (upErr) { toast.error(upErr.message); return; }
-const photo_url = supabase.storage.from(“inventory-photos”).getPublicUrl(path).data.publicUrl;
-const { error } = await supabase.from(“inventory_items”).update({ photo_url }).eq(“id”, item.id);
+const photo_url = supabase.storage.from("inventory-photos").getPublicUrl(path).data.publicUrl;
+const { error } = await supabase.from("inventory_items").update({ photo_url }).eq("id", item.id);
 if (error) { toast.error(error.message); return; }
-toast.success(“Photo added”);
-qc.invalidateQueries({ queryKey: [“inventory_items”] });
+toast.success("Photo added");
+qc.invalidateQueries({ queryKey: ["inventory_items"] });
 }
 
 const photoSection = item.photo_url ? (
@@ -1471,10 +1459,10 @@ const photoSection = item.photo_url ? (
 <img src={item.photo_url} alt="" className="w-full h-auto max-h-40 rounded-md object-contain" />
 <div className="absolute right-2 top-2 flex gap-1">
 <button
-type=“button”
+type="button"
 onClick={() => fileRef.current?.click()}
-className=“rounded-full bg-black/60 p-1 text-white text-xs leading-none”
-aria-label=“Change photo”
+className="rounded-full bg-black/60 p-1 text-white text-xs leading-none"
+aria-label="Change photo"
 ><Camera className="h-3.5 w-3.5" /></button>
 <button
 type="button"
@@ -1490,7 +1478,7 @@ aria-label="Remove photo"
 ) : (
 <div className="space-y-1.5">
 <Label className="text-xs">Photo</Label>
-<Button type=“button” variant=“outline” size=“sm” onClick={() => fileRef.current?.click()}>
+<Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
 <Camera className="mr-1 h-3.5 w-3.5" /> Add photo
 </Button>
 </div>
@@ -1499,9 +1487,9 @@ aria-label="Remove photo"
 const photoInput = (
 <input
 ref={fileRef}
-type=“file”
-accept=“image/*”
-className=“hidden”
+type="file"
+accept="image/*"
+className="hidden"
 onChange={(e) => { const f = e.target.files?.[0]; if (f) changeItemPhoto(f); }}
 />
 );
@@ -1516,14 +1504,14 @@ return (
 </div>
 <div className="space-y-1.5">
 <Label className="text-xs">Category</Label>
-<Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder=“e.g. Electronics” />
+<Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Electronics" />
 </div>
 <div className="space-y-1.5">
 <Label className="text-xs flex items-center gap-1">Warranty/Expiry date <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" /></Label>
 <div className="relative flex items-center">
-<Input type=“date” value={warranty} onChange={(e) => setWarranty(e.target.value)} className=“h-7 w-full pr-8” />
+<Input type="date" value={warranty} onChange={(e) => setWarranty(e.target.value)} className="h-7 w-full pr-8" />
 {warranty && (
-<button type=“button” onClick={() => setWarranty(””)} className=“absolute right-2 flex items-center justify-center text-muted-foreground hover:text-foreground” aria-label=“Clear date”>
+<button type="button" onClick={() => setWarranty("")} className="absolute right-2 flex items-center justify-center text-muted-foreground hover:text-foreground" aria-label="Clear date">
 <X className="h-4 w-4" />
 </button>
 )}
@@ -1538,13 +1526,11 @@ return (
 <ReminderButton entityType="inventory" entityId={item.id} />
 </div>
 
-```
   <div className="flex gap-2">
     <Button variant="outline" className="flex-1" onClick={onDone}>Cancel</Button>
-    <Button className="flex-1" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save changes"}</Button>
+    <Button className="flex-1" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save changes"}</Button>
   </div>
 </div>
-```
 
 );
 }

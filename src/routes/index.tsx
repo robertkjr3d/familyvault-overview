@@ -1,36 +1,36 @@
-import { createFileRoute, Link } from “@tanstack/react-router”;
-import { useQuery, useQueryClient } from “@tanstack/react-query”;
-import { supabase } from “@/integrations/supabase/client”;
-import { useToday } from “@/lib/today”;
-import { fmtMoney, fmtDate, fmtMonth } from “@/lib/format”;
-import { MemberFilterBar } from “@/components/MemberFilterBar”;
-import { MemberTag } from “@/components/MemberTag”;
-import { StatusBadge } from “@/components/StatusToggle”;
-import { useAppStore } from “@/lib/store”;
-import { addDays, format, parseISO } from “date-fns”;
-import { buildUpcomingItems, computeNextOccurrence } from “@/lib/alerts”;
-import type { UpcomingItem } from “@/lib/alerts”;
-import { freqTimesPerYear, propertyTotalCosts, insuranceMonthly, investmentPremiumMonthly, insurancePayoutMonthly, investmentPayoutMonthly } from “@/lib/lifetimeChartMath”;
-import type { LineItem } from “@/lib/lifetimeChartMath”;
-import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check } from “lucide-react”;
-import { useState, useRef, useEffect, lazy, Suspense } from “react”;
-import { fmtPct } from “@/lib/format”;
-import { HashHighlight } from “@/components/HashHighlight”;
-import { useMembers } from “@/hooks/useMembers”;
-import { toast } from “sonner”;
-import { OnboardingWizard } from “@/components/OnboardingWizard”;
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useToday } from "@/lib/today";
+import { fmtMoney, fmtDate, fmtMonth } from "@/lib/format";
+import { MemberFilterBar } from "@/components/MemberFilterBar";
+import { MemberTag } from "@/components/MemberTag";
+import { StatusBadge } from "@/components/StatusToggle";
+import { useAppStore } from "@/lib/store";
+import { addDays, format, parseISO } from "date-fns";
+import { buildUpcomingItems, computeNextOccurrence } from "@/lib/alerts";
+import type { UpcomingItem } from "@/lib/alerts";
+import { freqTimesPerYear, propertyTotalCosts, insuranceMonthly, investmentPremiumMonthly, insurancePayoutMonthly, investmentPayoutMonthly } from "@/lib/lifetimeChartMath";
+import type { LineItem } from "@/lib/lifetimeChartMath";
+import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check } from "lucide-react";
+import { useState, useRef, useEffect, lazy, Suspense } from "react";
+import { fmtPct } from "@/lib/format";
+import { HashHighlight } from "@/components/HashHighlight";
+import { useMembers } from "@/hooks/useMembers";
+import { toast } from "sonner";
+import { OnboardingWizard } from "@/components/OnboardingWizard";
 
 // Lazy-loaded: LifetimeChart pulls in recharts, by far the heaviest single
-// dependency in this route’s bundle. Deferring it means the rest of the
+// dependency in this route's bundle. Deferring it means the rest of the
 // dashboard (KPI cards, due-soon list, cash flow) paints and becomes
 // interactive without waiting on recharts to download and parse first.
 const LifetimeChart = lazy(() =>
-import(”@/components/LifetimeChart”).then((m) => ({ default: m.LifetimeChart }))
+import("@/components/LifetimeChart").then((m) => ({ default: m.LifetimeChart }))
 );
 
-export const Route = createFileRoute(”/”)({
+export const Route = createFileRoute("/")({
 component: Dashboard,
-head: () => ({ meta: [{ title: “Home — FamilyHub SG” }] }),
+head: () => ({ meta: [{ title: "Home — FamilyHub SG" }] }),
 });
 
 function Dashboard() {
@@ -53,30 +53,30 @@ const autoShownOnboardingRef = useRef(false);
 
 function scrollTo(ref: any, key: string) {
 if (!ref.current) return;
-ref.current.scrollIntoView({ behavior: “smooth”, block: “start” });
+ref.current.scrollIntoView({ behavior: "smooth", block: "start" });
 setHighlight(key);
 setTimeout(() => setHighlight((h) => (h === key ? null : h)), 1800);
 }
 
 const { data } = useQuery({
-queryKey: [“dashboard”, memberFilter, activeHouseholdId],
+queryKey: ["dashboard", memberFilter, activeHouseholdId],
 enabled: !!activeHouseholdId,
 queryFn: async () => {
 if (!activeHouseholdId) {
 return { properties: [], loans: [], insurance: [], investments: [], savings: [], otherAssets: [] };
 }
+const db = supabase as any;
 const filter = (q: any) => {
-let scoped = q.eq(“household_id”, activeHouseholdId);
-if (memberFilter !== “all”) scoped = scoped.eq(“member_id”, memberFilter);
+let scoped = q.eq("household_id", activeHouseholdId);
+if (memberFilter !== "all") scoped = scoped.eq("member_id", memberFilter);
 return scoped;
 };
-// inventory_items has no member_id column — don’t apply memberFilter,
+// inventory_items has no member_id column — don't apply memberFilter,
 // or it silently returns [] whenever any specific member is selected.
-// Route through ‘any’ since the generated types predate the household_id
+// Route through 'any' since the generated types predate the household_id
 // column added via migration (same stale-types issue as every other table here).
-const filterHH = (q: any) => q.eq(“household_id”, activeHouseholdId);
+const filterHH = (q: any) => q.eq("household_id", activeHouseholdId);
 
-```
   const [props, loans, insurance, invs, savings, inventoryItemsRes, otherAssets] = await Promise.all([
     filter(supabase.from("properties").select("*")),
     filter(supabase.from("loans").select("*")),
@@ -84,7 +84,7 @@ const filterHH = (q: any) => q.eq(“household_id”, activeHouseholdId);
     filter(supabase.from("investments").select("*")),
     filter(supabase.from("savings_accounts").select("*")),
     filterHH(supabase.from("inventory_items").select("*")),
-    filter(supabase.from("other_assets").select("*")),
+    filter(db.from("other_assets").select("*")),
   ]);
   return {
     properties: props.data ?? [],
@@ -96,50 +96,49 @@ const filterHH = (q: any) => q.eq(“household_id”, activeHouseholdId);
     otherAssets: otherAssets.data ?? [],
   };
 },
-```
 
 });
 
 const { data: appSettings } = useQuery({
-queryKey: [“app_settings”, activeHouseholdId],
+queryKey: ["app_settings", activeHouseholdId],
 enabled: !!activeHouseholdId,
 queryFn: async () => {
 if (!activeHouseholdId) return null;
-const { data } = await supabase
-.from(“app_settings”)
-.select(“monthly_income, monthly_expenses, currency, mortgage_days, insurance_days, fd_days, warranty_days, onboarding_dismissed”)
-.eq(“household_id”, activeHouseholdId)
+const { data } = await (supabase as any)
+.from("app_settings")
+.select("monthly_income, monthly_expenses, currency, mortgage_days, insurance_days, fd_days, warranty_days, onboarding_dismissed")
+.eq("household_id", activeHouseholdId)
 .maybeSingle();
 return data;
 },
 });
 
 const { data: remindersData } = useQuery({
-queryKey: [“reminders-dashboard”, memberFilter, activeHouseholdId],
+queryKey: ["reminders-dashboard", memberFilter, activeHouseholdId],
 enabled: !!activeHouseholdId,
 queryFn: async () => {
 if (!activeHouseholdId) return [];
 const horizonStr = addDays(new Date(), 90).toISOString().slice(0, 10);
-const { data } = await supabase
-.from(“reminders”)
-.select(”*”)
-.eq(“household_id”, activeHouseholdId)
-.eq(“dismissed”, false)
-.lte(“remind_at”, horizonStr);
+const { data } = await (supabase as any)
+.from("reminders")
+.select("*")
+.eq("household_id", activeHouseholdId)
+.eq("dismissed", false)
+.lte("remind_at", horizonStr);
 return data ?? [];
 },
 });
 
 const { data: dismissedData } = useQuery({
-queryKey: [“dismissed-dashboard”, activeHouseholdId],
+queryKey: ["dismissed-dashboard", activeHouseholdId],
 enabled: !!activeHouseholdId,
 queryFn: async () => {
 if (!activeHouseholdId) return [];
-const { data } = await supabase
-.from(“dismissed_dashboard_items”)
-.select(“id, record_id, source_type, dismissed_date”)
-.eq(“household_id”, activeHouseholdId)
-.eq(“permanently_deleted”, false);
+const { data } = await (supabase as any)
+.from("dismissed_dashboard_items")
+.select("id, record_id, source_type, dismissed_date")
+.eq("household_id", activeHouseholdId)
+.eq("permanently_deleted", false);
 return data ?? [];
 },
 });
@@ -157,7 +156,7 @@ const inventoryItems = data?.inventoryItems ?? [];
 const otherAssets = data?.otherAssets ?? [];
 
 // Household has zero records of any kind — used to gate the onboarding
-// wizard’s auto-show so it only ever appears unprompted for a genuinely
+// wizard's auto-show so it only ever appears unprompted for a genuinely
 // fresh household, never for an existing populated one (regardless of the
 // onboarding_dismissed default value on app_settings).
 const isEmptyHousehold =
@@ -180,15 +179,15 @@ autoShownOnboardingRef.current = true;
 }
 }, [appSettings, isEmptyHousehold, data]);
 
-// Manual re-open from Settings → About → “Quick Start Guide” (links to /#onboarding),
+// Manual re-open from Settings → About → "Quick Start Guide" (links to /#onboarding),
 // same hash-link pattern HashHighlight already uses elsewhere in this app.
 useEffect(() => {
 const check = () => {
-if (window.location.hash === “#onboarding”) setOnboardingOpen(true);
+if (window.location.hash === "#onboarding") setOnboardingOpen(true);
 };
 check();
-window.addEventListener(“hashchange”, check);
-return () => window.removeEventListener(“hashchange”, check);
+window.addEventListener("hashchange", check);
+return () => window.removeEventListener("hashchange", check);
 }, []);
 
 async function dismissOnboardingForever() {
@@ -197,10 +196,10 @@ if (!activeHouseholdId) return;
 // upsert, not update — a fresh household (the exact case this wizard
 // targets) often has no app_settings row yet, and a plain update would
 // silently affect 0 rows, leaving the dismissal unpersisted.
-await supabase
-.from(“app_settings”)
-.upsert({ household_id: activeHouseholdId, onboarding_dismissed: true }, { onConflict: “household_id” });
-queryClient.invalidateQueries({ queryKey: [“app_settings”, activeHouseholdId] });
+await (supabase as any)
+.from("app_settings")
+.upsert({ household_id: activeHouseholdId, onboarding_dismissed: true }, { onConflict: "household_id" });
+queryClient.invalidateQueries({ queryKey: ["app_settings", activeHouseholdId] });
 }
 
 const propertyValue = properties.reduce((s: number, p: any) => s + (Number(p.current_value) || 0), 0);
@@ -217,9 +216,7 @@ const insurancePayoutIn = insurance.reduce((s: number, p: any) => s + insuranceP
 const investmentPayoutIn = investments.reduce((s: number, inv: any) => s + investmentPayoutMonthly(inv, today), 0);
 const monthlyIn = salaryIncome + rentalIncome + insurancePayoutIn + investmentPayoutIn;
 
-```
 // Properties with a linked mortgage loan should not double-count monthly_payment
-```
 
 const mortgagedPropertyIds = new Set(
 loans.filter((l: any) => l.property_id).map((l: any) => l.property_id)
@@ -236,23 +233,23 @@ const baseExpenses = Number(appSettings?.monthly_expenses) || 0;
 const monthlyOut = propertyOut + loanOut + insuranceOut + investmentPremiumOut + baseExpenses;
 const netCashFlow = monthlyIn - monthlyOut;
 
-// Per-record cash flow detail — same “what’s adding/subtracting and from where”
-// pattern as the Lifetime Chart’s Year Detail panel, but for this month’s actual figures.
+// Per-record cash flow detail — same "what's adding/subtracting and from where"
+// pattern as the Lifetime Chart's Year Detail panel, but for this month's actual figures.
 const inflowDetailItems: LineItem[] = [
-…(salaryIncome > 0 ? [{ label: “Salary / income”, amount: salaryIncome, href: “/settings” }] : []),
-…properties
+...(salaryIncome > 0 ? [{ label: "Salary / income", amount: salaryIncome, href: "/settings" }] : []),
+...properties
 .filter((p: any) => (Number(p.monthly_rent) || 0) > 0)
 .map((p: any) => ({ label: `${p.name ?? "Property"} rental`, amount: Number(p.monthly_rent) || 0, href: `/property#record-${p.id}` })),
-…insurance
+...insurance
 .filter((p: any) => insurancePayoutMonthly(p, today) > 0)
 .map((p: any) => ({ label: `${p.name ?? "Insurance"} payout`, amount: insurancePayoutMonthly(p, today), href: `/insurance#record-${p.id}`, timesPerYear: freqTimesPerYear(p.payout_frequency) })),
-…investments
+...investments
 .filter((inv: any) => investmentPayoutMonthly(inv, today) > 0)
 .map((inv: any) => ({ label: `${inv.name ?? "ILP"} payout`, amount: investmentPayoutMonthly(inv, today), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.payout_frequency) })),
 ];
 
 const outflowDetailItems: LineItem[] = [
-…properties.flatMap((p: any) => {
+...properties.flatMap((p: any) => {
 const items: LineItem[] = [];
 const propHref = `/property#record-${p.id}`;
 const costs = propertyTotalCosts(p);
@@ -261,16 +258,16 @@ const mortgage = mortgagedPropertyIds.has(p.id) ? 0 : Number(p.monthly_payment) 
 if (mortgage > 0) items.push({ label: `${p.name ?? "Property"} mortgage`, amount: mortgage, href: propHref });
 return items;
 }),
-…loans
+...loans
 .filter((l: any) => (Number(l.monthly_payment) || 0) > 0)
 .map((l: any) => ({ label: `${l.bank ?? "Loan"} repayment`, amount: Number(l.monthly_payment) || 0, href: `/loans#record-${l.id}` })),
-…insurance
+...insurance
 .filter((p: any) => insuranceMonthly(p) > 0)
 .map((p: any) => ({ label: `${p.name ?? "Insurance"} premium`, amount: insuranceMonthly(p), href: `/insurance#record-${p.id}`, timesPerYear: freqTimesPerYear(p.frequency) })),
-…investments
+...investments
 .filter((inv: any) => investmentPremiumMonthly(inv, today) > 0)
 .map((inv: any) => ({ label: `${inv.name ?? "ILP"} premium`, amount: investmentPremiumMonthly(inv, today), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.premium_frequency) })),
-…(baseExpenses > 0 ? [{ label: “Other expenses (Settings)”, amount: baseExpenses, href: “/settings” }] : []),
+...(baseExpenses > 0 ? [{ label: "Other expenses (Settings)", amount: baseExpenses, href: "/settings" }] : []),
 ];
 
 const showSettingsNudge = salaryIncome === 0 && baseExpenses === 0;
@@ -295,9 +292,9 @@ const upcoming = allUpcoming.filter(
 
 async function invalidateAll() {
 await Promise.all([
-queryClient.invalidateQueries({ queryKey: [“dismissed-dashboard”, activeHouseholdId] }),
-queryClient.invalidateQueries({ queryKey: [“reminders-dashboard”, memberFilter, activeHouseholdId] }),
-queryClient.invalidateQueries({ queryKey: [“alert-count”, activeHouseholdId] }),
+queryClient.invalidateQueries({ queryKey: ["dismissed-dashboard", activeHouseholdId] }),
+queryClient.invalidateQueries({ queryKey: ["reminders-dashboard", memberFilter, activeHouseholdId] }),
+queryClient.invalidateQueries({ queryKey: ["alert-count", activeHouseholdId] }),
 ]);
 }
 
@@ -307,8 +304,7 @@ const key = `${u.sourceType}::${u.recordId}`;
 if (dismissing === key) return;
 setDismissing(key);
 
-```
-const { data: inserted, error } = await supabase
+const { data: inserted, error } = await (supabase as any)
   .from("dismissed_dashboard_items")
   .insert({
     household_id: activeHouseholdId,
@@ -331,16 +327,15 @@ const insertedId = inserted.id;
 await invalidateAll();
 
 toast.success("Marked as done.", {
-```
 
 duration: 5000,
 action: {
-label: “Undo”,
+label: "Undo",
 onClick: async () => {
-await supabase
-.from(“dismissed_dashboard_items”)
+await (supabase as any)
+.from("dismissed_dashboard_items")
 .delete()
-.eq(“id”, insertedId);
+.eq("id", insertedId);
 await invalidateAll();
 },
 },
@@ -348,14 +343,14 @@ await invalidateAll();
 }
 
 const all: Array<{ kind: string; row: any; href: string; icon: any }> = [
-…properties.map((r: any) => ({ kind: “Property”, row: r, href: “/property”, icon: Building2 })),
-…loans.map((r: any) => ({ kind: “Loan”, row: r, href: “/loans”, icon: Landmark })),
-…insurance.map((r: any) => ({ kind: “Insurance”, row: r, href: “/insurance”, icon: Shield })),
-…investments.map((r: any) => ({ kind: “Invest”, row: r, href: “/investments”, icon: TrendingUp })),
+...properties.map((r: any) => ({ kind: "Property", row: r, href: "/property", icon: Building2 })),
+...loans.map((r: any) => ({ kind: "Loan", row: r, href: "/loans", icon: Landmark })),
+...insurance.map((r: any) => ({ kind: "Insurance", row: r, href: "/insurance", icon: Shield })),
+...investments.map((r: any) => ({ kind: "Invest", row: r, href: "/investments", icon: TrendingUp })),
 ];
 
-const urgent = all.filter((x) => x.row.status === “urgent”);
-const review = all.filter((x) => x.row.status === “review”);
+const urgent = all.filter((x) => x.row.status === "urgent");
+const review = all.filter((x) => x.row.status === "review");
 
 const upcomingAlerts = upcoming.filter((u) => u.daysLeft <= 30);
 const alertCount = urgent.length + review.length + upcomingAlerts.length;
@@ -363,7 +358,7 @@ const alertCount = urgent.length + review.length + upcomingAlerts.length;
 const dueToday = upcoming.find((u) => u.date === today.toISOString().slice(0, 10));
 
 // Asset allocation
-const sgdProperties = properties.filter((p: any) => !p.currency || p.currency === “SGD”);
+const sgdProperties = properties.filter((p: any) => !p.currency || p.currency === "SGD");
 const allocProperty = sgdProperties.reduce((s: number, p: any) => s + (Number(p.current_value) || 0), 0);
 const allocInvestments = investments.reduce((s: number, i: any) => s + (Number(i.current_value) || 0), 0);
 const allocCash = savings.reduce((s: number, a: any) => s + (Number(a.balance) || 0), 0);
@@ -373,58 +368,57 @@ const allocPctInvestments = allocTotal > 0 ? (allocInvestments / allocTotal) * 1
 const allocPctCash = allocTotal > 0 ? (allocCash / allocTotal) * 100 : 0;
 
 // Insurance adequacy
-const activeInsurance = insurance.filter((p: any) => p.status !== “inactive”);
+const activeInsurance = insurance.filter((p: any) => p.status !== "inactive");
 const totalSumAssured = activeInsurance.reduce((s: number, p: any) => s + (Number(p.sum_assured) || 0), 0);
 const policiesWithNoSumAssured = activeInsurance.filter((p: any) => !p.sum_assured).length;
 const incomeReplacementNeed = salaryIncome * 120;
 const coverageRatio = incomeReplacementNeed > 0 ? totalSumAssured / incomeReplacementNeed : null;
 const adequacyStatus =
-incomeReplacementNeed === 0 ? “unset” :
-totalSumAssured === 0 ? “none” :
-coverageRatio !== null && coverageRatio >= 1 ? “covered” : “partial”;
+incomeReplacementNeed === 0 ? "unset" :
+totalSumAssured === 0 ? "none" :
+coverageRatio !== null && coverageRatio >= 1 ? "covered" : "partial";
 
 // Financial health checks
 const healthChecks = [
 (() => {
-if (salaryIncome === 0 && baseExpenses === 0) return { label: “Cash flow”, status: “incomplete”, detail: “Set income and expenses in Settings”, href: “/settings” };
-if (netCashFlow > 0) return { label: “Cash flow”, status: “pass”, detail: `+${fmtMoney(netCashFlow)} monthly surplus`, href: “cash-flow” };
-if (netCashFlow >= -(monthlyOut * 0.1)) return { label: “Cash flow”, status: “warning”, detail: “Near break-even — monitor closely”, href: “cash-flow” };
-return { label: “Cash flow”, status: “fail”, detail: `${fmtMoney(netCashFlow)} monthly deficit`, href: “cash-flow” };
+if (salaryIncome === 0 && baseExpenses === 0) return { label: "Cash flow", status: "incomplete", detail: "Set income and expenses in Settings", href: "/settings" };
+if (netCashFlow > 0) return { label: "Cash flow", status: "pass", detail: `+${fmtMoney(netCashFlow)} monthly surplus`, href: "cash-flow" };
+if (netCashFlow >= -(monthlyOut * 0.1)) return { label: "Cash flow", status: "warning", detail: "Near break-even — monitor closely", href: "cash-flow" };
+return { label: "Cash flow", status: "fail", detail: `${fmtMoney(netCashFlow)} monthly deficit`, href: "cash-flow" };
 })(),
 (() => {
-if (baseExpenses === 0) return { label: “Emergency fund”, status: “incomplete”, detail: “Set monthly expenses in Settings to calculate”, href: “/settings” };
-if (savingsValue >= monthlyOut * 3) return { label: “Emergency fund”, status: “pass”, detail: `${(savingsValue / monthlyOut).toFixed(1)} months of expenses covered`, href: “/savings” };
-if (savingsValue >= monthlyOut) return { label: “Emergency fund”, status: “warning”, detail: `Only ${(savingsValue / monthlyOut).toFixed(1)} months covered — aim for 3+`, href: “/savings” };
-return { label: “Emergency fund”, status: “fail”, detail: “Less than 1 month of expenses in savings”, href: “/savings” };
+if (baseExpenses === 0) return { label: "Emergency fund", status: "incomplete", detail: "Set monthly expenses in Settings to calculate", href: "/settings" };
+if (savingsValue >= monthlyOut * 3) return { label: "Emergency fund", status: "pass", detail: `${(savingsValue / monthlyOut).toFixed(1)} months of expenses covered`, href: "/savings" };
+if (savingsValue >= monthlyOut) return { label: "Emergency fund", status: "warning", detail: `Only ${(savingsValue / monthlyOut).toFixed(1)} months covered — aim for 3+`, href: "/savings" };
+return { label: "Emergency fund", status: "fail", detail: "Less than 1 month of expenses in savings", href: "/savings" };
 })(),
 (() => {
-if (adequacyStatus === “unset”) return { label: “Insurance coverage”, status: “incomplete”, detail: “Set monthly income in Settings to calculate”, href: “/settings” };
-if (adequacyStatus === “none”) return { label: “Insurance coverage”, status: “incomplete”, detail: “No sum assured entered on policies”, href: “/insurance” };
-if (adequacyStatus === “covered”) return { label: “Insurance coverage”, status: “pass”, detail: `${Math.round((coverageRatio ?? 0) * 100)}% of 10-year income need covered`, href: “/insurance” };
-return { label: “Insurance coverage”, status: “warning”, detail: `Only ${Math.round((coverageRatio ?? 0) * 100)}% of 10-year income need covered`, href: “/insurance” };
+if (adequacyStatus === "unset") return { label: "Insurance coverage", status: "incomplete", detail: "Set monthly income in Settings to calculate", href: "/settings" };
+if (adequacyStatus === "none") return { label: "Insurance coverage", status: "incomplete", detail: "No sum assured entered on policies", href: "/insurance" };
+if (adequacyStatus === "covered") return { label: "Insurance coverage", status: "pass", detail: `${Math.round((coverageRatio ?? 0) * 100)}% of 10-year income need covered`, href: "/insurance" };
+return { label: "Insurance coverage", status: "warning", detail: `Only ${Math.round((coverageRatio ?? 0) * 100)}% of 10-year income need covered`, href: "/insurance" };
 })(),
 (() => {
-if (totalAssets === 0) return { label: “Debt ratio”, status: “incomplete”, detail: “No asset values recorded yet”, href: “/property” };
+if (totalAssets === 0) return { label: "Debt ratio", status: "incomplete", detail: "No asset values recorded yet", href: "/property" };
 const ratio = totalLiabilities / totalAssets;
 const pct = Math.round(ratio * 100);
-if (ratio < 0.4) return { label: “Debt ratio”, status: “pass”, detail: `${pct}% of assets — healthy`, href: “/loans” };
-if (ratio < 0.6) return { label: “Debt ratio”, status: “warning”, detail: `${pct}% of assets — monitor debt levels`, href: “/loans” };
-return { label: “Debt ratio”, status: “fail”, detail: `${pct}% of assets — high debt load`, href: “/loans” };
+if (ratio < 0.4) return { label: "Debt ratio", status: "pass", detail: `${pct}% of assets — healthy`, href: "/loans" };
+if (ratio < 0.6) return { label: "Debt ratio", status: "warning", detail: `${pct}% of assets — monitor debt levels`, href: "/loans" };
+return { label: "Debt ratio", status: "fail", detail: `${pct}% of assets — high debt load`, href: "/loans" };
 })(),
 (() => {
-if (urgent.length === 0) return { label: “Urgent alerts”, status: “pass”, detail: “No urgent items”, href: “” };
-return { label: “Urgent alerts”, status: “fail”, detail: `${urgent.length} item${urgent.length === 1 ? "" : "s"} need attention`, href: “needs-attention” };
+if (urgent.length === 0) return { label: "Urgent alerts", status: "pass", detail: "No urgent items", href: "" };
+return { label: "Urgent alerts", status: "fail", detail: `${urgent.length} item${urgent.length === 1 ? "" : "s"} need attention`, href: "needs-attention" };
 })(),
-] as { label: string; status: “pass” | “warning” | “fail” | “incomplete”; detail: string; href: string }[];
+] as { label: string; status: "pass" | "warning" | "fail" | "incomplete"; detail: string; href: string }[];
 
-const passCount = healthChecks.filter((c) => c.status === “pass”).length;
-const totalScored = healthChecks.filter((c) => c.status !== “incomplete”).length;
+const passCount = healthChecks.filter((c) => c.status === "pass").length;
+const totalScored = healthChecks.filter((c) => c.status !== "incomplete").length;
 
 return (
 <div className="space-y-5">
 <MemberFilterBar />
 
-```
   {dueToday && (
     <Link to={dueToday.href as any} hash={`record-${dueToday.recordId}`} className="block rounded-2xl bg-review p-4 text-review-foreground">
       <div className="text-xs font-semibold uppercase">Due today</div>
@@ -705,14 +699,13 @@ return (
     onScrollToLifetimeChart={() => scrollTo(lifetimeChartRef, "lifetime-chart")}
   />
 </div>
-```
 
 );
 }
 
-function Kpi({ label, value, accent, big, sub }: { label: string; value: string; accent?: “good” | “bad” | “neutral” | “gold”; big?: boolean; sub?: string }) {
-const valueColor = accent === “good” ? “text-settled” : accent === “bad” ? “text-urgent” : accent === “gold” ? “text-primary” : “”;
-const borderTop = accent === “bad” ? “bg-urgent-soft/30 border-urgent/30” : accent === “gold” ? “border-primary/40” : “”;
+function Kpi({ label, value, accent, big, sub }: { label: string; value: string; accent?: "good" | "bad" | "neutral" | "gold"; big?: boolean; sub?: string }) {
+const valueColor = accent === "good" ? "text-settled" : accent === "bad" ? "text-urgent" : accent === "gold" ? "text-primary" : "";
+const borderTop = accent === "bad" ? "bg-urgent-soft/30 border-urgent/30" : accent === "gold" ? "border-primary/40" : "";
 return (
 <div className={`rounded-2xl border border-border bg-card p-3 ${borderTop}`}>
 <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
@@ -731,11 +724,11 @@ return (
 );
 }
 
-function CashFlowItemRow({ it, color }: { it: LineItem; color: “settled” | “urgent” }) {
-const sign = color === “settled” ? “+” : “−”;
-const textClass = color === “settled” ? “font-medium text-settled” : “font-medium text-urgent”;
-// it.amount is already the monthly figure. If the source record’s actual
-// frequency isn’t monthly (timesPerYear !== 12), that monthly figure was
+function CashFlowItemRow({ it, color }: { it: LineItem; color: "settled" | "urgent" }) {
+const sign = color === "settled" ? "+" : "−";
+const textClass = color === "settled" ? "font-medium text-settled" : "font-medium text-urgent";
+// it.amount is already the monthly figure. If the source record's actual
+// frequency isn't monthly (timesPerYear !== 12), that monthly figure was
 // derived by dividing the annual total by 12 — show that conversion,
 // same convention as the ×N / per-occurrence breakdown in Year Detail.
 const showAnnualConversion = it.timesPerYear !== undefined && it.timesPerYear !== 12;
@@ -786,7 +779,7 @@ return (
 <span className="font-semibold">{fmtMoney(inflow)}</span>
 </div>
 <div className="mt-1 h-3 overflow-hidden rounded-full bg-muted">
-<div className=“h-full bg-settled” style={{ width: `${(inflow / max) * 100}%` }} />
+<div className="h-full bg-settled" style={{ width: `${(inflow / max) * 100}%` }} />
 </div>
 {activeInflow.length > 0 && (
 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
@@ -804,7 +797,7 @@ return (
 <span className="font-semibold">{fmtMoney(outflow)}</span>
 </div>
 <div className="mt-1 h-3 overflow-hidden rounded-full bg-muted">
-<div className=“h-full bg-urgent” style={{ width: `${(outflow / max) * 100}%` }} />
+<div className="h-full bg-urgent" style={{ width: `${(outflow / max) * 100}%` }} />
 </div>
 {activeOutflow.length > 0 && (
 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
@@ -821,13 +814,13 @@ return (
 }
 
 function reviewDateInfo(kind: string, row: any): { prefix: string; date: string } | null {
-if (kind === “Property” && row.fixed_rate_end) return { prefix: “Reprice by”, date: fmtMonth(row.fixed_rate_end) };
-if (kind === “Loan” && row.reprice_date) return { prefix: “Reprice by”, date: fmtMonth(row.reprice_date) };
-if (kind === “Insurance”) {
+if (kind === "Property" && row.fixed_rate_end) return { prefix: "Reprice by", date: fmtMonth(row.fixed_rate_end) };
+if (kind === "Loan" && row.reprice_date) return { prefix: "Reprice by", date: fmtMonth(row.reprice_date) };
+if (kind === "Insurance") {
 // Derived from start_date + frequency, same as everywhere else alerts are computed —
 // not the dead next_due_date field, which no longer gets kept in sync with reality.
 const nextDue = computeNextOccurrence(row.start_date, row.frequency, row.end_date, new Date());
-if (nextDue) return { prefix: “Renew by”, date: fmtMonth(nextDue) };
+if (nextDue) return { prefix: "Renew by", date: fmtMonth(nextDue) };
 }
 return null;
 }
@@ -841,9 +834,9 @@ allocPctProperty: number; allocPctInvestments: number; allocPctCash: number;
 }) {
 const isEmpty = allocTotal === 0;
 const segments = [
-{ label: “Property”, value: allocProperty, pct: allocPctProperty, color: “bg-primary” },
-{ label: “Investments”, value: allocInvestments, pct: allocPctInvestments, color: “bg-settled” },
-{ label: “Cash & Savings”, value: allocCash, pct: allocPctCash, color: “bg-review” },
+{ label: "Property", value: allocProperty, pct: allocPctProperty, color: "bg-primary" },
+{ label: "Investments", value: allocInvestments, pct: allocPctInvestments, color: "bg-settled" },
+{ label: "Cash & Savings", value: allocCash, pct: allocPctCash, color: "bg-review" },
 ];
 const activeSegments = segments.filter((s) => s.value > 0);
 
@@ -872,7 +865,7 @@ style={{ width: `${width}%` }}
 </div>
 <div className="grid grid-cols-3 gap-2">
 {segments.map((s) => {
-const pctDisplay = s.pct > 0 ? `${Math.round(s.pct)}%` : “—”;
+const pctDisplay = s.pct > 0 ? `${Math.round(s.pct)}%` : "—";
 return (
 <div key={s.label} className="space-y-0.5">
 <div className="flex items-center gap-1">
@@ -905,15 +898,15 @@ activePolicyCount,
 totalSumAssured: number;
 incomeReplacementNeed: number;
 coverageRatio: number | null;
-adequacyStatus: “covered” | “partial” | “none” | “unset”;
+adequacyStatus: "covered" | "partial" | "none" | "unset";
 policiesWithNoSumAssured: number;
 activePolicyCount: number;
 }) {
 const statusConfig = {
-covered:  { label: “Adequately covered”,  bar: “bg-settled”,  text: “text-settled”,  border: “border-settled/30  bg-settled/5” },
-partial:  { label: “Partially covered”,   bar: “bg-review”,   text: “text-review”,   border: “border-review/30   bg-review/5” },
-none:     { label: “No cover recorded”,   bar: “bg-urgent”,   text: “text-urgent”,   border: “border-urgent/30   bg-urgent-soft/20” },
-unset:    { label: “Income not set”,      bar: “bg-muted”,    text: “text-muted-foreground”, border: “border-border bg-card” },
+covered:  { label: "Adequately covered",  bar: "bg-settled",  text: "text-settled",  border: "border-settled/30  bg-settled/5" },
+partial:  { label: "Partially covered",   bar: "bg-review",   text: "text-review",   border: "border-review/30   bg-review/5" },
+none:     { label: "No cover recorded",   bar: "bg-urgent",   text: "text-urgent",   border: "border-urgent/30   bg-urgent-soft/20" },
+unset:    { label: "Income not set",      bar: "bg-muted",    text: "text-muted-foreground", border: "border-border bg-card" },
 };
 const cfg = statusConfig[adequacyStatus];
 const pct = coverageRatio != null ? Math.min(coverageRatio * 100, 100) : 0;
@@ -925,7 +918,6 @@ return (
 <Link to="/insurance" className="text-xs font-semibold text-primary">View policies →</Link>
 </div>
 
-```
   {adequacyStatus === "unset" ? (
     <p className="text-xs text-muted-foreground">
       Set your monthly income in{" "}
@@ -968,31 +960,30 @@ return (
     </div>
   )}
 </section>
-```
 
 );
 }
 
 function FinancialHealthCard({ checks, passCount, totalScored, onScroll }: {
-checks: { label: string; status: “pass” | “warning” | “fail” | “incomplete”; detail: string; href: string }[];
+checks: { label: string; status: "pass" | "warning" | "fail" | "incomplete"; detail: string; href: string }[];
 passCount: number;
 totalScored: number;
 onScroll: (target: string) => void;
 }) {
-const statusIcon = { pass: “✓”, warning: “⚠”, fail: “✗”, incomplete: “—” };
+const statusIcon = { pass: "✓", warning: "⚠", fail: "✗", incomplete: "—" };
 const statusColor = {
-pass: “text-settled”,
-warning: “text-review”,
-fail: “text-urgent”,
-incomplete: “text-muted-foreground”,
+pass: "text-settled",
+warning: "text-review",
+fail: "text-urgent",
+incomplete: "text-muted-foreground",
 };
 const rowBorder = {
-pass: “border-settled/20”,
-warning: “border-review/30”,
-fail: “border-urgent/30”,
-incomplete: “border-border”,
+pass: "border-settled/20",
+warning: "border-review/30",
+fail: "border-urgent/30",
+incomplete: "border-border",
 };
-const summaryColor = totalScored === 0 ? “text-muted-foreground” : passCount === totalScored ? “text-settled” : passCount >= totalScored * 0.6 ? “text-review” : “text-urgent”;
+const summaryColor = totalScored === 0 ? "text-muted-foreground" : passCount === totalScored ? "text-settled" : passCount >= totalScored * 0.6 ? "text-review" : "text-urgent";
 
 return (
 <section className="rounded-2xl border border-border bg-card p-4">
@@ -1007,7 +998,7 @@ return (
 const icon = statusIcon[c.status];
 const color = statusColor[c.status];
 const border = rowBorder[c.status];
-if (c.href === “”) {
+if (c.href === "") {
 return (
 <div key={c.label} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${border}`}>
 <span className={`w-4 shrink-0 text-center text-sm font-bold ${color}`}>{icon}</span>
@@ -1018,7 +1009,7 @@ return (
 </div>
 );
 }
-return c.href === “cash-flow” || c.href === “needs-attention” ? (
+return c.href === "cash-flow" || c.href === "needs-attention" ? (
 <button key={c.label} onClick={() => onScroll(c.href)} className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 hover:bg-accent/30 ${border}`}>
 <span className={`w-4 shrink-0 text-center text-sm font-bold ${color}`}>{icon}</span>
 <div className="min-w-0 flex-1 text-left">
@@ -1051,14 +1042,14 @@ return (
 <section className={`rounded-2xl border p-4 ${muted ? "border-review/40 bg-review-soft/40" : "border-urgent/40 bg-urgent-soft/30"}`}>
 <div className="mb-3 flex items-center justify-between">
 <h2 className="text-sm font-bold">{title}</h2>
-<span className="text-xs text-muted-foreground">{items.length} item{items.length === 1 ? “” : “s”}</span>
+<span className="text-xs text-muted-foreground">{items.length} item{items.length === 1 ? "" : "s"}</span>
 </div>
 <ul className="space-y-2">
 {visible.map(({ kind, row, href, icon: Icon }, i) => {
 const dateInfo = showDate ? reviewDateInfo(kind, row) : null;
 return (
 <li key={i}>
-<Link to={href as any} hash={`record-${row.id}`} className=“flex items-start gap-3 rounded-xl bg-card/80 p-3 hover:bg-card”>
+<Link to={href as any} hash={`record-${row.id}`} className="flex items-start gap-3 rounded-xl bg-card/80 p-3 hover:bg-card">
 <Icon className="mt-0.5 h-4 w-4 text-muted-foreground" />
 <div className="flex-1 min-w-0">
 <div className="flex flex-wrap items-center gap-2">
@@ -1082,9 +1073,9 @@ return (
 {items.length > 8 && (
 <button
 onClick={() => setShowAll((v) => !v)}
-className=“mt-2 flex w-full items-center justify-center gap-1 py-2 text-xs font-semibold text-primary”
+className="mt-2 flex w-full items-center justify-center gap-1 py-2 text-xs font-semibold text-primary"
 >
-{showAll ? “Show less ↑” : `Show ${items.length - 8} more ↓`}
+{showAll ? "Show less ↑" : `Show ${items.length - 8} more ↓`}
 </button>
 )}
 </section>

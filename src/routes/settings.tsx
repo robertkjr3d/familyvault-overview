@@ -1,26 +1,26 @@
-import { createFileRoute } from “@tanstack/react-router”;
-import { useQuery, useMutation, useQueryClient } from “@tanstack/react-query”;
-import { supabase } from “@/integrations/supabase/client”;
-import { useEffect, useState } from “react”;
-import { toast } from “sonner”;
-import { useMembers } from “@/hooks/useMembers”;
-import { useAppStore } from “@/lib/store”;
-import { Trash2 } from “lucide-react”;
-import { fmtMoney } from “@/lib/format”;
-import { runFullExport } from “@/lib/fullExport”;
+import { createFileRoute } from "@tanstack/react-router";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { useMembers } from "@/hooks/useMembers";
+import { useAppStore } from "@/lib/store";
+import { Trash2 } from "lucide-react";
+import { fmtMoney } from "@/lib/format";
+import { runFullExport } from "@/lib/fullExport";
 
-export const Route = createFileRoute(”/settings”)({
+export const Route = createFileRoute("/settings")({
 component: SettingsPage,
-head: () => ({ meta: [{ title: “Settings — FamilyHub SG” }] }),
+head: () => ({ meta: [{ title: "Settings — FamilyHub SG" }] }),
 });
 
 const ACCENT_PRESETS = [
-{ name: “Gold”,  value: “oklch(0.72 0.13 80)” },
-{ name: “Teal”,  value: “oklch(0.62 0.10 195)” },
-{ name: “Coral”, value: “oklch(0.68 0.18 35)” },
-{ name: “Sage”,  value: “oklch(0.65 0.10 150)” },
-{ name: “Plum”,  value: “oklch(0.55 0.15 320)” },
-{ name: “Slate”, value: “oklch(0.45 0.04 250)” },
+{ name: "Gold",  value: "oklch(0.72 0.13 80)" },
+{ name: "Teal",  value: "oklch(0.62 0.10 195)" },
+{ name: "Coral", value: "oklch(0.68 0.18 35)" },
+{ name: "Sage",  value: "oklch(0.65 0.10 150)" },
+{ name: "Plum",  value: "oklch(0.55 0.15 320)" },
+{ name: "Slate", value: "oklch(0.45 0.04 250)" },
 ];
 
 function SettingsPage() {
@@ -32,40 +32,40 @@ const [generatingEstateDoc, setGeneratingEstateDoc] = useState(false);
 const [generatingFullExport, setGeneratingFullExport] = useState(false);
 
 const { data: settings } = useQuery({
-queryKey: [“app_settings”, activeHouseholdId],
+queryKey: ["app_settings", activeHouseholdId],
 enabled: !!activeHouseholdId,
 queryFn: async () => {
 const { data } = await supabase
-.from(“app_settings”)
-.select(”*”)
-.eq(“household_id”, activeHouseholdId!)
+.from("app_settings")
+.select("*")
+.eq("household_id", activeHouseholdId!)
 .maybeSingle();
 return data;
 },
 });
 
-const [familyName, setFamilyName] = useState(””);
-const [simDate, setSimDate] = useState(””);
-const [monthlyIncome, setMonthlyIncome] = useState<string>(””);
-const [monthlyExpenses, setMonthlyExpenses] = useState<string>(””);
-const [retirementYear, setRetirementYear] = useState<string>(””);
-const [cpfPayoutAge, setCpfPayoutAge] = useState<string>(“65”);
-const [cpfMonthlyPayout, setCpfMonthlyPayout] = useState<string>(””);
-const [investmentGrowthRate, setInvestmentGrowthRate] = useState<string>(“4”);
-const [propertyAppreciationRate, setPropertyAppreciationRate] = useState<string>(“2”);
-const [inflationRate, setInflationRate] = useState<string>(“2”);
-const [planningHorizonAge, setPlanningHorizonAge] = useState<string>(“85”);
+const [familyName, setFamilyName] = useState("");
+const [simDate, setSimDate] = useState("");
+const [monthlyIncome, setMonthlyIncome] = useState<string>("");
+const [monthlyExpenses, setMonthlyExpenses] = useState<string>("");
+const [retirementYear, setRetirementYear] = useState<string>("");
+const [cpfPayoutAge, setCpfPayoutAge] = useState<string>("65");
+const [cpfMonthlyPayout, setCpfMonthlyPayout] = useState<string>("");
+const [investmentGrowthRate, setInvestmentGrowthRate] = useState<string>("4");
+const [propertyAppreciationRate, setPropertyAppreciationRate] = useState<string>("2");
+const [inflationRate, setInflationRate] = useState<string>("2");
+const [planningHorizonAge, setPlanningHorizonAge] = useState<string>("85");
 
-const [theme, setTheme] = useState<“light” | “dark”>(() =>
-typeof window !== “undefined” && document.documentElement.classList.contains(“dark”) ? “dark” : “light”
+const [theme, setTheme] = useState<"light" | "dark">(() =>
+typeof window !== "undefined" && document.documentElement.classList.contains("dark") ? "dark" : "light"
 );
 const [accent, setAccent] = useState<string>(() =>
-(typeof window !== “undefined” && localStorage.getItem(“fv:accent”)) || ACCENT_PRESETS[0].value
+(typeof window !== "undefined" && localStorage.getItem("fv:accent")) || ACCENT_PRESETS[0].value
 );
-const [mortgageDays, setMortgageDays] = useState<string>(“90”);
-const [insuranceDays, setInsuranceDays] = useState<string>(“60”);
-const [fdDays, setFdDays] = useState<string>(“30”);
-const [warrantyDays, setWarrantyDays] = useState<string>(“90”);
+const [mortgageDays, setMortgageDays] = useState<string>("90");
+const [insuranceDays, setInsuranceDays] = useState<string>("60");
+const [fdDays, setFdDays] = useState<string>("30");
+const [warrantyDays, setWarrantyDays] = useState<string>("90");
 
 useEffect(() => {
 if (settings?.simulated_date) setSimDate(settings.simulated_date);
@@ -96,50 +96,50 @@ if (settings?.warranty_days != null) setWarrantyDays(String(settings.warranty_da
 }, [settings?.mortgage_days, settings?.insurance_days, settings?.fd_days, settings?.warranty_days]);
 
 useEffect(() => {
-if (typeof document === “undefined”) return;
-document.documentElement.classList.toggle(“dark”, theme === “dark”);
+if (typeof document === "undefined") return;
+document.documentElement.classList.toggle("dark", theme === "dark");
 }, [theme]);
 useEffect(() => {
-if (typeof document === “undefined”) return;
-document.documentElement.style.setProperty(”–aza”, accent);
-localStorage.setItem(“fv:accent”, accent);
+if (typeof document === "undefined") return;
+document.documentElement.style.setProperty("–aza", accent);
+localStorage.setItem("fv:accent", accent);
 }, [accent]);
 
 const save = useMutation({
 mutationFn: async (patch: any) => {
-if (!activeHouseholdId) throw new Error(“Select a household first.”);
+if (!activeHouseholdId) throw new Error("Select a household first.");
 const { error } = await supabase
-.from(“app_settings”)
-.upsert({ household_id: activeHouseholdId, …patch }, { onConflict: “household_id” });
+.from("app_settings")
+.upsert({ household_id: activeHouseholdId, ...patch }, { onConflict: "household_id" });
 if (error) throw error;
 },
 onSuccess: () => {
-qc.invalidateQueries({ queryKey: [“app_settings”, activeHouseholdId] });
-toast.success(“Saved”);
+qc.invalidateQueries({ queryKey: ["app_settings", activeHouseholdId] });
+toast.success("Saved");
 },
 });
 
 async function clearDemo() {
-if (!confirm(“Are you sure? This cannot be undone.”)) return;
-const tables = [“properties”, “loans”, “insurance_policies”, “investments”, “savings_accounts”, “health_conditions”];
+if (!confirm("Are you sure? This cannot be undone.")) return;
+const tables = ["properties", "loans", "insurance_policies", "investments", "savings_accounts", "health_conditions"];
 for (const t of tables) {
-await supabase.from(t as any).delete().eq(“is_demo”, true);
+await supabase.from(t as any).delete().eq("is_demo", true);
 }
 qc.invalidateQueries();
-toast.success(“Demo data cleared”);
+toast.success("Demo data cleared");
 }
 
 async function exportFull() {
 if (!activeHouseholdId) {
-toast.error(“Select a household first.”);
+toast.error("Select a household first.");
 return;
 }
 setGeneratingFullExport(true);
 try {
 await runFullExport(activeHouseholdId, members);
-toast.success(“Full export downloaded”);
+toast.success("Full export downloaded");
 } catch (err: any) {
-toast.error(err.message || “Could not generate export”);
+toast.error(err.message || "Could not generate export");
 } finally {
 setGeneratingFullExport(false);
 }
@@ -147,15 +147,14 @@ setGeneratingFullExport(false);
 
 async function exportAssetSummaryDocx() {
 if (!activeHouseholdId) {
-toast.error(“Select a household first.”);
+toast.error("Select a household first.");
 return;
 }
 setGeneratingEstateDoc(true);
 try {
-const docxLib: any = await import(“https://esm.sh/docx@9”);
+const docxLib: any = await import("https://esm.sh/docx@9");
 const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType } = docxLib;
 
-```
   const filter = (q: any) => q.eq("household_id", activeHouseholdId);
   const [propsRes, loansRes, insRes, invRes, savRes, otherRes] = await Promise.all([
     filter(supabase.from("properties").select("*")),
@@ -353,17 +352,16 @@ const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, Tab
 } finally {
   setGeneratingEstateDoc(false);
 }
-```
 
 }
 
 const { data: hasDemoData } = useQuery({
-queryKey: [“has-demo-data”, activeHouseholdId],
+queryKey: ["has-demo-data", activeHouseholdId],
 enabled: !!activeHouseholdId,
 queryFn: async () => {
-const tables = [“properties”, “loans”, “insurance_policies”, “investments”, “savings_accounts”];
+const tables = ["properties", "loans", "insurance_policies", "investments", "savings_accounts"];
 const results = await Promise.all(
-tables.map((t) => supabase.from(t as any).select(“id”, { count: “exact”, head: true }).eq(“is_demo”, true).eq(“household_id”, activeHouseholdId!))
+tables.map((t) => supabase.from(t as any).select("id", { count: "exact", head: true }).eq("is_demo", true).eq("household_id", activeHouseholdId!))
 );
 return results.some((r) => (r.count ?? 0) > 0);
 },
@@ -371,15 +369,15 @@ return results.some((r) => (r.count ?? 0) > 0);
 
 // Check if a Demo Household already exists for this user
 const { data: demoHousehold } = useQuery({
-queryKey: [“demo-household”, activeHouseholdId],
+queryKey: ["demo-household", activeHouseholdId],
 queryFn: async () => {
 const { data: { user } } = await supabase.auth.getUser();
 if (!user) return null;
 const { data } = await supabase
-.from(“household_users” as any)
-.select(“household_id, households(id, name)”)
-.eq(“user_id”, user.id);
-const found = (data ?? []).find((m: any) => m.households?.name === “Demo Household — FamilyHub SG”);
+.from("household_users" as any)
+.select("household_id, households(id, name)")
+.eq("user_id", user.id);
+const found = (data ?? []).find((m: any) => m.households?.name === "Demo Household — FamilyHub SG");
 return found ? found.households : null;
 },
 });
@@ -391,9 +389,8 @@ async function createDemoHousehold() {
 setCreatingDemo(true);
 try {
 const { data: { user } } = await supabase.auth.getUser();
-if (!user) throw new Error(“Not signed in.”);
+if (!user) throw new Error("Not signed in.");
 
-```
   // Create the demo household
   const { data: hh, error: hhErr } = await supabase
     .from("households" as any)
@@ -483,50 +480,48 @@ if (!user) throw new Error(“Not signed in.”);
 } finally {
   setCreatingDemo(false);
 }
-```
 
 }
 
 async function switchToDemoHousehold() {
 if (!demoHousehold) return;
 setActiveHouseholdId((demoHousehold as any).id);
-toast.success(“Switched to Demo Household.”);
+toast.success("Switched to Demo Household.");
 }
 
 async function deleteDemoHousehold() {
 if (!demoHousehold) return;
-if (!confirm(“Delete the Demo Household and all its sample data? This cannot be undone.”)) return;
+if (!confirm("Delete the Demo Household and all its sample data? This cannot be undone.")) return;
 const demoId = (demoHousehold as any).id;
 // Delete all data — RLS will enforce ownership
-const tables = [“properties”, “loans”, “insurance_policies”, “investments”, “savings_accounts”, “members”, “app_settings”, “household_users”];
+const tables = ["properties", "loans", "insurance_policies", "investments", "savings_accounts", "members", "app_settings", "household_users"];
 for (const t of tables) {
-await supabase.from(t as any).delete().eq(“household_id”, demoId);
+await supabase.from(t as any).delete().eq("household_id", demoId);
 }
-await supabase.from(“households” as any).delete().eq(“id”, demoId);
+await supabase.from("households" as any).delete().eq("id", demoId);
 // If currently on demo, switch back
 if (activeHouseholdId === demoId) {
 const { data: memberships } = await supabase
-.from(“household_users” as any)
-.select(“household_id”)
-.neq(“household_id”, demoId);
+.from("household_users" as any)
+.select("household_id")
+.neq("household_id", demoId);
 const firstReal = (memberships ?? [])[0]?.household_id ?? null;
 setActiveHouseholdId(firstReal);
 }
 qc.invalidateQueries();
-toast.success(“Demo Household deleted.”);
+toast.success("Demo Household deleted.");
 }
-const currency = settings?.currency ?? “SGD”;
+const currency = settings?.currency ?? "SGD";
 const inc = parseFloat(monthlyIncome) || 0;
 const exp = parseFloat(monthlyExpenses) || 0;
 const surplus = inc - exp;
-const surplusColor = surplus >= 0 ? “text-settled” : “text-urgent”;
+const surplusColor = surplus >= 0 ? "text-settled" : "text-urgent";
 const showSurplus = inc > 0 || exp > 0;
 
 return (
 <div className="space-y-5 pb-6">
 <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
 
-```
   {/* Family */}
   <section className="rounded-2xl border border-border bg-card p-4">
     <h2 className="mb-3 text-sm font-bold">Family</h2>
@@ -809,10 +804,10 @@ return (
     <h2 className="mb-3 text-sm font-bold">Data</h2>
     <div className="flex flex-col gap-2">
       <button onClick={exportFull} disabled={generatingFullExport} className="rounded-lg border border-border px-3 py-2 text-sm font-semibold">
-        {generatingFullExport ? "Generating…" : "Export everything (Excel)"}
+        {generatingFullExport ? "Generating..." : "Export everything (Excel)"}
       </button>
       <button onClick={exportAssetSummaryDocx} disabled={generatingEstateDoc} className="rounded-lg border border-border px-3 py-2 text-sm font-semibold">
-        {generatingEstateDoc ? "Generating…" : "Export Asset & Liability Summary (.docx)"}
+        {generatingEstateDoc ? "Generating..." : "Export Asset & Liability Summary (.docx)"}
       </button>
       {hasDemoData && (
         <button onClick={clearDemo} className="rounded-lg border border-urgent/40 px-3 py-2 text-sm font-semibold text-urgent">
@@ -834,7 +829,7 @@ return (
         disabled={creatingDemo}
         className="w-full rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
       >
-        {creatingDemo ? "Creating…" : "Create Demo Household"}
+        {creatingDemo ? "Creating..." : "Create Demo Household"}
       </button>
     ) : (
       <div className="flex flex-col gap-2">
@@ -900,7 +895,6 @@ return (
     </div>
   </section>
 </div>
-```
 
 );
 }
@@ -912,27 +906,27 @@ id: string;
 label: string;
 year: number;
 amount: number;
-type: “inflow” | “outflow”;
+type: "inflow" | "outflow";
 };
 
 function PlannedEvents({ householdId, currency }: { householdId: string | null; currency: string }) {
 const qc = useQueryClient();
-const [label, setLabel] = useState(””);
-const [year, setYear] = useState<string>(””);
-const [amount, setAmount] = useState<string>(””);
-const [type, setType] = useState<“inflow” | “outflow”>(“outflow”);
+const [label, setLabel] = useState("");
+const [year, setYear] = useState<string>("");
+const [amount, setAmount] = useState<string>("");
+const [type, setType] = useState<"inflow" | "outflow">("outflow");
 const [adding, setAdding] = useState(false);
 
 const { data: events = [] } = useQuery({
-queryKey: [“planned_events”, householdId],
+queryKey: ["planned_events", householdId],
 enabled: !!householdId,
 queryFn: async () => {
 if (!householdId) return [];
 const { data } = await supabase
-.from(“planned_cashflow_events” as any)
-.select(”*”)
-.eq(“household_id”, householdId)
-.order(“year”, { ascending: true });
+.from("planned_cashflow_events" as any)
+.select("*")
+.eq("household_id", householdId)
+.order("year", { ascending: true });
 return (data ?? []) as PlannedEvent[];
 },
 });
@@ -941,7 +935,7 @@ async function addEvent() {
 if (!householdId || !label || !year || !amount) return;
 setAdding(true);
 const { error } = await supabase
-.from(“planned_cashflow_events” as any)
+.from("planned_cashflow_events" as any)
 .insert({
 household_id: householdId,
 label,
@@ -950,17 +944,17 @@ amount: parseFloat(amount),
 type,
 });
 setAdding(false);
-if (error) { toast.error(“Could not save event.”); return; }
-setLabel(””); setYear(””); setAmount(””); setType(“outflow”);
-qc.invalidateQueries({ queryKey: [“planned_events”, householdId] });
-qc.invalidateQueries({ queryKey: [“planned_events_chart”, householdId] });
-toast.success(“Event added”);
+if (error) { toast.error("Could not save event."); return; }
+setLabel(""); setYear(""); setAmount(""); setType("outflow");
+qc.invalidateQueries({ queryKey: ["planned_events", householdId] });
+qc.invalidateQueries({ queryKey: ["planned_events_chart", householdId] });
+toast.success("Event added");
 }
 
 async function deleteEvent(id: string) {
-await supabase.from(“planned_cashflow_events” as any).delete().eq(“id”, id);
-qc.invalidateQueries({ queryKey: [“planned_events”, householdId] });
-qc.invalidateQueries({ queryKey: [“planned_events_chart”, householdId] });
+await supabase.from("planned_cashflow_events" as any).delete().eq("id", id);
+qc.invalidateQueries({ queryKey: ["planned_events", householdId] });
+qc.invalidateQueries({ queryKey: ["planned_events_chart", householdId] });
 }
 
 const currentYear = new Date().getFullYear();
@@ -972,7 +966,6 @@ return (
 One-off future inflows or outflows — renovations, education fees, inheritances, windfalls.
 </p>
 
-```
   {/* Add form */}
   <div className="space-y-2 rounded-xl bg-background/50 p-3">
     <input
@@ -1011,7 +1004,7 @@ One-off future inflows or outflows — renovations, education fees, inheritances
       onClick={addEvent}
       disabled={adding || !label || !year || !amount}
     >
-      {adding ? "Adding…" : "Add event"}
+      {adding ? "Adding..." : "Add event"}
     </button>
   </div>
 
@@ -1046,7 +1039,6 @@ One-off future inflows or outflows — renovations, education fees, inheritances
     <p className="mt-3 text-center text-xs text-muted-foreground">No planned events yet.</p>
   )}
 </section>
-```
 
 );
 }
@@ -1058,46 +1050,46 @@ const qc = useQueryClient();
 const [expanded, setExpanded] = useState(false);
 
 const { data: history = [] } = useQuery({
-queryKey: [“dismissed-dashboard”, householdId],
+queryKey: ["dismissed-dashboard", householdId],
 enabled: !!householdId,
 queryFn: async () => {
 if (!householdId) return [];
 const { data } = await supabase
-.from(“dismissed_dashboard_items”)
-.select(”*”)
-.eq(“household_id”, householdId)
-.eq(“permanently_deleted”, false)
-.order(“dismissed_at”, { ascending: false });
+.from("dismissed_dashboard_items")
+.select("*")
+.eq("household_id", householdId)
+.eq("permanently_deleted", false)
+.order("dismissed_at", { ascending: false });
 return data ?? [];
 },
 });
 
 async function restoreItem(id: string) {
-await supabase.from(“dismissed_dashboard_items”).delete().eq(“id”, id);
-await qc.invalidateQueries({ queryKey: [“dismissed-dashboard”, householdId] });
-await qc.invalidateQueries({ queryKey: [“alert-count”, householdId] });
-toast.success(“Restored to dashboard.”);
+await supabase.from("dismissed_dashboard_items").delete().eq("id", id);
+await qc.invalidateQueries({ queryKey: ["dismissed-dashboard", householdId] });
+await qc.invalidateQueries({ queryKey: ["alert-count", householdId] });
+toast.success("Restored to dashboard.");
 }
 
 async function permanentlyDeleteItem(id: string) {
 await supabase
-.from(“dismissed_dashboard_items”)
+.from("dismissed_dashboard_items")
 .update({ permanently_deleted: true } as any)
-.eq(“id”, id);
-await qc.invalidateQueries({ queryKey: [“dismissed-dashboard”, householdId] });
-toast.success(“Removed permanently.”);
+.eq("id", id);
+await qc.invalidateQueries({ queryKey: ["dismissed-dashboard", householdId] });
+toast.success("Removed permanently.");
 }
 
 async function clearAll() {
 if (!householdId) return;
-if (!confirm(“Clear all completed items? This cannot be undone and nothing will return to the dashboard.”)) return;
+if (!confirm("Clear all completed items? This cannot be undone and nothing will return to the dashboard.")) return;
 await supabase
-.from(“dismissed_dashboard_items”)
+.from("dismissed_dashboard_items")
 .update({ permanently_deleted: true } as any)
-.eq(“household_id”, householdId)
-.eq(“permanently_deleted”, false);
-await qc.invalidateQueries({ queryKey: [“dismissed-dashboard”, householdId] });
-toast.success(“All completed items cleared.”);
+.eq("household_id", householdId)
+.eq("permanently_deleted", false);
+await qc.invalidateQueries({ queryKey: ["dismissed-dashboard", householdId] });
+toast.success("All completed items cleared.");
 }
 
 const historyCount = history.length;
@@ -1106,8 +1098,8 @@ return (
 <section className="rounded-2xl border border-border bg-card p-4">
 <div className="flex items-center justify-between">
 <h2 className="text-sm font-bold">Completed & Dismissed</h2>
-<button onPointerDown={() => setExpanded((v) => !v)} className=“text-xs font-semibold text-primary”>
-{expanded ? “Hide” : `Show (${historyCount})`}
+<button onPointerDown={() => setExpanded((v) => !v)} className="text-xs font-semibold text-primary">
+{expanded ? "Hide" : `Show (${historyCount})`}
 </button>
 </div>
 {expanded && (
@@ -1118,8 +1110,8 @@ return (
 <>
 <ul className="divide-y divide-border">
 {history.map((item: any) => {
-const dismissedOn = new Date(item.dismissed_at).toLocaleDateString(“en-GB”, {
-day: “numeric”, month: “short”, year: “numeric”,
+const dismissedOn = new Date(item.dismissed_at).toLocaleDateString("en-GB", {
+day: "numeric", month: "short", year: "numeric",
 });
 return (
 <li key={item.id} className="flex items-start justify-between gap-2 py-2.5">
@@ -1130,15 +1122,15 @@ return (
 <div className="flex shrink-0 gap-1.5 pt-0.5">
 <button
 onPointerDown={() => restoreItem(item.id)}
-className=“rounded px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/10”
-title=“Put back on dashboard”
+className="rounded px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/10"
+title="Put back on dashboard"
 >
 Restore
 </button>
 <button
 onPointerDown={() => permanentlyDeleteItem(item.id)}
-className=“rounded px-2 py-1 text-xs font-semibold text-urgent hover:bg-urgent/10”
-title=“Delete permanently”
+className="rounded px-2 py-1 text-xs font-semibold text-urgent hover:bg-urgent/10"
+title="Delete permanently"
 >
 Delete
 </button>
