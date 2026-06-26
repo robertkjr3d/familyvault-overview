@@ -169,14 +169,66 @@ export const transferHouseholdOwnership = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+const removeMemberPayloadSchema = z.object({
+  householdId: z.string().uuid(),
+  email: z.string().email(),
+});
+
+export const removeHouseholdMember = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(removeMemberPayloadSchema)
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+
+    const { data: ownerCheck, error: ownerError } = await supabase
+      .from("household_users" as any)
+      .select("household_id")
+      .eq("household_id", data.householdId)
+      .eq("user_id", userId)
+      .eq("role", "owner")
+      .maybeSingle();
+
+    if (ownerError) throw ownerError;
+    if (!ownerCheck) throw new Error("Only the household owner can remove members.");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+    if (listError) throw listError;
+
+    const targetUser = listData.users.find(
+      (u) => normalizeEmail(u.email ?? "") === normalizeEmail(data.email)
+    );
+    if (!targetUser) throw new Error("No account found for that email.");
+    if (targetUser.id === userId) throw new Error("You cannot remove yourself.");
+
+    const { data: targetMembership, error: membershipError } = await supabaseAdmin
+      .from("household_users" as any)
+      .select("role")
+      .eq("household_id", data.householdId)
+      .eq("user_id", targetUser.id)
+      .maybeSingle();
+
+    if (membershipError) throw membershipError;
+    if (!targetMembership) throw new Error("That person is not a member of this household.");
+    if ((targetMembership as any).role === "owner") throw new Error("Cannot remove another owner. Transfer ownership first.");
+
+    const { error: deleteError } = await supabaseAdmin
+      .from("household_users" as any)
+      .delete()
+      .eq("household_id", data.householdId)
+      .eq("user_id", targetUser.id);
+
+    if (deleteError) throw deleteError;
+    return { ok: true };
+  });
+
 export const listHouseholdPeople = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(listPeoplePayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    // Caller must themselves belong to this household to see who else has
-    // access to it.
     const { data: membership, error: membershipError } = await supabase
       .from("household_users" as any)
       .select("household_id")
@@ -189,10 +241,6 @@ export const listHouseholdPeople = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // household_users RLS only exposes a user's own row (by design — see
-    // household_users_select policy), so listing everyone in the household
-    // needs the admin client. Same for household_invites, which has zero
-    // client-readable policies at all.
     const { data: memberRows, error: memberError } = await supabaseAdmin
       .from("household_users" as any)
       .select("user_id, role, created_at")
