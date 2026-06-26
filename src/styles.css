@@ -90,7 +90,7 @@
   --settled-foreground: oklch(0.99 0 0);
   --settled-soft: oklch(0.95 0.05 155);
 
-  /* Card tints — very light backgrounds when card has a status */
+  /* Card tints */
   --urgent-tint: #fff0ee;
   --urgent-border: #f5c2bd;
   --review-tint: #fffbf0;
@@ -99,9 +99,9 @@
   --settled-border: #b9e6c4;
 
   /* Members */
-  --aza: oklch(0.72 0.13 80);     /* gold */
-  --leslie: oklch(0.62 0.10 195); /* teal */
-  --chay: oklch(0.68 0.18 35);    /* coral */
+  --aza: oklch(0.72 0.13 80);
+  --leslie: oklch(0.62 0.10 195);
+  --chay: oklch(0.68 0.18 35);
 }
 
 .dark {
@@ -124,6 +124,23 @@
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 14%);
   --ring: oklch(0.55 0.05 70);
+
+  --urgent: oklch(0.72 0.18 25);
+  --urgent-foreground: oklch(0.99 0 0);
+  --urgent-soft: oklch(0.28 0.08 25);
+  --review: oklch(0.82 0.12 75);
+  --review-foreground: oklch(0.20 0.04 60);
+  --review-soft: oklch(0.28 0.06 75);
+  --settled: oklch(0.72 0.13 155);
+  --settled-foreground: oklch(0.99 0 0);
+  --settled-soft: oklch(0.25 0.07 155);
+
+  --urgent-tint: oklch(0.24 0.06 25);
+  --urgent-border: oklch(0.35 0.10 25);
+  --review-tint: oklch(0.24 0.05 75);
+  --review-border: oklch(0.35 0.08 75);
+  --settled-tint: oklch(0.22 0.06 155);
+  --settled-border: oklch(0.33 0.09 155);
 }
 
 @layer base {
@@ -137,12 +154,10 @@
   h1, h2, h3 { letter-spacing: -0.02em; }
 }
 
-/* Status pill helpers */
 .status-urgent  { background: var(--urgent-soft); color: var(--urgent); }
 .status-review  { background: var(--review-soft); color: oklch(0.45 0.12 70); }
 .status-settled { background: var(--settled-soft); color: var(--settled); }
 
-/* Cursor pointer for interactive elements */
 button:not(:disabled), a, [role="button"], [role="tab"], summary, label[for],
 .cursor-pointer { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
