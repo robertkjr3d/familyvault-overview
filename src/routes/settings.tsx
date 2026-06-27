@@ -396,7 +396,7 @@ function SettingsPage() {
         .insert({ name: "Demo Household — FamilyHub SG" })
         .select("id")
         .single();
-      if (hhErr) throw new Error(`households: ${hhErr.message}`);
+      if (hhErr) throw new Error(`households: ${hhErr.message} | code:${hhErr.code} | details:${hhErr.details} | hint:${hhErr.hint}`);
       if (!hh) throw new Error("households: no data returned");
       const hhId = (hh as any).id as string;
 
