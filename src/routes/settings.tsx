@@ -979,17 +979,19 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
   });
 
   async function restoreItem(id: string) {
-    await supabase.from("dismissed_dashboard_items").delete().eq("id", id);
+    await supabase.from("dismissed_dashboard_items" as any).delete().eq("id", id);
     await qc.invalidateQueries({ queryKey: ["dismissed-dashboard", householdId] });
     await qc.invalidateQueries({ queryKey: ["alert-count", householdId] });
     toast.success("Restored to dashboard.");
   }
 
   async function permanentlyDeleteItem(id: string) {
-    await supabase
-      .from("dismissed_dashboard_items")
-      .update({ permanently_deleted: true } as any)
-      .eq("id", id);
+    const { error } = await supabase
+      .from("dismissed_dashboard_items" as any)
+      .update({ permanently_deleted: true })
+      .eq("id", id)
+      .eq("household_id", householdId!);
+    if (error) { toast.error("Could not delete item."); return; }
     await qc.invalidateQueries({ queryKey: ["dismissed-dashboard", householdId] });
     toast.success("Removed permanently.");
   }
@@ -997,11 +999,12 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
   async function clearAll() {
     if (!householdId) return;
     if (!confirm("Clear all completed items? This cannot be undone and nothing will return to the dashboard.")) return;
-    await supabase
-      .from("dismissed_dashboard_items")
-      .update({ permanently_deleted: true } as any)
+    const { error } = await supabase
+      .from("dismissed_dashboard_items" as any)
+      .update({ permanently_deleted: true })
       .eq("household_id", householdId)
       .eq("permanently_deleted", false);
+    if (error) { toast.error("Could not clear items."); return; }
     await qc.invalidateQueries({ queryKey: ["dismissed-dashboard", householdId] });
     toast.success("All completed items cleared.");
   }
