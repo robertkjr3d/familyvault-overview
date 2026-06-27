@@ -944,7 +944,7 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
   async function permanentlyDeleteItem(id: string) {
     const { error } = await supabase
       .from("dismissed_dashboard_items" as any)
-      .update({ permanently_deleted: true } as any)
+      .delete()
       .eq("id", id)
       .eq("household_id", householdId!);
     if (error) { toast.error("Could not delete item."); return; }
@@ -958,7 +958,7 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
     if (!confirm("Clear all completed items? This cannot be undone and nothing will return to the dashboard.")) return;
     const { error } = await supabase
       .from("dismissed_dashboard_items" as any)
-      .update({ permanently_deleted: true } as any)
+      .delete()
       .eq("household_id", householdId)
       .eq("permanently_deleted", false);
     if (error) { toast.error("Could not clear items."); return; }
