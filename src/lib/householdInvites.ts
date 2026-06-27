@@ -22,6 +22,11 @@ const transferOwnershipPayloadSchema = z.object({
   email: z.string().email(),
 });
 
+const removeMemberPayloadSchema = z.object({
+  householdId: z.string().uuid(),
+  email: z.string().email(),
+});
+
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
@@ -169,11 +174,6 @@ export const transferHouseholdOwnership = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-const removeMemberPayloadSchema = z.object({
-  householdId: z.string().uuid(),
-  email: z.string().email(),
-});
-
 export const removeHouseholdMember = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(removeMemberPayloadSchema)
@@ -282,4 +282,109 @@ export const listHouseholdPeople = createServerFn({ method: "POST" })
     );
 
     return { members, pending };
+  });
+
+export const createDemoHousehold = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { userId } = context;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: existingMemberships } = await supabaseAdmin
+      .from("household_users" as any)
+      .select("household_id, households(id, name)")
+      .eq("user_id", userId);
+
+    const existing = (existingMemberships ?? []).find(
+      (m: any) => m.households?.name === "Demo Household — FamilyHub SG"
+    );
+    if (existing) {
+      return { householdId: existing.households.id as string };
+    }
+
+    const { data: hh, error: hhErr } = await supabaseAdmin
+      .from("households" as any)
+      .insert({ name: "Demo Household — FamilyHub SG" })
+      .select("id")
+      .single();
+    if (hhErr) throw new Error(`Could not create household: ${hhErr.message}`);
+    const hhId = (hh as any).id as string;
+
+    const { error: huErr } = await supabaseAdmin
+      .from("household_users" as any)
+      .insert({ household_id: hhId, user_id: userId, role: "owner" });
+    if (huErr) throw new Error(`Could not add owner: ${huErr.message}`);
+
+    const { data: member, error: mErr } = await supabaseAdmin
+      .from("members" as any)
+      .insert({ household_id: hhId, name: "Alex Tan", emoji: "👨", color: "#4F8EF7" })
+      .select("id")
+      .single();
+    if (mErr) throw new Error(`Could not create member: ${mErr.message}`);
+    const memberId = (member as any).id as string;
+
+    const today = new Date();
+    const nextYear = today.getFullYear() + 1;
+    const in2Years = today.getFullYear() + 2;
+
+    const { error: propErr } = await supabaseAdmin.from("properties" as any).insert({
+      household_id: hhId, member_id: memberId, is_demo: true,
+      name: "3-Room HDB, Tampines", property_type: "HDB",
+      purchase_price: 380000, current_value: 450000,
+      monthly_rent: 0, status: "settled",
+    });
+    if (propErr) throw new Error(`properties: ${propErr.message}`);
+
+    const { error: loanErr } = await supabaseAdmin.from("loans" as any).insert({
+      household_id: hhId, member_id: memberId, is_demo: true,
+      name: "HDB Housing Loan", loan_type: "mortgage",
+      balance: 210000, monthly_payment: 1450, interest_rate: 2.6,
+      repricing_date: `${nextYear}-03-01`, status: "settled",
+    });
+    if (loanErr) throw new Error(`loans: ${loanErr.message}`);
+
+    const { error: ins1Err } = await supabaseAdmin.from("insurance_policies" as any).insert({
+      household_id: hhId, member_id: memberId, is_demo: true,
+      name: "Prudential PruLife", category: "whole_life",
+      sum_assured: 200000, monthly_premium: 320,
+      payment_frequency: "monthly", start_date: "2018-06-01",
+      end_date: `${in2Years}-06-01`, status: "settled",
+    });
+    if (ins1Err) throw new Error(`insurance 1: ${ins1Err.message}`);
+
+    const { error: ins2Err } = await supabaseAdmin.from("insurance_policies" as any).insert({
+      household_id: hhId, member_id: memberId, is_demo: true,
+      name: "AIA HealthShield Gold", category: "hospitalisation",
+      sum_assured: 0, monthly_premium: 85,
+      payment_frequency: "annual", start_date: "2020-01-01",
+      end_date: `${nextYear}-01-01`, status: "settled",
+    });
+    if (ins2Err) throw new Error(`insurance 2: ${ins2Err.message}`);
+
+    const { error: invErr } = await supabaseAdmin.from("investments" as any).insert({
+      household_id: hhId, member_id: memberId, is_demo: true,
+      name: "Manulife InvestReady III", investment_type: "ILP",
+      current_value: 52000, monthly_premium: 500,
+      start_date: "2019-09-01",
+      maturity_date: `${today.getFullYear() + 15}-09-01`,
+      status: "review",
+    });
+    if (invErr) throw new Error(`investments: ${invErr.message}`);
+
+    const { error: savErr } = await supabaseAdmin.from("savings_accounts" as any).insert({
+      household_id: hhId, member_id: memberId, is_demo: true,
+      name: "DBS Multiplier", account_type: "savings",
+      balance: 38000, interest_rate: 3.5, status: "settled",
+    });
+    if (savErr) throw new Error(`savings: ${savErr.message}`);
+
+    const { error: settErr } = await supabaseAdmin.from("app_settings" as any).upsert({
+      household_id: hhId,
+      monthly_income: 7200, monthly_expenses: 3500,
+      currency: "SGD", mortgage_days: 90, insurance_days: 60,
+      fd_days: 30, warranty_days: 90, onboarding_dismissed: true,
+    }, { onConflict: "household_id" });
+    if (settErr) throw new Error(`app_settings: ${settErr.message}`);
+
+    return { householdId: hhId };
   });
