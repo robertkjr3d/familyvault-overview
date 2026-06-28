@@ -28,7 +28,7 @@ const LifetimeChart = lazy(() =>
 import("@/components/LifetimeChart").then((m) => ({ default: m.LifetimeChart }))
 );
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/")(({
 component: Dashboard,
 head: () => ({ meta: [{ title: "Home — FamilyHub SG" }] }),
 });
@@ -431,12 +431,18 @@ return (
     <Kpi label="Total Assets" value={fmtMoney(totalAssets)} />
     <Kpi label="Total Liabilities" value={fmtMoney(totalLiabilities)} />
     <Kpi label="Net Worth" value={fmtMoney(netWorth)} accent="gold" big sub="SGD only · foreign currency excluded" />
-    <Kpi
-      label="Active Alerts"
-      value={String(alertCount)}
-      accent={alertCount > 0 ? "bad" : "neutral"}
-      sub={`${urgent.length} urgent · ${review.length} to review`}
-    />
+    <button
+      type="button"
+      onClick={() => window.dispatchEvent(new CustomEvent("fh:open-alerts"))}
+      className="text-left w-full"
+    >
+      <Kpi
+        label="Active Alerts"
+        value={String(alertCount)}
+        accent={alertCount > 0 ? "bad" : "neutral"}
+        sub={`${urgent.length} urgent · ${review.length} to review`}
+      />
+    </button>
   </div>
 
   {/* MONTHLY CASH FLOW LINE — tapping scrolls to the full breakdown below */}
