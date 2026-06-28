@@ -28,7 +28,7 @@ const LifetimeChart = lazy(() =>
 import("@/components/LifetimeChart").then((m) => ({ default: m.LifetimeChart }))
 );
 
-export const Route = createFileRoute("/")(({
+export const Route = createFileRoute("/")({
 component: Dashboard,
 head: () => ({ meta: [{ title: "Home — FamilyHub SG" }] }),
 });
