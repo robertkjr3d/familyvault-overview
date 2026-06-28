@@ -945,8 +945,7 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
     const { error } = await supabase
       .from("dismissed_dashboard_items" as any)
       .delete()
-      .eq("id", id)
-      .eq("household_id", householdId!);
+      .eq("id", id);
     if (error) { toast.error("Could not delete item."); return; }
     await qc.invalidateQueries({ queryKey: ["dismissed-dashboard", householdId] });
     await qc.invalidateQueries({ queryKey: ["alert-count", householdId] });
