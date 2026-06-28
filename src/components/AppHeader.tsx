@@ -32,6 +32,11 @@ const { simulated, today } = useToday();
 const { user } = useAuthSession();
 const queryClient = useQueryClient();
 const [alertsOpen, setAlertsOpen] = useState(false);
+useEffect(() => {
+  const handler = () => setAlertsOpen(true);
+  window.addEventListener("fh:open-alerts", handler);
+  return () => window.removeEventListener("fh:open-alerts", handler);
+}, []);
 const shareOpen = useAppStore((s) => s.shareOpen);
 const setShareOpen = useAppStore((s) => s.setShareOpen);
 const [shareEmail, setShareEmail] = useState("");
