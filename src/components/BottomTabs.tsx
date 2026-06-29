@@ -2,11 +2,16 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   Home, Building2, Shield, Landmark, MoreHorizontal,
-  TrendingUp, PiggyBank, Heart, Package, Settings as SettingsIcon, Gem,
+  TrendingUp, PiggyBank, Heart, Package, Settings as SettingsIcon, Gem, ScrollText,
   type LucideIcon,
 } from "lucide-react";
 
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 type Tab = { to: string; label: string; icon: LucideIcon };
@@ -19,17 +24,16 @@ const MOBILE_PRIMARY: Tab[] = [
 ];
 
 const MOBILE_MORE: Tab[] = [
-  { to: "/investments",  label: "Investments",  icon: TrendingUp },
-  { to: "/savings",      label: "Savings",      icon: PiggyBank },
-  { to: "/health",       label: "Health",       icon: Heart },
-  { to: "/inventory",    label: "Inventory",    icon: Package },
-  { to: "/other-assets", label: "Assets",       icon: Gem },
-  { to: "/settings",     label: "Settings",     icon: SettingsIcon },
+  { to: "/investments",    label: "Investments",  icon: TrendingUp },
+  { to: "/savings",        label: "Savings",      icon: PiggyBank },
+  { to: "/health",         label: "Health",       icon: Heart },
+  { to: "/inventory",      label: "Inventory",    icon: Package },
+  { to: "/other-assets",   label: "Assets",       icon: Gem },
+  { to: "/estate-planning",label: "Estate",       icon: ScrollText },
+  { to: "/settings",       label: "Settings",     icon: SettingsIcon },
 ];
 
 const ALL_TABS: Tab[] = [...MOBILE_PRIMARY, ...MOBILE_MORE];
-// Desktop shows all tabs.
-
 
 export function BottomTabs() {
   const isMobile = useIsMobile();
@@ -54,13 +58,12 @@ export function BottomTabs() {
             </li>
           </ul>
         </nav>
-        <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
-          <SheetContent side="bottom" className="rounded-t-2xl pb-6">
-            <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted-foreground/30" />
-            <SheetHeader>
-              <SheetTitle className="text-base">More</SheetTitle>
-            </SheetHeader>
-            <ul className="mt-3 divide-y divide-border">
+        <Drawer open={moreOpen} onOpenChange={setMoreOpen}>
+          <DrawerContent>
+            <DrawerHeader>
+              <DrawerTitle className="text-base">More</DrawerTitle>
+            </DrawerHeader>
+            <ul className="divide-y divide-border px-4 pb-8">
               {MOBILE_MORE.map((t) => {
                 const Icon = t.icon;
                 return (
@@ -77,15 +80,15 @@ export function BottomTabs() {
                 );
               })}
             </ul>
-          </SheetContent>
-        </Sheet>
+          </DrawerContent>
+        </Drawer>
       </>
     );
   }
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-card/95 backdrop-blur">
-      <ul className="mx-auto grid max-w-3xl grid-cols-10">
+      <ul className="mx-auto grid max-w-3xl grid-cols-11">
         {ALL_TABS.map((t) => <TabItem key={t.to} t={t} />)}
       </ul>
     </nav>
