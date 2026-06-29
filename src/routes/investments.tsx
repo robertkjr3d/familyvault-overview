@@ -154,17 +154,20 @@ function InvestmentRow({
   const staleTitle = "Updated " + stale + "d ago";
   const staleIndicator = isStale ? <span className="ml-1 text-review" title={staleTitle}>⚠</span> : null;
 
-  // Premium shown on the collapsed card so a yearly/monthly ILP/Endowment premium
-  // is visible without expanding — same pattern as Loans' monthly repayment.
-  const premiumMonthlyEquivalent = (() => {
+  // Premium shown on the collapsed card in its actual frequency — e.g. $3,600/yr
+  // not converted to a monthly estimate (that was confusing). Monthly equivalent
+  // still feeds the dashboard cash flow via investmentPremiumMonthly().
+  const premiumDisplay = (() => {
     if (!isILPOrEndowment || !inv.premium_amount) return null;
     const amt = Number(inv.premium_amount);
     const freq = (inv.premium_frequency || "annual").toLowerCase();
-    if (freq === "monthly") return amt;
-    if (freq === "quarterly") return amt / 3;
-    if (freq === "semi-annual") return amt / 6;
-    if (freq === "annual") return amt / 12;
-    return null; // one-off — no recurring amount to show
+    if (freq === "one-off" || freq === "one_off") return null;
+    const suffix =
+      freq === "monthly" ? "/mo" :
+      freq === "quarterly" ? "/qtr" :
+      freq === "semi-annual" ? "/6mo" :
+      "/yr";
+    return { amt, suffix };
   })();
 
   const [cardOpen, setCardOpen] = useState(false);
@@ -214,9 +217,9 @@ function InvestmentRow({
               )}
               <span>{inv.last_updated ? `Updated: ${fmtDate(inv.last_updated)}` : "Never updated"}</span>
             </div>
-            {premiumMonthlyEquivalent != null && (
+            {premiumDisplay != null && (
               <div className="mt-1 font-semibold text-urgent">
-                −{fmtMoney(premiumMonthlyEquivalent)}/mo
+                −{fmtMoney(premiumDisplay.amt)}{premiumDisplay.suffix}
               </div>
             )}
           </div>
