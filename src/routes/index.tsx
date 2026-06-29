@@ -695,6 +695,8 @@ return (
     </Suspense>
   </section>
 
+  <EstatePlanningCard />
+
   <OnboardingWizard
     open={onboardingOpen}
     onOpenChange={setOnboardingOpen}
@@ -1086,4 +1088,120 @@ className="mt-2 flex w-full items-center justify-center gap-1 py-2 text-xs font-
 )}
 </section>
 );
+}
+
+// ── Estate Planning Card ───────────────────────────────────────────────────────
+
+const ESTATE_ITEMS = [
+  {
+    id: "will",
+    label: "Will",
+    detail: "Specifies how your assets are distributed. Without one, Singapore intestacy laws apply.",
+    who: "Lawyer required to witness and certify",
+  },
+  {
+    id: "lpa",
+    label: "Lasting Power of Attorney (LPA)",
+    detail: "Appoints someone to act for you if you lose mental capacity. Must be done before capacity is lost.",
+    who: "Certificate Issuer required — doctor, lawyer, or accredited psychiatrist",
+  },
+  {
+    id: "cpf-nomination",
+    label: "CPF Nomination",
+    detail: "CPF does NOT follow your Will. Must be nominated separately with CPF Board.",
+    who: "CPF Board — can be done online",
+    urgent: true,
+  },
+  {
+    id: "amd",
+    label: "Advance Medical Directive (AMD)",
+    detail: "Instructs doctors not to use extraordinary life-sustaining treatment if you are terminally ill and unconscious.",
+    who: "Must be signed in front of a registered doctor who files it with MOH",
+  },
+  {
+    id: "acp",
+    label: "Advance Care Planning (ACP)",
+    detail: "Non-legally-binding document capturing your values and care preferences. Free at most public hospitals.",
+    who: "No lawyer or doctor required — done at ACP facilitator clinics",
+  },
+] as const;
+
+function EstatePlanningCard() {
+  const [checked, setChecked] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem("fh:estate-checklist") ?? "{}"); }
+    catch { return {}; }
+  });
+  const [open, setOpen] = useState(false);
+
+  function toggle(id: string) {
+    const next = { ...checked, [id]: !checked[id] };
+    setChecked(next);
+    try { localStorage.setItem("fh:estate-checklist", JSON.stringify(next)); } catch {}
+  }
+
+  const doneCount = ESTATE_ITEMS.filter((i) => checked[i.id]).length;
+  const total = ESTATE_ITEMS.length;
+  const allDone = doneCount === total;
+
+  return (
+    <section className="rounded-2xl border border-border bg-card p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-bold">📜 Estate Planning</h2>
+          <p className="text-[10px] text-muted-foreground mt-0.5">{doneCount}/{total} completed</p>
+        </div>
+        <button
+          type="button"
+          onPointerDown={() => setOpen((v) => !v)}
+          className="flex items-center gap-1 text-xs font-semibold text-primary"
+        >
+          {open ? "Hide" : "Show"}
+          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+        </button>
+      </div>
+
+      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+        <div
+          className={`h-full rounded-full transition-all ${allDone ? "bg-settled" : "bg-primary"}`}
+          style={{ width: `${(doneCount / total) * 100}%` }}
+        />
+      </div>
+
+      {open && (
+        <ul className="mt-3 space-y-2">
+          {ESTATE_ITEMS.map((item) => {
+            const done = !!checked[item.id];
+            return (
+              <li key={item.id} className={`rounded-xl border p-3 ${item.urgent && !done ? "border-urgent/30 bg-urgent-soft/10" : "border-border/60 bg-background/50"}`}>
+                <button
+                  type="button"
+                  onPointerDown={() => toggle(item.id)}
+                  className="flex w-full items-start gap-3 text-left"
+                >
+                  <span className={`mt-0.5 text-base leading-none ${done ? "text-settled" : "text-muted-foreground"}`}>
+                    {done ? "✓" : "○"}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-sm font-semibold ${done ? "line-through text-muted-foreground" : ""}`}>
+                      {item.label}
+                      {"urgent" in item && item.urgent && !done && (
+                        <span className="ml-2 text-[10px] font-bold text-urgent">DO THIS FIRST</span>
+                      )}
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{item.detail}</p>
+                    <p className="mt-0.5 text-[10px] font-medium text-muted-foreground">👤 {item.who}</p>
+                  </div>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {open && (
+        <p className="mt-3 text-[10px] text-muted-foreground italic">
+          Record-keeping only. Not legal or medical advice — consult a lawyer or doctor.
+        </p>
+      )}
+    </section>
+  );
 }
