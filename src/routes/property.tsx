@@ -179,6 +179,7 @@ function PropertyRow({
         status={p.status}
         onStatusChange={onStatus}
         action={p.action_note}
+        externalUrl={p.external_url}
         onEdit={edit.open}
         onDuplicate={dup.open}
         onDelete={onDelete}
