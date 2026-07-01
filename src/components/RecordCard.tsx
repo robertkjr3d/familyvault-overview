@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ChevronDown, Copy, Pencil, Trash2, Bell, NotebookPen, RotateCw, Paperclip } from "lucide-react";
+import { ChevronDown, Copy, Pencil, Trash2, Bell, NotebookPen, RotateCw, Paperclip, ExternalLink } from "lucide-react";
 import { StatusToggle, type Status } from "./StatusToggle";
 import { MemberTag } from "./MemberTag";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,8 @@ type Props = {
   status: Status;
   onStatusChange: (s: Status) => void;
   action?: string | null;
+  /** External link (e.g. provider website, portal) shown as an icon next to the title, only while the card is expanded */
+  externalUrl?: string | null;
   /** Small informational badges shown below the title/subtitle */
   tags?: string[] | null;
   /** Second member shown alongside the primary memberId — used for joint savings accounts */
@@ -84,7 +86,7 @@ function CardIconButton({
 }
 
 export function RecordCard({
-  title, subtitle, memberId, secondaryMemberId, status, onStatusChange, action, tags, rightMeta, children,
+  title, subtitle, memberId, secondaryMemberId, status, onStatusChange, action, externalUrl, tags, rightMeta, children,
   onEdit, onDelete, onDuplicate, defaultOpen = false, highlight, persistKey, hasNotes, updatedAt, createdAt,
   reminderCount, historyCount, documentsCount,
   onNotesClick, onReminderClick, onHistoryClick, onDocumentsClick,
@@ -165,6 +167,19 @@ export function RecordCard({
         <div className="flex min-w-0 flex-1 flex-col gap-1.5 pl-4 pr-3 pb-6 pt-4">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-semibold leading-tight">{title}</h3>
+            {open && externalUrl && (
+              <a
+                href={externalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-primary hover:bg-primary/10"
+                aria-label="Open external link"
+                title={externalUrl}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            )}
             <MemberTag memberId={memberId} />
             {secondaryMemberId && <MemberTag memberId={secondaryMemberId} />}
           </div>
