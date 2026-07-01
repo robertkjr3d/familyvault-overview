@@ -123,6 +123,7 @@ function LoanRow({
         status={l.status}
         onStatusChange={onStatus}
         action={actionLabel}
+        externalUrl={l.external_url}
         onEdit={edit.open}
         onDuplicate={dup.open}
         onDelete={onDelete}
