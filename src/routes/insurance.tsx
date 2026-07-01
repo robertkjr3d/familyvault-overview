@@ -168,6 +168,7 @@ function InsuranceRow({
         status={p.status}
         onStatusChange={onStatus}
         action={p.action}
+        externalUrl={p.external_url}
         tags={Array.isArray(p.also_covers) ? p.also_covers : null}
         onEdit={edit.open}
         onDelete={onDelete}
@@ -188,6 +189,12 @@ function InsuranceRow({
           <div className="text-right text-xs">
             <div className="text-muted-foreground">Premium</div>
             <div className="font-bold">{fmtMoney(p.premium)}/{freqLabel(p.frequency)}</div>
+            {p.surrender_value != null && (
+              <div className="mt-1 text-settled">
+                <div className="text-[10px] text-muted-foreground">Surrender value</div>
+                <div className="font-semibold">{fmtMoney(p.surrender_value)}</div>
+              </div>
+            )}
           </div>
         }
       >
@@ -203,8 +210,9 @@ function InsuranceRow({
             value={nextDue ? <span className="font-semibold text-primary">{fmtDate(nextDue)}</span> : "—"}
           />
         </Section>
-        {(p.payout_amount || p.payout_start_date || p.payout_end_date || p.beneficiary) && (
+        {(p.payout_amount || p.payout_start_date || p.payout_end_date || p.beneficiary || p.surrender_value != null) && (
           <Section title="Payout">
+            {p.surrender_value != null && <FieldRow label="Surrender value (current)" value={fmtMoney(p.surrender_value)} />}
             {p.payout_amount && <FieldRow label="Payout amount (est.)" value={fmtMoney(p.payout_amount, p.currency)} />}
             {p.payout_start_date && <FieldRow label="Payout start" value={fmtDate(p.payout_start_date)} />}
             {p.payout_frequency && <FieldRow label="Payout frequency" value={freqLabel(p.payout_frequency)} />}
