@@ -71,6 +71,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
       { key: "strategy", label: "Investment strategy", type: "text", placeholder: "e.g. Capital appreciation at 5% p.a., sell by 2028", section: "🎯 Strategy & Action" },
       { key: "action_note", label: "Action", type: "text", placeholder: "e.g. Ask UOB for repricing rate May 2026", section: "🎯 Strategy & Action" },
       { key: "beneficiary", label: "Beneficiary / intended for", type: "text", placeholder: "e.g. Split equally between Aza and Leslie", section: "🎯 Strategy & Action" },
+      { key: "external_url", label: "Listing / portal link", type: "text", placeholder: "https://...", section: "🎯 Strategy & Action" },
     ],
   },
 
@@ -93,6 +94,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
       { key: "property_id", label: "Linked property (mortgage)", type: "property_select" },
       { key: "loan_end_date", label: "Loan end date", type: "date" },
       { key: "action", label: "Action", type: "text", placeholder: "e.g. Ask UOB for repricing rate by May 2026" },
+      { key: "external_url", label: "Bank portal link", type: "text", placeholder: "https://..." },
     ],
   },
 
@@ -123,6 +125,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
 
       // 💰 Payout
       { key: "sum_assured", label: "Sum assured", type: "number", money: true, section: "💰 Payout" },
+      { key: "surrender_value", label: "Surrender value (current)", type: "number", money: true, placeholder: "Cash value if you cancel today — counts toward Net Worth", section: "💰 Payout" },
       { key: "payout_amount", label: "Payout amount (est.)", type: "number", money: true, section: "💰 Payout" },
       { key: "payout_start_date", label: "Payout start date", type: "date", section: "💰 Payout" },
       { key: "payout_frequency", label: "Payout frequency", type: "select", options: INSURANCE_FREQ, section: "💰 Payout" },
@@ -131,6 +134,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
 
       // 🎯 Action
       { key: "action", label: "Action", type: "text", placeholder: "e.g. Renew before Mar 2027", section: "🎯 Action" },
+      { key: "external_url", label: "Policy website / portal link", type: "text", placeholder: "https://...", section: "🎯 Action" },
     ],
   },
 
@@ -157,6 +161,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
       { key: "payout_frequency", label: "Payout frequency", type: "select", options: INSURANCE_FREQ, showIf: (v) => v.group_name === "ILP (Investment-Linked Policy)" || v.group_name === "Endowment" },
       { key: "payout_end_date", label: "Payout end date", type: "date", showIf: (v) => v.group_name === "ILP (Investment-Linked Policy)" || v.group_name === "Endowment" },
       { key: "strategy", label: "Strategy / notes", type: "textarea" },
+      { key: "external_url", label: "Platform website / portal link", type: "text", placeholder: "https://..." },
     ],
   },
 
