@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Info } from "lucide-react";
 import { AddRecordFab } from "@/components/AddRecordFab";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -189,6 +190,7 @@ function InvestmentRow({
         status={inv.status}
         onStatusChange={onStatus}
         action={inv.strategy}
+        externalUrl={inv.external_url}
         onEdit={edit.open}
         onDuplicate={dup.open}
         onDelete={onDelete}
@@ -239,7 +241,10 @@ function InvestmentRow({
           <FieldRow label="Amount invested" value={fmtMoney(inv.cost_basis)} />
           <FieldRow label="Current value (est.)" value={fmtMoney(inv.current_value)} />
           <FieldRow label="Value as of" value={fmtDate(inv.last_updated)} />
-          <FieldRow label="Projected return" value={fmtPct(inv.projected_return_pct)} />
+          <FieldRow
+            label={<span className="inline-flex items-center">Projected return<InfoNote text="This rate is for your own reference only. The Lifetime Net Worth chart uses one global growth rate set in Settings → Projection Assumptions, not this field." /></span>}
+            value={fmtPct(inv.projected_return_pct)}
+          />
           {isILPOrEndowment && inv.coverage && <FieldRow label="Coverage" value={inv.coverage} />}
           {isILPOrEndowment && inv.premium_amount && <FieldRow label="Premium amount" value={fmtMoney(inv.premium_amount)} />}
           {isILPOrEndowment && inv.premium_start_date && <FieldRow label="Premium start" value={fmtDate(inv.premium_start_date)} />}
@@ -295,5 +300,26 @@ function InvestmentRow({
       {edit.element}
       {dup.element}
     </HashHighlight>
+  );
+}
+
+function InfoNote({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-flex items-center">
+      <button
+        type="button"
+        onPointerDown={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        className="ml-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+        aria-label="More info"
+      >
+        <Info className="h-3 w-3" />
+      </button>
+      {open && (
+        <span className="absolute left-0 top-5 z-10 w-56 rounded-lg border border-border bg-card p-2 text-[11px] font-normal normal-case leading-snug text-muted-foreground shadow-lg">
+          {text}
+        </span>
+      )}
+    </span>
   );
 }
