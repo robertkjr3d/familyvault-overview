@@ -12,6 +12,10 @@ export type UpcomingItem = {
   daysLeft: number;
   icon: any;
   kind: string;
+  /** Only set when sourceType === "reminder" — the reminder row's own id, distinct from
+   * recordId (which is the entity_id it's attached to). Needed so a permanent delete can
+   * target the exact reminder row, since an entity can have multiple reminders. */
+  reminderId?: string;
 };
 
 export type AlertSourceData = {
@@ -231,7 +235,7 @@ export function buildUpcomingItems(
         ? `${entityName} — ${r.what ?? "Reminder"}`
         : (r.what ?? "Reminder");
 
-      items.push({ date: dateStr, label, amount: null, member_id: entityMemberId, href, recordId, sourceType: "reminder", daysLeft: daysUntil(dateStr), icon: Bell, kind: "Reminder" });
+      items.push({ date: dateStr, label, amount: null, member_id: entityMemberId, href, recordId, sourceType: "reminder", daysLeft: daysUntil(dateStr), icon: Bell, kind: "Reminder", reminderId: r.id });
     }
   }
 
