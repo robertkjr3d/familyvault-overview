@@ -941,20 +941,53 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
     toast.success("Restored to dashboard.");
   }
 
-  async function permanentlyDeleteItem(id: string) {
+  async function permanentlyDeleteItem(item: any) {
+    // Manually-created reminders only exist because the user made them — once permanently
+    // deleted, the reminder itself should be gone too (it will never regenerate on its own).
+    // Recurring/computed alerts (insurance renewal, loan reprice, etc.) are derived from a
+    // real ongoing record, so only the suppression flag is set — the underlying record and
+    // its future occurrences must stay untouched.
+    if (item.source_type === "reminder" && item.reminder_id) {
+      const { error: reminderError } = await (supabase as any)
+        .from("reminders")
+        .delete()
+        .eq("id", item.reminder_id);
+      if (reminderError) {
+        toast.error("Could not delete the reminder.");
+        return;
+      }
+    }
     const { error } = await (supabase as any)
       .from("dismissed_dashboard_items")
       .update({ permanently_deleted: true })
-      .eq("id", id);
+      .eq("id", item.id);
     if (error) { toast.error("Could not delete item."); return; }
     await qc.invalidateQueries({ queryKey: ["dismissed-dashboard", householdId] });
     await qc.invalidateQueries({ queryKey: ["alert-count", householdId] });
+    await qc.invalidateQueries({ queryKey: ["reminders-dashboard"] });
     toast.success("Removed permanently.");
   }
 
   async function clearAll() {
     if (!householdId) return;
     if (!confirm("Clear all completed items? This cannot be undone and nothing will return to the dashboard.")) return;
+
+    // Same rule as single-item delete: manually-created reminders must be deleted outright,
+    // not just suppressed, or they'd keep regenerating on the dashboard after "Clear all."
+    const reminderIds = history
+      .filter((h: any) => h.source_type === "reminder" && h.reminder_id)
+      .map((h: any) => h.reminder_id);
+    if (reminderIds.length > 0) {
+      const { error: reminderError } = await (supabase as any)
+        .from("reminders")
+        .delete()
+        .in("id", reminderIds);
+      if (reminderError) {
+        toast.error("Could not delete some reminders.");
+        return;
+      }
+    }
+
     const { error } = await (supabase as any)
       .from("dismissed_dashboard_items")
       .update({ permanently_deleted: true })
@@ -962,6 +995,7 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
       .eq("permanently_deleted", false);
     if (error) { toast.error("Could not clear items."); return; }
     await qc.invalidateQueries({ queryKey: ["dismissed-dashboard", householdId] });
+    await qc.invalidateQueries({ queryKey: ["reminders-dashboard"] });
     await qc.invalidateQueries({ queryKey: ["alert-count", householdId] });
     toast.success("All completed items cleared.");
   }
@@ -1004,7 +1038,7 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
                           Restore
                         </button>
                         <button
-                          onPointerDown={() => permanentlyDeleteItem(item.id)}
+                          onPointerDown={() => permanentlyDeleteItem(item)}
                           className="rounded px-2 py-1 text-xs font-semibold text-urgent hover:bg-urgent/10"
                         >
                           Delete
