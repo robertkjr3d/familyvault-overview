@@ -311,6 +311,7 @@ const key = `${u.sourceType}::${u.recordId}`;
 if (dismissing === key) return;
 setDismissing(key);
 
+const isReminder = u.sourceType === "reminder" && !!u.reminderId;
 const { data: inserted, error } = await (supabase as any)
   .from("dismissed_dashboard_items")
   .upsert(
@@ -318,11 +319,15 @@ const { data: inserted, error } = await (supabase as any)
       household_id: activeHouseholdId,
       source_type: u.sourceType,
       record_id: u.recordId,
+      reminder_id: u.reminderId ?? null,
       label: u.label,
       dismissed_date: u.date,
       permanently_deleted: false,
     },
-    { onConflict: "household_id,source_type,record_id,dismissed_date" }
+    // Reminders use a dedicated conflict target keyed on the reminder's own id, since
+    // multiple reminders can share the same entity_id (record_id) and even the same
+    // date — the original target would collide and silently overwrite between them.
+    { onConflict: isReminder ? "household_id,reminder_id" : "household_id,source_type,record_id,dismissed_date" }
   )
   .select("id")
   .single();
