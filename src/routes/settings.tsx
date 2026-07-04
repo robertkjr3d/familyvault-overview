@@ -1021,9 +1021,10 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
             <>
               <ul className="divide-y divide-border">
                 {history.map((item: any) => {
-                  const dismissedOn = new Date(item.dismissed_at).toLocaleDateString("en-GB", {
-                    day: "numeric", month: "short", year: "numeric",
-                  });
+                  const dismissedAtDate = item.dismissed_at ? new Date(item.dismissed_at) : null;
+                  const dismissedOn = dismissedAtDate && !isNaN(dismissedAtDate.getTime())
+                    ? dismissedAtDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+                    : "recently";
                   return (
                     <li key={item.id} className="flex items-start justify-between gap-2 py-2.5">
                       <div className="flex-1 min-w-0">
