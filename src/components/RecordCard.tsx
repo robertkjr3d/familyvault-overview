@@ -167,9 +167,11 @@ export function RecordCard({
         <div className="flex min-w-0 flex-1 flex-col gap-1.5 pl-4 pr-3 pb-6 pt-4">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-semibold leading-tight">{title}</h3>
-            {open && externalUrl && (
+            <MemberTag memberId={memberId} />
+            {secondaryMemberId && <MemberTag memberId={secondaryMemberId} />}
+            {externalUrl && (
               <a
-                href={externalUrl}
+                href={/^https?:\/\//i.test(externalUrl) ? externalUrl : `https://${externalUrl}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
@@ -180,8 +182,6 @@ export function RecordCard({
                 <ExternalLink className="h-3.5 w-3.5" />
               </a>
             )}
-            <MemberTag memberId={memberId} />
-            {secondaryMemberId && <MemberTag memberId={secondaryMemberId} />}
           </div>
           {subtitle && <div className="text-xs text-muted-foreground">{subtitle}</div>}
           {tags && tags.length > 0 && (
