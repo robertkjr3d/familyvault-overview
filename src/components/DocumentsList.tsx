@@ -7,6 +7,7 @@ import { Upload, Link, ExternalLink, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useAppStore } from "@/lib/store";
+import { getDisplayUrl } from "@/lib/storageUrls";
 
 export function DocumentsList({ entityType, entityId }: { entityType: string; entityId: string }) {
   const qc = useQueryClient();
@@ -91,13 +92,22 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
     }
   }
 
-  function openDoc(e: React.MouseEvent, doc: any) {
+  async function openDoc(e: React.MouseEvent, doc: any) {
     if (doc.bucket === "external") {
       window.open(doc.path, "_blank", "noopener,noreferrer");
       return;
     }
-    const url = supabase.storage.from("vault-docs").getPublicUrl(doc.path).data.publicUrl;
-    window.open(url, "_blank", "noopener,noreferrer");
+    // Open the tab synchronously (in direct response to the click) so
+    // browsers don't treat it as a popup, then fill it in once the
+    // short-lived signed URL comes back.
+    const newTab = window.open("", "_blank", "noopener,noreferrer");
+    const url = await getDisplayUrl("vault-docs", doc.path);
+    if (!url) {
+      newTab?.close();
+      toast.error("Couldn't open this document");
+      return;
+    }
+    if (newTab) newTab.location.href = url;
   }
 
   async function del(id: string, doc: any) {
@@ -164,6 +174,10 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
             <Link className="mr-1 h-3.5 w-3.5" /> Add Link
           </Button>
         </div>
+
+        <p className="text-[11px] text-muted-foreground">
+          Links to uploaded files aren't password-protected — anyone with the exact link can open it. Avoid sharing it outside people you trust with this document.
+        </p>
 
         {mode === "upload" && (
           <>
