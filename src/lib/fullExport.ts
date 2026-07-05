@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { recordConfigs, type FieldDef, type SelectOption } from "@/lib/recordConfigs";
 import type { Member } from "@/hooks/useMembers";
+import { getExportUrl } from "@/lib/storageUrls";
 
 // Full household data export — one Excel sheet per record type (Properties,
 // Loans, Insurance, Investments, Savings & CPF, Other Assets, Health, Go-Bag,
@@ -275,6 +276,17 @@ export async function runFullExport(householdId: string, members: Member[]) {
   const folders = foldersRes.data ?? [];
   const folderById = new Map(folders.map((f: any) => [f.id, f]));
   const inventoryItems = inventoryRes.data ?? [];
+
+  // photo_url holds a private storage path, not a fetchable link. Resolve
+  // every distinct one into a long-lived (10 year) signed link before
+  // writing rows, since this workbook is meant to be kept outside the app.
+  const uniquePhotoPaths = new Set<string>();
+  inventoryItems.forEach((it: any) => { if (it.photo_url) uniquePhotoPaths.add(it.photo_url); });
+  const photoUrlEntries = await Promise.all(
+    Array.from(uniquePhotoPaths).map(async (p) => [p, await getExportUrl("inventory-photos", p)] as const)
+  );
+  const photoUrlMap = new Map(photoUrlEntries);
+
   const inventoryRows: ExportRow[] = inventoryItems.map((it: any) => {
     const folder = folderById.get(it.folder_id);
     const parent = folder?.parent_id ? folderById.get(folder.parent_id) : null;
@@ -285,7 +297,7 @@ export async function runFullExport(householdId: string, members: Member[]) {
       category: it.category ?? "",
       action: it.action ?? "",
       warranty_date: it.warranty_date ? new Date(it.warranty_date) : null,
-      photo_url: it.photo_url ?? "",
+      photo_url: it.photo_url ? photoUrlMap.get(it.photo_url) ?? "" : "",
     };
   });
   sheets.push({
