@@ -33,6 +33,25 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
     },
   });
 
+  // Resolve signed URLs ahead of time (not inside the click handler). Some
+  // mobile browsers (iOS Safari in particular) silently fail to navigate a
+  // pre-opened tab if there's an `await` between the click and setting its
+  // location — the tab opens but stays on about:blank. Resolving here means
+  // the click handler can open the link synchronously, no gap involved.
+  const { data: signedUrlByPath = {} } = useQuery({
+    queryKey: ["docSignedUrls", entityType, entityId, docs.map((d: any) => d.path).join(",")],
+    queryFn: async () => {
+      const nonExternal = docs.filter((d: any) => d.bucket !== "external");
+      const entries = await Promise.all(
+        nonExternal.map(async (d: any) => [d.path, await getDisplayUrl("vault-docs", d.path)] as const),
+      );
+      return Object.fromEntries(entries) as Record<string, string | null>;
+    },
+    enabled: docs.length > 0,
+  });
+
+  const [previewImage, setPreviewImage] = useState<{ url: string; label: string } | null>(null);
+
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -92,22 +111,32 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
     }
   }
 
-  async function openDoc(e: React.MouseEvent, doc: any) {
+  function isImagePath(path: string) {
+    return /\.(jpe?g|png|gif|webp|heic)$/i.test(path);
+  }
+
+  function openDoc(e: React.MouseEvent, doc: any) {
     if (doc.bucket === "external") {
       window.open(doc.path, "_blank", "noopener,noreferrer");
       return;
     }
-    // Open the tab synchronously (in direct response to the click) so
-    // browsers don't treat it as a popup, then fill it in once the
-    // short-lived signed URL comes back.
-    const newTab = window.open("", "_blank", "noopener,noreferrer");
-    const url = await getDisplayUrl("vault-docs", doc.path);
+    const url = signedUrlByPath[doc.path];
     if (!url) {
-      newTab?.close();
-      toast.error("Couldn't open this document");
+      toast.error("Still preparing this document — try again in a moment");
       return;
     }
-    if (newTab) newTab.location.href = url;
+    const label = doc.label || doc.path.split("/").pop();
+    if (isImagePath(doc.path)) {
+      // Preview inline instead of a new tab — avoids the mobile-browser
+      // issue where a tab opened after any async work can be left stuck
+      // on about:blank, and it's a better experience on phones anyway.
+      setPreviewImage({ url, label });
+      return;
+    }
+    // Non-image (PDF etc.): the URL was already resolved above, so this
+    // window.open runs synchronously in the same click, which every
+    // browser (including mobile Safari) reliably allows.
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 
   async function del(id: string, doc: any) {
@@ -216,6 +245,26 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
           </div>
         )}
       </div>
+
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setPreviewImage(null)}
+        >
+          <img
+            src={previewImage.url}
+            alt={previewImage.label}
+            className="max-h-full max-w-full rounded-lg object-contain"
+          />
+          <button
+            type="button"
+            onClick={() => setPreviewImage(null)}
+            className="absolute right-4 top-4 rounded-full bg-background/90 px-3 py-1 text-sm font-medium"
+          >
+            Close
+          </button>
+        </div>
+      )}
     </div>
   );
 }
