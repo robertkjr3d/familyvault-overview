@@ -393,7 +393,7 @@ function QuickAddInventoryItem({ onSaved }: { onSaved: () => void }) {
         const path = `${activeHouseholdId}/items/${Date.now()}-${compressed.name}`;
         const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
         if (upErr) throw upErr;
-        photo_url = supabase.storage.from("inventory-photos").getPublicUrl(path).data.publicUrl;
+        photo_url = path;
       }
 
       const { error } = await supabase.from("inventory_items").insert({
