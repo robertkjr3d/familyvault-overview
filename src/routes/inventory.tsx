@@ -16,6 +16,8 @@ import { toast } from "sonner";
 import { fmtDate } from "@/lib/format";
 import { useAppStore } from "@/lib/store";
 import { compressImage } from "@/lib/imageCompression";
+import { getDisplayUrl, getExportUrl } from "@/lib/storageUrls";
+import { SignedImg } from "@/components/SignedImg";
 
 export const Route = createFileRoute("/inventory")({
 component: InventoryPage,
@@ -129,6 +131,7 @@ const openSubfolder = openSubfolderId ? folderById.get(openSubfolderId) ?? null 
 
 const [hashHandled, setHashHandled] = useState(false);
 const [generatingDocx, setGeneratingDocx] = useState(false);
+const [generatingCsv, setGeneratingCsv] = useState(false);
 useEffect(() => {
 if (hashHandled) return;
 if (allItems.length === 0 || folders.length === 0) return;
@@ -194,12 +197,29 @@ return '"' + s.replace(/"/g, '""') + '"';
 return s;
 }
 
-function exportCsv() {
+async function exportCsv() {
+setGeneratingCsv(true);
+try {
 const rows: string[] = [];
 rows.push(["Location", "Location photo URL", "Subfolder", "Subfolder photo URL", "Item name", "Category", "Action / Notes", "Warranty/Expiry date", "Item photo URL"].map(csvCell).join(","));
 
+// Photos are stored privately now, so a raw path won't open as a link.
+// Resolve every distinct photo referenced into a long-lived (10 year)
+// signed link before writing rows, since this file will be kept outside the app.
+const uniquePaths = new Set<string>();
+topLevelFolders.forEach((f) => {
+  if (f.photo_url) uniquePaths.add(f.photo_url);
+  (childrenByParent.get(f.id) ?? []).forEach((sf) => { if (sf.photo_url) uniquePaths.add(sf.photo_url); });
+});
+allItems.forEach((it) => { if (it.photo_url) uniquePaths.add(it.photo_url); });
+const resolvedEntries = await Promise.all(
+  Array.from(uniquePaths).map(async (p) => [p, await getExportUrl("inventory-photos", p)] as const)
+);
+const urlMap = new Map(resolvedEntries);
+const resolvePhoto = (p: string | null | undefined) => (p ? urlMap.get(p) ?? "" : "");
+
 function buildRow(locName: string, locPhoto: string | null | undefined, subName: string, subPhoto: string | null | undefined, itemName: string, category: string, notes: string, warranty: string, itemPhoto: string | null | undefined): string {
-  return [locName, locPhoto ?? "", subName, subPhoto ?? "", itemName, category, notes, warranty, itemPhoto ?? ""].map(csvCell).join(",");
+  return [locName, resolvePhoto(locPhoto), subName, resolvePhoto(subPhoto), itemName, category, notes, warranty, resolvePhoto(itemPhoto)].map(csvCell).join(",");
 }
 
 topLevelFolders.forEach((f) => {
@@ -235,7 +255,9 @@ document.body.appendChild(a);
 a.click();
 document.body.removeChild(a);
 URL.revokeObjectURL(url);
-
+} finally {
+setGeneratingCsv(false);
+}
 }
 
 function exportText() {
@@ -325,10 +347,15 @@ const { Document, Packer, Paragraph, TextRun, ImageRun, HeadingLevel } = docxLib
   });
   allItems.forEach((it) => { if (it.photo_url) photoUrls.add(it.photo_url); });
 
-  const urlList = Array.from(photoUrls);
-  const fetched = await mapWithConcurrency(urlList, 4, fetchImageBytes);
+  // photo_url now holds a storage path, not a fetchable link, since the
+  // bucket is private. Resolve each path to a short-lived signed URL just
+  // long enough to download the bytes, then embed the bytes themselves —
+  // the finished .docx has no dependency on any link at all.
+  const pathList = Array.from(photoUrls);
+  const signedUrls = await Promise.all(pathList.map((p) => getDisplayUrl("inventory-photos", p)));
+  const fetched = await mapWithConcurrency(signedUrls, 4, (u) => (u ? fetchImageBytes(u) : Promise.resolve(null)));
   const imageBytesByUrl = new Map<string, ArrayBuffer | null>();
-  urlList.forEach((u, i) => imageBytesByUrl.set(u, fetched[i]));
+  pathList.forEach((path, i) => imageBytesByUrl.set(path, fetched[i]));
 
   function imageParagraph(url: string | null, widthPx: number): any | null {
     if (!url) return null;
@@ -483,8 +510,9 @@ return (
           >
             <div className="relative aspect-square w-full overflow-hidden bg-muted">
               {f.photo_url ? (
-                <img
-                  src={f.photo_url}
+                <SignedImg
+                  bucket="inventory-photos"
+                  path={f.photo_url}
                   alt={f.name}
                   className="h-full w-full object-cover"
                 />
@@ -548,8 +576,8 @@ return (
   )}
 
   <div className="pt-2 space-y-2">
-    <Button variant="outline" className="w-full" onClick={exportCsv} disabled={allItems.length === 0}>
-      Export as spreadsheet (CSV)
+    <Button variant="outline" className="w-full" onClick={exportCsv} disabled={allItems.length === 0 || generatingCsv}>
+      {generatingCsv ? "Preparing... please wait" : "Export as spreadsheet (CSV)"}
     </Button>
     <p className="text-center text-[11px] text-muted-foreground">
       One row per item with photo links — open in Google Sheets / Excel.
@@ -754,7 +782,7 @@ const compressed = await compressImage(photoFile);
 const path = `${activeHouseholdId}/folders/${Date.now()}-${compressed.name}`;
 const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
 if (upErr) throw upErr;
-photo_url = supabase.storage.from("inventory-photos").getPublicUrl(path).data.publicUrl;
+photo_url = path;
 }
 const { error } = await supabase.from("inventory_folders").insert({
 household_id: activeHouseholdId,
@@ -798,6 +826,7 @@ aria-label="Remove photo"
 <div className="flex flex-col items-center gap-1 py-6 text-muted-foreground">
 <Camera className="h-7 w-7" />
 <span className="text-xs">Tap to take photo or choose from library</span>
+<span className="text-[11px]">Photos are compressed (~200KB) automatically</span>
 </div>
 )}
 </div>
@@ -895,7 +924,7 @@ const compressed = await compressImage(f);
 const path = `${activeHouseholdId}/folders/${Date.now()}-${compressed.name}`;
 const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
 if (upErr) { toast.error(upErr.message); return; }
-const photo_url = supabase.storage.from("inventory-photos").getPublicUrl(path).data.publicUrl;
+const photo_url = path;
 await supabase.from("inventory_folders").update({ photo_url }).eq("id", folder.id);
 toast.success("Photo updated");
 qc.invalidateQueries({ queryKey: ["folders"] });
@@ -1008,8 +1037,9 @@ className="group overflow-hidden rounded-2xl border border-border bg-card text-l
 >
 <div className="relative aspect-square w-full overflow-hidden bg-muted">
 {sf.photo_url ? (
-<img
-src={sf.photo_url}
+<SignedImg
+bucket="inventory-photos"
+path={sf.photo_url}
 alt={sf.name}
 className="h-full w-full object-cover"
 />
@@ -1156,13 +1186,14 @@ className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semib
 
     {folder.photo_url && (
       <div className="mt-3 flex justify-center">
-        <img
-          src={folder.photo_url}
+        <SignedImg
+          bucket="inventory-photos"
+          path={folder.photo_url}
           alt=""
           draggable="false"
           className="block max-w-full rounded-xl object-contain max-h-48 cursor-pointer touch-none select-none"
           onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as any)._pdX = e.clientX; (e.currentTarget as any)._pdY = e.clientY; }}
-          onPointerUp={(e) => { e.stopPropagation(); const dx = e.clientX - (e.currentTarget as any)._pdX; const dy = e.clientY - (e.currentTarget as any)._pdY; if (Math.hypot(dx, dy) < 8) { lightboxOpenRef.current = true; setLightboxUrl(folder.photo_url ?? ""); } }}
+          onPointerUp={(e) => { e.stopPropagation(); const dx = e.clientX - (e.currentTarget as any)._pdX; const dy = e.clientY - (e.currentTarget as any)._pdY; if (Math.hypot(dx, dy) < 8) { lightboxOpenRef.current = true; getDisplayUrl("inventory-photos", folder.photo_url).then((u) => setLightboxUrl(u ?? "")); } }}
           title="Tap to enlarge"
         />
       </div>
@@ -1206,13 +1237,14 @@ className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semib
                 )}
               </div>
               {it.photo_url && (
-                <img
-                  src={it.photo_url}
+                <SignedImg
+                  bucket="inventory-photos"
+                  path={it.photo_url}
                   alt=""
                   draggable="false"
                   className="h-14 w-14 rounded-md object-cover cursor-pointer touch-none select-none"
                   onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as any)._pdX = e.clientX; (e.currentTarget as any)._pdY = e.clientY; }}
-                  onPointerUp={(e) => { e.stopPropagation(); const dx = e.clientX - (e.currentTarget as any)._pdX; const dy = e.clientY - (e.currentTarget as any)._pdY; if (Math.hypot(dx, dy) < 8) { lightboxOpenRef.current = true; setLightboxUrl(it.photo_url ?? ""); } }}
+                  onPointerUp={(e) => { e.stopPropagation(); const dx = e.clientX - (e.currentTarget as any)._pdX; const dy = e.clientY - (e.currentTarget as any)._pdY; if (Math.hypot(dx, dy) < 8) { lightboxOpenRef.current = true; getDisplayUrl("inventory-photos", it.photo_url).then((u) => setLightboxUrl(u ?? "")); } }}
                   title="Tap to enlarge"
                 />
               )}
@@ -1315,7 +1347,7 @@ const compressed = await compressImage(photoFile);
 const path = `${activeHouseholdId}/items/${Date.now()}-${compressed.name}`;
 const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
 if (upErr) throw upErr;
-photo_url = supabase.storage.from("inventory-photos").getPublicUrl(path).data.publicUrl;
+photo_url = path;
 }
 const { error } = await supabase
 .from("inventory_items")
@@ -1365,6 +1397,7 @@ return (
 </div>
 <div className="space-y-2">
 <Label className="text-xs">Photo (optional)</Label>
+<p className="text-[11px] text-muted-foreground">Photos are automatically compressed (~200KB) to keep the app fast and free.</p>
 <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)} />
 {photoFile ? (
 <div className="relative inline-block">
@@ -1445,7 +1478,7 @@ const compressed = await compressImage(f);
 const path = `${activeHouseholdId}/items/${Date.now()}-${compressed.name}`;
 const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
 if (upErr) { toast.error(upErr.message); return; }
-const photo_url = supabase.storage.from("inventory-photos").getPublicUrl(path).data.publicUrl;
+const photo_url = path;
 const { error } = await supabase.from("inventory_items").update({ photo_url }).eq("id", item.id);
 if (error) { toast.error(error.message); return; }
 toast.success("Photo added");
@@ -1456,7 +1489,7 @@ const photoSection = item.photo_url ? (
 <div className="space-y-1.5">
 <Label className="text-xs">Photo</Label>
 <div className="relative w-full">
-<img src={item.photo_url} alt="" className="w-full h-auto max-h-40 rounded-md object-contain" />
+<SignedImg bucket="inventory-photos" path={item.photo_url} alt="" className="w-full h-auto max-h-40 rounded-md object-contain" />
 <div className="absolute right-2 top-2 flex gap-1">
 <button
 type="button"
