@@ -266,7 +266,7 @@ export function NotesEditor({
         />
       </div>
 
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Button
           type="button"
           size="sm"
@@ -276,7 +276,7 @@ export function NotesEditor({
           className="text-urgent hover:bg-urgent/10 hover:text-urgent"
         >
           <Trash2 className="mr-1 h-3.5 w-3.5" />
-          Clear notes
+          Clear
         </Button>
         <div className="flex items-center gap-1.5">
           <Button type="button" size="sm" variant="outline" onClick={summarise} disabled={isEmpty || summarising}>
