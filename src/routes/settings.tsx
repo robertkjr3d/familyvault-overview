@@ -7,7 +7,7 @@ import { useMembers } from "@/hooks/useMembers";
 import { useAppStore } from "@/lib/store";
 import { Trash2 } from "lucide-react";
 import { fmtMoney } from "@/lib/format";
-import { runFullExport } from "@/lib/fullExport";
+import { runFullExport, runFullBackupZip } from "@/lib/fullExport";
 import { createDemoHousehold } from "@/lib/householdInvites";
 
 export const Route = createFileRoute("/settings")({
@@ -31,6 +31,7 @@ function SettingsPage() {
   const setShareOpen = useAppStore((s) => s.setShareOpen);
   const [generatingEstateDoc, setGeneratingEstateDoc] = useState(false);
   const [generatingFullExport, setGeneratingFullExport] = useState(false);
+  const [generatingFullBackup, setGeneratingFullBackup] = useState(false);
 
   const { data: settings } = useQuery({
     queryKey: ["app_settings", activeHouseholdId],
@@ -141,6 +142,23 @@ function SettingsPage() {
       toast.error(err.message || "Could not generate export");
     } finally {
       setGeneratingFullExport(false);
+    }
+  }
+
+  async function exportFullBackup() {
+    if (!activeHouseholdId) { toast.error("Select a household first."); return; }
+    setGeneratingFullBackup(true);
+    try {
+      const result = await runFullBackupZip(activeHouseholdId, members);
+      if (result.missingCount > 0) {
+        toast.success(`Backup downloaded (${result.totalFiles - result.missingCount} of ${result.totalFiles} files included — some couldn't be fetched)`);
+      } else {
+        toast.success("Full backup downloaded");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Could not generate backup");
+    } finally {
+      setGeneratingFullBackup(false);
     }
   }
 
@@ -689,6 +707,12 @@ function SettingsPage() {
           <button onClick={exportFull} disabled={generatingFullExport} className="rounded-lg border border-border px-3 py-2 text-sm font-semibold">
             {generatingFullExport ? "Generating…" : "Export everything (Excel)"}
           </button>
+          <button onClick={exportFullBackup} disabled={generatingFullBackup} className="rounded-lg border border-border px-3 py-2 text-sm font-semibold">
+            {generatingFullBackup ? "Downloading files, this can take a moment…" : "Download full backup (Excel + all photos & documents, .zip)"}
+          </button>
+          <p className="px-1 text-[11px] text-muted-foreground">
+            "Export everything" gives you a spreadsheet with 10-year links to your files. "Download full backup" downloads the actual files too, in one .zip — nothing depends on FamilyHub SG still running.
+          </p>
           <button onClick={exportAssetSummaryDocx} disabled={generatingEstateDoc} className="rounded-lg border border-border px-3 py-2 text-sm font-semibold">
             {generatingEstateDoc ? "Generating…" : "Export Asset & Liability Summary (.docx)"}
           </button>
