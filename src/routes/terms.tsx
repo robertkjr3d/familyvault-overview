@@ -5,7 +5,7 @@ export const Route = createFileRoute("/terms")({
   head: () => ({ meta: [{ title: "Terms of Service — FamilyHub SG" }] }),
 });
 
-const LAST_UPDATED = "20 June 2026";
+const LAST_UPDATED = "6 July 2026";
 // Placeholder — replace with a real, monitored inbox. See chat for details.
 const CONTACT_EMAIL = "support@familyhubsg.com";
 
@@ -58,6 +58,11 @@ function TermsPage() {
             Use FamilyHub SG only for lawful, personal household record-keeping. Don't attempt to
             access another household's data, disrupt the service, or use the app in a way that
             could harm other users.
+          </p>
+          <p>
+            When you export or download your data, including links to photos or documents, you're
+            responsible for how you store and share those files afterward — see our
+            Privacy Policy for how long those links stay valid.
           </p>
         </Section>
 
