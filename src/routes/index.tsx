@@ -282,7 +282,7 @@ const showSettingsNudge = salaryIncome === 0 && baseExpenses === 0;
 const horizon90 = 90;
 
 const allUpcoming = buildUpcomingItems(
-{ properties, loans, insurance, investments, savings, inventoryItems, reminders: remindersData ?? [] },
+{ properties, loans, insurance, investments, savings, inventoryItems, reminders: remindersData ?? [], otherAssets },
 today,
 horizon90,
 {
