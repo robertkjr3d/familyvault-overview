@@ -7,9 +7,20 @@ export function HashHighlight({ id, children }: { id: string; children: ReactNod
     const check = () => {
       if (typeof window === "undefined") return;
       if (window.location.hash === `#${id}`) {
-        setTimeout(() => {
-          document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" });
-        }, 50);
+        // Poll for the element instead of a single fixed delay — on a
+        // fresh page load the data (and this element) may still be
+        // loading well past 50ms, which silently skipped the scroll.
+        let attempts = 0;
+        const tryScroll = () => {
+          const el = document.getElementById(id);
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+          } else if (attempts < 20) {
+            attempts++;
+            setTimeout(tryScroll, 100);
+          }
+        };
+        tryScroll();
         setHl(true);
         const t = setTimeout(() => setHl(false), 2000);
         return () => clearTimeout(t);
