@@ -5,7 +5,7 @@ export const Route = createFileRoute("/privacy")({
   head: () => ({ meta: [{ title: "Privacy Policy — FamilyHub SG" }] }),
 });
 
-const LAST_UPDATED = "20 June 2026";
+const LAST_UPDATED = "6 July 2026";
 // Placeholder — replace with a real, monitored inbox. See chat for details.
 const CONTACT_EMAIL = "support@familyhubsg.com";
 
@@ -56,6 +56,18 @@ function PrivacyPage() {
             other households using the app. If you invite someone to join your household, they
             gain the level of access you grant them to that household's data.
           </p>
+          <p>
+            Photos and documents you upload are stored privately — not on the open internet.
+            Viewing or downloading a file always requires being signed in as a member of your
+            household first; nobody can access your files without that. When you view a file in
+            the app, or when a link is generated for you, that link is time-limited: links used
+            inside the app expire after about an hour and are silently regenerated each time you
+            need them, and links included in downloaded exports remain valid for up to 10 years,
+            so exported files stay useful long after you've downloaded them. A link, once
+            generated, isn't password-protected beyond that — treat it like you would a shared
+            cloud storage link, and avoid forwarding it to anyone you wouldn't want to have that
+            file. Uploads are also limited in size and file type to keep the service reliable.
+          </p>
         </Section>
 
         <Section title="Who can see your data">
@@ -82,9 +94,13 @@ function PrivacyPage() {
 
         <Section title="Exporting and deleting your data">
           <p>
-            You can export your household's data at any time from Settings → Data, as an Excel
-            workbook covering every record in the app. If you'd like your account and data
-            permanently deleted, contact us at the email below and we'll action it.
+            You can export your household's data at any time from Settings → Data, in two ways:
+            an Excel workbook covering every record in the app (with time-limited links to your
+            photos and documents, valid for up to 10 years), or a full backup as a single .zip
+            file that includes the same spreadsheet plus the actual photo and document files
+            themselves — fully self-contained, with nothing that depends on FamilyHub SG
+            continuing to run. If you'd like your account and data permanently deleted, contact us
+            at the email below and we'll action it.
           </p>
         </Section>
 
@@ -101,6 +117,28 @@ function PrivacyPage() {
           <p>
             If this policy changes in a meaningful way, we'll update the date above and let
             existing users know within the app.
+          </p>
+        </Section>
+
+        <Section title="Data breach response">
+          <p>
+            If we become aware of, or suspect, a data breach, our first step is to contain it —
+            for example, by revoking exposed access or fixing the underlying issue. We then assess
+            what data was affected, how many people, and how serious it is. If that assessment
+            finds the breach is likely to cause significant harm to anyone, or affects a large
+            number of people, Singapore's PDPA requires us to notify the Personal Data Protection
+            Commission (PDPC) within 3 calendar days of completing that assessment, and to notify
+            affected individuals directly where significant harm is likely. We keep a written
+            record of any suspected breach and our response, whether or not it ends up meeting the
+            reporting threshold.
+          </p>
+        </Section>
+
+        <Section title="Data Protection Officer">
+          <p>
+            FamilyHub SG's founder acts as Data Protection Officer, responsible for this app's
+            compliance with Singapore's PDPA. Reach the DPO at the contact email below for any
+            data protection question, concern, or request.
           </p>
         </Section>
 
