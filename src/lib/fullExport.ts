@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { recordConfigs, type FieldDef, type SelectOption } from "@/lib/recordConfigs";
 import type { Member } from "@/hooks/useMembers";
-import { getExportUrl } from "@/lib/storageUrls";
+import { getDisplayUrl, getExportUrl } from "@/lib/storageUrls";
 
 // Full household data export — one Excel sheet per record type (Properties,
 // Loans, Insurance, Investments, Savings & CPF, Other Assets, Health, Go-Bag,
@@ -325,10 +325,12 @@ export async function runFullExport(householdId: string, members: Member[]) {
     rows: members.map((m) => ({ name: `${m.emoji ? m.emoji + " " : ""}${m.name}`, short_name: m.short_name ?? "" })),
   });
 
-  await writeWorkbook(sheets);
+  const buffer = await writeWorkbook(sheets);
+  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  downloadBlob(blob, `familyvault-full-export-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
-async function writeWorkbook(sheets: SheetSpec[]) {
+async function writeWorkbook(sheets: SheetSpec[], context: "standalone" | "backup-zip" = "standalone") {
   const mod: any = await import("https://esm.sh/exceljs@4.4.0");
   const ExcelJS = mod.default ?? mod;
   const workbook = new ExcelJS.Workbook();
@@ -338,7 +340,22 @@ async function writeWorkbook(sheets: SheetSpec[]) {
   // Read Me sheet — first tab, sets expectations honestly.
   const readMe = workbook.addWorksheet("Read Me");
   readMe.columns = [{ width: 100 }];
-  const readMeLines = [
+  const readMeLines = context === "backup-zip" ? [
+    "FamilyHub SG — Full Backup",
+    `Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`,
+    "",
+    "What's included: every record from every tab in the app, as one sheet per tab — plus the actual photo",
+    "and document files themselves, included right alongside this spreadsheet in the \"Documents\" and",
+    "\"Inventory Photos\" folders of this .zip. This backup is fully self-contained: nothing in it depends on",
+    "FamilyHub SG, Supabase, or any link ever again.",
+    "",
+    "The Inventory sheet's Photo column and each record's document links still work too (valid for up to 10",
+    "years), as a convenient shortcut — but you don't need them, since the real files are right here.",
+    "",
+    "Each sheet below is safe to delete if you don't need it — they're independent.",
+    "",
+    "This export is for your own records and is not financial advice.",
+  ] : [
     "FamilyHub SG — Full Data Export",
     `Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`,
     "",
@@ -347,11 +364,15 @@ async function writeWorkbook(sheets: SheetSpec[]) {
     "of internal IDs and real numbers/dates you can sort, filter, and calculate with directly in Excel or",
     "Google Sheets.",
     "",
-    "What's NOT included: the actual photo and document FILES (e.g. inventory item photos, insurance policy",
-    "PDFs). Only their stored web links are included where present (see the Inventory sheet's Photo URL",
-    "column). Those links point back to FamilyHub SG's storage and may stop working if this household",
-    "later stops using the app. If you want to keep the actual files long-term, download them individually",
-    "from within the app — this spreadsheet is not a substitute for that.",
+    "What's NOT included in this version: the actual photo and document FILES (e.g. inventory item photos,",
+    "insurance policy PDFs). Instead, each has a private link (see the Inventory sheet's Photo column and",
+    "each record's documents) that opens the real file directly, valid for up to 10 years from when this",
+    "export was generated. Treat these links like a shared cloud storage link — anyone with the exact link",
+    "can open it, so avoid forwarding this file to anyone you wouldn't want to have that access.",
+    "",
+    "If you'd rather have the actual files themselves, with nothing depending on a link or on FamilyHub SG",
+    "still running, use \"Download full backup (.zip)\" from Settings \u2192 Data instead — it includes this same",
+    "spreadsheet plus every photo and document as real files.",
     "",
     "Each sheet below is safe to delete if you don't need it — they're independent.",
     "",
@@ -383,14 +404,223 @@ async function writeWorkbook(sheets: SheetSpec[]) {
     }
   }
 
-  const buffer = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  return await workbook.xlsx.writeBuffer();
+}
+
+function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `familyvault-full-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// Entity types that can have attachments via the Documents feature, mapped
+// to the table + display-name logic used for that record type elsewhere in
+// the app (insurance.tsx, property.tsx, etc. — see title={...} on each card).
+const DOCUMENT_ENTITY_TABLES: { entityType: string; table: string; sheetLabel: string }[] = [
+  { entityType: "property", table: "properties", sheetLabel: "Properties" },
+  { entityType: "loan", table: "loans", sheetLabel: "Loans" },
+  { entityType: "insurance", table: "insurance_policies", sheetLabel: "Insurance" },
+  { entityType: "investment", table: "investments", sheetLabel: "Investments" },
+  { entityType: "savings", table: "savings_accounts", sheetLabel: "Savings & CPF" },
+  { entityType: "other_asset", table: "other_assets", sheetLabel: "Other Assets" },
+  { entityType: "health", table: "health_conditions", sheetLabel: "Health" },
+];
+
+function recordDisplayName(entityType: string, row: any): string {
+  switch (entityType) {
+    case "loan":
+      return `${row.bank ?? "Loan"}${row.purpose ? " - " + row.purpose : ""}`;
+    case "savings":
+      return `${row.institution ?? "Account"}${row.account_type ? " - " + row.account_type : ""}`;
+    default:
+      return row.name ?? "Record";
+  }
+}
+
+function sanitizeForFilename(s: string): string {
+  return (s || "untitled").replace(/[\\/:*?"<>|]/g, "-").trim().slice(0, 80);
+}
+
+function extensionFromPath(path: string): string {
+  const match = path.match(/\.([a-zA-Z0-9]+)$/);
+  return match ? match[1] : "bin";
+}
+
+async function fetchBytes(url: string): Promise<ArrayBuffer | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return await res.arrayBuffer();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * True "take my files and leave" backup: downloads the actual document and
+ * photo bytes (not just links) and bundles them with the same data workbook
+ * into a single .zip. Fully self-contained — doesn't depend on FamilyHub SG
+ * still running, or on any link still being valid, ever.
+ */
+export async function runFullBackupZip(householdId: string, members: Member[]) {
+  const memberNameById = new Map(members.map((m) => [m.id, `${m.emoji ? m.emoji + " " : ""}${m.name}`]));
+  const filter = (q: any) => q.eq("household_id", householdId);
+
+  const tableQueries = FINANCIAL_TABLES.map((t) => filter(supabase.from(t.configKey as any).select("*")));
+  const [
+    propertiesRes, loansRes, insuranceRes, investmentsRes, savingsRes,
+    otherAssetsRes, healthRes, gobagRes, foldersRes, inventoryRes,
+  ] = await Promise.all([
+    ...tableQueries,
+    filter(supabase.from("inventory_folders").select("*")),
+    filter(supabase.from("inventory_items").select("*")),
+  ]);
+
+  const properties = propertiesRes.data ?? [];
+  const propertyNameById = new Map(properties.map((p: any) => [p.id, p.name ?? "Property"]));
+  const ctx = { memberNameById, propertyNameById };
+
+  // Build the exact same workbook as the plain export (same sheets, same
+  // logic) — reused inside the zip so the backup is fully self-contained.
+  const sheets: SheetSpec[] = [];
+  sheets.push(buildRecordSheet("properties", "Properties", properties, ctx));
+  sheets.push(buildRecordSheet("loans", "Loans", loansRes.data ?? [], ctx));
+  sheets.push(buildRecordSheet("insurance_policies", "Insurance", insuranceRes.data ?? [], ctx));
+  sheets.push(buildRecordSheet("investments", "Investments", investmentsRes.data ?? [], ctx));
+  sheets.push(buildRecordSheet("savings_accounts", "Savings & CPF", savingsRes.data ?? [], ctx));
+  sheets.push(buildRecordSheet("other_assets", "Other Assets", otherAssetsRes.data ?? [], ctx));
+  sheets.push(buildRecordSheet("health_conditions", "Health", healthRes.data ?? [], ctx));
+  sheets.push(buildRecordSheet("gobag_items", "Go-Bag", gobagRes.data ?? [], ctx));
+
+  const folders = foldersRes.data ?? [];
+  const folderById = new Map(folders.map((f: any) => [f.id, f]));
+  const inventoryItems = inventoryRes.data ?? [];
+  const inventoryRows: ExportRow[] = inventoryItems.map((it: any) => {
+    const folder = folderById.get(it.folder_id);
+    const parent = folder?.parent_id ? folderById.get(folder.parent_id) : null;
+    return {
+      location: parent ? parent.name : folder?.name ?? "",
+      subfolder: parent ? folder?.name ?? "" : "",
+      name: it.name ?? "",
+      category: it.category ?? "",
+      action: it.action ?? "",
+      warranty_date: it.warranty_date ? new Date(it.warranty_date) : null,
+      photo_url: "(see Inventory Photos folder in this zip)",
+    };
+  });
+  sheets.push({
+    name: "Inventory",
+    columns: [
+      { header: "Location", key: "location", width: 20 },
+      { header: "Subfolder", key: "subfolder", width: 20 },
+      { header: "Item name", key: "name", width: 24 },
+      { header: "Category", key: "category", width: 16 },
+      { header: "Action / Notes", key: "action", width: 28 },
+      { header: "Warranty / Expiry date", key: "warranty_date", width: 20, numFmt: "dd mmm yyyy" },
+      { header: "Photo", key: "photo_url", width: 30 },
+    ],
+    rows: inventoryRows,
+  });
+  sheets.push({
+    name: "Members",
+    columns: [
+      { header: "Name", key: "name", width: 20 },
+      { header: "Short name", key: "short_name", width: 16 },
+    ],
+    rows: members.map((m) => ({ name: `${m.emoji ? m.emoji + " " : ""}${m.name}`, short_name: m.short_name ?? "" })),
+  });
+
+  const workbookBuffer = await writeWorkbook(sheets, "backup-zip");
+
+  const zipMod: any = await import("https://esm.sh/jszip@3.10.1");
+  const JSZip = zipMod.default ?? zipMod;
+  const zip = new JSZip();
+  zip.file(`FamilyHub Export ${new Date().toISOString().slice(0, 10)}.xlsx`, workbookBuffer);
+
+  // Every record's uploaded documents, organised by category/record name.
+  const tableResByEntity: Record<string, any[]> = {
+    property: properties,
+    loan: loansRes.data ?? [],
+    insurance: insuranceRes.data ?? [],
+    investment: investmentsRes.data ?? [],
+    savings: savingsRes.data ?? [],
+    other_asset: otherAssetsRes.data ?? [],
+    health: healthRes.data ?? [],
+  };
+  const allEntityIds = Object.values(tableResByEntity).flat().map((r: any) => r.id);
+  const { data: allDocuments } = allEntityIds.length
+    ? await supabase.from("record_documents").select("*").in("entity_id", allEntityIds).eq("bucket", "vault-docs")
+    : { data: [] as any[] };
+
+  const docFetches = (allDocuments ?? []).map(async (doc: any) => {
+    const url = await getDisplayUrl("vault-docs", doc.path);
+    const bytes = url ? await fetchBytes(url) : null;
+    return { doc, bytes };
+  });
+
+  // Every inventory photo (folders + items).
+  const photoTargets: { path: string; folderPath: string; label: string }[] = [];
+  folders.forEach((f: any) => {
+    if (!f.photo_url) return;
+    const parent = f.parent_id ? folderById.get(f.parent_id) : null;
+    photoTargets.push({ path: f.photo_url, folderPath: parent ? parent.name : f.name, label: f.name });
+  });
+  inventoryItems.forEach((it: any) => {
+    if (!it.photo_url) return;
+    const folder = folderById.get(it.folder_id);
+    const parent = folder?.parent_id ? folderById.get(folder.parent_id) : null;
+    const folderPath = parent ? `${parent.name}/${folder?.name ?? ""}` : folder?.name ?? "";
+    photoTargets.push({ path: it.photo_url, folderPath, label: it.name ?? "item" });
+  });
+  const photoFetches = photoTargets.map(async (t) => {
+    const url = await getDisplayUrl("inventory-photos", t.path);
+    const bytes = url ? await fetchBytes(url) : null;
+    return { target: t, bytes };
+  });
+
+  const [docResults, photoResults] = await Promise.all([
+    Promise.all(docFetches),
+    Promise.all(photoFetches),
+  ]);
+
+  const usedNames = new Set<string>();
+  function uniqueName(base: string): string {
+    let name = base;
+    let n = 2;
+    while (usedNames.has(name)) { name = `${base} (${n})`; n++; }
+    usedNames.add(name);
+    return name;
+  }
+
+  let missingCount = 0;
+
+  docResults.forEach(({ doc, bytes }) => {
+    if (!bytes) { missingCount++; return; }
+    const tableConfig = DOCUMENT_ENTITY_TABLES.find((t) => t.entityType === doc.entity_type);
+    const rows = tableResByEntity[doc.entity_type] ?? [];
+    const record = rows.find((r: any) => r.id === doc.entity_id);
+    const recordName = sanitizeForFilename(record ? recordDisplayName(doc.entity_type, record) : "Record");
+    const ext = extensionFromPath(doc.path);
+    const baseLabel = sanitizeForFilename(doc.label || doc.path.split("/").pop() || "document");
+    const zipPath = uniqueName(`Documents/${tableConfig?.sheetLabel ?? doc.entity_type}/${recordName}/${baseLabel}`);
+    zip.file(`${zipPath}.${ext}`, bytes);
+  });
+
+  photoResults.forEach(({ target, bytes }) => {
+    if (!bytes) { missingCount++; return; }
+    const ext = extensionFromPath(target.path);
+    const safeFolder = target.folderPath.split("/").map(sanitizeForFilename).join("/");
+    const zipPath = uniqueName(`Inventory Photos/${safeFolder}/${sanitizeForFilename(target.label)}`);
+    zip.file(`${zipPath}.${ext}`, bytes);
+  });
+
+  const zipBlob = await zip.generateAsync({ type: "blob" });
+  downloadBlob(zipBlob, `familyvault-full-backup-${new Date().toISOString().slice(0, 10)}.zip`);
+
+  return { missingCount, totalFiles: docResults.length + photoResults.length };
 }
