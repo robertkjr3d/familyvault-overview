@@ -116,7 +116,7 @@ queryFn: async () => {
 const today = new Date();
 const householdId = selectedHouseholdId!;
 
-  const [properties, loans, insurance, investments, savings, inventoryItems, reminders, dismissed] = await Promise.all([
+  const [properties, loans, insurance, investments, savings, inventoryItems, reminders, dismissed, otherAssets] = await Promise.all([
     supabase.from("properties").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
     supabase.from("loans").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
     supabase.from("insurance_policies").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
@@ -125,6 +125,7 @@ const householdId = selectedHouseholdId!;
     supabase.from("inventory_items").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
     supabase.from("reminders").select("*").eq("household_id", householdId).eq("dismissed", false).then((r) => r.data ?? []),
     supabase.from("dismissed_dashboard_items").select("record_id, source_type, dismissed_date").eq("household_id", householdId).eq("permanently_deleted", false).then((r) => r.data ?? []),
+    supabase.from("other_assets").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
   ]);
 
   const dismissedKeys = new Set(
@@ -132,7 +133,7 @@ const householdId = selectedHouseholdId!;
   );
 
   const allItems = buildUpcomingItems(
-    { properties, loans, insurance, investments, savings, inventoryItems, reminders },
+    { properties, loans, insurance, investments, savings, inventoryItems, reminders, otherAssets },
     today,
     30,
     {
