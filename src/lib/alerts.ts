@@ -26,6 +26,7 @@ export type AlertSourceData = {
   savings: any[];
   inventoryItems: any[];
   reminders: any[];
+  otherAssets?: any[];
 };
 
 export function reminderHref(entityType: string | null | undefined): string {
@@ -213,6 +214,8 @@ export function buildUpcomingItems(
     investment: data.investments,
     savings:    data.savings,
     inventory:  data.inventoryItems,
+    other_asset: data.otherAssets ?? [],
+    other_assets: data.otherAssets ?? [],
   };
 
   for (const r of data.reminders) {
