@@ -146,7 +146,15 @@ const householdId = selectedHouseholdId!;
 
   return allItems.filter((item) => !dismissedKeys.has(`${item.sourceType}::${item.recordId}::${item.date}`)).length;
 },
-refetchInterval: 5_000,
+// Previously polled every 5 seconds, re-fetching all 9 tables above continuously
+// for as long as any tab was open — the single largest driver of read volume in
+// the app. Same-device changes already trigger an immediate refetch via the
+// invalidateQueries(["alert-count"]) calls in RemindersList, ReminderButton,
+// OnboardingWizard, settings.tsx, and lib/mutations.ts, and React Query's default
+// refetchOnWindowFocus already refreshes this when the user returns to the tab.
+// This interval is now just a light backstop for the one case those don't cover:
+// a different household member editing data from their own device/session.
+refetchInterval: 5 * 60 * 1000,
 
 });
 
