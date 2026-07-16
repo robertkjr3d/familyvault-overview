@@ -16,94 +16,276 @@ export type Database = {
     Tables: {
       app_settings: {
         Row: {
-          alert_review_days: number
-          alert_urgent_days: number
-          currency: string
+          id: string
           family_name: string
-          id: number
           simulated_date: string | null
+          created_at: string
+          updated_at: string
+          household_id: string
+          monthly_income: number | null
+          monthly_expenses: number | null
+          retirement_year: number | null
+          cpf_payout_age: number | null
+          cpf_monthly_payout: number | null
+          investment_growth_rate: number | null
+          property_appreciation_rate: number | null
+          inflation_rate: number | null
+          planning_horizon_age: number | null
+          mortgage_days: number
+          insurance_days: number
+          fd_days: number
+          warranty_days: number
+          onboarding_dismissed: boolean
+        }
+        Insert: {
+          id?: string
+          family_name?: string
+          simulated_date?: string | null
+          created_at?: string
+          updated_at?: string
+          household_id?: string
+          monthly_income?: number | null
+          monthly_expenses?: number | null
+          retirement_year?: number | null
+          cpf_payout_age?: number | null
+          cpf_monthly_payout?: number | null
+          investment_growth_rate?: number | null
+          property_appreciation_rate?: number | null
+          inflation_rate?: number | null
+          planning_horizon_age?: number | null
+          mortgage_days?: number
+          insurance_days?: number
+          fd_days?: number
+          warranty_days?: number
+          onboarding_dismissed?: boolean
+        }
+        Update: {
+          id?: string
+          family_name?: string
+          simulated_date?: string | null
+          created_at?: string
+          updated_at?: string
+          household_id?: string
+          monthly_income?: number | null
+          monthly_expenses?: number | null
+          retirement_year?: number | null
+          cpf_payout_age?: number | null
+          cpf_monthly_payout?: number | null
+          investment_growth_rate?: number | null
+          property_appreciation_rate?: number | null
+          inflation_rate?: number | null
+          planning_horizon_age?: number | null
+          mortgage_days?: number
+          insurance_days?: number
+          fd_days?: number
+          warranty_days?: number
+          onboarding_dismissed?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_settings_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dismissed_dashboard_items: {
+        Row: {
+          id: string
+          household_id: string
+          source_type: string
+          record_id: string
+          label: string
+          dismissed_at: string
+          dismissed_date: string
+          permanently_deleted: boolean
+          reminder_id: string | null
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          source_type: string
+          record_id: string
+          label: string
+          dismissed_at?: string
+          dismissed_date?: string
+          permanently_deleted?: boolean
+          reminder_id?: string | null
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          source_type?: string
+          record_id?: string
+          label?: string
+          dismissed_at?: string
+          dismissed_date?: string
+          permanently_deleted?: boolean
+          reminder_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dismissed_dashboard_items_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      error_logs: {
+        Row: {
+          id: string
+          created_at: string
+          user_id: string | null
+          error_type: string
+          error_message: string | null
+          error_stack: string | null
+          page_url: string | null
+          component_name: string | null
+          metadata: Json | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          user_id?: string | null
+          error_type: string
+          error_message?: string | null
+          error_stack?: string | null
+          page_url?: string | null
+          component_name?: string | null
+          metadata?: Json | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          user_id?: string | null
+          error_type?: string
+          error_message?: string | null
+          error_stack?: string | null
+          page_url?: string | null
+          component_name?: string | null
+          metadata?: Json | null
+        }
+        Relationships: []
+      }
+      estate_checklist: {
+        Row: {
+          id: string
+          household_id: string
+          item_id: string
+          checked: boolean
+          external_url: string | null
+          notes: string | null
           updated_at: string
         }
         Insert: {
-          alert_review_days?: number
-          alert_urgent_days?: number
-          currency?: string
-          family_name?: string
-          id?: number
-          simulated_date?: string | null
+          id?: string
+          household_id: string
+          item_id: string
+          checked?: boolean
+          external_url?: string | null
+          notes?: string | null
           updated_at?: string
         }
         Update: {
-          alert_review_days?: number
-          alert_urgent_days?: number
-          currency?: string
-          family_name?: string
-          id?: number
-          simulated_date?: string | null
+          id?: string
+          household_id?: string
+          item_id?: string
+          checked?: boolean
+          external_url?: string | null
+          notes?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "estate_checklist_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       gobag_items: {
         Row: {
-          checked: boolean
           id: string
           label: string
+          checked: boolean
           sort_order: number
+          household_id: string
         }
         Insert: {
-          checked?: boolean
           id?: string
           label: string
+          checked?: boolean
           sort_order?: number
+          household_id?: string
         }
         Update: {
-          checked?: boolean
           id?: string
           label?: string
+          checked?: boolean
           sort_order?: number
+          household_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "gobag_items_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       health_conditions: {
         Row: {
-          actions: Json
-          created_at: string
-          details: string | null
           id: string
-          is_demo: boolean
-          member_id: string
+          member_id: string | null
+          action_member_id: string | null
           name: string
+          supplements: Json
+          actions: Json
+          details: string | null
           notes: string | null
           status: Database["public"]["Enums"]["record_status"]
-          supplements: Json
+          is_demo: boolean
+          created_at: string
           updated_at: string
+          household_id: string
         }
         Insert: {
-          actions?: Json
-          created_at?: string
-          details?: string | null
           id?: string
-          is_demo?: boolean
-          member_id: string
+          member_id?: string | null
+          action_member_id?: string | null
           name: string
+          supplements?: Json
+          actions?: Json
+          details?: string | null
           notes?: string | null
           status?: Database["public"]["Enums"]["record_status"]
-          supplements?: Json
+          is_demo?: boolean
+          created_at?: string
           updated_at?: string
+          household_id?: string
         }
         Update: {
-          actions?: Json
-          created_at?: string
-          details?: string | null
           id?: string
-          is_demo?: boolean
-          member_id?: string
+          member_id?: string | null
+          action_member_id?: string | null
           name?: string
+          supplements?: Json
+          actions?: Json
+          details?: string | null
           notes?: string | null
           status?: Database["public"]["Enums"]["record_status"]
-          supplements?: Json
+          is_demo?: boolean
+          created_at?: string
           updated_at?: string
+          household_id?: string
         }
         Relationships: [
           {
@@ -113,77 +295,230 @@ export type Database = {
             referencedRelation: "members"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "health_conditions_action_member_id_fkey"
+            columns: ["action_member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "health_conditions_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
         ]
       }
-      insurance_policies: {
+      household_invites: {
         Row: {
-          action: string | null
-          category: string
-          created_at: string
-          end_date: string | null
-          expected_payout: number | null
-          frequency: string | null
           id: string
-          is_demo: boolean
-          member_id: string | null
+          household_id: string
+          invited_email: string
+          role: string
+          invited_by_user_id: string
+          token: string
+          created_at: string
+          expires_at: string
+          accepted_at: string | null
+          accepted_by_user_id: string | null
+          cancelled_at: string | null
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          invited_email: string
+          role?: string
+          invited_by_user_id: string
+          token: string
+          created_at?: string
+          expires_at?: string
+          accepted_at?: string | null
+          accepted_by_user_id?: string | null
+          cancelled_at?: string | null
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          invited_email?: string
+          role?: string
+          invited_by_user_id?: string
+          token?: string
+          created_at?: string
+          expires_at?: string
+          accepted_at?: string | null
+          accepted_by_user_id?: string | null
+          cancelled_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_invites_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      household_users: {
+        Row: {
+          household_id: string
+          user_id: string
+          role: string
+          invited_by: string | null
+          created_at: string
+        }
+        Insert: {
+          household_id: string
+          user_id: string
+          role?: string
+          invited_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          household_id?: string
+          user_id?: string
+          role?: string
+          invited_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_users_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      households: {
+        Row: {
+          id: string
           name: string
-          next_due_date: string | null
-          payment_method: string | null
-          payout_year: number | null
-          policy_number: string | null
-          premium: number | null
-          provider: string | null
-          start_date: string | null
-          status: Database["public"]["Enums"]["record_status"]
-          sum_assured: number | null
-          type: string | null
+          slug: string | null
+          created_at: string
           updated_at: string
         }
         Insert: {
-          action?: string | null
-          category: string
-          created_at?: string
-          end_date?: string | null
-          expected_payout?: number | null
-          frequency?: string | null
           id?: string
-          is_demo?: boolean
-          member_id?: string | null
           name: string
-          next_due_date?: string | null
-          payment_method?: string | null
-          payout_year?: number | null
-          policy_number?: string | null
-          premium?: number | null
-          provider?: string | null
-          start_date?: string | null
-          status?: Database["public"]["Enums"]["record_status"]
-          sum_assured?: number | null
-          type?: string | null
+          slug?: string | null
+          created_at?: string
           updated_at?: string
         }
         Update: {
-          action?: string | null
-          category?: string
-          created_at?: string
-          end_date?: string | null
-          expected_payout?: number | null
-          frequency?: string | null
           id?: string
-          is_demo?: boolean
-          member_id?: string | null
           name?: string
-          next_due_date?: string | null
-          payment_method?: string | null
-          payout_year?: number | null
+          slug?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      insurance_policies: {
+        Row: {
+          id: string
+          member_id: string | null
+          action_member_id: string | null
+          name: string
+          category: string | null
+          provider: string | null
+          policy_number: string | null
+          premium: number | null
+          frequency: string | null
+          num_payments: number | null
+          payment_end_date: string | null
+          sum_assured: number | null
+          start_date: string | null
+          end_date: string | null
+          next_due_date: string | null
+          action: string | null
+          notes: string | null
+          status: Database["public"]["Enums"]["record_status"]
+          is_demo: boolean
+          created_at: string
+          updated_at: string
+          household_id: string
+          currency: string | null
+          payout_amount: number | null
+          payout_start_date: string | null
+          payout_frequency: string | null
+          payout_end_date: string | null
+          coverage: string | null
+          beneficiary: string | null
+          also_covers: string[]
+          surrender_value: number | null
+          external_url: string | null
+        }
+        Insert: {
+          id?: string
+          member_id?: string | null
+          action_member_id?: string | null
+          name: string
+          category?: string | null
+          provider?: string | null
           policy_number?: string | null
           premium?: number | null
-          provider?: string | null
-          start_date?: string | null
-          status?: Database["public"]["Enums"]["record_status"]
+          frequency?: string | null
+          num_payments?: number | null
+          payment_end_date?: string | null
           sum_assured?: number | null
-          type?: string | null
+          start_date?: string | null
+          end_date?: string | null
+          next_due_date?: string | null
+          action?: string | null
+          notes?: string | null
+          status?: Database["public"]["Enums"]["record_status"]
+          is_demo?: boolean
+          created_at?: string
           updated_at?: string
+          household_id?: string
+          currency?: string | null
+          payout_amount?: number | null
+          payout_start_date?: string | null
+          payout_frequency?: string | null
+          payout_end_date?: string | null
+          coverage?: string | null
+          beneficiary?: string | null
+          also_covers?: string[]
+          surrender_value?: number | null
+          external_url?: string | null
+        }
+        Update: {
+          id?: string
+          member_id?: string | null
+          action_member_id?: string | null
+          name?: string
+          category?: string | null
+          provider?: string | null
+          policy_number?: string | null
+          premium?: number | null
+          frequency?: string | null
+          num_payments?: number | null
+          payment_end_date?: string | null
+          sum_assured?: number | null
+          start_date?: string | null
+          end_date?: string | null
+          next_due_date?: string | null
+          action?: string | null
+          notes?: string | null
+          status?: Database["public"]["Enums"]["record_status"]
+          is_demo?: boolean
+          created_at?: string
+          updated_at?: string
+          household_id?: string
+          currency?: string | null
+          payout_amount?: number | null
+          payout_start_date?: string | null
+          payout_frequency?: string | null
+          payout_end_date?: string | null
+          coverage?: string | null
+          beneficiary?: string | null
+          also_covers?: string[]
+          surrender_value?: number | null
+          external_url?: string | null
         }
         Relationships: [
           {
@@ -193,32 +528,49 @@ export type Database = {
             referencedRelation: "members"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "insurance_policies_action_member_id_fkey"
+            columns: ["action_member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insurance_policies_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
         ]
       }
       inventory_folders: {
         Row: {
-          created_at: string
           id: string
-          name: string
           parent_id: string | null
+          name: string
           photo_url: string | null
           sort_order: number
+          created_at: string
+          household_id: string
         }
         Insert: {
-          created_at?: string
           id?: string
-          name: string
           parent_id?: string | null
+          name: string
           photo_url?: string | null
           sort_order?: number
+          created_at?: string
+          household_id?: string
         }
         Update: {
-          created_at?: string
           id?: string
-          name?: string
           parent_id?: string | null
+          name?: string
           photo_url?: string | null
           sort_order?: number
+          created_at?: string
+          household_id?: string
         }
         Relationships: [
           {
@@ -228,43 +580,82 @@ export type Database = {
             referencedRelation: "inventory_folders"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "inventory_folders_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
         ]
       }
       inventory_items: {
         Row: {
-          action: string | null
-          category: string | null
-          created_at: string
-          folder_id: string
           id: string
+          folder_id: string | null
+          member_id: string | null
           name: string
-          photo_url: string | null
+          description: string | null
+          quantity: number | null
+          image_url: string | null
+          notes: string | null
+          created_at: string
           updated_at: string
+          household_id: string
+          category: string | null
+          action: string | null
           warranty_date: string | null
+          photo_url: string | null
         }
         Insert: {
-          action?: string | null
-          category?: string | null
-          created_at?: string
-          folder_id: string
           id?: string
+          folder_id?: string | null
+          member_id?: string | null
           name: string
-          photo_url?: string | null
+          description?: string | null
+          quantity?: number | null
+          image_url?: string | null
+          notes?: string | null
+          created_at?: string
           updated_at?: string
+          household_id?: string
+          category?: string | null
+          action?: string | null
           warranty_date?: string | null
+          photo_url?: string | null
         }
         Update: {
-          action?: string | null
-          category?: string | null
-          created_at?: string
-          folder_id?: string
           id?: string
+          folder_id?: string | null
+          member_id?: string | null
           name?: string
-          photo_url?: string | null
+          description?: string | null
+          quantity?: number | null
+          image_url?: string | null
+          notes?: string | null
+          created_at?: string
           updated_at?: string
+          household_id?: string
+          category?: string | null
+          action?: string | null
           warranty_date?: string | null
+          photo_url?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "inventory_items_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_items_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "inventory_items_folder_id_fkey"
             columns: ["folder_id"]
@@ -274,48 +665,117 @@ export type Database = {
           },
         ]
       }
-      investments: {
+      inventory_locations: {
         Row: {
-          cost_basis: number | null
-          created_at: string
-          current_value: number | null
-          group_name: string
           id: string
-          is_demo: boolean
-          member_id: string | null
           name: string
-          projected_return_pct: number | null
-          status: Database["public"]["Enums"]["record_status"]
-          strategy: string | null
-          updated_at: string
+          description: string | null
+          created_at: string
         }
         Insert: {
-          cost_basis?: number | null
-          created_at?: string
-          current_value?: number | null
-          group_name: string
           id?: string
-          is_demo?: boolean
-          member_id?: string | null
           name: string
-          projected_return_pct?: number | null
-          status?: Database["public"]["Enums"]["record_status"]
-          strategy?: string | null
-          updated_at?: string
+          description?: string | null
+          created_at?: string
         }
         Update: {
-          cost_basis?: number | null
-          created_at?: string
-          current_value?: number | null
-          group_name?: string
           id?: string
-          is_demo?: boolean
-          member_id?: string | null
           name?: string
+          description?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      investments: {
+        Row: {
+          id: string
+          member_id: string | null
+          action_member_id: string | null
+          name: string
+          group_name: string | null
+          cost_basis: number | null
+          current_value: number | null
+          projected_return_pct: number | null
+          strategy: string | null
+          action: string | null
+          notes: string | null
+          status: Database["public"]["Enums"]["record_status"]
+          is_demo: boolean
+          created_at: string
+          updated_at: string
+          household_id: string
+          premium_start_date: string | null
+          premium_frequency: string | null
+          premium_end_date: string | null
+          coverage: string | null
+          premium_amount: number | null
+          payout_amount: number | null
+          payout_start_date: string | null
+          payout_end_date: string | null
+          payout_frequency: string | null
+          currency: string | null
+          last_updated: string | null
+          external_url: string | null
+        }
+        Insert: {
+          id?: string
+          member_id?: string | null
+          action_member_id?: string | null
+          name: string
+          group_name?: string | null
+          cost_basis?: number | null
+          current_value?: number | null
           projected_return_pct?: number | null
-          status?: Database["public"]["Enums"]["record_status"]
           strategy?: string | null
+          action?: string | null
+          notes?: string | null
+          status?: Database["public"]["Enums"]["record_status"]
+          is_demo?: boolean
+          created_at?: string
           updated_at?: string
+          household_id?: string
+          premium_start_date?: string | null
+          premium_frequency?: string | null
+          premium_end_date?: string | null
+          coverage?: string | null
+          premium_amount?: number | null
+          payout_amount?: number | null
+          payout_start_date?: string | null
+          payout_end_date?: string | null
+          payout_frequency?: string | null
+          currency?: string | null
+          last_updated?: string | null
+          external_url?: string | null
+        }
+        Update: {
+          id?: string
+          member_id?: string | null
+          action_member_id?: string | null
+          name?: string
+          group_name?: string | null
+          cost_basis?: number | null
+          current_value?: number | null
+          projected_return_pct?: number | null
+          strategy?: string | null
+          action?: string | null
+          notes?: string | null
+          status?: Database["public"]["Enums"]["record_status"]
+          is_demo?: boolean
+          created_at?: string
+          updated_at?: string
+          household_id?: string
+          premium_start_date?: string | null
+          premium_frequency?: string | null
+          premium_end_date?: string | null
+          coverage?: string | null
+          premium_amount?: number | null
+          payout_amount?: number | null
+          payout_start_date?: string | null
+          payout_end_date?: string | null
+          payout_frequency?: string | null
+          currency?: string | null
+          last_updated?: string | null
+          external_url?: string | null
         }
         Relationships: [
           {
@@ -325,32 +785,49 @@ export type Database = {
             referencedRelation: "members"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "investments_action_member_id_fkey"
+            columns: ["action_member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "investments_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
         ]
       }
       loan_rate_schedule: {
         Row: {
           id: string
           loan_id: string
+          year_label: string
           rate: number | null
           rate_type: string | null
           sort_order: number
-          year_label: string
+          household_id: string
         }
         Insert: {
           id?: string
           loan_id: string
+          year_label: string
           rate?: number | null
           rate_type?: string | null
           sort_order?: number
-          year_label: string
+          household_id?: string
         }
         Update: {
           id?: string
           loan_id?: string
+          year_label?: string
           rate?: number | null
           rate_type?: string | null
           sort_order?: number
-          year_label?: string
+          household_id?: string
         }
         Relationships: [
           {
@@ -360,68 +837,90 @@ export type Database = {
             referencedRelation: "loans"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "loan_rate_schedule_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
         ]
       }
       loans: {
         Row: {
-          action: string | null
-          balance: number | null
-          bank: string
-          created_at: string
           id: string
-          is_demo: boolean
           member_id: string | null
-          monthly_payment: number | null
-          notes: string | null
-          original_amount: number | null
+          action_member_id: string | null
+          bank: string
           purpose: string | null
+          original_amount: number | null
+          balance: number | null
+          start_date: string | null
+          term_years: number | null
           rate: number | null
           rate_label: string | null
           reprice_date: string | null
-          start_date: string | null
+          action: string | null
+          notes: string | null
           status: Database["public"]["Enums"]["record_status"]
-          term_years: number | null
+          is_demo: boolean
+          created_at: string
           updated_at: string
+          household_id: string
+          monthly_payment: number | null
+          property_id: string | null
+          loan_end_date: string | null
+          external_url: string | null
         }
         Insert: {
-          action?: string | null
-          balance?: number | null
-          bank: string
-          created_at?: string
           id?: string
-          is_demo?: boolean
           member_id?: string | null
-          monthly_payment?: number | null
-          notes?: string | null
-          original_amount?: number | null
+          action_member_id?: string | null
+          bank: string
           purpose?: string | null
+          original_amount?: number | null
+          balance?: number | null
+          start_date?: string | null
+          term_years?: number | null
           rate?: number | null
           rate_label?: string | null
           reprice_date?: string | null
-          start_date?: string | null
+          action?: string | null
+          notes?: string | null
           status?: Database["public"]["Enums"]["record_status"]
-          term_years?: number | null
+          is_demo?: boolean
+          created_at?: string
           updated_at?: string
+          household_id?: string
+          monthly_payment?: number | null
+          property_id?: string | null
+          loan_end_date?: string | null
+          external_url?: string | null
         }
         Update: {
-          action?: string | null
-          balance?: number | null
-          bank?: string
-          created_at?: string
           id?: string
-          is_demo?: boolean
           member_id?: string | null
-          monthly_payment?: number | null
-          notes?: string | null
-          original_amount?: number | null
+          action_member_id?: string | null
+          bank?: string
           purpose?: string | null
+          original_amount?: number | null
+          balance?: number | null
+          start_date?: string | null
+          term_years?: number | null
           rate?: number | null
           rate_label?: string | null
           reprice_date?: string | null
-          start_date?: string | null
+          action?: string | null
+          notes?: string | null
           status?: Database["public"]["Enums"]["record_status"]
-          term_years?: number | null
+          is_demo?: boolean
+          created_at?: string
           updated_at?: string
+          household_id?: string
+          monthly_payment?: number | null
+          property_id?: string | null
+          loan_end_date?: string | null
+          external_url?: string | null
         }
         Relationships: [
           {
@@ -431,137 +930,287 @@ export type Database = {
             referencedRelation: "members"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "loans_action_member_id_fkey"
+            columns: ["action_member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loans_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loans_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
         ]
       }
       members: {
         Row: {
-          color: string
-          created_at: string
-          emoji: string
           id: string
           name: string
+          emoji: string | null
+          color: string | null
+          created_at: string
           short_name: string | null
           sort_order: number
+          household_id: string
+          birth_year: number | null
         }
         Insert: {
-          color: string
-          created_at?: string
-          emoji?: string
           id?: string
           name: string
+          emoji?: string | null
+          color?: string | null
+          created_at?: string
           short_name?: string | null
           sort_order?: number
+          household_id?: string
+          birth_year?: number | null
         }
         Update: {
-          color?: string
-          created_at?: string
-          emoji?: string
           id?: string
           name?: string
+          emoji?: string | null
+          color?: string | null
+          created_at?: string
           short_name?: string | null
           sort_order?: number
+          household_id?: string
+          birth_year?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "members_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      other_assets: {
+        Row: {
+          id: string
+          member_id: string | null
+          action_member_id: string | null
+          name: string
+          category: string
+          estimated_value: number | null
+          last_updated: string | null
+          notes: string | null
+          action: string | null
+          status: Database["public"]["Enums"]["record_status"]
+          is_demo: boolean
+          created_at: string
+          updated_at: string
+          household_id: string
+        }
+        Insert: {
+          id?: string
+          member_id?: string | null
+          action_member_id?: string | null
+          name: string
+          category?: string
+          estimated_value?: number | null
+          last_updated?: string | null
+          notes?: string | null
+          action?: string | null
+          status?: Database["public"]["Enums"]["record_status"]
+          is_demo?: boolean
+          created_at?: string
+          updated_at?: string
+          household_id: string
+        }
+        Update: {
+          id?: string
+          member_id?: string | null
+          action_member_id?: string | null
+          name?: string
+          category?: string
+          estimated_value?: number | null
+          last_updated?: string | null
+          notes?: string | null
+          action?: string | null
+          status?: Database["public"]["Enums"]["record_status"]
+          is_demo?: boolean
+          created_at?: string
+          updated_at?: string
+          household_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "other_assets_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "other_assets_action_member_id_fkey"
+            columns: ["action_member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "other_assets_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      planned_cashflow_events: {
+        Row: {
+          id: string
+          household_id: string
+          label: string
+          year: number
+          amount: number
+          type: string
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          label: string
+          year: number
+          amount: number
+          type: string
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          label?: string
+          year?: number
+          amount?: number
+          type?: string
+          created_at?: string | null
         }
         Relationships: []
       }
       properties: {
         Row: {
-          action_note: string | null
+          id: string
+          member_id: string | null
+          action_member_id: string | null
+          name: string
           address: string | null
+          purpose: string | null
+          currency: string
+          purchase_price: number | null
+          purchase_date: string | null
+          current_value: number | null
+          mortgage_bank: string | null
+          mortgage_balance: number | null
+          monthly_payment: number | null
+          interest_rate: number | null
+          rate_type: string | null
+          fixed_rate_end: string | null
+          monthly_rent: number | null
+          market_rent: number | null
+          cost_management: number | null
+          cost_property_tax: number | null
           cost_fire_insurance: number | null
           cost_maintenance: number | null
-          cost_management: number | null
-          cost_other: number | null
           cost_other_label: string | null
-          cost_property_tax: number | null
-          created_at: string
-          currency: string
-          current_value: number | null
-          fixed_rate_end: string | null
-          id: string
-          interest_rate: number | null
-          is_demo: boolean
-          joint_member_ids: string[] | null
-          market_rent: number | null
-          member_id: string | null
-          monthly_costs: number | null
-          monthly_payment: number | null
-          monthly_rent: number | null
-          mortgage_balance: number | null
-          mortgage_bank: string | null
-          name: string
-          purchase_date: string | null
-          purchase_price: number | null
-          purpose: Database["public"]["Enums"]["property_purpose"]
-          rate_type: string | null
-          status: Database["public"]["Enums"]["record_status"]
+          cost_other: number | null
           strategy: string | null
+          action_note: string | null
+          notes: string | null
+          status: Database["public"]["Enums"]["record_status"]
+          is_demo: boolean
+          created_at: string
           updated_at: string
+          household_id: string
+          mortgage_end_date: string | null
+          beneficiary: string | null
+          external_url: string | null
         }
         Insert: {
-          action_note?: string | null
+          id?: string
+          member_id?: string | null
+          action_member_id?: string | null
+          name: string
           address?: string | null
+          purpose?: string | null
+          currency?: string
+          purchase_price?: number | null
+          purchase_date?: string | null
+          current_value?: number | null
+          mortgage_bank?: string | null
+          mortgage_balance?: number | null
+          monthly_payment?: number | null
+          interest_rate?: number | null
+          rate_type?: string | null
+          fixed_rate_end?: string | null
+          monthly_rent?: number | null
+          market_rent?: number | null
+          cost_management?: number | null
+          cost_property_tax?: number | null
           cost_fire_insurance?: number | null
           cost_maintenance?: number | null
-          cost_management?: number | null
-          cost_other?: number | null
           cost_other_label?: string | null
-          cost_property_tax?: number | null
-          created_at?: string
-          currency?: string
-          current_value?: number | null
-          fixed_rate_end?: string | null
-          id?: string
-          interest_rate?: number | null
-          is_demo?: boolean
-          joint_member_ids?: string[] | null
-          market_rent?: number | null
-          member_id?: string | null
-          monthly_costs?: number | null
-          monthly_payment?: number | null
-          monthly_rent?: number | null
-          mortgage_balance?: number | null
-          mortgage_bank?: string | null
-          name: string
-          purchase_date?: string | null
-          purchase_price?: number | null
-          purpose?: Database["public"]["Enums"]["property_purpose"]
-          rate_type?: string | null
-          status?: Database["public"]["Enums"]["record_status"]
+          cost_other?: number | null
           strategy?: string | null
+          action_note?: string | null
+          notes?: string | null
+          status?: Database["public"]["Enums"]["record_status"]
+          is_demo?: boolean
+          created_at?: string
           updated_at?: string
+          household_id?: string
+          mortgage_end_date?: string | null
+          beneficiary?: string | null
+          external_url?: string | null
         }
         Update: {
-          action_note?: string | null
+          id?: string
+          member_id?: string | null
+          action_member_id?: string | null
+          name?: string
           address?: string | null
+          purpose?: string | null
+          currency?: string
+          purchase_price?: number | null
+          purchase_date?: string | null
+          current_value?: number | null
+          mortgage_bank?: string | null
+          mortgage_balance?: number | null
+          monthly_payment?: number | null
+          interest_rate?: number | null
+          rate_type?: string | null
+          fixed_rate_end?: string | null
+          monthly_rent?: number | null
+          market_rent?: number | null
+          cost_management?: number | null
+          cost_property_tax?: number | null
           cost_fire_insurance?: number | null
           cost_maintenance?: number | null
-          cost_management?: number | null
-          cost_other?: number | null
           cost_other_label?: string | null
-          cost_property_tax?: number | null
-          created_at?: string
-          currency?: string
-          current_value?: number | null
-          fixed_rate_end?: string | null
-          id?: string
-          interest_rate?: number | null
-          is_demo?: boolean
-          joint_member_ids?: string[] | null
-          market_rent?: number | null
-          member_id?: string | null
-          monthly_costs?: number | null
-          monthly_payment?: number | null
-          monthly_rent?: number | null
-          mortgage_balance?: number | null
-          mortgage_bank?: string | null
-          name?: string
-          purchase_date?: string | null
-          purchase_price?: number | null
-          purpose?: Database["public"]["Enums"]["property_purpose"]
-          rate_type?: string | null
-          status?: Database["public"]["Enums"]["record_status"]
+          cost_other?: number | null
           strategy?: string | null
+          action_note?: string | null
+          notes?: string | null
+          status?: Database["public"]["Enums"]["record_status"]
+          is_demo?: boolean
+          created_at?: string
           updated_at?: string
+          household_id?: string
+          mortgage_end_date?: string | null
+          beneficiary?: string | null
+          external_url?: string | null
         }
         Relationships: [
           {
@@ -571,32 +1220,49 @@ export type Database = {
             referencedRelation: "members"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "properties_action_member_id_fkey"
+            columns: ["action_member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "properties_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
         ]
       }
       property_rate_schedule: {
         Row: {
           id: string
           property_id: string
+          year_label: string
           rate: number | null
           rate_type: string | null
           sort_order: number
-          year_label: string
+          household_id: string
         }
         Insert: {
           id?: string
           property_id: string
+          year_label: string
           rate?: number | null
           rate_type?: string | null
           sort_order?: number
-          year_label: string
+          household_id?: string
         }
         Update: {
           id?: string
           property_id?: string
+          year_label?: string
           rate?: number | null
           rate_type?: string | null
           sort_order?: number
-          year_label?: string
+          household_id?: string
         }
         Relationships: [
           {
@@ -606,158 +1272,213 @@ export type Database = {
             referencedRelation: "properties"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "property_rate_schedule_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
         ]
       }
       record_documents: {
         Row: {
-          bucket: string
-          entity_id: string
-          entity_type: Database["public"]["Enums"]["entity_type"]
           id: string
-          label: string | null
+          entity_type: string
+          entity_id: string
+          bucket: string
           path: string
+          label: string | null
           reminder_date: string | null
           uploaded_at: string
+          household_id: string
         }
         Insert: {
-          bucket?: string
-          entity_id: string
-          entity_type: Database["public"]["Enums"]["entity_type"]
           id?: string
-          label?: string | null
+          entity_type: string
+          entity_id: string
+          bucket?: string
           path: string
+          label?: string | null
           reminder_date?: string | null
           uploaded_at?: string
+          household_id?: string
         }
         Update: {
-          bucket?: string
-          entity_id?: string
-          entity_type?: Database["public"]["Enums"]["entity_type"]
           id?: string
-          label?: string | null
+          entity_type?: string
+          entity_id?: string
+          bucket?: string
           path?: string
+          label?: string | null
           reminder_date?: string | null
           uploaded_at?: string
+          household_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "record_documents_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       record_history: {
         Row: {
-          created_at: string
-          entity_id: string
-          entity_type: Database["public"]["Enums"]["entity_type"]
           id: string
+          entity_type: string
+          entity_id: string
           note: string
           occurred_on: string
+          created_at: string
+          household_id: string
         }
         Insert: {
-          created_at?: string
-          entity_id: string
-          entity_type: Database["public"]["Enums"]["entity_type"]
           id?: string
+          entity_type: string
+          entity_id: string
           note: string
           occurred_on?: string
+          created_at?: string
+          household_id?: string
         }
         Update: {
-          created_at?: string
-          entity_id?: string
-          entity_type?: Database["public"]["Enums"]["entity_type"]
           id?: string
+          entity_type?: string
+          entity_id?: string
           note?: string
           occurred_on?: string
+          created_at?: string
+          household_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "record_history_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       reminders: {
         Row: {
-          created_at: string
-          done: boolean
-          entity_id: string
-          entity_type: string
           id: string
-          note: string | null
-          remind_at: string
-          repeat: string | null
-          what: string
-          who: string | null
+          entity_type: string | null
+          entity_id: string | null
+          what: string | null
+          remind_at: string | null
+          dismissed: boolean
+          created_at: string
+          household_id: string
         }
         Insert: {
-          created_at?: string
-          done?: boolean
-          entity_id: string
-          entity_type: string
           id?: string
-          note?: string | null
-          remind_at: string
-          repeat?: string | null
-          what: string
-          who?: string | null
+          entity_type?: string | null
+          entity_id?: string | null
+          what?: string | null
+          remind_at?: string | null
+          dismissed?: boolean
+          created_at?: string
+          household_id?: string
         }
         Update: {
-          created_at?: string
-          done?: boolean
-          entity_id?: string
-          entity_type?: string
           id?: string
-          note?: string | null
-          remind_at?: string
-          repeat?: string | null
-          what?: string
-          who?: string | null
+          entity_type?: string | null
+          entity_id?: string | null
+          what?: string | null
+          remind_at?: string | null
+          dismissed?: boolean
+          created_at?: string
+          household_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "reminders_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       savings_accounts: {
         Row: {
-          account_number: string | null
-          account_type: string | null
-          balance: number | null
-          created_at: string
-          group_name: string
           id: string
-          institution: string
-          interest_rate: number | null
-          is_demo: boolean
-          last_updated: string | null
-          maturity_date: string | null
           member_id: string | null
+          action_member_id: string | null
+          institution: string
+          account_type: string | null
+          account_number: string | null
+          group_name: string | null
+          balance: number | null
+          interest_rate: number | null
+          monthly_contribution: number | null
+          maturity_date: string | null
+          last_updated: string | null
           note: string | null
+          action: string | null
+          notes: string | null
           status: Database["public"]["Enums"]["record_status"]
+          is_demo: boolean
+          created_at: string
           updated_at: string
+          household_id: string
+          withdrawal_date: string | null
+          estimated_monthly_payout: number | null
+          joint_member_id: string | null
         }
         Insert: {
-          account_number?: string | null
-          account_type?: string | null
-          balance?: number | null
-          created_at?: string
-          group_name: string
           id?: string
-          institution: string
-          interest_rate?: number | null
-          is_demo?: boolean
-          last_updated?: string | null
-          maturity_date?: string | null
           member_id?: string | null
+          action_member_id?: string | null
+          institution: string
+          account_type?: string | null
+          account_number?: string | null
+          group_name?: string | null
+          balance?: number | null
+          interest_rate?: number | null
+          monthly_contribution?: number | null
+          maturity_date?: string | null
+          last_updated?: string | null
           note?: string | null
+          action?: string | null
+          notes?: string | null
           status?: Database["public"]["Enums"]["record_status"]
+          is_demo?: boolean
+          created_at?: string
           updated_at?: string
+          household_id?: string
+          withdrawal_date?: string | null
+          estimated_monthly_payout?: number | null
+          joint_member_id?: string | null
         }
         Update: {
-          account_number?: string | null
-          account_type?: string | null
-          balance?: number | null
-          created_at?: string
-          group_name?: string
           id?: string
-          institution?: string
-          interest_rate?: number | null
-          is_demo?: boolean
-          last_updated?: string | null
-          maturity_date?: string | null
           member_id?: string | null
+          action_member_id?: string | null
+          institution?: string
+          account_type?: string | null
+          account_number?: string | null
+          group_name?: string | null
+          balance?: number | null
+          interest_rate?: number | null
+          monthly_contribution?: number | null
+          maturity_date?: string | null
+          last_updated?: string | null
           note?: string | null
+          action?: string | null
+          notes?: string | null
           status?: Database["public"]["Enums"]["record_status"]
+          is_demo?: boolean
+          created_at?: string
           updated_at?: string
+          household_id?: string
+          withdrawal_date?: string | null
+          estimated_monthly_payout?: number | null
+          joint_member_id?: string | null
         }
         Relationships: [
           {
@@ -767,9 +1488,88 @@ export type Database = {
             referencedRelation: "members"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "savings_accounts_action_member_id_fkey"
+            columns: ["action_member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "savings_accounts_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "savings_accounts_joint_member_id_fkey"
+            columns: ["joint_member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
         ]
       }
-    }
+      travel_checklist_items: {
+        Row: {
+          id: string
+          household_id: string
+          label: string
+          checked: boolean
+          sort_order: number
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          label: string
+          checked?: boolean
+          sort_order?: number
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          label?: string
+          checked?: boolean
+          sort_order?: number
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "travel_checklist_items_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_profiles: {
+        Row: {
+          user_id: string
+          email: string | null
+          display_name: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          email?: string | null
+          display_name?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          email?: string | null
+          display_name?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }    }
     Views: {
       [_ in never]: never
     }
@@ -785,7 +1585,9 @@ export type Database = {
         | "savings"
         | "health"
         | "inventory"
-      property_purpose: "capital_growth" | "rental_yield" | "own_home" | "other"
+        | "other_asset"
+        | "other_assets"
+      property_purpose: "capital_growth" | "rental_yield" | "own_home" | "mixed"
       record_status: "urgent" | "review" | "settled"
     }
     CompositeTypes: {
@@ -922,8 +1724,10 @@ export const Constants = {
         "savings",
         "health",
         "inventory",
+        "other_asset",
+        "other_assets",
       ],
-      property_purpose: ["capital_growth", "rental_yield", "own_home", "other"],
+      property_purpose: ["capital_growth", "rental_yield", "own_home", "mixed"],
       record_status: ["urgent", "review", "settled"],
     },
   },
