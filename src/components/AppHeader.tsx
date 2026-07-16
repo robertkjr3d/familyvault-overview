@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToday } from "@/lib/today";
 import { AlertsSheet } from "./AlertsSheet";
+import { GlobalSearch } from "./GlobalSearch";
 import { buildUpcomingItems } from "@/lib/alerts";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { useAppStore } from "@/lib/store";
@@ -298,7 +299,7 @@ return (
           </span>
         )}
 
-        {households.length > 0 && (
+        {households.length > 1 && (
           <div className="w-28 sm:w-36">
             <Select value={activeHouseholdId ?? households[0].id} onValueChange={setActiveHouseholdId}>
               <SelectTrigger className="h-8 text-xs">
@@ -314,6 +315,8 @@ return (
             </Select>
           </div>
         )}
+
+        <GlobalSearch />
 
         <button
           type="button"
