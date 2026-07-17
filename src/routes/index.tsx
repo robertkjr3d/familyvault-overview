@@ -12,7 +12,7 @@ import { buildUpcomingItems, computeNextOccurrence } from "@/lib/alerts";
 import type { UpcomingItem } from "@/lib/alerts";
 import { freqTimesPerYear, propertyTotalCosts, insuranceMonthly, investmentPremiumMonthly, insurancePayoutMonthly, investmentPayoutMonthly } from "@/lib/lifetimeChartMath";
 import type { LineItem } from "@/lib/lifetimeChartMath";
-import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check, Info } from "lucide-react";
+import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check, Info, Gem, Heart } from "lucide-react";
 import { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { fmtPct } from "@/lib/format";
 import { HashHighlight } from "@/components/HashHighlight";
@@ -65,7 +65,7 @@ queryKey: ["dashboard", memberFilter, activeHouseholdId],
 enabled: !!activeHouseholdId,
 queryFn: async () => {
 if (!activeHouseholdId) {
-return { properties: [], loans: [], insurance: [], investments: [], savings: [], otherAssets: [] };
+return { properties: [], loans: [], insurance: [], investments: [], savings: [], otherAssets: [], healthConditions: [] };
 }
 const db = supabase as any;
 const filter = (q: any) => {
@@ -79,7 +79,7 @@ return scoped;
 // column added via migration (same stale-types issue as every other table here).
 const filterHH = (q: any) => q.eq("household_id", activeHouseholdId);
 
-  const [props, loans, insurance, invs, savings, inventoryItemsRes, otherAssets] = await Promise.all([
+  const [props, loans, insurance, invs, savings, inventoryItemsRes, otherAssets, health] = await Promise.all([
     filter(supabase.from("properties").select("*")),
     filter(supabase.from("loans").select("*")),
     filter(supabase.from("insurance_policies").select("*")),
@@ -87,6 +87,7 @@ const filterHH = (q: any) => q.eq("household_id", activeHouseholdId);
     filter(supabase.from("savings_accounts").select("*")),
     filterHH(supabase.from("inventory_items").select("*")),
     filter(db.from("other_assets").select("*")),
+    filter(supabase.from("health_conditions").select("*")),
   ]);
   return {
     properties: props.data ?? [],
@@ -96,6 +97,7 @@ const filterHH = (q: any) => q.eq("household_id", activeHouseholdId);
     savings: savings.data ?? [],
     inventoryItems: inventoryItemsRes.data ?? [],
     otherAssets: otherAssets.data ?? [],
+    healthConditions: health.data ?? [],
   };
 },
 
@@ -156,6 +158,7 @@ const investments = data?.investments ?? [];
 const savings = data?.savings ?? [];
 const inventoryItems = data?.inventoryItems ?? [];
 const otherAssets = data?.otherAssets ?? [];
+const healthConditions = data?.healthConditions ?? [];
 
 // Household has zero records of any kind — used to gate the onboarding
 // wizard's auto-show so it only ever appears unprompted for a genuinely
@@ -364,6 +367,8 @@ const all: Array<{ kind: string; row: any; href: string; icon: any }> = [
 ...loans.map((r: any) => ({ kind: "Loan", row: r, href: "/loans", icon: Landmark })),
 ...insurance.map((r: any) => ({ kind: "Insurance", row: r, href: "/insurance", icon: Shield })),
 ...investments.map((r: any) => ({ kind: "Invest", row: r, href: "/investments", icon: TrendingUp })),
+...otherAssets.map((r: any) => ({ kind: "Asset", row: r, href: "/other-assets", icon: Gem })),
+...healthConditions.map((r: any) => ({ kind: "Health", row: r, href: "/health", icon: Heart })),
 ];
 
 const urgent = all.filter((x) => x.row.status === "urgent");
