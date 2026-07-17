@@ -164,7 +164,7 @@ export function RecordCard({
         className="flex w-full cursor-pointer items-stretch gap-0 text-left"
       >
         {/* Left column — text content */}
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5 pl-4 pr-3 pb-6 pt-4">
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5 pl-4 pr-20 pb-6 pt-4">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-semibold leading-tight">{title}</h3>
             <MemberTag memberId={memberId} />
