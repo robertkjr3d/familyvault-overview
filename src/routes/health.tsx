@@ -15,6 +15,7 @@ import { DocumentsList } from "@/components/DocumentsList";
 import { useEditRecord } from "@/components/EditRecordButton";
 import { ReminderButton } from "@/components/ReminderButton";
 import { RemindersList } from "@/components/RemindersList";
+import { HashHighlight } from "@/components/HashHighlight";
 
 export const Route = createFileRoute("/health")({
   component: HealthPage,
@@ -23,14 +24,17 @@ export const Route = createFileRoute("/health")({
 
 function HealthPage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("health_conditions", "health");
   const del = useDeleteMutation("health_conditions", "health", "health");
   const { data: members = [] } = useMembers();
 
   const { data: items = [] } = useQuery({
-    queryKey: ["health", memberFilter],
+    queryKey: ["health", memberFilter, activeHouseholdId],
+    enabled: !!activeHouseholdId,
     queryFn: async () => {
-      let q = supabase.from("health_conditions").select("*");
+      if (!activeHouseholdId) return [];
+      let q = supabase.from("health_conditions").select("*").eq("household_id", activeHouseholdId);
       if (memberFilter !== "all") q = q.eq("member_id", memberFilter);
       const { data, error } = await q;
       if (error) throw error;
@@ -71,7 +75,7 @@ function HealthPage() {
 function HealthRow({ c, onStatus, onDelete }: { c: any; onStatus: (s: any) => void; onDelete: () => void }) {
   const edit = useEditRecord("health_conditions", c);
   return (
-    <>
+    <HashHighlight id={`record-${c.id}`}>
       <RecordCard
         title={c.name}
         memberId={c.member_id}
@@ -122,6 +126,6 @@ function HealthRow({ c, onStatus, onDelete }: { c: any; onStatus: (s: any) => vo
         </div>
       </RecordCard>
       {edit.element}
-    </>
+    </HashHighlight>
   );
 }
