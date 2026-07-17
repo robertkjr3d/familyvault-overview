@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Trash2, Save, UserPlus } from "lucide-react";
+import { HashHighlight } from "@/components/HashHighlight";
 
 export const Route = createFileRoute("/members")({
   component: MembersPage,
@@ -224,70 +225,72 @@ function MembersPage() {
               const currentAge = currentBirthYear ? THIS_YEAR - Number(currentBirthYear) : null;
 
               return (
-                <div key={member.id} className="space-y-3 rounded-xl border border-border bg-card p-4">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Name</Label>
-                      <Input
-                        value={draft.name ?? member.name}
-                        onChange={(e) => setEditing((prev) => ({ ...prev, [member.id]: { ...prev[member.id], name: e.target.value } }))}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Short name</Label>
-                      <Input
-                        value={draft.short_name ?? member.short_name ?? ""}
-                        onChange={(e) => setEditing((prev) => ({ ...prev, [member.id]: { ...prev[member.id], short_name: e.target.value } }))}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">
-                        Birth year {currentAge !== null && <span className="text-muted-foreground">(age {currentAge})</span>}
-                      </Label>
-                      <Input
-                        type="number" min="1920" max={THIS_YEAR}
-                        value={currentBirthYear ?? ""}
-                        onChange={(e) => setEditing((prev) => ({ ...prev, [member.id]: { ...prev[member.id], birth_year: e.target.value ? parseInt(e.target.value) : null } }))}
-                        placeholder="e.g. 1985"
-                      />
-                      <p className="text-[10px] text-muted-foreground">Used for CPF and retirement projections</p>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Emoji</Label>
-                      <Input
-                        value={draft.emoji ?? member.emoji}
-                        onChange={(e) => setEditing((prev) => ({ ...prev, [member.id]: { ...prev[member.id], emoji: e.target.value } }))}
-                      />
-                    </div>
-                    <div className="space-y-1.5 sm:col-span-2">
-                      <Label className="text-xs">Color</Label>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {MEMBER_COLORS.map((c) => (
-                          <button
-                            key={`${member.id}-${c}`} type="button" aria-label={`Pick color ${c}`}
-                            onClick={() => setEditing((prev) => ({ ...prev, [member.id]: { ...prev[member.id], color: c } }))}
-                            className={`h-7 w-7 rounded-full border ${currentColor === c ? "border-foreground" : "border-border"}`}
-                            style={{ background: c }}
-                          />
-                        ))}
+                <HashHighlight key={member.id} id={`record-${member.id}`}>
+                  <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Name</Label>
+                        <Input
+                          value={draft.name ?? member.name}
+                          onChange={(e) => setEditing((prev) => ({ ...prev, [member.id]: { ...prev[member.id], name: e.target.value } }))}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Short name</Label>
+                        <Input
+                          value={draft.short_name ?? member.short_name ?? ""}
+                          onChange={(e) => setEditing((prev) => ({ ...prev, [member.id]: { ...prev[member.id], short_name: e.target.value } }))}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">
+                          Birth year {currentAge !== null && <span className="text-muted-foreground">(age {currentAge})</span>}
+                        </Label>
+                        <Input
+                          type="number" min="1920" max={THIS_YEAR}
+                          value={currentBirthYear ?? ""}
+                          onChange={(e) => setEditing((prev) => ({ ...prev, [member.id]: { ...prev[member.id], birth_year: e.target.value ? parseInt(e.target.value) : null } }))}
+                          placeholder="e.g. 1985"
+                        />
+                        <p className="text-[10px] text-muted-foreground">Used for CPF and retirement projections</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Emoji</Label>
+                        <Input
+                          value={draft.emoji ?? member.emoji}
+                          onChange={(e) => setEditing((prev) => ({ ...prev, [member.id]: { ...prev[member.id], emoji: e.target.value } }))}
+                        />
+                      </div>
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label className="text-xs">Color</Label>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {MEMBER_COLORS.map((c) => (
+                            <button
+                              key={`${member.id}-${c}`} type="button" aria-label={`Pick color ${c}`}
+                              onClick={() => setEditing((prev) => ({ ...prev, [member.id]: { ...prev[member.id], color: c } }))}
+                              className={`h-7 w-7 rounded-full border ${currentColor === c ? "border-foreground" : "border-border"}`}
+                              style={{ background: c }}
+                            />
+                          ))}
+                        </div>
                       </div>
                     </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button onClick={() => saveMember(member)} disabled={savingId === member.id}>
+                        <Save className="mr-1.5 h-4 w-4" />
+                        {savingId === member.id ? "Saving..." : "Save"}
+                      </Button>
+                      <Button
+                        variant="outline" className="text-urgent"
+                        onClick={() => deleteMember(member)}
+                        disabled={deletingId === member.id || savingId === member.id}
+                      >
+                        <Trash2 className="mr-1.5 h-4 w-4" />
+                        {deletingId === member.id ? "Deleting..." : "Delete"}
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button onClick={() => saveMember(member)} disabled={savingId === member.id}>
-                      <Save className="mr-1.5 h-4 w-4" />
-                      {savingId === member.id ? "Saving..." : "Save"}
-                    </Button>
-                    <Button
-                      variant="outline" className="text-urgent"
-                      onClick={() => deleteMember(member)}
-                      disabled={deletingId === member.id || savingId === member.id}
-                    >
-                      <Trash2 className="mr-1.5 h-4 w-4" />
-                      {deletingId === member.id ? "Deleting..." : "Delete"}
-                    </Button>
-                  </div>
-                </div>
+                </HashHighlight>
               );
             })}
           </section>
