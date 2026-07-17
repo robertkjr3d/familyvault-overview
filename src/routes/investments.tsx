@@ -63,7 +63,7 @@ function UpdateValueInline({ id, current }: { id: string; current: number | null
     );
   }
   return (
-    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+    <div className="flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
       <Input type="text" inputMode="decimal" value={val} onChange={(e) => setVal(e.target.value)} className="h-7 w-24 text-xs" autoFocus />
       <Button type="button" size="sm" className="h-7 px-2 text-xs" onClick={save}>Save</Button>
       <Button type="button" size="sm" variant="ghost" className="h-7 px-1.5 text-xs" onClick={() => setEditing(false)}>✕</Button>
