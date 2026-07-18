@@ -125,7 +125,7 @@ const householdId = selectedHouseholdId!;
     supabase.from("savings_accounts").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
     supabase.from("inventory_items").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
     supabase.from("reminders").select("*").eq("household_id", householdId).eq("dismissed", false).then((r) => r.data ?? []),
-    supabase.from("dismissed_dashboard_items").select("record_id, source_type, dismissed_date").eq("household_id", householdId).eq("permanently_deleted", false).then((r) => r.data ?? []),
+    supabase.from("dismissed_dashboard_items").select("record_id, source_type, dismissed_date").eq("household_id", householdId).then((r) => r.data ?? []),
     supabase.from("other_assets").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
   ]);
 
