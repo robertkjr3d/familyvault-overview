@@ -12,6 +12,12 @@ export type UpcomingItem = {
   daysLeft: number;
   icon: any;
   kind: string;
+  /** True once this occurrence's date has passed without being dismissed — only ever
+   * set for non-GIRO recurring premiums. GIRO items never go overdue (see isGiro on
+   * the source record) since the bank pays automatically; they simply roll forward. */
+  overdue?: boolean;
+  /** Mirrors the source record's is_giro flag, so the UI can show a [GIRO] tag. */
+  isGiro?: boolean;
   /** Only set when sourceType === "reminder" — the reminder row's own id, distinct from
    * recordId (which is the entity_id it's attached to). Needed so a permanent delete can
    * target the exact reminder row, since an entity can have multiple reminders. */
@@ -106,6 +112,90 @@ export function computeNextOccurrence(
   return occurrence.toISOString().slice(0, 10);
 }
 
+export type RecurringOccurrence = { date: string; overdue: boolean };
+
+/**
+ * Like computeNextOccurrence, but for the "due soon" alert list specifically:
+ * - Returns EVERY occurrence within the horizon window, not just the nearest one —
+ *   a monthly premium can have several distinct upcoming dates within a 90-day window.
+ * - For non-GIRO items, also returns the single most recently missed occurrence
+ *   (if any) flagged as overdue — it does NOT silently jump forward past a missed
+ *   payment the way computeNextOccurrence does. Only the latest missed occurrence is
+ *   ever returned (not one per missed cycle), so a policy neglected for years still
+ *   shows exactly one "overdue" line, not a pile of historical ones.
+ * - GIRO items (isGiro: true) never appear as overdue — a missed occurrence is
+ *   silently skipped, matching computeNextOccurrence's original behaviour, since the
+ *   bank pays automatically and there is nothing for the user to act on.
+ *
+ * computeNextOccurrence itself is left untouched — it's still used for the informational
+ * "Renew by" date shown elsewhere, which intentionally always shows the next upcoming
+ * date regardless of overdue state.
+ */
+export function computeRecurringAlerts(
+  startDateStr: string | null | undefined,
+  frequency: string | null | undefined,
+  endDateStr: string | null | undefined,
+  today: Date,
+  horizonDays: number,
+  isGiro: boolean
+): RecurringOccurrence[] {
+  if (!startDateStr) return [];
+  const freq = (frequency || "annual").toLowerCase();
+  const intervalMonths = FREQ_MONTHS[freq];
+  if (!intervalMonths) return []; // one-off, or unrecognised — no recurring alerts
+
+  const start = new Date(startDateStr);
+  if (isNaN(start.getTime())) return [];
+
+  const end = endDateStr ? new Date(endDateStr) : null;
+  // Same guard as computeNextOccurrence: a schedule that has already fully ended has
+  // nothing left to alert about, overdue or otherwise.
+  if (end && end.getTime() < today.getTime()) return [];
+
+  const horizonEnd = addDays(today, horizonDays);
+
+  // Identical clamping logic to computeNextOccurrence's addMonthsFromStart — re-derives
+  // from the ORIGINAL start day each time so Jan 31 -> Feb 28 -> Mar 31 (not stuck at 28).
+  function addMonthsFromStart(monthsToAdd: number): Date {
+    const targetMonthIndex = start.getMonth() + monthsToAdd;
+    const result = new Date(start.getFullYear(), targetMonthIndex, 1);
+    const lastDayOfTargetMonth = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+    result.setDate(Math.min(start.getDate(), lastDayOfTargetMonth));
+    return result;
+  }
+
+  const results: RecurringOccurrence[] = [];
+  let mostRecentPast: Date | null = null;
+
+  let monthsAdded = 0;
+  let occurrence = new Date(start);
+  let guard = 0;
+  while (guard < 2000) {
+    if (end && occurrence.getTime() > end.getTime()) break;
+    if (occurrence.getTime() > horizonEnd.getTime()) break;
+
+    if (occurrence.getTime() >= today.getTime()) {
+      results.push({ date: occurrence.toISOString().slice(0, 10), overdue: false });
+    } else if (!isGiro && monthsAdded > 0) {
+      // monthsAdded > 0 excludes the very first occurrence (the record's own start_date)
+      // from ever being flagged overdue — that date is when the policy/premium began,
+      // presumably already handled at setup, not a missed recurring payment. Only later
+      // occurrences (start_date + 1 interval or more) represent a genuine missed cycle.
+      mostRecentPast = occurrence; // keep overwriting — we only want the LATEST one
+    }
+
+    monthsAdded += intervalMonths;
+    occurrence = addMonthsFromStart(monthsAdded);
+    guard++;
+  }
+
+  if (mostRecentPast) {
+    results.unshift({ date: mostRecentPast.toISOString().slice(0, 10), overdue: true });
+  }
+
+  return results;
+}
+
 export type AlertCategoryDays = {
   mortgage_days?: number | null;
   insurance_days?: number | null;
@@ -157,9 +247,22 @@ export function buildUpcomingItems(
   const items: UpcomingItem[] = [];
 
   for (const p of data.insurance) {
-    const nextOccurrence = computeNextOccurrence(p.start_date, p.frequency, p.end_date, today);
-    if (nextOccurrence && within(nextOccurrence, insuranceHorizon)) {
-      items.push({ date: nextOccurrence, label: `${p.name} — premium due`, amount: p.premium, member_id: p.member_id, href: "/insurance", recordId: p.id, sourceType: "insurance_next_due", daysLeft: daysUntil(nextOccurrence), icon: Shield, kind: "Insurance" });
+    const occurrences = computeRecurringAlerts(p.start_date, p.frequency, p.end_date, today, insuranceHorizon, !!p.is_giro);
+    for (const occ of occurrences) {
+      items.push({
+        date: occ.date,
+        label: occ.overdue ? `${p.name} — premium overdue` : `${p.name} — premium due`,
+        amount: p.premium,
+        member_id: p.member_id,
+        href: "/insurance",
+        recordId: p.id,
+        sourceType: "insurance_next_due",
+        daysLeft: daysUntil(occ.date),
+        icon: Shield,
+        kind: "Insurance",
+        overdue: occ.overdue,
+        isGiro: !!p.is_giro,
+      });
     }
     if (within(p.end_date, insuranceHorizon)) {
       items.push({ date: p.end_date, label: `${p.name} — policy ends`, amount: null, member_id: p.member_id, href: "/insurance", recordId: p.id, sourceType: "insurance_end", daysLeft: daysUntil(p.end_date), icon: Shield, kind: "Insurance" });
@@ -184,9 +287,22 @@ export function buildUpcomingItems(
   for (const inv of data.investments) {
     const isILP = inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
     if (!isILP) continue;
-    const nextOccurrence = computeNextOccurrence(inv.premium_start_date, inv.premium_frequency, inv.premium_end_date, today);
-    if (nextOccurrence && within(nextOccurrence)) {
-      items.push({ date: nextOccurrence, label: `${inv.name} — premium due`, amount: inv.premium_amount, member_id: inv.member_id, href: "/investments", recordId: inv.id, sourceType: "investment_premium_due", daysLeft: daysUntil(nextOccurrence), icon: TrendingUp, kind: "Invest" });
+    const occurrences = computeRecurringAlerts(inv.premium_start_date, inv.premium_frequency, inv.premium_end_date, today, horizonDays, !!inv.is_giro);
+    for (const occ of occurrences) {
+      items.push({
+        date: occ.date,
+        label: occ.overdue ? `${inv.name} — premium overdue` : `${inv.name} — premium due`,
+        amount: inv.premium_amount,
+        member_id: inv.member_id,
+        href: "/investments",
+        recordId: inv.id,
+        sourceType: "investment_premium_due",
+        daysLeft: daysUntil(occ.date),
+        icon: TrendingUp,
+        kind: "Invest",
+        overdue: occ.overdue,
+        isGiro: !!inv.is_giro,
+      });
     }
     if (within(inv.premium_end_date)) {
       items.push({ date: inv.premium_end_date, label: `${inv.name} — premiums end`, amount: null, member_id: inv.member_id, href: "/investments", recordId: inv.id, sourceType: "investment_premium_end", daysLeft: daysUntil(inv.premium_end_date), icon: TrendingUp, kind: "Invest" });
