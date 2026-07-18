@@ -3,6 +3,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useMembers } from "@/hooks/useMembers";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -334,6 +335,14 @@ function FieldStep({ f, value, onChange, members, properties, currency }: {
 function FieldInput({ f, value, onChange, members, properties, currency }: {
   f: FieldDef; value: any; onChange: (v: any) => void; members: any[]; properties: any[]; currency: string;
 }) {
+  if (f.type === "boolean") {
+    return (
+      <label className="flex cursor-pointer items-center gap-2 py-1 text-sm text-muted-foreground">
+        <Checkbox checked={!!value} onCheckedChange={(v) => onChange(!!v)} />
+        <span>{f.placeholder ?? "Enabled"}</span>
+      </label>
+    );
+  }
   // Tappable buttons for small select-like fields (member, select, property_select)
   if (f.type === "select" && f.options && f.options.length <= 8) {
     return (
