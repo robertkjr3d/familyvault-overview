@@ -3,7 +3,7 @@ import {
   SAVINGS_ACCOUNT_TYPES, isFdLikeAccountType, isCpfAccountType,
 } from "./options";
 
-export type FieldType = "text" | "number" | "date" | "select" | "textarea" | "member" | "chips" | "property_select";
+export type FieldType = "text" | "number" | "date" | "select" | "textarea" | "member" | "chips" | "property_select" | "boolean";
 export type SelectOption = string | { value: string; label: string };
 
 export type FieldDef = {
@@ -118,6 +118,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
       { key: "frequency", label: "Premium frequency", type: "select", options: INSURANCE_FREQ, default: "annual", section: "💳 Premium" },
       { key: "start_date", label: "Premium start date", type: "date", section: "💳 Premium" },
       { key: "end_date", label: "Premium end date", type: "date", section: "💳 Premium" },
+      { key: "is_giro", label: "GIRO / auto-payment", type: "boolean", placeholder: "Paid automatically — never mark as overdue", default: false, section: "💳 Premium" },
       // Note: next_due_date was removed from this form — it no longer drives any
       // alert or display anywhere (insurance.tsx and the dashboard both derive the
       // next-due date from start_date + frequency via computeNextOccurrence). The
@@ -155,6 +156,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
       { key: "premium_start_date", label: "Premium start date", type: "date", showIf: (v) => v.group_name === "ILP (Investment-Linked Policy)" || v.group_name === "Endowment" },
       { key: "premium_frequency", label: "Premium frequency", type: "select", options: INSURANCE_FREQ, showIf: (v) => v.group_name === "ILP (Investment-Linked Policy)" || v.group_name === "Endowment" },
       { key: "premium_end_date", label: "Premium end date", type: "date", showIf: (v) => v.group_name === "ILP (Investment-Linked Policy)" || v.group_name === "Endowment" },
+      { key: "is_giro", label: "GIRO / auto-payment", type: "boolean", placeholder: "Paid automatically — never mark as overdue", default: false, showIf: (v) => v.group_name === "ILP (Investment-Linked Policy)" || v.group_name === "Endowment" },
       { key: "coverage", label: "Coverage", type: "text", placeholder: "e.g. 101% on death or TPD", showIf: (v) => v.group_name === "ILP (Investment-Linked Policy)" || v.group_name === "Endowment" },
       { key: "payout_amount", label: "Payout amount (est.)", type: "number", money: true, showIf: (v) => v.group_name === "ILP (Investment-Linked Policy)" || v.group_name === "Endowment" },
       { key: "payout_start_date", label: "Payout start date", type: "date", showIf: (v) => v.group_name === "ILP (Investment-Linked Policy)" || v.group_name === "Endowment" },
