@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useMembers } from "@/hooks/useMembers";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -258,6 +259,14 @@ function ChipsInput({ value, onChange, placeholder }: { value: string[]; onChang
 function FieldInput({ f, value, onChange, members, properties, currency }: {
   f: FieldDef; value: any; onChange: (v: any) => void; members: any[]; properties: any[]; currency: string;
 }) {
+  if (f.type === "boolean") {
+    return (
+      <label className="flex cursor-pointer items-center gap-2 py-1 text-sm text-muted-foreground">
+        <Checkbox checked={!!value} onCheckedChange={(v) => onChange(!!v)} />
+        <span>{f.placeholder ?? "Enabled"}</span>
+      </label>
+    );
+  }
   if (f.type === "chips") {
     const arr: string[] = Array.isArray(value) ? value : [];
     return <ChipsInput value={arr} onChange={onChange} placeholder={f.placeholder} />;
