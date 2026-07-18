@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeNextOccurrence, buildUpcomingItems, reminderHref } from "./alerts";
+import { computeNextOccurrence, computeRecurringAlerts, buildUpcomingItems, reminderHref } from "./alerts";
 
 describe("computeNextOccurrence", () => {
   const today = new Date(2026, 5, 18); // 18 Jun 2026
@@ -62,6 +62,77 @@ describe("computeNextOccurrence", () => {
   });
 });
 
+describe("computeRecurringAlerts", () => {
+  const today = new Date(2026, 5, 18); // 18 Jun 2026
+
+  it("returns the upcoming occurrence, not overdue, when the due date hasn't passed yet", () => {
+    const result = computeRecurringAlerts("2025-07-01", "annual", null, today, 90, false);
+    expect(result).toEqual([{ date: "2026-07-01", overdue: false }]);
+  });
+
+  it("regression: the exact reported bug — an annual premium 1 day overdue must NOT silently jump to next year; it stays overdue", () => {
+    // due 17 Jun 2026, "today" is 18 Jun 2026 — one day overdue
+    const result = computeRecurringAlerts("2018-06-17", "annual", null, today, 90, false);
+    expect(result).toEqual([{ date: "2026-06-17", overdue: true }]);
+  });
+
+  it("a policy neglected for years still shows exactly ONE overdue line — the latest missed occurrence, not one per missed year", () => {
+    // today is 1 Aug 2026 — well after the 2026-07-17 due date, and the next
+    // occurrence (2027-07-17) is far outside a 90-day horizon
+    const laterToday = new Date(2026, 7, 1);
+    const result = computeRecurringAlerts("2018-07-17", "annual", null, laterToday, 90, false);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({ date: "2026-07-17", overdue: true });
+  });
+
+  it("GIRO items never go overdue — a missed occurrence is silently skipped, and the next upcoming one shows normally", () => {
+    // last occurrence 2026-01-17 (passed, but GIRO), next occurrence 2027-01-17 (outside 90-day horizon)
+    const result = computeRecurringAlerts("2018-01-17", "annual", null, today, 90, true);
+    expect(result).toEqual([]);
+  });
+
+  it("GIRO items still show upcoming occurrences within the horizon, same as non-GIRO", () => {
+    const result = computeRecurringAlerts("2025-07-01", "annual", null, today, 90, true);
+    expect(result).toEqual([{ date: "2026-07-01", overdue: false }]);
+  });
+
+  it("a monthly premium shows every upcoming occurrence within the horizon, plus the current overdue one if unpaid", () => {
+    const result = computeRecurringAlerts("2026-01-10", "monthly", null, today, 90, false);
+    // from 18 Jun 2026: Jun 10 is already 8 days overdue (unpaid); within 90 days
+    // (~16 Sep 2026) the upcoming ones are Jul 10, Aug 10, Sep 10
+    expect(result).toEqual([
+      { date: "2026-06-10", overdue: true },
+      { date: "2026-07-10", overdue: false },
+      { date: "2026-08-10", overdue: false },
+      { date: "2026-09-10", overdue: false },
+    ]);
+  });
+
+  it("a monthly premium overdue by a few days shows the overdue one AND still lists upcoming future months", () => {
+    // due dates land on the 15th; today is 18 Jun, so 15 Jun is 3 days overdue
+    const result = computeRecurringAlerts("2026-01-15", "monthly", null, today, 60, false);
+    expect(result[0]).toEqual({ date: "2026-06-15", overdue: true });
+    expect(result.some((r) => r.date === "2026-07-15" && !r.overdue)).toBe(true);
+  });
+
+  it("respects the end date — no occurrences at all once the schedule has fully ended", () => {
+    expect(computeRecurringAlerts("2020-01-01", "annual", "2025-01-01", today, 90, false)).toEqual([]);
+  });
+
+  it("respects the end date mid-schedule — stops generating occurrences past it, even for upcoming ones", () => {
+    const result = computeRecurringAlerts("2026-01-01", "monthly", "2026-07-20", today, 90, false);
+    expect(result.every((r) => r.date <= "2026-07-20")).toBe(true);
+  });
+
+  it("returns an empty array for a one-off frequency — nothing recurring to alert about", () => {
+    expect(computeRecurringAlerts("2024-01-01", "one-off", null, today, 90, false)).toEqual([]);
+  });
+
+  it("returns an empty array when there is no start date", () => {
+    expect(computeRecurringAlerts(null, "monthly", null, today, 90, false)).toEqual([]);
+  });
+});
+
 describe("reminderHref", () => {
   it("maps known entity types to their tab route", () => {
     expect(reminderHref("loan")).toBe("/loans");
@@ -96,14 +167,19 @@ describe("buildUpcomingItems", () => {
     expect(items.some((i) => i.sourceType === "insurance_next_due" && i.recordId === "i1")).toBe(true);
   });
 
-  it("excludes an insurance premium that falls outside the horizon", () => {
+  it("a non-GIRO insurance premium that's overdue by months stays visible as overdue, instead of being silently hidden (this was the actual production bug — see computeRecurringAlerts)", () => {
     const data = {
       ...emptyData,
-      // next occurrence is 2027-01-01 — well past a 90-day horizon from 18 Jun 2026
+      // last occurrence was 2026-01-01 — over 5 months overdue relative to today (18 Jun 2026),
+      // and the next occurrence (2027-01-01) is far outside a 90-day horizon
       insurance: [{ id: "i1", name: "Term Life", start_date: "2025-01-01", frequency: "annual", end_date: null, premium: 1200, member_id: "m1" }],
     };
     const items = buildUpcomingItems(data, today, 90);
-    expect(items.some((i) => i.sourceType === "insurance_next_due")).toBe(false);
+    const overdueItem = items.find((i) => i.sourceType === "insurance_next_due" && i.recordId === "i1");
+    expect(overdueItem).toBeDefined();
+    expect(overdueItem?.overdue).toBe(true);
+    expect(overdueItem?.date).toBe("2026-01-01");
+    expect(overdueItem?.daysLeft).toBeLessThan(0);
   });
 
   it("regression: only ILP/Endowment investments generate premium alerts, not regular investments", () => {
