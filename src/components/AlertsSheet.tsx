@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Building2, Shield, Landmark, TrendingUp, Heart, ChevronRight, Gem } from "lucide-react";
+import { Building2, Shield, Landmark, TrendingUp, Heart, ChevronRight, Gem, Wallet, Package } from "lucide-react";
 import { MemberTag } from "./MemberTag";
 import { fmtDate, fmtMoney } from "@/lib/format";
 import { useAppStore } from "@/lib/store";
@@ -17,6 +17,8 @@ const SOURCES = [
   { table: "investments",        href: "/investments",  kind: "Invest",    icon: TrendingUp, title: (r: any) => r.name },
   { table: "health_conditions",  href: "/health",       kind: "Health",    icon: Heart,      title: (r: any) => r.name },
   { table: "other_assets",       href: "/other-assets", kind: "Asset",     icon: Gem,        title: (r: any) => r.name },
+  { table: "savings_accounts",   href: "/savings",      kind: "Savings",   icon: Wallet,     title: (r: any) => r.institution },
+  { table: "inventory_items",    href: "/inventory",    kind: "Item",      icon: Package,    title: (r: any) => r.name },
 ] as const;
 
 const BELL_HORIZON_DAYS = 30;
