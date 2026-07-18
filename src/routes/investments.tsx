@@ -187,6 +187,7 @@ function InvestmentRow({
       <RecordCard
         title={inv.name}
         memberId={inv.member_id}
+        isGiro={!!inv.is_giro}
         status={inv.status}
         onStatusChange={onStatus}
         action={inv.strategy}
