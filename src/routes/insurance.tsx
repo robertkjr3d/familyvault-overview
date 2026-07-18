@@ -170,6 +170,7 @@ function InsuranceRow({
         action={p.action}
         externalUrl={p.external_url}
         tags={Array.isArray(p.also_covers) ? p.also_covers : null}
+        isGiro={!!p.is_giro}
         onEdit={edit.open}
         onDelete={onDelete}
         onDuplicate={dup.open}
