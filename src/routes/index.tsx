@@ -141,8 +141,7 @@ if (!activeHouseholdId) return [];
 const { data } = await (supabase as any)
 .from("dismissed_dashboard_items")
 .select("id, record_id, source_type, dismissed_date")
-.eq("household_id", activeHouseholdId)
-.eq("permanently_deleted", false);
+.eq("household_id", activeHouseholdId);
 return data ?? [];
 },
 });
@@ -554,7 +553,10 @@ return (
                   <div className="flex w-full min-w-0 items-center gap-2">
                     <span className={`w-12 shrink-0 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
                     <u.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    <span className="hidden min-w-0 flex-1 line-clamp-1 text-sm md:block">{u.label}</span>
+                    <span className="hidden min-w-0 flex-1 line-clamp-1 text-sm md:block">
+                      {u.isGiro && <b>[GIRO] </b>}
+                      {u.label}
+                    </span>
                     <span className="flex-1 md:hidden" aria-hidden="true" />
                     <MemberTag memberId={u.member_id} />
                     {u.amount != null && <span className="shrink-0 text-xs font-semibold">{fmtMoney(u.amount)}</span>}
@@ -565,20 +567,29 @@ return (
                       <Check className="h-4 w-4" />
                     </button>
                   </div>
-                  <span className="min-w-0 break-words text-sm md:hidden">{u.label}</span>
+                  <span className="min-w-0 break-words text-sm md:hidden">
+                    {u.isGiro && <b>[GIRO] </b>}
+                    {u.label}
+                  </span>
                 </div>
               ) : (
                 <Link to={u.href as any} hash={`record-${u.recordId}`} className="flex min-w-0 flex-1 flex-col gap-0.5 hover:bg-accent/40 rounded overflow-hidden">
                   <div className="flex w-full min-w-0 items-center gap-2">
                     <span className={`w-12 shrink-0 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
                     <u.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    <span className="hidden min-w-0 flex-1 line-clamp-1 text-sm md:block">{u.label}</span>
+                    <span className="hidden min-w-0 flex-1 line-clamp-1 text-sm md:block">
+                      {u.isGiro && <b>[GIRO] </b>}
+                      {u.label}
+                    </span>
                     <span className="flex-1 md:hidden" aria-hidden="true" />
                     <MemberTag memberId={u.member_id} />
                     {u.amount != null && <span className="shrink-0 text-xs font-semibold">{fmtMoney(u.amount)}</span>}
                     <ChevronRight className="h-4 w-4 shrink-0 text-primary" />
                   </div>
-                  <span className="min-w-0 break-words text-sm md:hidden">{u.label}</span>
+                  <span className="min-w-0 break-words text-sm md:hidden">
+                    {u.isGiro && <b>[GIRO] </b>}
+                    {u.label}
+                  </span>
                 </Link>
               )}
             </li>
