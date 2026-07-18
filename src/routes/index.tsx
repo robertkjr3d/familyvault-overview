@@ -12,7 +12,7 @@ import { buildUpcomingItems, computeNextOccurrence } from "@/lib/alerts";
 import type { UpcomingItem } from "@/lib/alerts";
 import { freqTimesPerYear, propertyTotalCosts, insuranceMonthly, investmentPremiumMonthly, insurancePayoutMonthly, investmentPayoutMonthly } from "@/lib/lifetimeChartMath";
 import type { LineItem } from "@/lib/lifetimeChartMath";
-import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check, Info, Gem, Heart } from "lucide-react";
+import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check, Info, Gem, Heart, Wallet, Package } from "lucide-react";
 import { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { fmtPct } from "@/lib/format";
 import { HashHighlight } from "@/components/HashHighlight";
@@ -368,6 +368,8 @@ const all: Array<{ kind: string; row: any; href: string; icon: any }> = [
 ...investments.map((r: any) => ({ kind: "Invest", row: r, href: "/investments", icon: TrendingUp })),
 ...otherAssets.map((r: any) => ({ kind: "Asset", row: r, href: "/other-assets", icon: Gem })),
 ...healthConditions.map((r: any) => ({ kind: "Health", row: r, href: "/health", icon: Heart })),
+...savings.map((r: any) => ({ kind: "Savings", row: r, href: "/savings", icon: Wallet })),
+...inventoryItems.map((r: any) => ({ kind: "Item", row: r, href: "/inventory", icon: Package })),
 ];
 
 const urgent = all.filter((x) => x.row.status === "urgent");
