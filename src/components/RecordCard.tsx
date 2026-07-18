@@ -15,6 +15,8 @@ type Props = {
   externalUrl?: string | null;
   /** Small informational badges shown below the title/subtitle */
   tags?: string[] | null;
+  /** Shows a bold [GIRO] tag next to the title when true */
+  isGiro?: boolean;
   /** Second member shown alongside the primary memberId — used for joint savings accounts */
   secondaryMemberId?: string | null;
   rightMeta?: ReactNode;
@@ -86,7 +88,7 @@ function CardIconButton({
 }
 
 export function RecordCard({
-  title, subtitle, memberId, secondaryMemberId, status, onStatusChange, action, externalUrl, tags, rightMeta, children,
+  title, subtitle, memberId, secondaryMemberId, status, onStatusChange, action, externalUrl, tags, isGiro, rightMeta, children,
   onEdit, onDelete, onDuplicate, defaultOpen = false, highlight, persistKey, hasNotes, updatedAt, createdAt,
   reminderCount, historyCount, documentsCount,
   onNotesClick, onReminderClick, onHistoryClick, onDocumentsClick,
@@ -167,6 +169,7 @@ export function RecordCard({
         <div className="flex min-w-0 flex-1 flex-col gap-1.5 pl-4 pr-20 pb-6 pt-4">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-semibold leading-tight">{title}</h3>
+            {isGiro && <span className="text-sm font-bold">[GIRO]</span>}
             <MemberTag memberId={memberId} />
             {secondaryMemberId && <MemberTag memberId={secondaryMemberId} />}
             {externalUrl && (
