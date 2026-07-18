@@ -30,7 +30,7 @@ async function fetchDueSoonItems(today: Date, householdId: string): Promise<Upco
     supabase.from("savings_accounts").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
     supabase.from("inventory_items").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
     supabase.from("reminders").select("*").eq("household_id", householdId).eq("dismissed", false).then((r) => r.data ?? []),
-    supabase.from("dismissed_dashboard_items").select("record_id, source_type, dismissed_date").eq("household_id", householdId).eq("permanently_deleted" as any, false).then((r) => r.data ?? []),
+    supabase.from("dismissed_dashboard_items").select("record_id, source_type, dismissed_date").eq("household_id", householdId).then((r) => r.data ?? []),
     supabase.from("app_settings").select("mortgage_days, insurance_days, fd_days, warranty_days").eq("household_id", householdId).maybeSingle().then((r) => r.data),
     supabase.from("other_assets").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
   ]);
@@ -118,6 +118,7 @@ export function AlertsSheet({ open, onOpenChange }: { open: boolean; onOpenChang
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-[10px] font-semibold uppercase text-muted-foreground">{item.kind}</span>
                             <span className="min-w-0 line-clamp-2 break-words text-sm font-semibold">{item.label}</span>
+                            {item.isGiro && <span className="text-sm font-bold">[GIRO]</span>}
                             <MemberTag memberId={item.member_id} />
                           </div>
                           <div className="mt-1 flex items-center gap-2 text-xs">
