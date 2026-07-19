@@ -12,6 +12,7 @@ export function useStatusMutation(table: string, queryKey: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [queryKey] });
       qc.invalidateQueries({ queryKey: ["alert-count"] });
+      qc.invalidateQueries({ queryKey: ["alert-count-extras"] }); // alert-count no longer exists as a query - this is the key that actually needs invalidating now
       qc.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (e: any) => toast.error(e.message),
@@ -50,8 +51,10 @@ export function useDeleteMutation(table: string, queryKey: string, entityType?: 
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [queryKey] });
       qc.invalidateQueries({ queryKey: ["alert-count"] });
+      qc.invalidateQueries({ queryKey: ["alert-count-extras"] }); // alert-count no longer exists as a query - this is the key that actually needs invalidating now
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["alerts-all"] });
+      qc.invalidateQueries({ queryKey: ["alerts-extras"] }); // alerts-all no longer exists (AlertsSheet migration) - this is its replacement
       toast.success("Deleted");
     },
     onError: (e: any) => toast.error(e.message),
