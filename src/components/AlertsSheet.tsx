@@ -9,81 +9,112 @@ import { fmtDate, fmtMoney } from "@/lib/format";
 import { useAppStore } from "@/lib/store";
 import { buildUpcomingItems } from "@/lib/alerts";
 import type { UpcomingItem } from "@/lib/alerts";
+import {
+  useProperties,
+  useLoans,
+  useInsurancePolicies,
+  useInvestments,
+  useSavingsAccounts,
+  useHealthConditions,
+  useOtherAssets,
+  useInventoryItems,
+} from "@/lib/householdRecordQueries";
 
 const SOURCES = [
-  { table: "properties",         href: "/property",     kind: "Property",  icon: Building2,  title: (r: any) => r.name },
-  { table: "loans",              href: "/loans",        kind: "Loan",      icon: Landmark,   title: (r: any) => `${r.bank} · ${r.purpose ?? ""}` },
-  { table: "insurance_policies", href: "/insurance",    kind: "Insurance", icon: Shield,     title: (r: any) => r.name },
-  { table: "investments",        href: "/investments",  kind: "Invest",    icon: TrendingUp, title: (r: any) => r.name },
-  { table: "health_conditions",  href: "/health",       kind: "Health",    icon: Heart,      title: (r: any) => r.name },
-  { table: "other_assets",       href: "/other-assets", kind: "Asset",     icon: Gem,        title: (r: any) => r.name },
-  { table: "savings_accounts",   href: "/savings",      kind: "Savings",   icon: Wallet,     title: (r: any) => r.institution },
-  { table: "inventory_items",    href: "/inventory",    kind: "Item",      icon: Package,    title: (r: any) => r.name },
+  { table: "properties",         key: "properties",     href: "/property",     kind: "Property",  icon: Building2,  title: (r: any) => r.name },
+  { table: "loans",              key: "loans",           href: "/loans",        kind: "Loan",      icon: Landmark,   title: (r: any) => `${r.bank} · ${r.purpose ?? ""}` },
+  { table: "insurance_policies", key: "insurance",       href: "/insurance",    kind: "Insurance", icon: Shield,     title: (r: any) => r.name },
+  { table: "investments",        key: "investments",     href: "/investments",  kind: "Invest",    icon: TrendingUp, title: (r: any) => r.name },
+  { table: "health_conditions",  key: "health",          href: "/health",       kind: "Health",    icon: Heart,      title: (r: any) => r.name },
+  { table: "other_assets",       key: "other_assets",    href: "/other-assets", kind: "Asset",     icon: Gem,        title: (r: any) => r.name },
+  { table: "savings_accounts",   key: "savings",         href: "/savings",      kind: "Savings",   icon: Wallet,     title: (r: any) => r.institution },
+  { table: "inventory_items",    key: "inventory_items", href: "/inventory",    kind: "Item",      icon: Package,    title: (r: any) => r.name },
 ] as const;
 
 const BELL_HORIZON_DAYS = 30;
 
-async function fetchDueSoonItems(today: Date, householdId: string): Promise<UpcomingItem[]> {
-  const [properties, loans, insurance, investments, savings, inventoryItems, reminders, dismissed, settings, otherAssets] = await Promise.all([
-    supabase.from("properties").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
-    supabase.from("loans").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
-    supabase.from("insurance_policies").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
-    supabase.from("investments").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
-    supabase.from("savings_accounts").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
-    supabase.from("inventory_items").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
-    supabase.from("reminders").select("*").eq("household_id", householdId).eq("dismissed", false).then((r) => r.data ?? []),
-    supabase.from("dismissed_dashboard_items").select("record_id, source_type, dismissed_date").eq("household_id", householdId).then((r) => r.data ?? []),
-    supabase.from("app_settings").select("mortgage_days, insurance_days, fd_days, warranty_days").eq("household_id", householdId).maybeSingle().then((r) => r.data),
-    supabase.from("other_assets").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
-  ]);
-
-  const dismissedKeys = new Set(
-    dismissed.map((d: any) => `${d.source_type}::${d.record_id}::${d.dismissed_date}`)
-  );
-
-  const allItems = buildUpcomingItems(
-    { properties, loans, insurance, investments, savings, inventoryItems, reminders, otherAssets },
-    today,
-    BELL_HORIZON_DAYS,
-    {
-      mortgage_days: settings?.mortgage_days,
-      insurance_days: settings?.insurance_days,
-      fd_days: settings?.fd_days,
-      warranty_days: settings?.warranty_days,
-    }
-  );
-
-  return allItems.filter((item) => !dismissedKeys.has(`${item.sourceType}::${item.recordId}::${item.date}`));
-}
-
 export function AlertsSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const today = new Date();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
+  const gate = open && !!activeHouseholdId;
 
-  const { data } = useQuery({
-    queryKey: ["alerts-all", activeHouseholdId],
-    enabled: open && !!activeHouseholdId,
+  // Shared per-table data — uses the same query keys AppHeader/dashboard
+  // use, so once those are migrated too, opening the bell will reuse
+  // whatever's already cached instead of re-fetching from scratch.
+  const propertiesQ = useProperties(activeHouseholdId, gate);
+  const loansQ = useLoans(activeHouseholdId, gate);
+  const insuranceQ = useInsurancePolicies(activeHouseholdId, gate);
+  const investmentsQ = useInvestments(activeHouseholdId, gate);
+  const savingsQ = useSavingsAccounts(activeHouseholdId, gate);
+  const healthQ = useHealthConditions(activeHouseholdId, gate);
+  const otherAssetsQ = useOtherAssets(activeHouseholdId, gate);
+  const inventoryQ = useInventoryItems(activeHouseholdId, gate);
+
+  const tableQueries = [propertiesQ, loansQ, insuranceQ, investmentsQ, savingsQ, healthQ, otherAssetsQ, inventoryQ];
+  const tablesLoaded = tableQueries.every((q) => q.data !== undefined);
+
+  // Reminders / dismissed-items / due-soon thresholds aren't part of the
+  // shared per-table layer yet (kept as their own scoped query for now).
+  const { data: extras } = useQuery({
+    queryKey: ["alerts-extras", activeHouseholdId],
+    enabled: gate,
     queryFn: async () => {
-      const [statusResults, dueSoon] = await Promise.all([
-        Promise.all(
-          SOURCES.map(async (s) => {
-            const { data } = await supabase
-              .from(s.table as any)
-              .select("*")
-              .eq("household_id", activeHouseholdId!)
-              .in("status", ["urgent", "review"]);
-            return (data ?? []).map((row: any) => ({ row, src: s }));
-          }),
-        ),
-        fetchDueSoonItems(today, activeHouseholdId!),
+      const [reminders, dismissed, settings] = await Promise.all([
+        supabase.from("reminders").select("*").eq("household_id", activeHouseholdId!).eq("dismissed", false).then((r) => r.data ?? []),
+        supabase.from("dismissed_dashboard_items").select("record_id, source_type, dismissed_date").eq("household_id", activeHouseholdId!).then((r) => r.data ?? []),
+        supabase.from("app_settings").select("mortgage_days, insurance_days, fd_days, warranty_days").eq("household_id", activeHouseholdId!).maybeSingle().then((r) => r.data),
       ]);
-      const allStatus = statusResults.flat();
-      return { allStatus, dueSoon };
+      return { reminders, dismissed, settings };
     },
   });
 
-  const allStatus = data?.allStatus ?? [];
-  const dueSoon = data?.dueSoon ?? [];
+  const dataByKey: Record<string, any[]> = {
+    properties: propertiesQ.data ?? [],
+    loans: loansQ.data ?? [],
+    insurance: insuranceQ.data ?? [],
+    investments: investmentsQ.data ?? [],
+    savings: savingsQ.data ?? [],
+    health: healthQ.data ?? [],
+    other_assets: otherAssetsQ.data ?? [],
+    inventory_items: inventoryQ.data ?? [],
+  };
+
+  const allStatus = tablesLoaded
+    ? SOURCES.flatMap((s) =>
+        dataByKey[s.key]
+          .filter((row: any) => row.status === "urgent" || row.status === "review")
+          .map((row: any) => ({ row, src: s })),
+      )
+    : [];
+
+  const dismissedKeys = new Set(
+    (extras?.dismissed ?? []).map((d: any) => `${d.source_type}::${d.record_id}::${d.dismissed_date}`),
+  );
+
+  const dueSoon: UpcomingItem[] =
+    tablesLoaded && extras
+      ? buildUpcomingItems(
+          {
+            properties: dataByKey.properties,
+            loans: dataByKey.loans,
+            insurance: dataByKey.insurance,
+            investments: dataByKey.investments,
+            savings: dataByKey.savings,
+            inventoryItems: dataByKey.inventory_items,
+            reminders: extras.reminders,
+            otherAssets: dataByKey.other_assets,
+          },
+          today,
+          BELL_HORIZON_DAYS,
+          {
+            mortgage_days: extras.settings?.mortgage_days,
+            insurance_days: extras.settings?.insurance_days,
+            fd_days: extras.settings?.fd_days,
+            warranty_days: extras.settings?.warranty_days,
+          },
+        ).filter((item) => !dismissedKeys.has(`${item.sourceType}::${item.recordId}::${item.date}`))
+      : [];
+
   const urgent = allStatus.filter((x) => x.row.status === "urgent");
   const review = allStatus.filter((x) => x.row.status === "review");
 
@@ -197,5 +228,5 @@ function Group({ title, items, empty, onNav }: { title: string; items: any[]; em
 export function useAlertsSheet() {
   const [open, setOpen] = useState(false);
   return { open, setOpen };
-  
+
 }
