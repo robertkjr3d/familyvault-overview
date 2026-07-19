@@ -204,6 +204,7 @@ function QuickAddProperty({ onSaved }: { onSaved: () => void }) {
       qc.invalidateQueries({ queryKey: ["properties"] });
       qc.invalidateQueries({ queryKey: ["reminders-dashboard"] });
       qc.invalidateQueries({ queryKey: ["alert-count"] });
+      qc.invalidateQueries({ queryKey: ["alert-count-extras"] }); // alert-count no longer exists as a query - this is the key that actually needs invalidating now
       onSaved();
     } catch (err: any) {
       toast.error(err.message);
@@ -292,6 +293,7 @@ function QuickAddInsurance({ onSaved }: { onSaved: () => void }) {
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["insurance"] });
       qc.invalidateQueries({ queryKey: ["alert-count"] });
+      qc.invalidateQueries({ queryKey: ["alert-count-extras"] }); // alert-count no longer exists as a query - this is the key that actually needs invalidating now
       onSaved();
     } catch (err: any) {
       toast.error(err.message);
