@@ -962,6 +962,7 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
     await (supabase as any).from("dismissed_dashboard_items").delete().eq("id", id);
     await qc.invalidateQueries({ queryKey: ["dismissed-dashboard", householdId] });
     await qc.invalidateQueries({ queryKey: ["alert-count", householdId] });
+    await qc.invalidateQueries({ queryKey: ["alert-count-extras", householdId] }); // alert-count no longer exists as a query - this is the key that actually needs invalidating now
     toast.success("Restored to dashboard.");
   }
 
@@ -988,6 +989,7 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
     if (error) { toast.error("Could not delete item."); return; }
     await qc.invalidateQueries({ queryKey: ["dismissed-dashboard", householdId] });
     await qc.invalidateQueries({ queryKey: ["alert-count", householdId] });
+    await qc.invalidateQueries({ queryKey: ["alert-count-extras", householdId] }); // alert-count no longer exists as a query - this is the key that actually needs invalidating now
     await qc.invalidateQueries({ queryKey: ["reminders-dashboard"] });
     toast.success("Removed permanently.");
   }
@@ -1021,6 +1023,7 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
     await qc.invalidateQueries({ queryKey: ["dismissed-dashboard", householdId] });
     await qc.invalidateQueries({ queryKey: ["reminders-dashboard"] });
     await qc.invalidateQueries({ queryKey: ["alert-count", householdId] });
+    await qc.invalidateQueries({ queryKey: ["alert-count-extras", householdId] }); // alert-count no longer exists as a query - this is the key that actually needs invalidating now
     toast.success("All completed items cleared.");
   }
 
