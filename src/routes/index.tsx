@@ -20,6 +20,16 @@ import { useMembers } from "@/hooks/useMembers";
 import { toast } from "sonner";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { ESTATE_SECTIONS, useEstateChecklist } from "@/lib/estatePlanning";
+import {
+  useProperties,
+  useLoans,
+  useInsurancePolicies,
+  useInvestments,
+  useSavingsAccounts,
+  useHealthConditions,
+  useOtherAssets,
+  useInventoryItems,
+} from "@/lib/householdRecordQueries";
 
 // Lazy-loaded: LifetimeChart pulls in recharts, by far the heaviest single
 // dependency in this route's bundle. Deferring it means the rest of the
@@ -60,48 +70,34 @@ setHighlight(key);
 setTimeout(() => setHighlight((h) => (h === key ? null : h)), 1800);
 }
 
-const { data } = useQuery({
-queryKey: ["dashboard", memberFilter, activeHouseholdId],
-enabled: !!activeHouseholdId,
-queryFn: async () => {
-if (!activeHouseholdId) {
-return { properties: [], loans: [], insurance: [], investments: [], savings: [], otherAssets: [], healthConditions: [] };
+// Shared per-table data — same query keys AppHeader and the alerts bell use,
+// so this reuses whatever's already cached instead of the dashboard doing
+// its own separate 8-table fetch. See householdRecordQueries.ts.
+//
+// These hooks always fetch the FULL household's rows (unfiltered by member),
+// because that's what AppHeader/AlertsSheet need too and sharing the cache
+// only works if every consumer asks for the same thing. The old query used
+// to apply the member filter server-side (.eq("member_id", memberFilter));
+// scopeByMember() below reproduces that exact filtering, just client-side,
+// on the same shared data — same end result, one less table-specific fetch.
+const gate = !!activeHouseholdId;
+const propertiesQ = useProperties(activeHouseholdId, gate);
+const loansQ = useLoans(activeHouseholdId, gate);
+const insuranceQ = useInsurancePolicies(activeHouseholdId, gate);
+const investmentsQ = useInvestments(activeHouseholdId, gate);
+const savingsQ = useSavingsAccounts(activeHouseholdId, gate);
+const healthQ = useHealthConditions(activeHouseholdId, gate);
+const otherAssetsQ = useOtherAssets(activeHouseholdId, gate);
+const inventoryQ = useInventoryItems(activeHouseholdId, gate);
+
+const tablesLoaded = [propertiesQ, loansQ, insuranceQ, investmentsQ, savingsQ, healthQ, otherAssetsQ, inventoryQ].every(
+  (q) => q.data !== undefined
+);
+
+function scopeByMember(rows: any[]): any[] {
+if (memberFilter === "all") return rows;
+return rows.filter((r) => r.member_id === memberFilter);
 }
-const db = supabase as any;
-const filter = (q: any) => {
-let scoped = q.eq("household_id", activeHouseholdId);
-if (memberFilter !== "all") scoped = scoped.eq("member_id", memberFilter);
-return scoped;
-};
-// inventory_items has no member_id column — don't apply memberFilter,
-// or it silently returns [] whenever any specific member is selected.
-// Route through 'any' since the generated types predate the household_id
-// column added via migration (same stale-types issue as every other table here).
-const filterHH = (q: any) => q.eq("household_id", activeHouseholdId);
-
-  const [props, loans, insurance, invs, savings, inventoryItemsRes, otherAssets, health] = await Promise.all([
-    filter(supabase.from("properties").select("*")),
-    filter(supabase.from("loans").select("*")),
-    filter(supabase.from("insurance_policies").select("*")),
-    filter(supabase.from("investments").select("*")),
-    filter(supabase.from("savings_accounts").select("*")),
-    filterHH(supabase.from("inventory_items").select("*")),
-    filter(db.from("other_assets").select("*")),
-    filter(supabase.from("health_conditions").select("*")),
-  ]);
-  return {
-    properties: props.data ?? [],
-    loans: loans.data ?? [],
-    insurance: insurance.data ?? [],
-    investments: invs.data ?? [],
-    savings: savings.data ?? [],
-    inventoryItems: inventoryItemsRes.data ?? [],
-    otherAssets: otherAssets.data ?? [],
-    healthConditions: health.data ?? [],
-  };
-},
-
-});
 
 const { data: appSettings } = useQuery({
 queryKey: ["app_settings", activeHouseholdId],
@@ -150,21 +146,22 @@ const dismissedKeys = new Set(
 (dismissedData ?? []).map((d: any) => `${d.source_type}::${d.record_id}::${d.dismissed_date}`)
 );
 
-const properties = data?.properties ?? [];
-const loans = data?.loans ?? [];
-const insurance = data?.insurance ?? [];
-const investments = data?.investments ?? [];
-const savings = data?.savings ?? [];
-const inventoryItems = data?.inventoryItems ?? [];
-const otherAssets = data?.otherAssets ?? [];
-const healthConditions = data?.healthConditions ?? [];
+const properties = scopeByMember(propertiesQ.data ?? []);
+const loans = scopeByMember(loansQ.data ?? []);
+const insurance = scopeByMember(insuranceQ.data ?? []);
+const investments = scopeByMember(investmentsQ.data ?? []);
+const savings = scopeByMember(savingsQ.data ?? []);
+// inventory_items has no member_id column — never scoped by member, same as before.
+const inventoryItems = inventoryQ.data ?? [];
+const otherAssets = scopeByMember(otherAssetsQ.data ?? []);
+const healthConditions = scopeByMember(healthQ.data ?? []);
 
 // Household has zero records of any kind — used to gate the onboarding
 // wizard's auto-show so it only ever appears unprompted for a genuinely
 // fresh household, never for an existing populated one (regardless of the
 // onboarding_dismissed default value on app_settings).
 const isEmptyHousehold =
-!!data &&
+tablesLoaded &&
 properties.length === 0 &&
 loans.length === 0 &&
 insurance.length === 0 &&
@@ -176,12 +173,12 @@ otherAssets.length === 0;
 // Auto-show once per page load for a fresh, not-yet-dismissed household.
 useEffect(() => {
 if (autoShownOnboardingRef.current) return;
-if (appSettings === undefined || data === undefined) return; // still loading
+if (appSettings === undefined || !tablesLoaded) return; // still loading
 if (!appSettings?.onboarding_dismissed && isEmptyHousehold) {
 setOnboardingOpen(true);
 autoShownOnboardingRef.current = true;
 }
-}, [appSettings, isEmptyHousehold, data]);
+}, [appSettings, isEmptyHousehold, tablesLoaded]);
 
 // Manual re-open from Settings → About → "Quick Start Guide" (links to /#onboarding),
 // same hash-link pattern HashHighlight already uses elsewhere in this app.
@@ -303,7 +300,12 @@ async function invalidateAll() {
 await Promise.all([
 queryClient.invalidateQueries({ queryKey: ["dismissed-dashboard", activeHouseholdId] }),
 queryClient.invalidateQueries({ queryKey: ["reminders-dashboard", memberFilter, activeHouseholdId] }),
-queryClient.invalidateQueries({ queryKey: ["alert-count", activeHouseholdId] }),
+// Was "alert-count" - that combined query no longer exists as of the
+// AppHeader migration (see householdRecordQueries.ts). The badge count is
+// now a useMemo derived from the shared per-table caches (already covered
+// by RecordFormSheet/etc's existing invalidation) plus this extras query,
+// which is what actually needs invalidating here for the dismiss to reflect.
+queryClient.invalidateQueries({ queryKey: ["alert-count-extras", activeHouseholdId] }),
 ]);
 }
 
