@@ -32,7 +32,9 @@ export function RemindersList({ entityType, entityId }: { entityType: string; en
     toast.success("Reminder marked as done");
     qc.invalidateQueries({ queryKey: ["reminders", entityType, entityId] });
     qc.invalidateQueries({ queryKey: ["alert-count"] });
+    qc.invalidateQueries({ queryKey: ["alert-count-extras"] }); // alert-count itself no longer exists as a query (see householdRecordQueries.ts) - this is the key that actually needs invalidating now
     qc.invalidateQueries({ queryKey: ["alerts-all"] });
+    qc.invalidateQueries({ queryKey: ["alerts-extras"] }); // alerts-all itself no longer exists (AlertsSheet migration) - this is its replacement
     qc.invalidateQueries({ queryKey: ["reminders-dashboard"] });
     qc.invalidateQueries({ queryKey: ["dashboard"] });
   }
