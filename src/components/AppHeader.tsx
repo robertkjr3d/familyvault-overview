@@ -27,6 +27,25 @@ DialogHeader,
 DialogTitle,
 } from "@/components/ui/dialog";
 import { sendHouseholdInvite, transferHouseholdOwnership, listHouseholdPeople, removeHouseholdMember } from "@/lib/householdInvites";
+import {
+  useProperties,
+  useLoans,
+  useInsurancePolicies,
+  useInvestments,
+  useSavingsAccounts,
+  useOtherAssets,
+  useInventoryItems,
+} from "@/lib/householdRecordQueries";
+
+// Previously polled every 5 seconds, re-fetching all 9 tables continuously for as
+// long as any tab was open — the single largest driver of read volume in the app.
+// Same-device changes already trigger an immediate refetch via the
+// invalidateQueries(["alert-count"]) calls in RemindersList, ReminderButton,
+// OnboardingWizard, settings.tsx, and lib/mutations.ts, and React Query's default
+// refetchOnWindowFocus already refreshes this when the user returns to the tab.
+// This interval is now just a light backstop for the one case those don't cover:
+// a different household member editing data from their own device/session.
+const ALERT_REFRESH_INTERVAL = 5 * 60 * 1000;
 
 export function AppHeader() {
 const { simulated, today } = useToday();
@@ -110,32 +129,62 @@ return data;
 // 30-day horizon, same source-of-truth as the AlertsSheet ("Due Soon" list) and
 // the dashboard's 90-day view. Any new alert source only needs to be added once,
 // in src/lib/alerts.ts.
-const { data: alertCount = 0 } = useQuery({
-queryKey: ["alert-count", selectedHouseholdId],
-enabled: !!selectedHouseholdId,
-queryFn: async () => {
-const today = new Date();
-const householdId = selectedHouseholdId!;
+//
+// This used to be one big Promise.all fetching 9 tables inside a single
+// combined query. It's now 7 shared per-table queries (see
+// householdRecordQueries.ts) plus one small query for reminders/dismissed —
+// same tables, same filters, but AlertsSheet and the dashboard now reuse
+// these exact same cache entries instead of each re-fetching independently.
+//
+// AppHeader is always mounted, so it's deliberately the one place that owns
+// ALERT_REFRESH_INTERVAL — see the note in householdRecordQueries.ts. This
+// keeps every shared table fresh for whichever other component reads it,
+// without each of them separately polling.
+const propertiesQ = useProperties(selectedHouseholdId, true, ALERT_REFRESH_INTERVAL);
+const loansQ = useLoans(selectedHouseholdId, true, ALERT_REFRESH_INTERVAL);
+const insuranceQ = useInsurancePolicies(selectedHouseholdId, true, ALERT_REFRESH_INTERVAL);
+const investmentsQ = useInvestments(selectedHouseholdId, true, ALERT_REFRESH_INTERVAL);
+const savingsQ = useSavingsAccounts(selectedHouseholdId, true, ALERT_REFRESH_INTERVAL);
+const otherAssetsQ = useOtherAssets(selectedHouseholdId, true, ALERT_REFRESH_INTERVAL);
+const inventoryQ = useInventoryItems(selectedHouseholdId, true, ALERT_REFRESH_INTERVAL);
 
-  const [properties, loans, insurance, investments, savings, inventoryItems, reminders, dismissed, otherAssets] = await Promise.all([
-    supabase.from("properties").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
-    supabase.from("loans").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
-    supabase.from("insurance_policies").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
-    supabase.from("investments").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
-    supabase.from("savings_accounts").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
-    supabase.from("inventory_items").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
-    supabase.from("reminders").select("*").eq("household_id", householdId).eq("dismissed", false).then((r) => r.data ?? []),
-    supabase.from("dismissed_dashboard_items").select("record_id, source_type, dismissed_date").eq("household_id", householdId).then((r) => r.data ?? []),
-    supabase.from("other_assets").select("*").eq("household_id", householdId).then((r) => r.data ?? []),
-  ]);
+const tablesLoaded = [propertiesQ, loansQ, insuranceQ, investmentsQ, savingsQ, otherAssetsQ, inventoryQ].every(
+  (q) => q.data !== undefined
+);
+
+const { data: alertExtras } = useQuery({
+queryKey: ["alert-count-extras", selectedHouseholdId],
+enabled: !!selectedHouseholdId,
+refetchInterval: ALERT_REFRESH_INTERVAL,
+queryFn: async () => {
+const householdId = selectedHouseholdId!;
+const [reminders, dismissed] = await Promise.all([
+  supabase.from("reminders").select("*").eq("household_id", householdId).eq("dismissed", false).then((r) => r.data ?? []),
+  supabase.from("dismissed_dashboard_items").select("record_id, source_type, dismissed_date").eq("household_id", householdId).then((r) => r.data ?? []),
+]);
+return { reminders, dismissed };
+},
+});
+
+const alertCount = useMemo(() => {
+if (!tablesLoaded || !alertExtras) return 0;
 
   const dismissedKeys = new Set(
-    dismissed.map((d: any) => `${d.source_type}::${d.record_id}::${d.dismissed_date}`)
+    alertExtras.dismissed.map((d: any) => `${d.source_type}::${d.record_id}::${d.dismissed_date}`)
   );
 
   const allItems = buildUpcomingItems(
-    { properties, loans, insurance, investments, savings, inventoryItems, reminders, otherAssets },
-    today,
+    {
+      properties: propertiesQ.data ?? [],
+      loans: loansQ.data ?? [],
+      insurance: insuranceQ.data ?? [],
+      investments: investmentsQ.data ?? [],
+      savings: savingsQ.data ?? [],
+      inventoryItems: inventoryQ.data ?? [],
+      reminders: alertExtras.reminders,
+      otherAssets: otherAssetsQ.data ?? [],
+    },
+    new Date(),
     30,
     {
       mortgage_days: settings?.mortgage_days,
@@ -146,18 +195,7 @@ const householdId = selectedHouseholdId!;
   );
 
   return allItems.filter((item) => !dismissedKeys.has(`${item.sourceType}::${item.recordId}::${item.date}`)).length;
-},
-// Previously polled every 5 seconds, re-fetching all 9 tables above continuously
-// for as long as any tab was open — the single largest driver of read volume in
-// the app. Same-device changes already trigger an immediate refetch via the
-// invalidateQueries(["alert-count"]) calls in RemindersList, ReminderButton,
-// OnboardingWizard, settings.tsx, and lib/mutations.ts, and React Query's default
-// refetchOnWindowFocus already refreshes this when the user returns to the tab.
-// This interval is now just a light backstop for the one case those don't cover:
-// a different household member editing data from their own device/session.
-refetchInterval: 5 * 60 * 1000,
-
-});
+}, [tablesLoaded, alertExtras, propertiesQ.data, loansQ.data, insuranceQ.data, investmentsQ.data, savingsQ.data, inventoryQ.data, otherAssetsQ.data, settings]);
 
 const { data: people, isLoading: peopleLoading } = useQuery({
 queryKey: ["household-people", selectedHouseholdId],
