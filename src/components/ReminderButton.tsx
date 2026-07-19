@@ -31,6 +31,8 @@ export function ReminderButton({ entityType, entityId }: { entityType: string; e
     qc.invalidateQueries({ queryKey: ["dashboard"] });
     qc.invalidateQueries({ queryKey: ["reminders"] });
     qc.invalidateQueries({ queryKey: ["alert-count"] });
+    qc.invalidateQueries({ queryKey: ["alert-count-extras"] }); // alert-count itself no longer exists as a query - this is the key that actually needs invalidating now
+    qc.invalidateQueries({ queryKey: ["alerts-extras"] });
     setOpen(false);
     setWhat("");
     setDate("");
