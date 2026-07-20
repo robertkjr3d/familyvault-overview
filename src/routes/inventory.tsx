@@ -18,6 +18,7 @@ import { useAppStore } from "@/lib/store";
 import { compressImage } from "@/lib/imageCompression";
 import { getDisplayUrl, getExportUrl } from "@/lib/storageUrls";
 import { SignedImg } from "@/components/SignedImg";
+import { useCurrentRole } from "@/lib/useCurrentRole";
 
 export const Route = createFileRoute("/inventory")({
 component: InventoryPage,
@@ -37,6 +38,7 @@ photo_url: string | null;
 
 function InventoryPage() {
 const qc = useQueryClient();
+const { canEdit } = useCurrentRole();
 const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
 const [search, setSearch] = useState("");
 const [openFolderId, setOpenFolderId] = useState<string | null>(null);
@@ -539,14 +541,16 @@ return (
   <ChecklistSection table="gobag_items" queryKey="gobag" title="Go-Bag Checklist" items={gobag} />
 
   {/* FAB */}
-  <button
-    aria-label="New Location"
-    onClick={() => setShowAddFolder(true)}
-    className="fixed bottom-20 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full text-primary-foreground shadow-lg shadow-primary/30 transition active:scale-95"
-    style={{ background: "var(--aza)" }}
-  >
-    <Plus className="h-7 w-7" />
-  </button>
+  {canEdit && (
+    <button
+      aria-label="New Location"
+      onClick={() => setShowAddFolder(true)}
+      className="fixed bottom-20 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full text-primary-foreground shadow-lg shadow-primary/30 transition active:scale-95"
+      style={{ background: "var(--aza)" }}
+    >
+      <Plus className="h-7 w-7" />
+    </button>
+  )}
 
   <AddFolderSheet open={showAddFolder} onClose={() => setShowAddFolder(false)} parentId={null} />
   {openFolder && (
@@ -626,6 +630,7 @@ return (
 /* ––––– Checklist Section (Go-Bag, Travel, etc.) ––––– */
 function ChecklistSection({ table, queryKey, title, items }: { table: string; queryKey: string; title: string; items: any[] }) {
 const qc = useQueryClient();
+const { canEdit } = useCurrentRole();
 const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
 const [open, setOpen] = useState(false);
 const [newLabel, setNewLabel] = useState("");
@@ -713,11 +718,14 @@ return (
 <input
 type="checkbox"
 defaultChecked={g.checked}
+disabled={!canEdit}
 onChange={(e) => toggle(g.id, e.target.checked)}
 className="h-4 w-4 shrink-0 rounded border-border"
 />
 {rowContent}
 </label>
+{canEdit && (
+<>
 <button
 onClick={() => { setEditingId(g.id); setEditingLabel(g.label); }}
 className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent"
@@ -732,11 +740,14 @@ aria-label="Delete item"
 >
 <Trash2 className="h-3.5 w-3.5" />
 </button>
+</>
+)}
 </li>
 );
 })}
 </ul>
 )}
+{canEdit && (
 <div className="flex gap-2">
 <Input
 value={newLabel}
@@ -749,6 +760,7 @@ className="h-9 flex-1"
 <Plus className="h-3.5 w-3.5" />
 </Button>
 </div>
+)}
 </div>
 )}
 </section>
@@ -860,6 +872,7 @@ setPreview(URL.createObjectURL(f));
 /* ––––– Folder Detail ––––– */
 function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfolder, parentFolder, topLevelFolders, itemMoveOptions }: { folder: Folder; items: Item[]; allItems: Item[]; onClose: () => void; subfolders: Folder[]; onOpenSubfolder: (f: Folder) => void; parentFolder?: Folder | null; topLevelFolders: Folder[]; itemMoveOptions: { id: string; label: string }[] }) {
 const qc = useQueryClient();
+const { canEdit } = useCurrentRole();
 const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
 const [adding, setAdding] = useState(false);
 const [editingItem, setEditingItem] = useState<Item | null>(null);
@@ -991,7 +1004,7 @@ return topLevelFolders
 return [];
 }, [parentFolder, topLevelFolders, subfolders, folder.id]);
 
-const removePhotoButton = folder.photo_url ? (
+const removePhotoButton = folder.photo_url && canEdit ? (
 <button
 onClick={removeFolderPhoto}
 className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold hover:bg-accent"
@@ -1000,7 +1013,7 @@ className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semib
 </button>
 ) : null;
 
-const moveFolderButton = canMoveFolder ? (
+const moveFolderButton = canMoveFolder && canEdit ? (
 <button
 onClick={() => setShowMoveFolder(true)}
 className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold hover:bg-accent"
@@ -1064,9 +1077,11 @@ const subfoldersSection = parentFolder ? null : (
 <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
 Subfolders ({subfolders.length})
 </h3>
+{canEdit && (
 <Button size="sm" variant="outline" onClick={() => setShowAddSubfolder(true)}>
 <Plus className="mr-1 h-3.5 w-3.5" /> Add subfolder
 </Button>
+)}
 </div>
 {subfolderGrid}
 </div>
@@ -1146,6 +1161,7 @@ onInteractOutside={(e) => { if (lightboxOpenRef.current) e.preventDefault(); }}
 <SheetHeader>
 <SheetTitle className="flex items-center justify-between pr-8">
 <span>{folder.name}</span>
+{canEdit && (
 <details className="relative">
 <summary className="cursor-pointer list-none rounded-md p-1 text-muted-foreground hover:bg-accent">
 <span className="text-xl leading-none">⋯</span>
@@ -1173,6 +1189,7 @@ className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semib
 </button>
 </div>
 </details>
+)}
 </SheetTitle>
 </SheetHeader>
 
@@ -1208,9 +1225,11 @@ className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semib
         <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
           Items ({items.length})
         </h3>
-        <Button size="sm" onClick={() => setAdding(true)}>
-          <Plus className="mr-1 h-3.5 w-3.5" /> Add item
-        </Button>
+        {canEdit && (
+          <Button size="sm" onClick={() => setAdding(true)}>
+            <Plus className="mr-1 h-3.5 w-3.5" /> Add item
+          </Button>
+        )}
       </div>
 
       {items.length === 0 && !adding && (
@@ -1248,29 +1267,31 @@ className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semib
                   title="Tap to enlarge"
                 />
               )}
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setMovingItem(it)}
-                  className="rounded-md p-1 text-muted-foreground hover:bg-accent"
-                  aria-label="Move item"
-                >
-                  <ArrowRightLeft className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onClick={() => setEditingItem(it)}
-                  className="rounded-md p-1 text-muted-foreground hover:bg-accent"
-                  aria-label="Edit item"
-                >
-                  <span className="text-sm">✏️</span>
-                </button>
-                <button
-                  onClick={() => delItem(it.id)}
-                  className="rounded-md p-1 text-urgent hover:bg-urgent/10"
-                  aria-label="Delete item"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
+              {canEdit && (
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setMovingItem(it)}
+                    className="rounded-md p-1 text-muted-foreground hover:bg-accent"
+                    aria-label="Move item"
+                  >
+                    <ArrowRightLeft className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setEditingItem(it)}
+                    className="rounded-md p-1 text-muted-foreground hover:bg-accent"
+                    aria-label="Edit item"
+                  >
+                    <span className="text-sm">✏️</span>
+                  </button>
+                  <button
+                    onClick={() => delItem(it.id)}
+                    className="rounded-md p-1 text-urgent hover:bg-urgent/10"
+                    aria-label="Delete item"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
             {editingItem?.id === it.id && (
               <div className="mt-3 border-t border-border pt-3">
