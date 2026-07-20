@@ -30,6 +30,7 @@ import {
   useOtherAssets,
   useInventoryItems,
 } from "@/lib/householdRecordQueries";
+import { useCurrentRole } from "@/lib/useCurrentRole";
 
 // Lazy-loaded: LifetimeChart pulls in recharts, by far the heaviest single
 // dependency in this route's bundle. Deferring it means the rest of the
@@ -48,6 +49,7 @@ function Dashboard() {
 const { today } = useToday();
 const memberFilter = useAppStore((s) => s.memberFilter);
 const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
+const { canEdit } = useCurrentRole();
 const { data: members = [] } = useMembers();
 const [breakdownOpen, setBreakdownOpen] = useState(false);
 const [cashFlowDetailOpen, setCashFlowDetailOpen] = useState(false);
@@ -526,7 +528,7 @@ return (
       <h2 className="text-sm font-bold tracking-tight">Due in the Next 90 Days</h2>
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground">{upcoming.length} item{upcoming.length === 1 ? "" : "s"}</span>
-        {upcoming.length > 0 && (
+        {upcoming.length > 0 && canEdit && (
           <button
             onClick={() => setEditMode((v) => !v)}
             className="text-xs font-semibold text-primary"
