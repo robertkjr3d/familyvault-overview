@@ -7,13 +7,17 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { useCurrentRole } from "@/lib/useCurrentRole";
 
 export function ReminderButton({ entityType, entityId }: { entityType: string; entityId: string }) {
+  const { canEdit } = useCurrentRole();
   const [open, setOpen] = useState(false);
   const [what, setWhat] = useState("");
   const [date, setDate] = useState("");
   const [saving, setSaving] = useState(false);
   const qc = useQueryClient();
+
+  if (!canEdit) return null;
 
   async function save() {
     if (!what || !date) return toast.error("What and date are required");
