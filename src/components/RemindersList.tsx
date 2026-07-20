@@ -4,8 +4,10 @@ import { fmtDate } from "@/lib/format";
 import { Bell, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { useCurrentRole } from "@/lib/useCurrentRole";
 
 export function RemindersList({ entityType, entityId }: { entityType: string; entityId: string }) {
+  const { canEdit } = useCurrentRole();
   const qc = useQueryClient();
 
   const { data: reminders = [] } = useQuery({
@@ -59,14 +61,16 @@ export function RemindersList({ entityType, entityId }: { entityType: string; en
                 {isOverdue ? "Overdue · " : ""}{fmtDate(r.remind_at)}
               </p>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 px-2 text-xs shrink-0"
-              onClick={() => markDone(r.id)}
-            >
-              <Check className="h-3 w-3 mr-1" /> Done
-            </Button>
+            {canEdit && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-xs shrink-0"
+                onClick={() => markDone(r.id)}
+              >
+                <Check className="h-3 w-3 mr-1" /> Done
+              </Button>
+            )}
           </div>
         );
       })}
