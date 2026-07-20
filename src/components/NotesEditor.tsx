@@ -4,6 +4,7 @@ import { Sparkles, Trash2, Bold, Italic, List } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { useCurrentRole } from "@/lib/useCurrentRole";
 
 function escapeHtml(input: string): string {
   return input
@@ -49,6 +50,7 @@ export function NotesEditor({
   table: string; queryKey: string; id: string; value: string | null | undefined;
 }) {
   const [html, setHtml] = useState(toEditorHtml(value));
+  const { canEdit } = useCurrentRole();
   const [justSaved, setJustSaved] = useState(false);
   const [summarising, setSummarising] = useState(false);
   const [formatState, setFormatState] = useState({ bold: false, italic: false, bullet: false });
@@ -213,35 +215,37 @@ export function NotesEditor({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-1 border-b border-border/40 pb-1.5">
-        <button
-          type="button"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => insertFormat("bold")}
-          className={`rounded p-1 hover:bg-muted hover:text-foreground ${formatState.bold ? "bg-muted text-foreground" : "text-muted-foreground"}`}
-          title="Bold"
-        >
-          <Bold className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => insertFormat("italic")}
-          className={`rounded p-1 hover:bg-muted hover:text-foreground ${formatState.italic ? "bg-muted text-foreground" : "text-muted-foreground"}`}
-          title="Italic"
-        >
-          <Italic className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => insertFormat("bullet")}
-          className={`rounded p-1 hover:bg-muted hover:text-foreground ${formatState.bullet ? "bg-muted text-foreground" : "text-muted-foreground"}`}
-          title="Bullet list"
-        >
-          <List className="h-3.5 w-3.5" />
-        </button>
-      </div>
+      {canEdit && (
+        <div className="flex items-center gap-1 border-b border-border/40 pb-1.5">
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => insertFormat("bold")}
+            className={`rounded p-1 hover:bg-muted hover:text-foreground ${formatState.bold ? "bg-muted text-foreground" : "text-muted-foreground"}`}
+            title="Bold"
+          >
+            <Bold className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => insertFormat("italic")}
+            className={`rounded p-1 hover:bg-muted hover:text-foreground ${formatState.italic ? "bg-muted text-foreground" : "text-muted-foreground"}`}
+            title="Italic"
+          >
+            <Italic className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => insertFormat("bullet")}
+            className={`rounded p-1 hover:bg-muted hover:text-foreground ${formatState.bullet ? "bg-muted text-foreground" : "text-muted-foreground"}`}
+            title="Bullet list"
+          >
+            <List className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       <div className="relative">
         {isEmpty && (
@@ -251,43 +255,45 @@ export function NotesEditor({
         )}
         <div
           ref={editorRef}
-          contentEditable
+          contentEditable={canEdit}
           suppressContentEditableWarning
-          onInput={onEditorInput}
-          onFocus={refreshFormatState}
-          onKeyUp={refreshFormatState}
-          onMouseUp={refreshFormatState}
-          onBlur={() => {
+          onInput={canEdit ? onEditorInput : undefined}
+          onFocus={canEdit ? refreshFormatState : undefined}
+          onKeyUp={canEdit ? refreshFormatState : undefined}
+          onMouseUp={canEdit ? refreshFormatState : undefined}
+          onBlur={canEdit ? () => {
             // Safety-net: save on blur in case the card is closed without clicking Save.
             void commit(editorRef.current?.innerHTML ?? html);
             setFormatState({ bold: false, italic: false, bullet: false });
-          }}
+          } : undefined}
           className="min-h-[132px] rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1"
         />
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={clearNotes}
-          disabled={isEmpty}
-          className="text-urgent hover:bg-urgent/10 hover:text-urgent"
-        >
-          <Trash2 className="mr-1 h-3.5 w-3.5" />
-          Clear
-        </Button>
-        <div className="flex items-center gap-1.5">
-          <Button type="button" size="sm" variant="outline" onClick={summarise} disabled={isEmpty || summarising}>
-            <Sparkles className="mr-1 h-3.5 w-3.5" />
-            {summarising ? "Summarising…" : "Summarise"}
+      {canEdit && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={clearNotes}
+            disabled={isEmpty}
+            className="text-urgent hover:bg-urgent/10 hover:text-urgent"
+          >
+            <Trash2 className="mr-1 h-3.5 w-3.5" />
+            Clear
           </Button>
-          <Button type="button" size="sm" onClick={handleSave} disabled={isEmpty}>
-            {justSaved ? "Saved ✓" : "Save"}
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button type="button" size="sm" variant="outline" onClick={summarise} disabled={isEmpty || summarising}>
+              <Sparkles className="mr-1 h-3.5 w-3.5" />
+              {summarising ? "Summarising…" : "Summarise"}
+            </Button>
+            <Button type="button" size="sm" onClick={handleSave} disabled={isEmpty}>
+              {justSaved ? "Saved ✓" : "Save"}
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
