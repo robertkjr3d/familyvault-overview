@@ -3,15 +3,19 @@ import { Plus, Sparkles } from "lucide-react";
 import { RecordFormSheet } from "./RecordFormSheet";
 import { RecordWizardSheet } from "./RecordWizardSheet";
 import { recordConfigs } from "@/lib/recordConfigs";
+import { useCurrentRole } from "@/lib/useCurrentRole";
 
 const WIZARD_CONFIGS = new Set(["properties", "insurance_policies"]);
 
 export function AddRecordFab({ configKey }: { configKey: keyof typeof recordConfigs }) {
+  const { canEdit } = useCurrentRole();
   const cfg = recordConfigs[configKey];
   const [formOpen, setFormOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const hasWizard = WIZARD_CONFIGS.has(configKey as string);
+
+  if (!canEdit) return null;
 
   function onFabClick() {
     if (hasWizard) {
