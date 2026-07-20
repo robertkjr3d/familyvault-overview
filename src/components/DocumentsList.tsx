@@ -8,8 +8,10 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { useAppStore } from "@/lib/store";
 import { getDisplayUrl } from "@/lib/storageUrls";
+import { useCurrentRole } from "@/lib/useCurrentRole";
 
 export function DocumentsList({ entityType, entityId }: { entityType: string; entityId: string }) {
+  const { canEdit } = useCurrentRole();
   const qc = useQueryClient();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const [uploading, setUploading] = useState(false);
@@ -170,81 +172,85 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
                   {format(new Date(d.uploaded_at), "dd MMM yyyy")}
                 </span>
               </button>
-              <button
-                type="button"
-                onClick={() => del(d.id, d)}
-                className="cursor-pointer rounded p-1 text-urgent opacity-0 transition hover:bg-urgent/10 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
-                aria-label="Delete document"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => del(d.id, d)}
+                  className="cursor-pointer rounded p-1 text-urgent opacity-0 transition hover:bg-urgent/10 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
+                  aria-label="Delete document"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
             </li>
           );
         })}
         {docs.length === 0 && <li className="text-xs text-muted-foreground">No documents yet.</li>}
       </ul>
 
-      <div className="rounded-md border border-dashed border-border/60 p-2 space-y-2">
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant={mode === "upload" ? "default" : "outline"}
-            onClick={() => setMode("upload")}
-            className="h-7 px-2 text-xs"
-          >
-            <Upload className="mr-1 h-3.5 w-3.5" /> Upload
-          </Button>
-          <Button
-            size="sm"
-            variant={mode === "link" ? "default" : "outline"}
-            onClick={() => setMode("link")}
-            className="h-7 px-2 text-xs"
-          >
-            <Link className="mr-1 h-3.5 w-3.5" /> Add Link
-          </Button>
-        </div>
-
-        <p className="text-[11px] text-muted-foreground">
-          Links to uploaded files aren't password-protected — anyone with the exact link can open it. Avoid sharing it outside people you trust with this document.
-        </p>
-
-        {mode === "upload" && (
-          <>
-            <input ref={fileRef} type="file" onChange={onFile} className="hidden" id={`up-${entityId}`} />
-            <Button asChild size="sm" variant="outline" disabled={uploading} className="w-full">
-              <label htmlFor={`up-${entityId}`} className="cursor-pointer">
-                <Upload className="mr-1 h-3.5 w-3.5" />
-                {uploading ? "Uploading…" : "Choose file"}
-              </label>
+      {canEdit && (
+        <div className="rounded-md border border-dashed border-border/60 p-2 space-y-2">
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant={mode === "upload" ? "default" : "outline"}
+              onClick={() => setMode("upload")}
+              className="h-7 px-2 text-xs"
+            >
+              <Upload className="mr-1 h-3.5 w-3.5" /> Upload
             </Button>
-          </>
-        )}
-
-        {mode === "link" && (
-          <div className="space-y-1.5">
-            <Input
-              placeholder="Label (e.g. Policy PDF on Google Drive)"
-              value={linkLabel}
-              onChange={(e) => setLinkLabel(e.target.value)}
-              className="h-8 text-xs"
-            />
-            <Input
-              placeholder="URL (e.g. https://drive.google.com/...)"
-              value={linkUrl}
-              onChange={(e) => setLinkUrl(e.target.value)}
-              className="h-8 text-xs"
-            />
-            <div className="flex gap-2">
-              <Button size="sm" onClick={saveLink} disabled={savingLink} className="h-7 px-3 text-xs">
-                {savingLink ? "Saving…" : "Save Link"}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => { setMode("upload"); setLinkUrl(""); setLinkLabel(""); }} className="h-7 px-2 text-xs">
-                Cancel
-              </Button>
-            </div>
+            <Button
+              size="sm"
+              variant={mode === "link" ? "default" : "outline"}
+              onClick={() => setMode("link")}
+              className="h-7 px-2 text-xs"
+            >
+              <Link className="mr-1 h-3.5 w-3.5" /> Add Link
+            </Button>
           </div>
-        )}
-      </div>
+
+          <p className="text-[11px] text-muted-foreground">
+            Links to uploaded files aren't password-protected — anyone with the exact link can open it. Avoid sharing it outside people you trust with this document.
+          </p>
+
+          {mode === "upload" && (
+            <>
+              <input ref={fileRef} type="file" onChange={onFile} className="hidden" id={`up-${entityId}`} />
+              <Button asChild size="sm" variant="outline" disabled={uploading} className="w-full">
+                <label htmlFor={`up-${entityId}`} className="cursor-pointer">
+                  <Upload className="mr-1 h-3.5 w-3.5" />
+                  {uploading ? "Uploading…" : "Choose file"}
+                </label>
+              </Button>
+            </>
+          )}
+
+          {mode === "link" && (
+            <div className="space-y-1.5">
+              <Input
+                placeholder="Label (e.g. Policy PDF on Google Drive)"
+                value={linkLabel}
+                onChange={(e) => setLinkLabel(e.target.value)}
+                className="h-8 text-xs"
+              />
+              <Input
+                placeholder="URL (e.g. https://drive.google.com/...)"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                className="h-8 text-xs"
+              />
+              <div className="flex gap-2">
+                <Button size="sm" onClick={saveLink} disabled={savingLink} className="h-7 px-3 text-xs">
+                  {savingLink ? "Saving…" : "Save Link"}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => { setMode("upload"); setLinkUrl(""); setLinkLabel(""); }} className="h-7 px-2 text-xs">
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {previewImage && (
         <div
