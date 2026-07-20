@@ -3,6 +3,7 @@ import { ChevronDown, Copy, Pencil, Trash2, Bell, NotebookPen, RotateCw, Papercl
 import { StatusToggle, type Status } from "./StatusToggle";
 import { MemberTag } from "./MemberTag";
 import { cn } from "@/lib/utils";
+import { useCurrentRole } from "@/lib/useCurrentRole";
 
 type Props = {
   title: string;
@@ -94,6 +95,7 @@ export function RecordCard({
   onNotesClick, onReminderClick, onHistoryClick, onDocumentsClick,
   open: openProp, onOpenChange,
 }: Props) {
+  const { canEdit } = useCurrentRole();
   const [internalOpen, setInternalOpen] = useState(() => readPersisted(persistKey, defaultOpen));
   const isControlled = openProp !== undefined;
   const open = isControlled ? openProp : internalOpen;
@@ -129,7 +131,7 @@ export function RecordCard({
     >
       {/* Icon cluster — top right, absolute */}
       <div className="absolute right-2 top-2 z-10 flex gap-0.5">
-        {onEdit && (
+        {onEdit && canEdit && (
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
             className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-background/60 hover:text-foreground"
@@ -139,7 +141,7 @@ export function RecordCard({
             <Pencil className="h-[18px] w-[18px]" />
           </button>
         )}
-        {onDuplicate && (
+        {onDuplicate && canEdit && (
           <button
             onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
             className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-background/60 hover:text-foreground"
@@ -149,7 +151,7 @@ export function RecordCard({
             <Copy className="h-[18px] w-[18px]" />
           </button>
         )}
-        {onDelete && (
+        {onDelete && canEdit && (
           <button
             onClick={(e) => { e.stopPropagation(); if (confirm("Delete this record?")) onDelete(); }}
             className="cursor-pointer rounded-md p-1 text-urgent hover:bg-urgent/10"
@@ -218,7 +220,7 @@ export function RecordCard({
             className="flex items-center"
             aria-label="Toggle status"
           >
-            <StatusToggle value={status} onChange={onStatusChange} />
+            <StatusToggle value={status} onChange={onStatusChange} disabled={!canEdit} />
           </button>
           {hasAnyIcon && (
             <div className="flex items-center gap-1 text-[11px]">
