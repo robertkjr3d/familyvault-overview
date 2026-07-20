@@ -29,9 +29,12 @@ export function StatusBadge({ status, className }: { status: Status; className?:
 export function StatusToggle({
   value,
   onChange,
+  disabled,
 }: {
   value: Status;
   onChange: (s: Status) => void;
+  /** When true, renders as a plain non-interactive badge - no dropdown, no click. */
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -45,6 +48,20 @@ export function StatusToggle({
     window.addEventListener("mousedown", handler);
     return () => window.removeEventListener("mousedown", handler);
   }, [open]);
+
+  if (disabled) {
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide",
+          c.cls,
+        )}
+      >
+        <span className="text-[8px]">{c.dot}</span>
+        {c.label}
+      </span>
+    );
+  }
 
   return (
     <div ref={ref} className="relative inline-block">
