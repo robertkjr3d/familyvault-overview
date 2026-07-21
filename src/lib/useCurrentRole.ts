@@ -38,14 +38,18 @@ export function useCurrentRole() {
     },
   });
 
-  const role: Role | null = useMemo(() => {
+  const selectedMembership = useMemo(() => {
     if (!memberships) return null;
     const firstHouseholdId = memberships[0]?.household_id ?? null;
     const selectedHouseholdId = activeHouseholdId ?? firstHouseholdId;
-    return memberships.find((m) => m.household_id === selectedHouseholdId)?.role ?? null;
+    return memberships.find((m) => m.household_id === selectedHouseholdId) ?? null;
   }, [memberships, activeHouseholdId]);
+
+  const role: Role | null = selectedMembership?.role ?? null;
+  const householdId: string | null = selectedMembership?.household_id ?? null;
+  const householdName: string | null = selectedMembership?.households?.name ?? null;
 
   const canEdit = role === "owner" || role === "member";
 
-  return { role, canEdit, isViewer: role === "viewer", isLoading };
+  return { role, canEdit, isViewer: role === "viewer", isLoading, householdId, householdName };
 }
