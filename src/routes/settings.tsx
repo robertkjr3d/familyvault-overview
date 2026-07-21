@@ -9,6 +9,7 @@ import { Trash2 } from "lucide-react";
 import { fmtMoney } from "@/lib/format";
 import { runFullExport, runFullBackupZip } from "@/lib/fullExport";
 import { createDemoHousehold } from "@/lib/householdInvites";
+import { useCurrentRole } from "@/lib/useCurrentRole";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -29,6 +30,8 @@ function SettingsPage() {
   const { data: members = [] } = useMembers();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const setShareOpen = useAppStore((s) => s.setShareOpen);
+  const { role: currentRole, householdName } = useCurrentRole();
+  const [householdNameInput, setHouseholdNameInput] = useState("");
   const [generatingEstateDoc, setGeneratingEstateDoc] = useState(false);
   const [generatingFullExport, setGeneratingFullExport] = useState(false);
   const [generatingFullBackup, setGeneratingFullBackup] = useState(false);
@@ -72,6 +75,10 @@ function SettingsPage() {
   useEffect(() => {
     if (settings?.simulated_date) setSimDate(settings.simulated_date);
   }, [settings?.simulated_date]);
+
+  useEffect(() => {
+    if (householdName) setHouseholdNameInput(householdName);
+  }, [householdName]);
 
   useEffect(() => {
     if (settings?.monthly_income != null) setMonthlyIncome(String(settings.monthly_income));
@@ -119,6 +126,33 @@ function SettingsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["app_settings", activeHouseholdId] });
       toast.success("Saved");
+    },
+  });
+
+  const renameHousehold = useMutation({
+    mutationFn: async (name: string) => {
+      if (!activeHouseholdId) throw new Error("Select a household first.");
+      const trimmed = name.trim();
+      if (!trimmed) throw new Error("Household name can't be empty.");
+      const { data, error } = await supabase
+        .from("households" as any)
+        .update({ name: trimmed })
+        .eq("id", activeHouseholdId)
+        .select("id")
+        .maybeSingle();
+      if (error) throw error;
+      // RLS blocks non-owners from matching any row here - Postgres reports
+      // that as a normal 0-rows-updated success, not an error, so we check
+      // explicitly rather than trusting the absence of `error` alone.
+      if (!data) throw new Error("Only the household owner can rename it.");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["household-memberships"] });
+      toast.success("Household renamed");
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : "Could not rename household.";
+      toast.error(message);
     },
   });
 
@@ -432,12 +466,37 @@ function SettingsPage() {
           defaultValue={settings?.family_name ?? ""}
           onChange={(e) => setFamilyName(e.target.value)}
         />
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          Shown as the app's header title — just a label for you, not the household's own name below.
+        </p>
         <button
           className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
           onClick={() => save.mutate({ family_name: familyName || settings?.family_name })}
         >
           Save
         </button>
+
+        {currentRole === "owner" && (
+          <div className="mt-4 border-t border-border/40 pt-4">
+            <label className="block text-xs font-medium text-muted-foreground">Household name</label>
+            <input
+              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+              value={householdNameInput}
+              onChange={(e) => setHouseholdNameInput(e.target.value)}
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              This is what shows in the household switcher and the Share dialog — visible to everyone with access.
+            </p>
+            <button
+              className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+              disabled={renameHousehold.isPending}
+              onClick={() => renameHousehold.mutate(householdNameInput)}
+            >
+              Save
+            </button>
+          </div>
+        )}
+
         <div className="mt-4">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Members</span>
