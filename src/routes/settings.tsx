@@ -10,6 +10,9 @@ import { fmtMoney } from "@/lib/format";
 import { runFullExport, runFullBackupZip } from "@/lib/fullExport";
 import { createDemoHousehold } from "@/lib/householdInvites";
 import { useCurrentRole } from "@/lib/useCurrentRole";
+import { deleteAccount } from "@/lib/accountDeletion";
+import { useAuthSession } from "@/hooks/useAuthSession";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -31,7 +34,11 @@ function SettingsPage() {
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const setShareOpen = useAppStore((s) => s.setShareOpen);
   const { role: currentRole, householdName } = useCurrentRole();
+  const { user } = useAuthSession();
   const [householdNameInput, setHouseholdNameInput] = useState("");
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [generatingEstateDoc, setGeneratingEstateDoc] = useState(false);
   const [generatingFullExport, setGeneratingFullExport] = useState(false);
   const [generatingFullBackup, setGeneratingFullBackup] = useState(false);
@@ -155,6 +162,30 @@ function SettingsPage() {
       toast.error(message);
     },
   });
+
+  async function handleDeleteAccount() {
+    if (!user?.email) {
+      toast.error("Could not verify your account. Try refreshing the page.");
+      return;
+    }
+    if (deleteConfirmEmail.trim().toLowerCase() !== user.email.trim().toLowerCase()) {
+      toast.error("That email doesn't match your account.");
+      return;
+    }
+    setDeletingAccount(true);
+    try {
+      await deleteAccount({ data: { confirmEmail: deleteConfirmEmail } });
+      toast.success("Account deleted.");
+      await supabase.auth.signOut();
+      // The root-level auth listener shows the sign-in screen automatically
+      // once there's no session, same as the existing "Sign out" button -
+      // no manual navigation needed.
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Could not delete account.";
+      toast.error(message);
+      setDeletingAccount(false);
+    }
+  }
 
   async function clearDemo() {
     if (!confirm("Are you sure? This cannot be undone.")) return;
@@ -841,8 +872,53 @@ function SettingsPage() {
           >
             Sign out
           </button>
+          <div className="mt-2 border-t border-urgent/20 pt-3">
+            <button
+              onClick={() => setDeleteAccountOpen(true)}
+              className="w-full rounded-lg bg-urgent px-3 py-2 text-sm font-semibold text-urgent-foreground"
+            >
+              Delete Account
+            </button>
+          </div>
         </div>
       </section>
+
+      <Dialog open={deleteAccountOpen} onOpenChange={(open) => { setDeleteAccountOpen(open); if (!open) setDeleteConfirmEmail(""); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-urgent">Delete your account?</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-2 text-left">
+                <p>This permanently deletes your account and cannot be undone.</p>
+                {currentRole === "owner" ? (
+                  <p className="font-semibold text-urgent">
+                    You own "{householdName ?? "this household"}" — deleting your account deletes this entire household, including every record and document in it, for everyone who has access.
+                  </p>
+                ) : (
+                  <p>
+                    Your access to any shared household will be removed. Shared household records are not affected.
+                  </p>
+                )}
+                <p>Type your email address ({user?.email}) to confirm.</p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <input
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            placeholder="your@email.com"
+            value={deleteConfirmEmail}
+            onChange={(e) => setDeleteConfirmEmail(e.target.value)}
+            autoComplete="off"
+          />
+          <button
+            onClick={handleDeleteAccount}
+            disabled={deletingAccount || deleteConfirmEmail.trim().toLowerCase() !== (user?.email ?? "").trim().toLowerCase()}
+            className="w-full rounded-lg bg-urgent px-3 py-2 text-sm font-semibold text-urgent-foreground disabled:opacity-40"
+          >
+            {deletingAccount ? "Deleting…" : "Delete My Account Forever"}
+          </button>
+        </DialogContent>
+      </Dialog>
 
       {/* About */}
       <section className="rounded-2xl border border-border bg-card p-4 text-sm">
