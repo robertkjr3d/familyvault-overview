@@ -27,6 +27,11 @@ const removeMemberPayloadSchema = z.object({
   email: z.string().email(),
 });
 
+const cancelInvitePayloadSchema = z.object({
+  householdId: z.string().uuid(),
+  email: z.string().email(),
+});
+
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
@@ -73,6 +78,20 @@ export const sendHouseholdInvite = createServerFn({ method: "POST" })
     redirectUrl.searchParams.set("invite", token);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Prevent duplicate pending invites: if this email already has an
+    // unaccepted, uncancelled, unexpired invite to this household, cancel
+    // that old row first instead of leaving two "pending" rows for the same
+    // person. The insert below then proceeds exactly as before - this reuses
+    // the existing, already-correct insert path rather than trying to guess
+    // the table's default expires_at duration.
+    await supabaseAdmin
+      .from("household_invites" as any)
+      .update({ cancelled_at: new Date().toISOString() })
+      .eq("household_id", data.householdId)
+      .eq("invited_email", invitedEmail)
+      .is("accepted_at", null)
+      .is("cancelled_at", null);
 
     const { error: insertError } = await supabaseAdmin
       .from("household_invites" as any)
@@ -220,6 +239,37 @@ export const removeHouseholdMember = createServerFn({ method: "POST" })
       .eq("user_id", targetUser.id);
 
     if (deleteError) throw deleteError;
+    return { ok: true };
+  });
+
+export const cancelHouseholdInvite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(cancelInvitePayloadSchema)
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+
+    const { data: ownerCheck, error: ownerError } = await supabase
+      .from("household_users" as any)
+      .select("household_id")
+      .eq("household_id", data.householdId)
+      .eq("user_id", userId)
+      .eq("role", "owner")
+      .maybeSingle();
+
+    if (ownerError) throw ownerError;
+    if (!ownerCheck) throw new Error("Only household owners can cancel invites.");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { error: cancelError } = await supabaseAdmin
+      .from("household_invites" as any)
+      .update({ cancelled_at: new Date().toISOString() })
+      .eq("household_id", data.householdId)
+      .eq("invited_email", normalizeEmail(data.email))
+      .is("accepted_at", null)
+      .is("cancelled_at", null);
+
+    if (cancelError) throw cancelError;
     return { ok: true };
   });
 
