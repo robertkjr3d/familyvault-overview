@@ -26,7 +26,7 @@ DialogFooter,
 DialogHeader,
 DialogTitle,
 } from "@/components/ui/dialog";
-import { sendHouseholdInvite, transferHouseholdOwnership, listHouseholdPeople, removeHouseholdMember } from "@/lib/householdInvites";
+import { sendHouseholdInvite, transferHouseholdOwnership, listHouseholdPeople, removeHouseholdMember, cancelHouseholdInvite } from "@/lib/householdInvites";
 import {
   useProperties,
   useLoans,
@@ -278,6 +278,21 @@ toast.error(message);
 },
 });
 
+const cancelInviteMutation = useMutation({
+mutationFn: async ({ email }: { email: string }) => {
+if (!selectedHouseholdId) throw new Error("Select a household first.");
+return cancelHouseholdInvite({ data: { householdId: selectedHouseholdId, email } });
+},
+onSuccess: (_data, { email }) => {
+toast.success(`Cancelled invite to ${email}`);
+queryClient.invalidateQueries({ queryKey: ["household-people", selectedHouseholdId] });
+},
+onError: (error: unknown) => {
+const message = error instanceof Error ? error.message : "Could not cancel invite.";
+toast.error(message);
+},
+});
+
 function onShareSubmit(e: React.FormEvent<HTMLFormElement>) {
 e.preventDefault();
 const normalized = shareEmail.trim().toLowerCase();
@@ -427,9 +442,24 @@ return (
             {people.pending.map((p) => (
               <div key={p.email} className="flex items-center justify-between gap-2 text-xs">
                 <span className="truncate text-muted-foreground">{p.email}</span>
-                <span className="shrink-0 rounded-full bg-review-soft px-2 py-0.5 text-[10px] font-medium text-review-foreground">
-                  Invited, pending
-                </span>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <span className="rounded-full bg-review-soft px-2 py-0.5 text-[10px] font-medium text-review-foreground">
+                    Invited, pending
+                  </span>
+                  {canShareActiveHousehold && (
+                    <button
+                      className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-urgent hover:bg-urgent/10 disabled:opacity-40"
+                      disabled={cancelInviteMutation.isPending}
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        if (!confirm(`Cancel the invite to ${p.email}?`)) return;
+                        cancelInviteMutation.mutate({ email: p.email });
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
             {people.members.length === 0 && people.pending.length === 0 && (
