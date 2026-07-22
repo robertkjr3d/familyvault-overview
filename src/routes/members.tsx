@@ -114,7 +114,7 @@ function MembersPage() {
 
     setSavingId(member.id);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("members" as any)
         .update({
           name,
@@ -123,8 +123,11 @@ function MembersPage() {
           color: draft.color ?? member.color,
           birth_year: parsedBirthYear,
         } as any)
-        .eq("id", member.id);
+        .eq("id", member.id)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("Nothing was saved — you may not have permission to edit this.");
       toast.success("Member updated.");
       setEditing((prev) => { const next = { ...prev }; delete next[member.id]; return next; });
       void qc.invalidateQueries({ queryKey: ["members"] });
