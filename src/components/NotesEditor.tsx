@@ -76,9 +76,13 @@ export function NotesEditor({
   async function commit(nextHtml: string) {
     const clean = sanitizeHtml(nextHtml);
     if (clean === lastSavedRef.current) return;
-    const { error } = await supabase.from(table as any).update({ notes: clean || null }).eq("id", id);
+    const { data, error } = await supabase.from(table as any).update({ notes: clean || null }).eq("id", id).select("id").maybeSingle();
     if (error) {
       toast.error(error.message);
+      return;
+    }
+    if (!data) {
+      toast.error("Nothing was saved — you may not have permission to edit this.");
       return;
     }
     lastSavedRef.current = clean;
