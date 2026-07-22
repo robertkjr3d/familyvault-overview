@@ -168,12 +168,15 @@ export const acceptHouseholdInvite = createServerFn({ method: "POST" })
 
     if (membershipError) throw membershipError;
 
-    const { error: completeError } = await supabaseAdmin
+    const { data: completeData, error: completeError } = await supabaseAdmin
       .from("household_invites" as any)
       .update({ accepted_at: new Date().toISOString(), accepted_by_user_id: userId })
-      .eq("id", invite.id);
+      .eq("id", invite.id)
+      .select("id")
+      .maybeSingle();
 
     if (completeError) throw completeError;
+    if (!completeData) throw new Error("This invite could not be marked accepted — it may have been cancelled.");
 
     return { householdId: invite.household_id as string };
   });
@@ -261,15 +264,18 @@ export const cancelHouseholdInvite = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const { error: cancelError } = await supabaseAdmin
+    const { data: cancelData, error: cancelError } = await supabaseAdmin
       .from("household_invites" as any)
       .update({ cancelled_at: new Date().toISOString() })
       .eq("household_id", data.householdId)
       .eq("invited_email", normalizeEmail(data.email))
       .is("accepted_at", null)
-      .is("cancelled_at", null);
+      .is("cancelled_at", null)
+      .select("id")
+      .maybeSingle();
 
     if (cancelError) throw cancelError;
+    if (!cancelData) throw new Error("No pending invite found for that email — it may already be cancelled or accepted.");
     return { ok: true };
   });
 
