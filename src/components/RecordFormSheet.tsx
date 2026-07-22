@@ -124,8 +124,9 @@ export function RecordFormSheet({
 
       let savedId = recordId;
       if (isEdit) {
-        const { error } = await supabase.from(cfg.table as any).update(payload).eq("id", recordId!);
+        const { data, error } = await supabase.from(cfg.table as any).update(payload).eq("id", recordId!).select("id").maybeSingle();
         if (error) throw error;
+        if (!data) throw new Error("Nothing was saved — you may not have permission to edit this record.");
       } else {
         const { data, error } = await supabase.from(cfg.table as any).insert(payload).select("id").single();
         if (error) throw error;
