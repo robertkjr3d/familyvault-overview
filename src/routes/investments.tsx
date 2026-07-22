@@ -44,8 +44,9 @@ function UpdateValueInline({ id, current }: { id: string; current: number | null
     const num = Number(val.replace(/,/g, ""));
     if (isNaN(num)) { toast.error("Enter a valid number"); return; }
     const today = new Date().toISOString().slice(0, 10);
-    const { error } = await supabase.from("investments").update({ current_value: num, last_updated: today } as any).eq("id", id);
+    const { data, error } = await supabase.from("investments").update({ current_value: num, last_updated: today } as any).eq("id", id).select("id").maybeSingle();
     if (error) toast.error(error.message);
+    else if (!data) toast.error("Nothing was updated — you may not have permission to edit this.");
     else {
       toast.success("Value updated");
       qc.invalidateQueries({ queryKey: ["investments"] });
