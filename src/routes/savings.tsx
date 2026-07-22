@@ -60,8 +60,9 @@ function UpdateBalanceInline({ id, current }: { id: string; current: number | nu
     const num = Number(val.replace(/,/g, ""));
     if (isNaN(num)) { toast.error("Enter a valid number"); return; }
     const today = new Date().toISOString().slice(0, 10);
-    const { error } = await supabase.from("savings_accounts").update({ balance: num, last_updated: today }).eq("id", id);
+    const { data, error } = await supabase.from("savings_accounts").update({ balance: num, last_updated: today }).eq("id", id).select("id").maybeSingle();
     if (error) toast.error(error.message);
+    else if (!data) toast.error("Nothing was updated — you may not have permission to edit this.");
     else {
       toast.success("Balance updated");
       qc.invalidateQueries({ queryKey: ["savings"] });
