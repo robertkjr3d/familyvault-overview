@@ -26,11 +26,14 @@ export function RemindersList({ entityType, entityId }: { entityType: string; en
   });
 
   async function markDone(id: string) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("reminders")
       .update({ dismissed: true })
-      .eq("id", id);
+      .eq("id", id)
+      .select("id")
+      .maybeSingle();
     if (error) { toast.error(error.message); return; }
+    if (!data) { toast.error("Nothing was updated — you may not have permission to edit this."); return; }
     toast.success("Reminder marked as done");
     qc.invalidateQueries({ queryKey: ["reminders", entityType, entityId] });
     qc.invalidateQueries({ queryKey: ["alert-count"] });
