@@ -38,6 +38,7 @@ function SettingsPage() {
   const [householdNameInput, setHouseholdNameInput] = useState("");
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [deleteConfirmEmail, setDeleteConfirmEmail] = useState("");
+  const [deleteStep, setDeleteStep] = useState<"input" | "confirm">("input");
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [generatingEstateDoc, setGeneratingEstateDoc] = useState(false);
   const [generatingFullExport, setGeneratingFullExport] = useState(false);
@@ -162,6 +163,18 @@ function SettingsPage() {
       toast.error(message);
     },
   });
+
+  function handleProceedToConfirm() {
+    if (!user?.email) {
+      toast.error("Could not verify your account. Try refreshing the page.");
+      return;
+    }
+    if (deleteConfirmEmail.trim().toLowerCase() !== user.email.trim().toLowerCase()) {
+      toast.error("That email doesn't match your account.");
+      return;
+    }
+    setDeleteStep("confirm");
+  }
 
   async function handleDeleteAccount() {
     if (!user?.email) {
@@ -883,40 +896,78 @@ function SettingsPage() {
         </div>
       </section>
 
-      <Dialog open={deleteAccountOpen} onOpenChange={(open) => { setDeleteAccountOpen(open); if (!open) setDeleteConfirmEmail(""); }}>
+      <Dialog open={deleteAccountOpen} onOpenChange={(open) => { setDeleteAccountOpen(open); if (!open) { setDeleteConfirmEmail(""); setDeleteStep("input"); } }}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="text-urgent">Delete your account?</DialogTitle>
-            <DialogDescription asChild>
-              <div className="space-y-2 text-left">
-                <p>This permanently deletes your account and cannot be undone.</p>
-                {currentRole === "owner" ? (
-                  <p className="font-semibold text-urgent">
-                    You own "{householdName ?? "this household"}" — deleting your account deletes this entire household, including every record and document in it, for everyone who has access.
-                  </p>
-                ) : (
-                  <p>
-                    Your access to any shared household will be removed. Shared household records are not affected.
-                  </p>
-                )}
-                <p>Type your email address ({user?.email}) to confirm.</p>
+          {deleteStep === "input" ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-urgent">Delete your account?</DialogTitle>
+                <DialogDescription asChild>
+                  <div className="space-y-2 text-left">
+                    <p>This permanently deletes your account and cannot be undone.</p>
+                    {currentRole === "owner" ? (
+                      <p className="font-semibold text-urgent">
+                        You own "{householdName ?? "this household"}" — deleting your account deletes this entire household, including every record and document in it, for everyone who has access.
+                      </p>
+                    ) : (
+                      <p>
+                        Your access to any shared household will be removed. Shared household records are not affected.
+                      </p>
+                    )}
+                    <p>Type your email address ({user?.email}) to confirm.</p>
+                  </div>
+                </DialogDescription>
+              </DialogHeader>
+              <input
+                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                placeholder="your@email.com"
+                value={deleteConfirmEmail}
+                onChange={(e) => setDeleteConfirmEmail(e.target.value)}
+                autoComplete="off"
+              />
+              <button
+                onClick={handleProceedToConfirm}
+                disabled={deleteConfirmEmail.trim().toLowerCase() !== (user?.email ?? "").trim().toLowerCase()}
+                className="w-full rounded-lg bg-urgent px-3 py-2 text-sm font-semibold text-urgent-foreground disabled:opacity-40"
+              >
+                Delete My Account Forever
+              </button>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-urgent">Are you really sure?</DialogTitle>
+                <DialogDescription asChild>
+                  <div className="space-y-2 text-left">
+                    <p className="font-semibold text-urgent">
+                      This is the last step. There is no way to undo this once you continue.
+                    </p>
+                    {currentRole === "owner" && (
+                      <p>
+                        "{householdName ?? "This household"}" and everything in it will be gone permanently for everyone with access.
+                      </p>
+                    )}
+                  </div>
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setDeleteStep("input")}
+                  disabled={deletingAccount}
+                  className="flex-1 rounded-lg border border-border px-3 py-2 text-sm font-semibold disabled:opacity-40"
+                >
+                  Go back
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={deletingAccount}
+                  className="flex-1 rounded-lg bg-urgent px-3 py-2 text-sm font-semibold text-urgent-foreground disabled:opacity-40"
+                >
+                  {deletingAccount ? "Deleting…" : "Yes, permanently delete"}
+                </button>
               </div>
-            </DialogDescription>
-          </DialogHeader>
-          <input
-            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-            placeholder="your@email.com"
-            value={deleteConfirmEmail}
-            onChange={(e) => setDeleteConfirmEmail(e.target.value)}
-            autoComplete="off"
-          />
-          <button
-            onClick={handleDeleteAccount}
-            disabled={deletingAccount || deleteConfirmEmail.trim().toLowerCase() !== (user?.email ?? "").trim().toLowerCase()}
-            className="w-full rounded-lg bg-urgent px-3 py-2 text-sm font-semibold text-urgent-foreground disabled:opacity-40"
-          >
-            {deletingAccount ? "Deleting…" : "Delete My Account Forever"}
-          </button>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -1117,11 +1168,14 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
         return;
       }
     }
-    const { error } = await (supabase as any)
+    const { data, error } = await (supabase as any)
       .from("dismissed_dashboard_items")
       .update({ permanently_deleted: true })
-      .eq("id", item.id);
+      .eq("id", item.id)
+      .select("id")
+      .maybeSingle();
     if (error) { toast.error("Could not delete item."); return; }
+    if (!data) { toast.error("Nothing was deleted — you may not have permission to do this."); return; }
     await qc.invalidateQueries({ queryKey: ["dismissed-dashboard", householdId] });
     await qc.invalidateQueries({ queryKey: ["alert-count", householdId] });
     await qc.invalidateQueries({ queryKey: ["alert-count-extras", householdId] }); // alert-count no longer exists as a query - this is the key that actually needs invalidating now
