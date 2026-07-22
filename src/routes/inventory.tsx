@@ -938,15 +938,18 @@ const path = `${activeHouseholdId}/folders/${Date.now()}-${compressed.name}`;
 const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
 if (upErr) { toast.error(upErr.message); return; }
 const photo_url = path;
-await supabase.from("inventory_folders").update({ photo_url }).eq("id", folder.id);
+const { data, error } = await supabase.from("inventory_folders").update({ photo_url }).eq("id", folder.id).select("id").maybeSingle();
+if (error) { toast.error(error.message); return; }
+if (!data) { toast.error("Nothing was updated — you may not have permission to edit this."); return; }
 toast.success("Photo updated");
 qc.invalidateQueries({ queryKey: ["folders"] });
 }
 
 async function removeFolderPhoto() {
 if (!confirm("Remove this photo?")) return;
-const { error } = await supabase.from("inventory_folders").update({ photo_url: null }).eq("id", folder.id);
+const { data, error } = await supabase.from("inventory_folders").update({ photo_url: null }).eq("id", folder.id).select("id").maybeSingle();
 if (error) { toast.error(error.message); return; }
+if (!data) { toast.error("Nothing was updated — you may not have permission to edit this."); return; }
 toast.success("Photo removed");
 qc.invalidateQueries({ queryKey: ["folders"] });
 }
@@ -963,15 +966,17 @@ const newName = window.prompt("Rename location", folder.name);
 if (newName === null) return;
 const trimmed = newName.trim();
 if (!trimmed || trimmed === folder.name) return;
-const { error } = await supabase.from("inventory_folders").update({ name: trimmed }).eq("id", folder.id);
+const { data, error } = await supabase.from("inventory_folders").update({ name: trimmed }).eq("id", folder.id).select("id").maybeSingle();
 if (error) { toast.error(error.message); return; }
+if (!data) { toast.error("Nothing was updated — you may not have permission to edit this."); return; }
 toast.success("Renamed");
 qc.invalidateQueries({ queryKey: ["folders"] });
 }
 
 async function moveFolderTo(targetParentId: string | null) {
-const { error } = await supabase.from("inventory_folders").update({ parent_id: targetParentId }).eq("id", folder.id);
+const { data, error } = await supabase.from("inventory_folders").update({ parent_id: targetParentId }).eq("id", folder.id).select("id").maybeSingle();
 if (error) { toast.error(error.message); return; }
+if (!data) { toast.error("Nothing was updated — you may not have permission to edit this."); return; }
 toast.success("Moved");
 qc.invalidateQueries({ queryKey: ["folders"] });
 setShowMoveFolder(false);
@@ -979,8 +984,9 @@ onClose();
 }
 
 async function moveItemTo(itemId: string, targetFolderId: string) {
-const { error } = await supabase.from("inventory_items").update({ folder_id: targetFolderId }).eq("id", itemId);
+const { data, error } = await supabase.from("inventory_items").update({ folder_id: targetFolderId }).eq("id", itemId).select("id").maybeSingle();
 if (error) { toast.error(error.message); return; }
+if (!data) { toast.error("Nothing was updated — you may not have permission to edit this."); return; }
 toast.success("Item moved");
 qc.invalidateQueries({ queryKey: ["inventory_items"] });
 setMovingItem(null);
@@ -1469,7 +1475,7 @@ const fileRef = useRef<HTMLInputElement>(null);
 async function save() {
 if (!name.trim()) { toast.error("Item name required"); return; }
 setSaving(true);
-const { error } = await supabase
+const { data, error } = await supabase
 .from("inventory_items")
 .update({
 name: name.trim(),
@@ -1477,9 +1483,12 @@ category: category.trim() || null,
 action: action.trim() || null,
 warranty_date: warranty || null,
 })
-.eq("id", item.id);
+.eq("id", item.id)
+.select("id")
+.maybeSingle();
 setSaving(false);
 if (error) { toast.error(error.message); return; }
+if (!data) { toast.error("Nothing was saved — you may not have permission to edit this."); return; }
 toast.success("Item updated");
 qc.invalidateQueries({ queryKey: ["inventory_items"] });
 onDone();
@@ -1487,8 +1496,9 @@ onDone();
 
 async function removePhoto() {
 if (!confirm("Remove this photo?")) return;
-const { error } = await supabase.from("inventory_items").update({ photo_url: null }).eq("id", item.id);
+const { data, error } = await supabase.from("inventory_items").update({ photo_url: null }).eq("id", item.id).select("id").maybeSingle();
 if (error) { toast.error(error.message); return; }
+if (!data) { toast.error("Nothing was updated — you may not have permission to edit this."); return; }
 toast.success("Photo removed");
 qc.invalidateQueries({ queryKey: ["inventory_items"] });
 }
@@ -1500,8 +1510,9 @@ const path = `${activeHouseholdId}/items/${Date.now()}-${compressed.name}`;
 const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
 if (upErr) { toast.error(upErr.message); return; }
 const photo_url = path;
-const { error } = await supabase.from("inventory_items").update({ photo_url }).eq("id", item.id);
+const { data, error } = await supabase.from("inventory_items").update({ photo_url }).eq("id", item.id).select("id").maybeSingle();
 if (error) { toast.error(error.message); return; }
+if (!data) { toast.error("Nothing was updated — you may not have permission to edit this."); return; }
 toast.success("Photo added");
 qc.invalidateQueries({ queryKey: ["inventory_items"] });
 }
