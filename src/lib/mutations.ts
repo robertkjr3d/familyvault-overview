@@ -6,8 +6,9 @@ export function useStatusMutation(table: string, queryKey: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase.from(table as any).update({ status }).eq("id", id);
+      const { data, error } = await supabase.from(table as any).update({ status }).eq("id", id).select("id").maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("Nothing was updated — you may not have permission to edit this.");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [queryKey] });
@@ -45,8 +46,9 @@ export function useDeleteMutation(table: string, queryKey: string, entityType?: 
         await supabase.from("reminders").delete().eq("entity_type", entityType).eq("entity_id", id);
       }
 
-      const { error } = await supabase.from(table as any).delete().eq("id", id);
+      const { data, error } = await supabase.from(table as any).delete().eq("id", id).select("id").maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("Nothing was deleted — you may not have permission to delete this.");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [queryKey] });
