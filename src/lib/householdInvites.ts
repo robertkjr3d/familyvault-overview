@@ -420,7 +420,7 @@ export const createDemoHousehold = createServerFn({ method: "POST" })
 
     const { error: propErr } = await supabaseAdmin.from("properties" as any).insert({
       household_id: hhId, member_id: memberId, is_demo: true,
-      name: "3-Room HDB, Tampines", property_type: "HDB",
+      name: "3-Room HDB, Tampines",
       purchase_price: 380000, current_value: 450000,
       monthly_rent: 0, status: "settled",
     });
