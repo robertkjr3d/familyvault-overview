@@ -44,7 +44,7 @@ export const sendHouseholdInvite = createServerFn({ method: "POST" })
 
     const { data: ownerMembership, error: ownerError } = await supabase
       .from("household_users" as any)
-      .select("household_id")
+      .select("household_id, households(name)")
       .eq("household_id", data.householdId)
       .eq("user_id", userId)
       .eq("role", "owner")
@@ -54,6 +54,8 @@ export const sendHouseholdInvite = createServerFn({ method: "POST" })
     if (!ownerMembership) {
       throw new Error("Only household owners can send invites.");
     }
+
+    const householdName = (ownerMembership as any).households?.name ?? "a household";
 
     const invitedEmail = normalizeEmail(data.email);
     const token = `${crypto.randomUUID()}${crypto.randomUUID().replace(/-/g, "")}`;
@@ -110,6 +112,7 @@ export const sendHouseholdInvite = createServerFn({ method: "POST" })
       options: {
         shouldCreateUser: true,
         emailRedirectTo: redirectUrl.toString(),
+        data: { invited_household_name: householdName },
       },
     });
 
