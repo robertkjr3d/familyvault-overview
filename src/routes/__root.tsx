@@ -202,6 +202,34 @@ function SignInScreen() {
     setSentTo(email);
   }
 
+  const [code, setCode] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+
+  async function verifyCode(e: FormEvent) {
+    e.preventDefault();
+    setVerifying(true);
+    setVerifyError(null);
+
+    const { error: verifyErr } = await supabase.auth.verifyOtp({
+      email: sentTo ?? email,
+      token: code.trim(),
+      type: "email",
+    });
+
+    setVerifying(false);
+    if (verifyErr) {
+      setVerifyError(verifyErr.message);
+      return;
+    }
+    // No further action needed here: verifyOtp establishes the session
+    // directly (no redirect involved), useAuthSession's onAuthStateChange
+    // picks it up, and the existing ?invite= URL-param effect above fires
+    // exactly as it does for a clicked link — confirmed by reading
+    // useAuthSession.ts, which only listens to onAuthStateChange/getSession
+    // and never parses the URL itself.
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-sm">
@@ -212,7 +240,7 @@ function SignInScreen() {
         <p className="mt-2 text-sm text-muted-foreground">
           {inviteMode
             ? "You are accepting a household invite. Enter the invited email to continue."
-            : "Enter your email and we will send a secure magic link."}
+            : "Enter your email and we will send a secure sign-in code."}
         </p>
 
         <form onSubmit={sendMagicLink} className="mt-5 space-y-3">
@@ -225,11 +253,33 @@ function SignInScreen() {
             onChange={(e) => setEmail(e.target.value)}
           />
           <Button type="submit" disabled={loading || !email} className="w-full">
-            {loading ? "Sending link..." : "Send magic link"}
+            {loading ? "Sending..." : "Send sign-in code"}
           </Button>
         </form>
 
-        {sentTo && <p className="mt-3 text-xs text-settled">Magic link sent to {sentTo}.</p>}
+        {sentTo && (
+          <>
+            <p className="mt-3 text-xs text-settled">
+              Check {sentTo} for a 6-digit code (there's also a link in the same email, but the
+              code is more reliable — some workplace email systems break one-click links).
+            </p>
+            <form onSubmit={verifyCode} className="mt-3 space-y-3">
+              <Input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                required
+                placeholder="123456"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+              />
+              <Button type="submit" disabled={verifying || !code} className="w-full">
+                {verifying ? "Verifying..." : "Verify code"}
+              </Button>
+            </form>
+            {verifyError && <p className="mt-3 text-xs text-urgent">{verifyError}</p>}
+          </>
+        )}
         {error && <p className="mt-3 text-xs text-urgent">{error}</p>}
 
         <p className="mt-5 text-center text-[11px] text-muted-foreground">
