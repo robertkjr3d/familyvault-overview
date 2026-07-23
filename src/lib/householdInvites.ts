@@ -305,17 +305,29 @@ export const listHouseholdPeople = createServerFn({ method: "POST" })
 
     if (memberError) throw memberError;
 
-    const members = await Promise.all(
-      ((memberRows ?? []) as Array<{ user_id: string; role: string; created_at: string }>).map(async (m) => {
-        const { data: userData } = await supabaseAdmin.auth.admin.getUserById(m.user_id);
-        return {
-          email: userData?.user?.email ?? "(email unavailable)",
-          role: m.role as "owner" | "member" | "viewer",
-          joinedAt: m.created_at,
-          isYou: m.user_id === userId,
-        };
-      })
-    );
+    const typedMemberRows = (memberRows ?? []) as Array<{ user_id: string; role: string; created_at: string }>;
+
+    // Look up all emails with ONE admin.listUsers() call instead of one
+    // getUserById() call per member. Firing N concurrent admin-API calls
+    // (the old approach) risks a transient failure/rate-limit on any
+    // single call, which silently showed "(email unavailable)" next to
+    // an unrelated, perfectly fine member — this removes that failure
+    // mode for household sizes this app targets.
+    // perPage covers this app's target scale (~200-300 households); if
+    // total platform users ever exceed it, pagination would need handling.
+    const { data: userList, error: userListError } = await supabaseAdmin.auth.admin.listUsers({
+      perPage: 10000,
+    });
+    if (userListError) throw userListError;
+
+    const emailByUserId = new Map((userList?.users ?? []).map((u) => [u.id, u.email ?? null]));
+
+    const members = typedMemberRows.map((m) => ({
+      email: emailByUserId.get(m.user_id) ?? "(email unavailable)",
+      role: m.role as "owner" | "member" | "viewer",
+      joinedAt: m.created_at,
+      isYou: m.user_id === userId,
+    }));
 
     const { data: inviteRows, error: inviteError } = await supabaseAdmin
       .from("household_invites" as any)
@@ -355,7 +367,30 @@ export const createDemoHousehold = createServerFn({ method: "POST" })
       (m: any) => m.households?.name === "Demo Household — FamilyHub SG"
     );
     if (existing) {
-      return { householdId: existing.households.id as string };
+      const existingHhId = existing.households.id as string;
+      // Bug fix: a previous attempt can have failed partway through (e.g. a
+      // transient PostgREST schema-cache miss on the properties insert),
+      // leaving a household+owner+member row behind with NO financial
+      // records. Reusing it by name alone used to hand back that empty
+      // shell as if it were a real, populated demo household. Verify it
+      // actually has data before reusing; if not, wipe the stale shell and
+      // fall through to a full rebuild below.
+      const { count: propCount } = await supabaseAdmin
+        .from("properties" as any)
+        .select("id", { count: "exact", head: true })
+        .eq("household_id", existingHhId);
+
+      if ((propCount ?? 0) > 0) {
+        return { householdId: existingHhId };
+      }
+
+      // households has no cascade to household_users/members (see
+      // accountDeletion.ts notes) — clear those first, same order used
+      // by the account-deletion flow, or this delete just trades one
+      // FK-violation error for another.
+      await supabaseAdmin.from("household_users" as any).delete().eq("household_id", existingHhId);
+      await supabaseAdmin.from("members" as any).delete().eq("household_id", existingHhId);
+      await supabaseAdmin.from("households" as any).delete().eq("id", existingHhId);
     }
 
     const { data: hh, error: hhErr } = await supabaseAdmin
