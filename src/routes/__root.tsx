@@ -174,9 +174,20 @@ function SignInScreen() {
     setError(null);
 
     const configuredRedirect = import.meta.env.VITE_SUPABASE_AUTH_REDIRECT_URL?.trim();
-    const redirectTo =
+    const base =
       configuredRedirect ||
       (typeof window !== "undefined" ? window.location.origin : undefined);
+    // Bug fix: this used to drop the ?invite= token from the redirect URL,
+    // so if someone landed here from an invite link and then requested
+    // their own magic link, the follow-up email sent them to the bare
+    // home page instead of back to the invite-acceptance flow.
+    let redirectTo = base;
+    if (base && typeof window !== "undefined") {
+      const url = new URL(base);
+      const inviteToken = new URLSearchParams(window.location.search).get("invite");
+      if (inviteToken) url.searchParams.set("invite", inviteToken);
+      redirectTo = url.toString();
+    }
     const { error: signInError } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: redirectTo },
