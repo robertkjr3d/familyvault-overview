@@ -168,19 +168,19 @@ function SignInScreen() {
   const [error, setError] = useState<string | null>(null);
   const inviteMode = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("invite");
 
-  async function sendMagicLink(e: FormEvent) {
-    e.preventDefault();
+  async function sendMagicLink() {
     setLoading(true);
     setError(null);
 
-    const configuredRedirect = import.meta.env.VITE_SUPABASE_AUTH_REDIRECT_URL?.trim();
-    const base =
-      configuredRedirect ||
-      (typeof window !== "undefined" ? window.location.origin : undefined);
-    // Bug fix: this used to drop the ?invite= token from the redirect URL,
-    // so if someone landed here from an invite link and then requested
-    // their own magic link, the follow-up email sent them to the bare
-    // home page instead of back to the invite-acceptance flow.
+    // Bug fix: this used to allow a build-time env var (baked into the
+    // client bundle by Vite, separate from the server's runtime settings)
+    // to override the redirect domain. That variable had gone stale after
+    // moving off the old workers.dev domain, so invite emails sent from
+    // here pointed at an old, phishing-flagged URL instead of
+    // familyhubsg.com. window.location.origin is always correct here —
+    // this code only ever runs in a real loaded browser tab — so there's
+    // no need for an override at all on the client.
+    const base = typeof window !== "undefined" ? window.location.origin : undefined;
     let redirectTo = base;
     if (base && typeof window !== "undefined") {
       const url = new URL(base);
@@ -212,7 +212,7 @@ function SignInScreen() {
     setVerifyError(null);
 
     const { error: verifyErr } = await supabase.auth.verifyOtp({
-      email: sentTo ?? email,
+      email,
       token: code.trim(),
       type: "email",
     });
@@ -239,11 +239,11 @@ function SignInScreen() {
         <h1 className="mt-1 text-2xl font-bold tracking-tight">Sign in</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {inviteMode
-            ? "You are accepting a household invite. Enter the invited email to continue."
-            : "Enter your email and we will send a secure sign-in code."}
+            ? "You are accepting a household invite. Enter the invited email and the code from your invite email."
+            : "Enter your email, then enter the code we email you."}
         </p>
 
-        <form onSubmit={sendMagicLink} className="mt-5 space-y-3">
+        <div className="mt-5 space-y-3">
           <Input
             type="email"
             required
@@ -252,34 +252,37 @@ function SignInScreen() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
-          <Button type="submit" disabled={loading || !email} className="w-full">
-            {loading ? "Sending..." : "Send sign-in code"}
-          </Button>
-        </form>
 
-        {sentTo && (
-          <>
-            <p className="mt-3 text-xs text-settled">
-              Check {sentTo} for a 6-digit code (there's also a link in the same email, but the
-              code is more reliable — some workplace email systems break one-click links).
-            </p>
-            <form onSubmit={verifyCode} className="mt-3 space-y-3">
-              <Input
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                required
-                placeholder="123456"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-              />
-              <Button type="submit" disabled={verifying || !code} className="w-full">
-                {verifying ? "Verifying..." : "Verify code"}
-              </Button>
-            </form>
-            {verifyError && <p className="mt-3 text-xs text-urgent">{verifyError}</p>}
-          </>
-        )}
+          <form onSubmit={verifyCode} className="space-y-3">
+            <Input
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder="6-digit code from your email"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+            />
+            <Button type="submit" disabled={verifying || !email || !code} className="w-full">
+              {verifying ? "Verifying..." : "Verify code and sign in"}
+            </Button>
+          </form>
+          {verifyError && <p className="text-xs text-urgent">{verifyError}</p>}
+
+          <p className="text-center text-xs text-muted-foreground">
+            Don't have a code yet?
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={sendMagicLink}
+            disabled={loading || !email}
+            className="w-full"
+          >
+            {loading ? "Sending..." : "Email me a code"}
+          </Button>
+          {sentTo && <p className="text-xs text-settled">New code sent to {sentTo}.</p>}
+        </div>
+
         {error && <p className="mt-3 text-xs text-urgent">{error}</p>}
 
         <p className="mt-5 text-center text-[11px] text-muted-foreground">
