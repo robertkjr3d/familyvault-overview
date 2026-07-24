@@ -98,7 +98,16 @@ const selectedMembership = memberships.find((m) => m.household_id === selectedHo
 const canShareActiveHousehold = selectedMembership?.role === "owner";
 
 useEffect(() => {
-if (households.length === 0) return;
+if (households.length === 0) {
+  // Bug fix: previously this returned immediately here, leaving a stale
+  // activeHouseholdId (e.g. from a household the user was just removed
+  // from) untouched. Every downstream query kept using that invalid id,
+  // RLS silently blocked all of it, and the user saw a blank, read-only
+  // shell of a household they no longer belonged to instead of a clear
+  // "you don't have access to anything right now" state.
+  if (activeHouseholdId !== null) setActiveHouseholdId(null);
+  return;
+}
 // Correct two cases: no household selected yet (fresh login, empty
 // localStorage), AND a selected household that no longer matches any of
 // the user's current memberships (stale id left over in localStorage —
