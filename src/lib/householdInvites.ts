@@ -40,7 +40,8 @@ export const sendHouseholdInvite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(invitePayloadSchema)
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+    const { supabase, userId, claims } = context;
+    const inviterEmail = normalizeEmail(String(claims.email ?? ""));
 
     const { data: ownerMembership, error: ownerError } = await supabase
       .from("household_users" as any)
@@ -78,6 +79,7 @@ export const sendHouseholdInvite = createServerFn({ method: "POST" })
     }
 
     redirectUrl.searchParams.set("invite", token);
+    redirectUrl.searchParams.set("email", invitedEmail);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -112,7 +114,7 @@ export const sendHouseholdInvite = createServerFn({ method: "POST" })
       options: {
         shouldCreateUser: true,
         emailRedirectTo: redirectUrl.toString(),
-        data: { invited_household_name: householdName },
+        data: { invited_household_name: householdName, invited_by_email: inviterEmail },
       },
     });
 
@@ -122,6 +124,55 @@ export const sendHouseholdInvite = createServerFn({ method: "POST" })
     }
 
     return { ok: true };
+  });
+
+export const acceptPendingInvitesForCurrentUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { userId, claims } = context;
+    const userEmail = normalizeEmail(String(claims.email ?? ""));
+    if (!userEmail) return { acceptedHouseholdIds: [] as string[] };
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: invites, error: invitesError } = await supabaseAdmin
+      .from("household_invites" as any)
+      .select("id, household_id, role, invited_by_user_id")
+      .eq("invited_email", userEmail)
+      .is("accepted_at", null)
+      .is("cancelled_at", null)
+      .gt("expires_at", new Date().toISOString());
+
+    if (invitesError) throw invitesError;
+    if (!invites || invites.length === 0) return { acceptedHouseholdIds: [] as string[] };
+
+    const acceptedHouseholdIds: string[] = [];
+
+    for (const invite of invites as any[]) {
+      const { error: membershipError } = await supabaseAdmin
+        .from("household_users" as any)
+        .upsert(
+          {
+            household_id: invite.household_id,
+            user_id: userId,
+            role: invite.role,
+            invited_by: invite.invited_by_user_id,
+          },
+          { onConflict: "household_id,user_id" },
+        );
+      if (membershipError) throw membershipError;
+
+      const { data: completeData, error: completeError } = await supabaseAdmin
+        .from("household_invites" as any)
+        .update({ accepted_at: new Date().toISOString(), accepted_by_user_id: userId })
+        .eq("id", invite.id)
+        .select("id")
+        .maybeSingle();
+      if (completeError) throw completeError;
+      if (completeData) acceptedHouseholdIds.push(invite.household_id as string);
+    }
+
+    return { acceptedHouseholdIds };
   });
 
 export const acceptHouseholdInvite = createServerFn({ method: "POST" })
