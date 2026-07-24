@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Outlet,
   createRootRouteWithContext,
@@ -71,9 +71,18 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  return (
+    <QueryClientProvider client={queryClient}>
+      <RootContent />
+    </QueryClientProvider>
+  );
+}
+
+function RootContent() {
   const { initialized, session } = useAuthSession();
   const setActiveHouseholdId = useAppStore((s) => s.setActiveHouseholdId);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const queryClient = useQueryClient();
   // Legal pages must be readable before signing in — that's the whole point
   // of a privacy policy / terms page. Bypass the auth gate for just these two.
   const isPublicRoute = pathname === "/privacy" || pathname === "/terms";
@@ -153,62 +162,44 @@ function RootComponent() {
   });
 
   if (isPublicRoute) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        <Outlet />
-      </QueryClientProvider>
-    );
+    return <Outlet />;
   }
 
   if (!initialized) {
     return (
-      <QueryClientProvider client={queryClient}>
-        <div className="flex min-h-screen items-center justify-center p-6 text-sm text-muted-foreground">
-          Loading...
-        </div>
-      </QueryClientProvider>
+      <div className="flex min-h-screen items-center justify-center p-6 text-sm text-muted-foreground">
+        Loading...
+      </div>
     );
   }
 
   if (!session) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        <SignInScreen />
-      </QueryClientProvider>
-    );
+    return <SignInScreen />;
   }
 
   if (!inviteCheckDone || membershipsLoading) {
     return (
-      <QueryClientProvider client={queryClient}>
-        <div className="flex min-h-screen items-center justify-center p-6 text-sm text-muted-foreground">
-          Loading...
-        </div>
-      </QueryClientProvider>
+      <div className="flex min-h-screen items-center justify-center p-6 text-sm text-muted-foreground">
+        Loading...
+      </div>
     );
   }
 
   if (memberships && memberships.length === 0) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        <NoHouseholdScreen />
-      </QueryClientProvider>
-    );
+    return <NoHouseholdScreen />;
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <ErrorBoundary>
-        <div className="min-h-screen pb-36">
-          <AppHeader />
-          <main className="mx-auto max-w-3xl px-4 py-4">
-            <Outlet />
-          </main>
-          <BottomTabs />
-          <Toaster position="bottom-right" richColors closeButton offset={{ bottom: 80 }} duration={1000} />
-        </div>
-      </ErrorBoundary>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <div className="min-h-screen pb-36">
+        <AppHeader />
+        <main className="mx-auto max-w-3xl px-4 py-4">
+          <Outlet />
+        </main>
+        <BottomTabs />
+        <Toaster position="bottom-right" richColors closeButton offset={{ bottom: 80 }} duration={1000} />
+      </div>
+    </ErrorBoundary>
   );
 }
 
