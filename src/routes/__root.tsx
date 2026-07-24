@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthSession } from "@/hooks/useAuthSession";
-import { acceptHouseholdInvite } from "@/lib/householdInvites";
+import { acceptPendingInvitesForCurrentUser } from "@/lib/householdInvites";
 import { useAppStore } from "@/lib/store";
 import { toast } from "sonner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -83,34 +83,43 @@ function RootComponent() {
   }, []);
 
   useEffect(() => {
-    if (!session?.user?.id || typeof window === "undefined") {
-      return;
-    }
-
-    const params = new URLSearchParams(window.location.search);
-    const inviteToken = params.get("invite");
-    if (!inviteToken) {
+    if (!session?.user?.id) {
       return;
     }
 
     let cancelled = false;
 
-    void acceptHouseholdInvite({ data: { token: inviteToken } })
+    // Bug fix: this used to only run when the URL had ?invite=<token>,
+    // which meant someone who typed their email + code directly on the
+    // homepage (instead of clicking the emailed link) never got joined to
+    // the household that invited them — the app had no way to know an
+    // invite was involved at all. Checking by the user's own verified
+    // email instead of a URL param fixes this regardless of how they
+    // arrived, and also accepts multiple pending invites if there are any.
+    void acceptPendingInvitesForCurrentUser()
       .then((result) => {
         if (cancelled) return;
-        if (result?.householdId) {
-          setActiveHouseholdId(result.householdId);
+        if (result?.acceptedHouseholdIds?.length) {
+          setActiveHouseholdId(result.acceptedHouseholdIds[0]);
+          toast.success(
+            result.acceptedHouseholdIds.length > 1
+              ? "Invitations accepted."
+              : "Invitation accepted."
+          );
         }
-        toast.success("Invitation accepted.");
 
+        if (typeof window === "undefined") return;
+        const params = new URLSearchParams(window.location.search);
+        if (!params.has("invite") && !params.has("email")) return;
         params.delete("invite");
+        params.delete("email");
         const nextQuery = params.toString();
         const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash}`;
         window.history.replaceState({}, "", nextUrl);
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        const message = error instanceof Error ? error.message : "Unable to accept invite.";
+        const message = error instanceof Error ? error.message : "Unable to check for pending invites.";
         toast.error(message);
       });
 
@@ -162,7 +171,12 @@ function RootComponent() {
 }
 
 function SignInScreen() {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => {
+    if (typeof window === "undefined") return "";
+    // Prefill from the invite link when present, so someone who actually
+    // clicked their invite email doesn't have to retype their own address.
+    return new URLSearchParams(window.location.search).get("email") ?? "";
+  });
   const [loading, setLoading] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -172,14 +186,6 @@ function SignInScreen() {
     setLoading(true);
     setError(null);
 
-    // Bug fix: this used to allow a build-time env var (baked into the
-    // client bundle by Vite, separate from the server's runtime settings)
-    // to override the redirect domain. That variable had gone stale after
-    // moving off the old workers.dev domain, so invite emails sent from
-    // here pointed at an old, phishing-flagged URL instead of
-    // familyhubsg.com. window.location.origin is always correct here —
-    // this code only ever runs in a real loaded browser tab — so there's
-    // no need for an override at all on the client.
     const base = typeof window !== "undefined" ? window.location.origin : undefined;
     let redirectTo = base;
     if (base && typeof window !== "undefined") {
@@ -222,74 +228,78 @@ function SignInScreen() {
       setVerifyError(verifyErr.message);
       return;
     }
-    // No further action needed here: verifyOtp establishes the session
-    // directly (no redirect involved), useAuthSession's onAuthStateChange
-    // picks it up, and the existing ?invite= URL-param effect above fires
-    // exactly as it does for a clicked link — confirmed by reading
-    // useAuthSession.ts, which only listens to onAuthStateChange/getSession
-    // and never parses the URL itself.
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-sm">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-          FamilyHub SG
-        </div>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight">Sign in</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {inviteMode
-            ? "You are accepting a household invite. Enter the invited email and the code from your invite email."
-            : "Enter your email, then enter the code we email you."}
-        </p>
-
-        <div className="mt-5 space-y-3">
-          <Input
-            type="email"
-            required
-            autoComplete="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-
-          <form onSubmit={verifyCode} className="space-y-3">
-            <Input
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              placeholder="6-digit code from your email"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-            />
-            <Button type="submit" disabled={verifying || !email || !code} className="w-full">
-              {verifying ? "Verifying..." : "Verify code and sign in"}
-            </Button>
-          </form>
-          {verifyError && <p className="text-xs text-urgent">{verifyError}</p>}
-
-          <p className="text-center text-xs text-muted-foreground">
-            Don't have a code yet?
+    <div className="flex min-h-screen items-center justify-center bg-background p-6">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="bg-primary px-6 py-6">
+          <p className="text-lg font-bold tracking-tight text-primary-foreground">FamilyHub SG</p>
+          <p className="mt-1 text-xs text-primary-foreground/70">
+            Your family's financial command centre
           </p>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={sendMagicLink}
-            disabled={loading || !email}
-            className="w-full"
-          >
-            {loading ? "Sending..." : "Email me a code"}
-          </Button>
-          {sentTo && <p className="text-xs text-settled">New code sent to {sentTo}.</p>}
         </div>
 
-        {error && <p className="mt-3 text-xs text-urgent">{error}</p>}
+        <div className="p-6">
+          <h1 className="text-lg font-semibold tracking-tight">
+            {inviteMode ? "Join your family's household" : "Sign in"}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {inviteMode
+              ? "Enter the invited email and the code from your invite email."
+              : "Enter your email and the code we send you — no password needed."}
+          </p>
 
-        <p className="mt-5 text-center text-[11px] text-muted-foreground">
-          By continuing, you agree to our{" "}
-          <Link to="/terms" className="underline">Terms of Service</Link> and{" "}
-          <Link to="/privacy" className="underline">Privacy Policy</Link>.
-        </p>
+          <div className="mt-5 space-y-3">
+            <Input
+              type="email"
+              required
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+
+            <form onSubmit={verifyCode} className="space-y-3">
+              <Input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="6-digit code"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+              />
+              <Button type="submit" disabled={verifying || !email || !code} className="w-full">
+                {verifying ? "Verifying..." : "Verify code and sign in"}
+              </Button>
+            </form>
+            {verifyError && <p className="text-xs text-urgent">{verifyError}</p>}
+          </div>
+
+          <div className="mt-5 border-t border-border pt-4">
+            <p className="text-xs text-muted-foreground">
+              {inviteMode ? "Code not showing up?" : "Don't have a code yet?"}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={sendMagicLink}
+              disabled={loading || !email}
+              className="mt-2 w-full"
+            >
+              {loading ? "Sending..." : "Email me a code"}
+            </Button>
+            {sentTo && <p className="mt-2 text-xs text-settled">New code sent to {sentTo}.</p>}
+          </div>
+
+          {error && <p className="mt-3 text-xs text-urgent">{error}</p>}
+
+          <p className="mt-5 text-center text-[11px] text-muted-foreground">
+            By continuing, you agree to our{" "}
+            <Link to="/terms" className="underline">Terms of Service</Link> and{" "}
+            <Link to="/privacy" className="underline">Privacy Policy</Link>.
+          </p>
+        </div>
       </div>
     </div>
   );
