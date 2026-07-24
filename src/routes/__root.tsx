@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import {
   Outlet,
   createRootRouteWithContext,
@@ -77,6 +77,7 @@ function RootComponent() {
   // Legal pages must be readable before signing in — that's the whole point
   // of a privacy policy / terms page. Bypass the auth gate for just these two.
   const isPublicRoute = pathname === "/privacy" || pathname === "/terms";
+  const [inviteCheckDone, setInviteCheckDone] = useState(false);
 
   useEffect(() => {
     setupGlobalErrorHandlers();
@@ -84,10 +85,12 @@ function RootComponent() {
 
   useEffect(() => {
     if (!session?.user?.id) {
+      setInviteCheckDone(false);
       return;
     }
 
     let cancelled = false;
+    setInviteCheckDone(false);
 
     // Bug fix: this used to only run when the URL had ?invite=<token>,
     // which meant someone who typed their email + code directly on the
@@ -97,16 +100,23 @@ function RootComponent() {
     // email instead of a URL param fixes this regardless of how they
     // arrived, and also accepts multiple pending invites if there are any.
     void acceptPendingInvitesForCurrentUser()
-      .then((result) => {
+      .then(async (result) => {
         if (cancelled) return;
         if (result?.acceptedHouseholdIds?.length) {
           setActiveHouseholdId(result.acceptedHouseholdIds[0]);
+          // Wait for the refetch to actually land, not just fire it — an
+          // invalidation alone doesn't mean fresh data has arrived yet, so
+          // marking the check "done" right after invalidating (without
+          // awaiting) would just relocate the same flash to a moment later.
+          await queryClient.invalidateQueries({ queryKey: ["household-memberships"] });
           toast.success(
             result.acceptedHouseholdIds.length > 1
               ? "Invitations accepted."
               : "Invitation accepted."
           );
         }
+        if (cancelled) return;
+        setInviteCheckDone(true);
 
         if (typeof window === "undefined") return;
         const params = new URLSearchParams(window.location.search);
@@ -119,6 +129,7 @@ function RootComponent() {
       })
       .catch((error: unknown) => {
         if (cancelled) return;
+        setInviteCheckDone(true);
         const message = error instanceof Error ? error.message : "Unable to check for pending invites.";
         toast.error(message);
       });
@@ -126,7 +137,20 @@ function RootComponent() {
     return () => {
       cancelled = true;
     };
-  }, [session?.user?.id, setActiveHouseholdId]);
+  }, [session?.user?.id, setActiveHouseholdId, queryClient]);
+
+  const { data: memberships, isLoading: membershipsLoading } = useQuery({
+    queryKey: ["household-memberships", session?.user?.id],
+    enabled: !!session?.user?.id && !isPublicRoute,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("household_users" as any)
+        .select("household_id, role, households(id, name)")
+        .eq("user_id", session!.user!.id);
+      if (error) throw error;
+      return (data ?? []) as unknown as Array<{ household_id: string }>;
+    },
+  });
 
   if (isPublicRoute) {
     return (
@@ -154,6 +178,24 @@ function RootComponent() {
     );
   }
 
+  if (!inviteCheckDone || membershipsLoading) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <div className="flex min-h-screen items-center justify-center p-6 text-sm text-muted-foreground">
+          Loading...
+        </div>
+      </QueryClientProvider>
+    );
+  }
+
+  if (memberships && memberships.length === 0) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <NoHouseholdScreen />
+      </QueryClientProvider>
+    );
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>
@@ -167,6 +209,33 @@ function RootComponent() {
         </div>
       </ErrorBoundary>
     </QueryClientProvider>
+  );
+}
+
+function NoHouseholdScreen() {
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background p-6">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="bg-primary px-6 py-6">
+          <p className="text-lg font-bold tracking-tight text-primary-foreground">FamilyHub SG</p>
+        </div>
+        <div className="p-6">
+          <h1 className="text-lg font-semibold tracking-tight">No household access</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            You're signed in, but you're not currently part of any household. If you were
+            recently removed, or you're waiting on an invite, check with whoever manages the
+            household you're expecting access to.
+          </p>
+          <Button type="button" variant="outline" onClick={handleSignOut} className="mt-5 w-full">
+            Sign out
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -279,6 +348,9 @@ function SignInScreen() {
           <div className="mt-5 border-t border-border pt-4">
             <p className="text-xs text-muted-foreground">
               {inviteMode ? "Code not showing up?" : "Don't have a code yet?"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Enter your email above and we'll email you a code to register.
             </p>
             <Button
               type="button"
