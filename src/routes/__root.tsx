@@ -246,17 +246,28 @@ function SignInScreen() {
     setLoading(true);
     setError(null);
 
+    const inviteToken = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("invite") : null;
     const base = typeof window !== "undefined" ? window.location.origin : undefined;
     let redirectTo = base;
     if (base && typeof window !== "undefined") {
       const url = new URL(base);
-      const inviteToken = new URLSearchParams(window.location.search).get("invite");
       if (inviteToken) url.searchParams.set("invite", inviteToken);
       redirectTo = url.toString();
     }
     const { error: signInError } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: redirectTo },
+      options: {
+        emailRedirectTo: redirectTo,
+        // Bug fix: Supabase's email template data reflects the user's
+        // STORED profile data, not just this one request — confirmed by
+        // a real case where someone who'd been removed from a household,
+        // then requested a completely fresh code with no invite involved,
+        // still got an email saying "invited by" a household they'd left.
+        // Only clear it when this genuinely isn't an invite request —
+        // otherwise a legitimate "resend my invite code" click would lose
+        // its own correct wording.
+        data: inviteToken ? undefined : { invited_household_name: null, invited_by_email: null },
+      },
     });
 
     setLoading(false);
