@@ -13,6 +13,7 @@ import { useCurrentRole } from "@/lib/useCurrentRole";
 import { deleteAccount } from "@/lib/accountDeletion";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { NativeSelect } from "@/components/ui/native-select";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -1053,7 +1054,7 @@ function PlannedEvents({ householdId, currency }: { householdId: string | null; 
       </p>
       <div className="space-y-2 rounded-xl bg-background/50 p-3">
         <input
-          className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm"
           placeholder="Label, e.g. University fees, Home renovation"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
@@ -1061,26 +1062,26 @@ function PlannedEvents({ householdId, currency }: { householdId: string | null; 
         <div className="grid grid-cols-3 gap-2">
           <input
             type="number" min={currentYear} max="2100"
-            className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            className="rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm"
             placeholder="Year"
             value={year}
             onChange={(e) => setYear(e.target.value)}
           />
           <input
             type="number" min="0"
-            className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            className="rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm"
             placeholder={`Amount (${currency})`}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
           />
-          <select
-            className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
+          <NativeSelect
+            className="h-auto rounded-lg py-2"
             value={type}
             onChange={(e) => setType(e.target.value as "inflow" | "outflow")}
           >
             <option value="outflow">Outflow</option>
             <option value="inflow">Inflow</option>
-          </select>
+          </NativeSelect>
         </div>
         <button
           className="w-full rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
