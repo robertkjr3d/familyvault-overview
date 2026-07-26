@@ -126,6 +126,44 @@ export const sendHouseholdInvite = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const createOwnHousehold = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { userId, claims } = context;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Server-side check, not trusted from the client: only someone with
+    // ZERO existing household memberships can create one this way. This is
+    // what replaces the old automatic-creation-on-signup behavior — now a
+    // deliberate action instead of something that could happen silently.
+    const { data: existing, error: existingError } = await supabaseAdmin
+      .from("household_users" as any)
+      .select("household_id")
+      .eq("user_id", userId);
+    if (existingError) throw existingError;
+    if (existing && existing.length > 0) {
+      throw new Error("You already belong to a household.");
+    }
+
+    const userEmail = normalizeEmail(String(claims.email ?? "")) || "My";
+    const householdName = `${userEmail.split("@")[0]}'s Household`;
+
+    const { data: hh, error: hhErr } = await supabaseAdmin
+      .from("households" as any)
+      .insert({ name: householdName })
+      .select("id")
+      .single();
+    if (hhErr) throw new Error(`Could not create household: ${hhErr.message}`);
+    const hhId = (hh as any).id as string;
+
+    const { error: huErr } = await supabaseAdmin
+      .from("household_users" as any)
+      .insert({ household_id: hhId, user_id: userId, role: "owner" });
+    if (huErr) throw new Error(`Could not add owner: ${huErr.message}`);
+
+    return { householdId: hhId };
+  });
+
 export const acceptPendingInvitesForCurrentUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
