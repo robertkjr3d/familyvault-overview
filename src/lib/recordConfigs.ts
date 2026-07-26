@@ -209,6 +209,16 @@ export const recordConfigs: Record<string, RecordConfig> = {
     ],
   },
 
+  travel_checklist_items: {
+    table: "travel_checklist_items",
+    queryKey: "travel_checklist",
+    label: "Travel Checklist Item",
+    fields: [
+      { key: "label", label: "Item", type: "text", required: true, placeholder: "e.g. Passports" },
+      { key: "category", label: "Category", type: "text" },
+    ],
+  },
+
   other_assets: {
     table: "other_assets",
     queryKey: "other_assets",
