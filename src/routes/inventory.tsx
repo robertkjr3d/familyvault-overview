@@ -10,6 +10,7 @@ import { RemindersList } from "@/components/RemindersList";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -629,7 +630,69 @@ return (
 
 /* ––––– Checklist Section (Go-Bag, Travel, etc.) ––––– */
 const CHECKLIST_CATEGORY_PRESETS = ["Documents", "Hygiene", "Clothes", "Electronics"];
-const CHECKLIST_UNCATEGORIZED = "Other";
+const CHECKLIST_UNCATEGORIZED = "Uncategorized";
+const CHECKLIST_UNCATEGORIZED_VALUE = "__uncategorized__";
+const CHECKLIST_ADD_NEW_VALUE = "__add_new__";
+
+/** A proper dropdown for picking a checklist item's category, with a "+ Add new category" option that reveals a text field. Used for both the add-item row and inline editing. */
+function CategoryPicker({
+value,
+onChange,
+suggestions,
+}: {
+value: string;
+onChange: (next: string) => void;
+suggestions: string[];
+}) {
+const [customMode, setCustomMode] = useState(false);
+const [customText, setCustomText] = useState("");
+
+const options = useMemo(() => {
+const set = new Set(suggestions);
+if (value) set.add(value);
+return Array.from(set).sort((a, b) => a.localeCompare(b));
+}, [suggestions, value]);
+
+function commitCustom() {
+const trimmed = customText.trim();
+setCustomMode(false);
+setCustomText("");
+if (trimmed) onChange(trimmed);
+}
+
+if (customMode) {
+return (
+<Input
+autoFocus
+value={customText}
+onChange={(e) => setCustomText(e.target.value)}
+onKeyDown={(e) => {
+if (e.key === "Enter") commitCustom();
+if (e.key === "Escape") { setCustomMode(false); setCustomText(""); }
+}}
+onBlur={commitCustom}
+placeholder="New category name"
+className="h-9"
+/>
+);
+}
+
+return (
+<NativeSelect
+value={value || CHECKLIST_UNCATEGORIZED_VALUE}
+onChange={(e) => {
+const v = e.target.value;
+if (v === CHECKLIST_ADD_NEW_VALUE) { setCustomMode(true); return; }
+onChange(v === CHECKLIST_UNCATEGORIZED_VALUE ? "" : v);
+}}
+className="h-9"
+>
+<option value={CHECKLIST_UNCATEGORIZED_VALUE}>{CHECKLIST_UNCATEGORIZED}</option>
+{options.map((c) => <option key={c} value={c}>{c}</option>)}
+<option value={CHECKLIST_ADD_NEW_VALUE}>+ Add new category…</option>
+</NativeSelect>
+);
+}
 
 function ChecklistSection({
 table,
@@ -657,7 +720,6 @@ const [editingLabel, setEditingLabel] = useState("");
 const [editingCategory, setEditingCategory] = useState("");
 
 const done = items.filter((g: any) => g.checked).length;
-const categoryDatalistId = `${table}-categories`;
 const categorySuggestions = useMemo(() => {
 const fromItems = items.map((g: any) => (g.category ?? "").trim()).filter(Boolean);
 return Array.from(new Set([...CHECKLIST_CATEGORY_PRESETS, ...fromItems])).sort((a, b) => a.localeCompare(b));
@@ -692,10 +754,10 @@ await supabase.from(table).delete().eq("id", id);
 qc.invalidateQueries({ queryKey: [queryKey, activeHouseholdId] });
 }
 
-async function saveEdit(id: string) {
+async function saveEdit(id: string, categoryOverride?: string) {
 if (!editingLabel.trim()) { setEditingId(""); return; }
 const payload: Record<string, unknown> = { label: editingLabel.trim() };
-if (enableCategories) payload.category = editingCategory.trim() || null;
+if (enableCategories) payload.category = (categoryOverride ?? editingCategory).trim() || null;
 await supabase.from(table).update(payload).eq("id", id);
 setEditingId("");
 setEditingLabel("");
@@ -706,7 +768,7 @@ qc.invalidateQueries({ queryKey: [queryKey, activeHouseholdId] });
 function renderItem(g: any) {
 const isEditing = editingId === g.id;
 const rowContent = isEditing ? (
-<div className="flex min-w-0 flex-1 flex-col gap-1">
+<div className="flex min-w-0 flex-1 flex-col gap-1.5">
 <input
 autoFocus
 value={editingLabel}
@@ -719,14 +781,10 @@ onBlur={() => { if (!enableCategories) saveEdit(g.id); }}
 className="min-w-0 flex-1 rounded border border-input bg-background px-2 py-0.5 text-sm"
 />
 {enableCategories && (
-<input
-list={categoryDatalistId}
+<CategoryPicker
 value={editingCategory}
-onChange={(e) => setEditingCategory(e.target.value)}
-onKeyDown={(e) => { if (e.key === "Enter") saveEdit(g.id); }}
-onBlur={() => saveEdit(g.id)}
-placeholder="Category (e.g. Documents)"
-className="min-w-0 flex-1 rounded border border-input bg-background px-2 py-0.5 text-xs text-muted-foreground"
+suggestions={categorySuggestions}
+onChange={(v) => { setEditingCategory(v); saveEdit(g.id, v); }}
 />
 )}
 </div>
@@ -832,25 +890,15 @@ className="h-9 flex-1"
 </div>
 {enableCategories && (
 <div className="flex gap-2">
-<Input
-list={categoryDatalistId}
-value={newCategory}
-onChange={(e) => setNewCategory(e.target.value)}
-onKeyDown={(e) => { if (e.key === "Enter") addItem(); }}
-placeholder="Category (e.g. Documents) — optional"
-className="h-9 flex-1"
-/>
+<div className="flex-1">
+<CategoryPicker value={newCategory} suggestions={categorySuggestions} onChange={setNewCategory} />
+</div>
 <Button size="sm" onClick={addItem} disabled={adding || !newLabel.trim()}>
 <Plus className="h-3.5 w-3.5" />
 </Button>
 </div>
 )}
 </div>
-)}
-{enableCategories && (
-<datalist id={categoryDatalistId}>
-{categorySuggestions.map((c) => <option key={c} value={c} />)}
-</datalist>
 )}
 </div>
 )}
