@@ -171,18 +171,42 @@ export function AlertsSheet({ open, onOpenChange }: { open: boolean; onOpenChang
               </ul>
             </section>
           )}
-          <Group title="Urgent" items={urgent} empty="No urgent items." onNav={() => onOpenChange(false)} />
-          <Group title="Review Needed" items={review} empty="Nothing to review." onNav={() => onOpenChange(false)} />
+          <Group title="Urgent" tone="urgent" items={urgent} empty="No urgent items." onNav={() => onOpenChange(false)} />
+          <Group title="Review Needed" tone="review" items={review} empty="Nothing to review." onNav={() => onOpenChange(false)} />
         </div>
       </SheetContent>
     </Sheet>
   );
 }
 
-function Group({ title, items, empty, onNav }: { title: string; items: any[]; empty: string; onNav: () => void }) {
+// Same tint/border classes RecordCard.tsx uses for urgent/review status cards —
+// keeps the bell's Urgent/Review Needed lists visually matched to the cards
+// the person sees when they tap through.
+const GROUP_TONE_CLS: Record<"urgent" | "review", string> = {
+  urgent: "bg-urgent-tint border-urgent-border",
+  review: "bg-review-tint border-review-border",
+};
+const GROUP_TITLE_CLS: Record<"urgent" | "review", string> = {
+  urgent: "text-urgent",
+  review: "text-review-foreground",
+};
+
+function Group({
+  title,
+  tone,
+  items,
+  empty,
+  onNav,
+}: {
+  title: string;
+  tone: "urgent" | "review";
+  items: any[];
+  empty: string;
+  onNav: () => void;
+}) {
   return (
     <section>
-      <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+      <h3 className={`mb-2 text-xs font-bold uppercase tracking-wider ${GROUP_TITLE_CLS[tone]}`}>
         {title} <span className="text-foreground">({items.length})</span>
       </h3>
       {items.length === 0 ? (
@@ -197,7 +221,7 @@ function Group({ title, items, empty, onNav }: { title: string; items: any[]; em
                   to={src.href as any}
                   hash={`record-${row.id}`}
                   onClick={onNav}
-                  className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-card p-3 hover:bg-accent/50"
+                  className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 hover:brightness-95 ${GROUP_TONE_CLS[tone]}`}
                 >
                   <Icon className="mt-0.5 h-4 w-4 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
