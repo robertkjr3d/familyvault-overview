@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthSession } from "@/hooks/useAuthSession";
-import { acceptPendingInvitesForCurrentUser } from "@/lib/householdInvites";
+import { acceptPendingInvitesForCurrentUser, createOwnHousehold } from "@/lib/householdInvites";
 import { useAppStore } from "@/lib/store";
 import { toast } from "sonner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -204,8 +204,26 @@ function RootContent() {
 }
 
 function NoHouseholdScreen() {
+  const queryClient = useQueryClient();
+  const setActiveHouseholdId = useAppStore((s) => s.setActiveHouseholdId);
+  const [creating, setCreating] = useState(false);
+
   async function handleSignOut() {
     await supabase.auth.signOut();
+  }
+
+  async function handleCreateOwn() {
+    setCreating(true);
+    try {
+      const result = await createOwnHousehold();
+      setActiveHouseholdId(result.householdId);
+      await queryClient.invalidateQueries({ queryKey: ["household-memberships"] });
+      toast.success("Your household is ready.");
+    } catch (err: any) {
+      toast.error(err.message || "Could not create a household.");
+    } finally {
+      setCreating(false);
+    }
   }
 
   return (
@@ -219,9 +237,12 @@ function NoHouseholdScreen() {
           <p className="mt-2 text-sm text-muted-foreground">
             You're signed in, but you're not currently part of any household. If you were
             recently removed, or you're waiting on an invite, check with whoever manages the
-            household you're expecting access to.
+            household you're expecting access to. Otherwise, you can start your own.
           </p>
-          <Button type="button" variant="outline" onClick={handleSignOut} className="mt-5 w-full">
+          <Button type="button" onClick={handleCreateOwn} disabled={creating} className="mt-5 w-full">
+            {creating ? "Creating..." : "Create your own household"}
+          </Button>
+          <Button type="button" variant="outline" onClick={handleSignOut} className="mt-2 w-full">
             Sign out
           </Button>
         </div>
