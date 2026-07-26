@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/MoneyInput";
 import { compressImage } from "@/lib/imageCompression";
@@ -19,9 +20,6 @@ import { Home, Shield, Package, TrendingUp, Check, Camera, X, ChevronRight } fro
 // immediately (an automatic alert, a working search, a populated chart) —
 // not because it's the most important field to capture long-term. Nothing
 // here is required or sequenced; every step is independently skippable.
-
-const SELECT_CLASS =
-  "h-9 w-full cursor-pointer rounded-md border border-input bg-background px-3 text-sm transition focus:border-primary focus:outline-none";
 
 type Props = {
   open: boolean;
@@ -311,12 +309,12 @@ function QuickAddInsurance({ onSaved }: { onSaved: () => void }) {
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1.5">
           <Label className="text-xs">Category</Label>
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className={SELECT_CLASS}>
+          <NativeSelect value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="">Select…</option>
             {INSURANCE_CATEGORIES.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Premium</Label>
@@ -326,11 +324,11 @@ function QuickAddInsurance({ onSaved }: { onSaved: () => void }) {
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1.5">
           <Label className="text-xs">How often?</Label>
-          <select value={frequency} onChange={(e) => setFrequency(e.target.value)} className={SELECT_CLASS}>
+          <NativeSelect value={frequency} onChange={(e) => setFrequency(e.target.value)}>
             {INSURANCE_FREQ.filter((f) => typeof f !== "string" && f.value !== "one-off").map((f: any) => (
               <option key={f.value} value={f.value}>{f.label}</option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Next renews</Label>
