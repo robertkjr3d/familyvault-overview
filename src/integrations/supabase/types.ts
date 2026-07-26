@@ -1518,6 +1518,7 @@ export type Database = {
           label: string
           checked: boolean
           sort_order: number
+          category: string | null
           created_at: string | null
         }
         Insert: {
@@ -1526,6 +1527,7 @@ export type Database = {
           label: string
           checked?: boolean
           sort_order?: number
+          category?: string | null
           created_at?: string | null
         }
         Update: {
@@ -1534,6 +1536,7 @@ export type Database = {
           label?: string
           checked?: boolean
           sort_order?: number
+          category?: string | null
           created_at?: string | null
         }
         Relationships: [
