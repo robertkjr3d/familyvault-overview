@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -58,13 +59,13 @@ export function RateSchedule({ loanId }: { loanId: string }) {
       <div className="space-y-1.5">
         {rows.map((r: any) => (
           <div key={r.id} className="grid grid-cols-[1fr_80px_110px_28px] items-center gap-1.5 text-sm">
-            <select
+            <NativeSelect
               value={r.year_label}
               onChange={(e) => update(r.id, { year_label: e.target.value })}
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+              className="h-8"
             >
               {YEAR_OPTIONS.map((y) => <option key={y} value={y}>{y}</option>)}
-            </select>
+            </NativeSelect>
             <Input
               type="number"
               step="0.01"
@@ -73,13 +74,13 @@ export function RateSchedule({ loanId }: { loanId: string }) {
               className="h-8"
               placeholder="0.00"
             />
-            <select
+            <NativeSelect
               value={r.rate_type ?? "Fixed"}
               onChange={(e) => update(r.id, { rate_type: e.target.value })}
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+              className="h-8"
             >
               {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
+            </NativeSelect>
             <button onClick={() => del(r.id)} className="text-urgent" aria-label="Delete row">
               <Trash2 className="h-4 w-4" />
             </button>
