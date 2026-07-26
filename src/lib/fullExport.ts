@@ -226,6 +226,7 @@ const FINANCIAL_TABLES: { configKey: keyof typeof recordConfigs; sheetName: stri
   { configKey: "other_assets", sheetName: "Other Assets" },
   { configKey: "health_conditions", sheetName: "Health" },
   { configKey: "gobag_items", sheetName: "Go-Bag" },
+  { configKey: "travel_checklist_items", sheetName: "Travel Checklist" },
 ];
 
 export async function runFullExport(householdId: string, members: Member[]) {
@@ -246,6 +247,7 @@ export async function runFullExport(householdId: string, members: Member[]) {
     otherAssetsRes,
     healthRes,
     gobagRes,
+    travelChecklistRes,
     foldersRes,
     inventoryRes,
   ] = await Promise.all([
@@ -268,6 +270,7 @@ export async function runFullExport(householdId: string, members: Member[]) {
   sheets.push(buildRecordSheet("other_assets", "Other Assets", otherAssetsRes.data ?? [], ctx));
   sheets.push(buildRecordSheet("health_conditions", "Health", healthRes.data ?? [], ctx));
   sheets.push(buildRecordSheet("gobag_items", "Go-Bag", gobagRes.data ?? [], ctx));
+  sheets.push(buildRecordSheet("travel_checklist_items", "Travel Checklist", travelChecklistRes.data ?? [], ctx));
 
   // Inventory is hand-built — its forms don't go through recordConfigs.ts,
   // and items are nested inside locations/subfolders rather than being flat
@@ -474,7 +477,7 @@ export async function runFullBackupZip(householdId: string, members: Member[]) {
   const tableQueries = FINANCIAL_TABLES.map((t) => filter(supabase.from(t.configKey as any).select("*")));
   const [
     propertiesRes, loansRes, insuranceRes, investmentsRes, savingsRes,
-    otherAssetsRes, healthRes, gobagRes, foldersRes, inventoryRes,
+    otherAssetsRes, healthRes, gobagRes, travelChecklistRes, foldersRes, inventoryRes,
   ] = await Promise.all([
     ...tableQueries,
     filter(supabase.from("inventory_folders").select("*")),
@@ -496,6 +499,7 @@ export async function runFullBackupZip(householdId: string, members: Member[]) {
   sheets.push(buildRecordSheet("other_assets", "Other Assets", otherAssetsRes.data ?? [], ctx));
   sheets.push(buildRecordSheet("health_conditions", "Health", healthRes.data ?? [], ctx));
   sheets.push(buildRecordSheet("gobag_items", "Go-Bag", gobagRes.data ?? [], ctx));
+  sheets.push(buildRecordSheet("travel_checklist_items", "Travel Checklist", travelChecklistRes.data ?? [], ctx));
 
   const folders = foldersRes.data ?? [];
   const folderById = new Map(folders.map((f: any) => [f.id, f]));
