@@ -535,7 +535,7 @@ return (
   </section>
 
   {/* Travel Checklist */}
-  <ChecklistSection table="travel_checklist_items" queryKey="travel_checklist" title="Travel Checklist" items={travelChecklist} />
+  <ChecklistSection table="travel_checklist_items" queryKey="travel_checklist" title="Travel Checklist" items={travelChecklist} enableCategories />
 
   {/* Go-Bag */}
   <ChecklistSection table="gobag_items" queryKey="gobag" title="Go-Bag Checklist" items={gobag} />
@@ -628,17 +628,40 @@ return (
 }
 
 /* ––––– Checklist Section (Go-Bag, Travel, etc.) ––––– */
-function ChecklistSection({ table, queryKey, title, items }: { table: string; queryKey: string; title: string; items: any[] }) {
+const CHECKLIST_CATEGORY_PRESETS = ["Documents", "Hygiene", "Clothes", "Electronics"];
+const CHECKLIST_UNCATEGORIZED = "Other";
+
+function ChecklistSection({
+table,
+queryKey,
+title,
+items,
+enableCategories,
+}: {
+table: string;
+queryKey: string;
+title: string;
+items: any[];
+/** When true, items are grouped under bold category headings (e.g. Travel Checklist). Leave off for a flat list. */
+enableCategories?: boolean;
+}) {
 const qc = useQueryClient();
 const { canEdit } = useCurrentRole();
 const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
 const [open, setOpen] = useState(false);
 const [newLabel, setNewLabel] = useState("");
+const [newCategory, setNewCategory] = useState("");
 const [adding, setAdding] = useState(false);
 const [editingId, setEditingId] = useState("");
 const [editingLabel, setEditingLabel] = useState("");
+const [editingCategory, setEditingCategory] = useState("");
 
 const done = items.filter((g: any) => g.checked).length;
+const categoryDatalistId = `${table}-categories`;
+const categorySuggestions = useMemo(() => {
+const fromItems = items.map((g: any) => (g.category ?? "").trim()).filter(Boolean);
+return Array.from(new Set([...CHECKLIST_CATEGORY_PRESETS, ...fromItems])).sort((a, b) => a.localeCompare(b));
+}, [items]);
 
 async function toggle(id: string, checked: boolean) {
 await supabase.from(table).update({ checked }).eq("id", id);
@@ -649,15 +672,18 @@ async function addItem() {
 if (!newLabel.trim() || !activeHouseholdId) return;
 setAdding(true);
 const maxSort = items.reduce((m, g: any) => Math.max(m, g.sort_order ?? 0), 0);
-const { error } = await supabase.from(table).insert({
+const payload: Record<string, unknown> = {
 household_id: activeHouseholdId,
 label: newLabel.trim(),
 checked: false,
 sort_order: maxSort + 1,
-});
+};
+if (enableCategories) payload.category = newCategory.trim() || null;
+const { error } = await supabase.from(table).insert(payload);
 setAdding(false);
 if (error) { toast.error(error.message); return; }
 setNewLabel("");
+setNewCategory("");
 qc.invalidateQueries({ queryKey: [queryKey, activeHouseholdId] });
 }
 
@@ -668,11 +694,94 @@ qc.invalidateQueries({ queryKey: [queryKey, activeHouseholdId] });
 
 async function saveEdit(id: string) {
 if (!editingLabel.trim()) { setEditingId(""); return; }
-await supabase.from(table).update({ label: editingLabel.trim() }).eq("id", id);
+const payload: Record<string, unknown> = { label: editingLabel.trim() };
+if (enableCategories) payload.category = editingCategory.trim() || null;
+await supabase.from(table).update(payload).eq("id", id);
 setEditingId("");
 setEditingLabel("");
+setEditingCategory("");
 qc.invalidateQueries({ queryKey: [queryKey, activeHouseholdId] });
 }
+
+function renderItem(g: any) {
+const isEditing = editingId === g.id;
+const rowContent = isEditing ? (
+<div className="flex min-w-0 flex-1 flex-col gap-1">
+<input
+autoFocus
+value={editingLabel}
+onChange={(e) => setEditingLabel(e.target.value)}
+onKeyDown={(e) => {
+if (e.key === "Enter" && !enableCategories) saveEdit(g.id);
+if (e.key === "Escape") { setEditingId(""); setEditingLabel(""); setEditingCategory(""); }
+}}
+onBlur={() => { if (!enableCategories) saveEdit(g.id); }}
+className="min-w-0 flex-1 rounded border border-input bg-background px-2 py-0.5 text-sm"
+/>
+{enableCategories && (
+<input
+list={categoryDatalistId}
+value={editingCategory}
+onChange={(e) => setEditingCategory(e.target.value)}
+onKeyDown={(e) => { if (e.key === "Enter") saveEdit(g.id); }}
+onBlur={() => saveEdit(g.id)}
+placeholder="Category (e.g. Documents)"
+className="min-w-0 flex-1 rounded border border-input bg-background px-2 py-0.5 text-xs text-muted-foreground"
+/>
+)}
+</div>
+) : (
+<span className={`truncate ${g.checked ? "text-muted-foreground line-through" : ""}`}>{g.label}</span>
+);
+return (
+<li key={g.id} className="flex items-center gap-3 text-sm">
+<label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+<input
+type="checkbox"
+defaultChecked={g.checked}
+disabled={!canEdit}
+onChange={(e) => toggle(g.id, e.target.checked)}
+className="h-4 w-4 shrink-0 rounded border-border"
+/>
+{rowContent}
+</label>
+{canEdit && (
+<>
+<button
+onClick={() => { setEditingId(g.id); setEditingLabel(g.label); setEditingCategory(g.category ?? ""); }}
+className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent"
+aria-label="Edit item"
+>
+<span className="text-sm">✏️</span>
+</button>
+<button
+onClick={() => deleteItem(g.id)}
+className="shrink-0 rounded-md p-1 text-urgent hover:bg-urgent/10"
+aria-label="Delete item"
+>
+<Trash2 className="h-3.5 w-3.5" />
+</button>
+</>
+)}
+</li>
+);
+}
+
+const groupedByCategory = useMemo(() => {
+if (!enableCategories) return null;
+const map = new Map<string, any[]>();
+items.forEach((g: any) => {
+const key = (g.category ?? "").trim() || CHECKLIST_UNCATEGORIZED;
+if (!map.has(key)) map.set(key, []);
+map.get(key)!.push(g);
+});
+const keys = Array.from(map.keys()).sort((a, b) => {
+if (a === CHECKLIST_UNCATEGORIZED) return 1;
+if (b === CHECKLIST_UNCATEGORIZED) return -1;
+return a.localeCompare(b);
+});
+return keys.map((key) => ({ category: key, items: map.get(key)! }));
+}, [enableCategories, items]);
 
 return (
 <section className="rounded-2xl border border-border bg-muted/40">
@@ -693,73 +802,55 @@ className="flex w-full items-center justify-between px-4 py-3 text-left"
 <div className="space-y-3 border-t border-border/40 px-4 py-3">
 {items.length === 0 ? (
 <p className="py-2 text-center text-xs text-muted-foreground">No items yet.</p>
+) : enableCategories && groupedByCategory ? (
+<div className="space-y-4">
+{groupedByCategory.map(({ category, items: catItems }) => (
+<div key={category}>
+<h4 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-foreground">{category}</h4>
+<ul className="space-y-2">{catItems.map(renderItem)}</ul>
+</div>
+))}
+</div>
 ) : (
-<ul className="space-y-2">
-{items.map((g: any) => {
-const isEditing = editingId === g.id;
-const rowContent = isEditing ? (
-<input
-autoFocus
-value={editingLabel}
-onChange={(e) => setEditingLabel(e.target.value)}
-onKeyDown={(e) => {
-if (e.key === "Enter") saveEdit(g.id);
-if (e.key === "Escape") { setEditingId(""); setEditingLabel(""); }
-}}
-onBlur={() => saveEdit(g.id)}
-className="min-w-0 flex-1 rounded border border-input bg-background px-2 py-0.5 text-sm"
-/>
-) : (
-<span className={`truncate ${g.checked ? "text-muted-foreground line-through" : ""}`}>{g.label}</span>
-);
-return (
-<li key={g.id} className="flex items-center gap-3 text-sm">
-<label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
-<input
-type="checkbox"
-defaultChecked={g.checked}
-disabled={!canEdit}
-onChange={(e) => toggle(g.id, e.target.checked)}
-className="h-4 w-4 shrink-0 rounded border-border"
-/>
-{rowContent}
-</label>
-{canEdit && (
-<>
-<button
-onClick={() => { setEditingId(g.id); setEditingLabel(g.label); }}
-className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent"
-aria-label="Edit item"
->
-<span className="text-sm">✏️</span>
-</button>
-<button
-onClick={() => deleteItem(g.id)}
-className="shrink-0 rounded-md p-1 text-urgent hover:bg-urgent/10"
-aria-label="Delete item"
->
-<Trash2 className="h-3.5 w-3.5" />
-</button>
-</>
-)}
-</li>
-);
-})}
-</ul>
+<ul className="space-y-2">{items.map(renderItem)}</ul>
 )}
 {canEdit && (
+<div className={enableCategories ? "space-y-2" : "flex gap-2"}>
 <div className="flex gap-2">
 <Input
 value={newLabel}
 onChange={(e) => setNewLabel(e.target.value)}
-onKeyDown={(e) => { if (e.key === "Enter") addItem(); }}
+onKeyDown={(e) => { if (e.key === "Enter" && !enableCategories) addItem(); }}
 placeholder="Add an item..."
+className="h-9 flex-1"
+/>
+{!enableCategories && (
+<Button size="sm" onClick={addItem} disabled={adding || !newLabel.trim()}>
+<Plus className="h-3.5 w-3.5" />
+</Button>
+)}
+</div>
+{enableCategories && (
+<div className="flex gap-2">
+<Input
+list={categoryDatalistId}
+value={newCategory}
+onChange={(e) => setNewCategory(e.target.value)}
+onKeyDown={(e) => { if (e.key === "Enter") addItem(); }}
+placeholder="Category (e.g. Documents) — optional"
 className="h-9 flex-1"
 />
 <Button size="sm" onClick={addItem} disabled={adding || !newLabel.trim()}>
 <Plus className="h-3.5 w-3.5" />
 </Button>
 </div>
+)}
+</div>
+)}
+{enableCategories && (
+<datalist id={categoryDatalistId}>
+{categorySuggestions.map((c) => <option key={c} value={c} />)}
+</datalist>
 )}
 </div>
 )}
