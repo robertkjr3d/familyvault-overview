@@ -2,6 +2,7 @@ import { useEffect, useState, type KeyboardEvent } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -277,40 +278,37 @@ function FieldInput({ f, value, onChange, members, properties, currency }: {
   }
   if (f.type === "select") {
     return (
-      <select
+      <NativeSelect
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value)}
-        className="h-9 w-full cursor-pointer rounded-md border border-input bg-background px-3 text-sm transition focus:border-primary focus:outline-none"
       >
         <option value="">Select…</option>
         {f.options?.map((o) => (
           <option key={optValue(o)} value={optValue(o)}>{optLabel(o)}</option>
         ))}
-      </select>
+      </NativeSelect>
     );
   }
   if (f.type === "property_select") {
     return (
-      <select
+      <NativeSelect
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value || null)}
-        className="h-9 w-full cursor-pointer rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
       >
         <option value="">— None (not a mortgage) —</option>
         {properties.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
-      </select>
+      </NativeSelect>
     );
   }
   if (f.type === "member") {
     return (
-      <select
+      <NativeSelect
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value || null)}
-        className="h-9 w-full cursor-pointer rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
       >
         <option value="">{f.required ? "Select person…" : "— None —"}</option>
         {members.map((m) => <option key={m.id} value={m.id}>{m.emoji ? `${m.emoji} ` : ""}{m.name}</option>)}
-      </select>
+      </NativeSelect>
     );
   }
   if (f.money) {
