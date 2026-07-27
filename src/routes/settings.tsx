@@ -454,6 +454,18 @@ function SettingsPage() {
     setCreatingDemo(true);
     try {
       const result = await createDemoHousehold();
+      // Bug fix (July 2026): AppHeader has a safety-net effect that resets
+      // activeHouseholdId back to the user's first household whenever the
+      // current selection isn't found in ITS OWN household list — needed
+      // for a different, earlier bug (a stale id left over after being
+      // removed from a household). That effect raced with this handler:
+      // setting the demo id before AppHeader's list had re-fetched made
+      // the effect see an "invalid" selection and immediately revert it,
+      // a fraction of a second before the list caught up — so the demo
+      // household never stayed selected until you opened the dropdown
+      // yourself. Await that specific list's refetch first so it already
+      // contains the new demo household before switching to it.
+      await qc.invalidateQueries({ queryKey: ["household-memberships"] });
       setActiveHouseholdId(result.householdId);
       qc.invalidateQueries();
       toast.success("Demo Household ready — you're now viewing it. Switch back anytime via the dropdown.");
