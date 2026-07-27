@@ -185,6 +185,11 @@ function measureDisplayLength(value: any, numFmt?: string): number {
     // month + space + 4-digit year, e.g. "01 Mar 2027" — always 11 chars.
     return 11;
   }
+  if (typeof value === "object" && typeof value.text === "string") {
+    // ExcelJS hyperlink cell ({ text, hyperlink }) — measure the short
+    // display text, not the (often much longer) underlying link.
+    return value.text.length;
+  }
   if (typeof value === "number") {
     if (numFmt === "#,##0.00") {
       return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).length;
@@ -282,8 +287,8 @@ export async function runFullExport(householdId: string, members: Member[]) {
     inventoryRes,
   ] = await Promise.all([
     ...tableQueries,
-    filter(supabase.from("inventory_folders").select("*")),
-    filter(supabase.from("inventory_items").select("*")),
+    filter(supabase.from("inventory_folders").select("*").order("sort_order")),
+    filter(supabase.from("inventory_items").select("*").order("name")),
   ]);
 
   const properties = propertiesRes.data ?? [];
@@ -304,11 +309,30 @@ export async function runFullExport(householdId: string, members: Member[]) {
 
   // Inventory is hand-built — its forms don't go through recordConfigs.ts,
   // and items are nested inside locations/subfolders rather than being flat
-  // records, so it needs its own location-aware flattening (same approach
-  // as the inventory tab's own CSV export).
+  // records. Walks folders the same way the inventory tab's own CSV export
+  // does (July 2026 fix — this used to just flat-map items ignoring folder
+  // structure entirely, so nothing was actually grouped by location despite
+  // this comment already claiming otherwise): top-level folders in
+  // sort_order, each one's direct items, then each subfolder (also in
+  // sort_order) and ITS items — including a placeholder row for a folder or
+  // subfolder that has no items yet, so empty locations still show up.
   const folders = foldersRes.data ?? [];
-  const folderById = new Map(folders.map((f: any) => [f.id, f]));
+  const topLevelFolders = folders.filter((f: any) => f.parent_id === null);
+  const childrenByParent = new Map<string, any[]>();
+  folders.forEach((f: any) => {
+    if (f.parent_id) {
+      const arr = childrenByParent.get(f.parent_id) ?? [];
+      arr.push(f);
+      childrenByParent.set(f.parent_id, arr);
+    }
+  });
   const inventoryItems = inventoryRes.data ?? [];
+  const itemsByFolder = new Map<string, any[]>();
+  inventoryItems.forEach((it: any) => {
+    const arr = itemsByFolder.get(it.folder_id) ?? [];
+    arr.push(it);
+    itemsByFolder.set(it.folder_id, arr);
+  });
 
   // photo_url holds a private storage path, not a fetchable link. Resolve
   // every distinct one into a long-lived (10 year) signed link before
@@ -319,19 +343,41 @@ export async function runFullExport(householdId: string, members: Member[]) {
     Array.from(uniquePhotoPaths).map(async (p) => [p, await getExportUrl("inventory-photos", p)] as const)
   );
   const photoUrlMap = new Map(photoUrlEntries);
+  // Shown as short clickable "Open photo" text instead of the raw signed
+  // URL (which can run 100+ characters) — the real link is still fully
+  // intact as the cell's hyperlink, just not forcing the column wide.
+  const photoCell = (path: string | null | undefined) => {
+    const url = path ? photoUrlMap.get(path) : null;
+    return url ? { text: "Open photo", hyperlink: url } : "";
+  };
 
-  const inventoryRows: ExportRow[] = inventoryItems.map((it: any) => {
-    const folder = folderById.get(it.folder_id);
-    const parent = folder?.parent_id ? folderById.get(folder.parent_id) : null;
-    return {
-      location: parent ? parent.name : folder?.name ?? "",
-      subfolder: parent ? folder?.name ?? "" : "",
-      name: it.name ?? "",
-      category: it.category ?? "",
-      action: it.action ?? "",
-      warranty_date: it.warranty_date ? new Date(it.warranty_date) : null,
-      photo_url: it.photo_url ? photoUrlMap.get(it.photo_url) ?? "" : "",
-    };
+  const inventoryRows: ExportRow[] = [];
+  topLevelFolders.forEach((f: any) => {
+    const directItems = itemsByFolder.get(f.id) ?? [];
+    const children = childrenByParent.get(f.id) ?? [];
+    if (directItems.length === 0 && children.length === 0) {
+      inventoryRows.push({ location: f.name, subfolder: "", name: "", category: "", action: "", warranty_date: null, photo_url: "" });
+    }
+    directItems.forEach((it: any) => {
+      inventoryRows.push({
+        location: f.name, subfolder: "", name: it.name ?? "", category: it.category ?? "",
+        action: it.action ?? "", warranty_date: it.warranty_date ? new Date(it.warranty_date) : null,
+        photo_url: photoCell(it.photo_url),
+      });
+    });
+    children.forEach((sf: any) => {
+      const subItems = itemsByFolder.get(sf.id) ?? [];
+      if (subItems.length === 0) {
+        inventoryRows.push({ location: f.name, subfolder: sf.name, name: "", category: "", action: "", warranty_date: null, photo_url: "" });
+      }
+      subItems.forEach((it: any) => {
+        inventoryRows.push({
+          location: f.name, subfolder: sf.name, name: it.name ?? "", category: it.category ?? "",
+          action: it.action ?? "", warranty_date: it.warranty_date ? new Date(it.warranty_date) : null,
+          photo_url: photoCell(it.photo_url),
+        });
+      });
+    });
   });
   sheets.push({
     name: "Inventory",
@@ -342,7 +388,7 @@ export async function runFullExport(householdId: string, members: Member[]) {
       { header: "Category", key: "category", width: 16 },
       { header: "Action / Notes", key: "action", width: 28 },
       { header: "Warranty / Expiry date", key: "warranty_date", width: 20, numFmt: "dd mmm yyyy" },
-      { header: "Photo URL (see Read Me)", key: "photo_url", width: 30 },
+      { header: "Photo (click to open — see Read Me)", key: "photo_url", width: 30 },
     ],
     rows: inventoryRows,
   });
@@ -460,6 +506,22 @@ async function writeWorkbook(sheets: SheetSpec[], context: "standalone" | "backu
         if (maxLen > 0) ws.getColumn(c.key).width = clamp(8, maxLen + 2, 60);
       }
     }
+    // Header row height must be set AFTER auto-fit above, since auto-fit can
+    // make a column narrower than the fixed-width layout this was originally
+    // tuned for — a long header wrapping onto 3+ lines at a narrow column was
+    // getting cut off at the old fixed 30pt (added July 2026, same session as
+    // auto-fit, to fix that). ~1.1 characters fit per width-unit for bold
+    // 11pt text (approximate, deliberately generous — better to leave a
+    // little extra blank space than cut a header off again), each wrapped
+    // line ~15pt tall.
+    let maxHeaderLines = 1;
+    for (const c of spec.columns) {
+      const width = ws.getColumn(c.key).width ?? c.width;
+      const charsPerLine = Math.max(1, Math.floor(width * 1.1));
+      const lines = Math.ceil(c.header.length / charsPerLine);
+      if (lines > maxHeaderLines) maxHeaderLines = lines;
+    }
+    ws.getRow(1).height = clamp(30, maxHeaderLines * 15 + 6, 90);
   }
 
   return await workbook.xlsx.writeBuffer();
@@ -535,8 +597,8 @@ export async function runFullBackupZip(householdId: string, members: Member[]) {
     otherAssetsRes, healthRes, gobagRes, travelChecklistRes, foldersRes, inventoryRes,
   ] = await Promise.all([
     ...tableQueries,
-    filter(supabase.from("inventory_folders").select("*")),
-    filter(supabase.from("inventory_items").select("*")),
+    filter(supabase.from("inventory_folders").select("*").order("sort_order")),
+    filter(supabase.from("inventory_items").select("*").order("name")),
   ]);
 
   const properties = propertiesRes.data ?? [];
@@ -556,21 +618,58 @@ export async function runFullBackupZip(householdId: string, members: Member[]) {
   sheets.push(buildRecordSheet("gobag_items", "Go-Bag", gobagRes.data ?? [], ctx));
   sheets.push(buildRecordSheet("travel_checklist_items", "Travel Checklist", travelChecklistRes.data ?? [], ctx));
 
+  // Walks folders the same way the inventory tab's own CSV export does
+  // (July 2026 fix — see the matching fix + comment in runFullExport above
+  // for the full explanation; this had the identical bug, duplicated).
   const folders = foldersRes.data ?? [];
+  // Also needed further down (by id, not by parent) to organise the actual
+  // photo FILES into a matching folder structure inside the zip — keep both
+  // maps, each serves a different lookup this function needs.
   const folderById = new Map(folders.map((f: any) => [f.id, f]));
+  const topLevelFolders = folders.filter((f: any) => f.parent_id === null);
+  const childrenByParent = new Map<string, any[]>();
+  folders.forEach((f: any) => {
+    if (f.parent_id) {
+      const arr = childrenByParent.get(f.parent_id) ?? [];
+      arr.push(f);
+      childrenByParent.set(f.parent_id, arr);
+    }
+  });
   const inventoryItems = inventoryRes.data ?? [];
-  const inventoryRows: ExportRow[] = inventoryItems.map((it: any) => {
-    const folder = folderById.get(it.folder_id);
-    const parent = folder?.parent_id ? folderById.get(folder.parent_id) : null;
-    return {
-      location: parent ? parent.name : folder?.name ?? "",
-      subfolder: parent ? folder?.name ?? "" : "",
-      name: it.name ?? "",
-      category: it.category ?? "",
-      action: it.action ?? "",
-      warranty_date: it.warranty_date ? new Date(it.warranty_date) : null,
-      photo_url: "(see Inventory Photos folder in this zip)",
-    };
+  const itemsByFolder = new Map<string, any[]>();
+  inventoryItems.forEach((it: any) => {
+    const arr = itemsByFolder.get(it.folder_id) ?? [];
+    arr.push(it);
+    itemsByFolder.set(it.folder_id, arr);
+  });
+
+  const inventoryRows: ExportRow[] = [];
+  topLevelFolders.forEach((f: any) => {
+    const directItems = itemsByFolder.get(f.id) ?? [];
+    const children = childrenByParent.get(f.id) ?? [];
+    if (directItems.length === 0 && children.length === 0) {
+      inventoryRows.push({ location: f.name, subfolder: "", name: "", category: "", action: "", warranty_date: null, photo_url: "" });
+    }
+    directItems.forEach((it: any) => {
+      inventoryRows.push({
+        location: f.name, subfolder: "", name: it.name ?? "", category: it.category ?? "",
+        action: it.action ?? "", warranty_date: it.warranty_date ? new Date(it.warranty_date) : null,
+        photo_url: it.photo_url ? "(see Inventory Photos folder in this zip)" : "",
+      });
+    });
+    children.forEach((sf: any) => {
+      const subItems = itemsByFolder.get(sf.id) ?? [];
+      if (subItems.length === 0) {
+        inventoryRows.push({ location: f.name, subfolder: sf.name, name: "", category: "", action: "", warranty_date: null, photo_url: "" });
+      }
+      subItems.forEach((it: any) => {
+        inventoryRows.push({
+          location: f.name, subfolder: sf.name, name: it.name ?? "", category: it.category ?? "",
+          action: it.action ?? "", warranty_date: it.warranty_date ? new Date(it.warranty_date) : null,
+          photo_url: it.photo_url ? "(see Inventory Photos folder in this zip)" : "",
+        });
+      });
+    });
   });
   sheets.push({
     name: "Inventory",
