@@ -378,7 +378,7 @@ function SignInScreen() {
               {inviteMode ? "Code not showing up?" : "Don't have a code yet?"}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Enter your email above and we'll email you a code to register.
+              Enter your email above and we'll email you a code to register/sign in.
             </p>
             <Button
               type="button"
