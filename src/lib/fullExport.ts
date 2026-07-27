@@ -172,6 +172,36 @@ function numFmtFor(f: FieldDef): string | undefined {
   return undefined;
 }
 
+// Measures how long a value will actually LOOK once Excel renders it with
+// the given numFmt — used by the column auto-fit pass below. Mirrors
+// numFmtFor()'s exact format strings; if that function's formats ever
+// change, this must change with it. Deliberately does NOT rely on
+// ExcelJS's cell.text (confirmed by direct testing to ignore numFmt for
+// both dates and numbers — see the auto-fit comment in writeWorkbook()).
+function measureDisplayLength(value: any, numFmt?: string): number {
+  if (value == null || value === "") return 0;
+  if (value instanceof Date) {
+    // "dd mmm yyyy" always renders as exactly 2-digit day + space + 3-letter
+    // month + space + 4-digit year, e.g. "01 Mar 2027" — always 11 chars.
+    return 11;
+  }
+  if (typeof value === "number") {
+    if (numFmt === "#,##0.00") {
+      return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).length;
+    }
+    if (numFmt === '0.00"%"') {
+      return `${value.toFixed(2)}%`.length;
+    }
+    if (numFmt === "#,##0.##") {
+      return value.toLocaleString("en-US", { maximumFractionDigits: 2 }).length;
+    }
+    return String(value).length;
+  }
+  // Plain text — longest line, so a multi-line note doesn't force a column
+  // wide enough to fit the whole note on one line.
+  return String(value).split("\n").reduce((m, l) => Math.max(m, l.length), 0);
+}
+
 function cellValue(
   f: FieldDef,
   raw: any,
@@ -330,7 +360,7 @@ export async function runFullExport(householdId: string, members: Member[]) {
 
   const buffer = await writeWorkbook(sheets);
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-  downloadBlob(blob, `familyvault-full-export-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  downloadBlob(blob, `familyhub-full-export-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
 async function writeWorkbook(sheets: SheetSpec[], context: "standalone" | "backup-zip" = "standalone") {
@@ -403,6 +433,31 @@ async function writeWorkbook(sheets: SheetSpec[], context: "standalone" | "backu
       const colIdx = ws.getColumn(c.key).number;
       for (let r = 2; r <= spec.rows.length + 1; r++) {
         ws.getCell(r, colIdx).numFmt = c.numFmt;
+      }
+    }
+    // Auto-fit every column to its actual data (added July 2026, per Azariah
+    // request — replaces guessing at widths by hand). Measures from the raw
+    // row data + each column's numFmt, NOT from ExcelJS's cell.text — tested
+    // directly and confirmed cell.text is unreliable for this: it returns
+    // the full 63-character Date.toString() for date cells (ignoring numFmt
+    // entirely) and the unformatted number for currency cells, which would
+    // have forced every single date column to the max-width cap and
+    // under-sized every currency column. Deliberately only measures DATA
+    // rows, not the header (row 1 already has wrapText + a taller row
+    // height, matching the same "long header shouldn't force a wide column"
+    // design already established above for widthFor()) — otherwise a long
+    // header on a short numeric/date column would widen it right back to
+    // the exact problem this replaces. Skips empty sheets — an empty table
+    // has nothing to size from, so it keeps its original hand-set width
+    // rather than collapsing to the bare minimum.
+    if (spec.rows.length > 0) {
+      for (const c of spec.columns) {
+        let maxLen = 0;
+        for (const row of spec.rows) {
+          const len = measureDisplayLength(row[c.key], c.numFmt);
+          if (len > maxLen) maxLen = len;
+        }
+        if (maxLen > 0) ws.getColumn(c.key).width = clamp(8, maxLen + 2, 60);
       }
     }
   }
@@ -624,7 +679,7 @@ export async function runFullBackupZip(householdId: string, members: Member[]) {
   });
 
   const zipBlob = await zip.generateAsync({ type: "blob" });
-  downloadBlob(zipBlob, `familyvault-full-backup-${new Date().toISOString().slice(0, 10)}.zip`);
+  downloadBlob(zipBlob, `familyhub-full-backup-${new Date().toISOString().slice(0, 10)}.zip`);
 
   return { missingCount, totalFiles: docResults.length + photoResults.length };
 }
