@@ -460,19 +460,26 @@ export const createDemoHousehold = createServerFn({ method: "POST" })
     );
     if (existing) {
       const existingHhId = existing.households.id as string;
-      // Bug fix: a previous attempt can have failed partway through (e.g. a
-      // transient PostgREST schema-cache miss on the properties insert),
-      // leaving a household+owner+member row behind with NO financial
-      // records. Reusing it by name alone used to hand back that empty
-      // shell as if it were a real, populated demo household. Verify it
-      // actually has data before reusing; if not, wipe the stale shell and
-      // fall through to a full rebuild below.
-      const { count: propCount } = await supabaseAdmin
-        .from("properties" as any)
-        .select("id", { count: "exact", head: true })
-        .eq("household_id", existingHhId);
+      // Bug fix: a previous attempt can have failed partway through — not just
+      // on the properties insert (already handled below), but also on any of
+      // the inserts that ran AFTER properties (loans/insurance/investments/
+      // savings all had wrong column names until July 27, 2026 — see notes
+      // below). Checking properties alone let a household with a property but
+      // nothing else look "done" and get reused forever, exactly as broken as
+      // before. Check every table this function seeds, not just the first one.
+      const [propCount, loanCount, insCount, invCount, savCount] = await Promise.all(
+        (["properties", "loans", "insurance_policies", "investments", "savings_accounts"] as const).map(
+          async (t) => {
+            const { count } = await supabaseAdmin
+              .from(t as any)
+              .select("id", { count: "exact", head: true })
+              .eq("household_id", existingHhId);
+            return count ?? 0;
+          },
+        ),
+      );
 
-      if ((propCount ?? 0) > 0) {
+      if (propCount > 0 && loanCount > 0 && insCount > 0 && invCount > 0 && savCount > 0) {
         return { householdId: existingHhId };
       }
 
@@ -510,61 +517,87 @@ export const createDemoHousehold = createServerFn({ method: "POST" })
     const nextYear = today.getFullYear() + 1;
     const in2Years = today.getFullYear() + 2;
 
-    const { error: propErr } = await supabaseAdmin.from("properties" as any).insert({
+    const { data: prop, error: propErr } = await supabaseAdmin.from("properties" as any).insert({
       household_id: hhId, member_id: memberId, is_demo: true,
       name: "3-Room HDB, Tampines",
       purchase_price: 380000, current_value: 450000,
       monthly_rent: 0, status: "settled",
-    });
+    }).select("id").single();
     if (propErr) throw new Error(`properties: ${propErr.message}`);
+    const propertyId = (prop as any).id as string;
 
+    // Note: loans' real columns are bank/purpose/rate/reprice_date, not
+    // name/loan_type/interest_rate/repricing_date — verified against
+    // src/integrations/supabase/types.ts and tested against a local mock
+    // schema before shipping (July 27, 2026 fix; this table has no "name"
+    // or "loan_type" column at all, and the rate column is called "rate").
     const { error: loanErr } = await supabaseAdmin.from("loans" as any).insert({
       household_id: hhId, member_id: memberId, is_demo: true,
-      name: "HDB Housing Loan", loan_type: "mortgage",
-      balance: 210000, monthly_payment: 1450, interest_rate: 2.6,
-      repricing_date: `${nextYear}-03-01`, status: "settled",
+      bank: "DBS", purpose: "HDB Housing Loan",
+      property_id: propertyId,
+      balance: 210000, monthly_payment: 1450, rate: 2.6,
+      reprice_date: `${nextYear}-03-01`, status: "settled",
     });
     if (loanErr) throw new Error(`loans: ${loanErr.message}`);
 
+    // Note: insurance_policies' real columns are premium/frequency, not
+    // monthly_premium/payment_frequency, and category is a free-text field
+    // validated against INSURANCE_CATEGORIES in options.ts ("Life"/"Health",
+    // not "whole_life"/"hospitalisation") — verified against types.ts and
+    // tested against a local mock schema before shipping (July 27, 2026 fix).
     const { error: ins1Err } = await supabaseAdmin.from("insurance_policies" as any).insert({
       household_id: hhId, member_id: memberId, is_demo: true,
-      name: "Prudential PruLife", category: "whole_life",
-      sum_assured: 200000, monthly_premium: 320,
-      payment_frequency: "monthly", start_date: "2018-06-01",
+      name: "Prudential PruLife", category: "Life",
+      sum_assured: 200000, premium: 320,
+      frequency: "monthly", start_date: "2018-06-01",
       end_date: `${in2Years}-06-01`, status: "settled",
     });
     if (ins1Err) throw new Error(`insurance 1: ${ins1Err.message}`);
 
     const { error: ins2Err } = await supabaseAdmin.from("insurance_policies" as any).insert({
       household_id: hhId, member_id: memberId, is_demo: true,
-      name: "AIA HealthShield Gold", category: "hospitalisation",
-      sum_assured: 0, monthly_premium: 85,
-      payment_frequency: "annual", start_date: "2020-01-01",
+      name: "AIA HealthShield Gold", category: "Health",
+      sum_assured: 0, premium: 85,
+      frequency: "annual", start_date: "2020-01-01",
       end_date: `${nextYear}-01-01`, status: "settled",
     });
     if (ins2Err) throw new Error(`insurance 2: ${ins2Err.message}`);
 
+    // Note: investments' real columns are group_name/premium_amount/
+    // premium_start_date — there is no investment_type, monthly_premium,
+    // start_date, or maturity_date column on this table at all. group_name
+    // must match one of the exact strings in INVESTMENT_TYPES (options.ts),
+    // e.g. "ILP (Investment-Linked Policy)", not a "ILP" shorthand —
+    // verified against types.ts and tested against a local mock schema
+    // before shipping (July 27, 2026 fix).
     const { error: invErr } = await supabaseAdmin.from("investments" as any).insert({
       household_id: hhId, member_id: memberId, is_demo: true,
-      name: "Manulife InvestReady III", investment_type: "ILP",
-      current_value: 52000, monthly_premium: 500,
-      start_date: "2019-09-01",
-      maturity_date: `${today.getFullYear() + 15}-09-01`,
+      name: "Manulife InvestReady III", group_name: "ILP (Investment-Linked Policy)",
+      current_value: 52000, premium_amount: 500,
+      premium_start_date: "2019-09-01",
       status: "review",
     });
     if (invErr) throw new Error(`investments: ${invErr.message}`);
 
+    // Note: savings_accounts' real name column is "institution", not "name",
+    // and account_type is validated against SAVINGS_ACCOUNT_TYPES
+    // (options.ts) — "Savings Account", not "savings" — verified against
+    // types.ts and tested against a local mock schema before shipping
+    // (July 27, 2026 fix).
     const { error: savErr } = await supabaseAdmin.from("savings_accounts" as any).insert({
       household_id: hhId, member_id: memberId, is_demo: true,
-      name: "DBS Multiplier", account_type: "savings",
+      institution: "DBS Multiplier", account_type: "Savings Account",
       balance: 38000, interest_rate: 3.5, status: "settled",
     });
     if (savErr) throw new Error(`savings: ${savErr.message}`);
 
+    // Note: app_settings has no "currency" column at all — verified against
+    // types.ts and tested against a local mock schema before shipping
+    // (July 27, 2026 fix).
     const { error: settErr } = await supabaseAdmin.from("app_settings" as any).upsert({
-      household_id: hhId,
+      household_id: hhId, family_name: "Tan Family",
       monthly_income: 7200, monthly_expenses: 3500,
-      currency: "SGD", mortgage_days: 90, insurance_days: 60,
+      mortgage_days: 90, insurance_days: 60,
       fd_days: 30, warranty_days: 90, onboarding_dismissed: true,
     }, { onConflict: "household_id" });
     if (settErr) throw new Error(`app_settings: ${settErr.message}`);
