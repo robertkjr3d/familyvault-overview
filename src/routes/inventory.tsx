@@ -253,7 +253,7 @@ const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
 const url = URL.createObjectURL(blob);
 const a = document.createElement("a");
 a.href = url;
-a.download = `familyvault-inventory-${new Date().toISOString().slice(0, 10)}.csv`;
+a.download = `familyhub-inventory-${new Date().toISOString().slice(0, 10)}.csv`;
 document.body.appendChild(a);
 a.click();
 document.body.removeChild(a);
@@ -265,7 +265,7 @@ setGeneratingCsv(false);
 
 function exportText() {
 const lines: string[] = [];
-lines.push("FAMILYVAULT INVENTORY");
+lines.push("FAMILYHUB INVENTORY");
 lines.push(`Exported ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`);
 lines.push("");
 
@@ -305,7 +305,7 @@ const blob = new Blob([text], { type: "text/plain;charset=utf-8;" });
 const url = URL.createObjectURL(blob);
 const a = document.createElement("a");
 a.href = url;
-a.download = `familyvault-inventory-${new Date().toISOString().slice(0, 10)}.txt`;
+a.download = `familyhub-inventory-${new Date().toISOString().slice(0, 10)}.txt`;
 document.body.appendChild(a);
 a.click();
 document.body.removeChild(a);
