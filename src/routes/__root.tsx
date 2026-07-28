@@ -8,7 +8,7 @@ import {
   Link,
 } from "@tanstack/react-router";
 import { Toaster } from "sonner";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import type { FormEvent } from "react";
 
 import appCss from "../styles.css?url";
@@ -256,6 +256,72 @@ function NoHouseholdScreen() {
   );
 }
 
+// Cloudflare Turnstile site key — safe to be public, it only identifies
+// which site is asking; the secret half of this lives in Supabase's own
+// dashboard (Settings > Authentication > Bot and Abuse Protection), not in
+// this app's code, since Supabase's own auth server verifies the token.
+const TURNSTILE_SITE_KEY = "0x4AAAAAAD-_TZ38lRs8wlpW";
+
+/**
+ * Renders Cloudflare Turnstile's "Managed" widget — mostly invisible; it
+ * resolves on its own in the background for the vast majority of real
+ * people, only showing an actual checkbox to a small minority Cloudflare
+ * is unsure about. Not the old "type these letters" CAPTCHA. Calls
+ * onToken(token) once a token is ready; parent must call reset() to get a
+ * fresh token after each use, since Turnstile tokens are single-use.
+ */
+function TurnstileWidget({ onToken, resetKey }: { onToken: (token: string | null) => void; resetKey: number }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const widgetIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    function render() {
+      const w = window as any;
+      if (cancelled || !containerRef.current || !w.turnstile) return;
+      widgetIdRef.current = w.turnstile.render(containerRef.current, {
+        sitekey: TURNSTILE_SITE_KEY,
+        callback: (token: string) => { if (!cancelled) onToken(token); },
+        "expired-callback": () => { if (!cancelled) onToken(null); },
+        "error-callback": () => { if (!cancelled) onToken(null); },
+      });
+    }
+
+    const w = window as any;
+    if (w.turnstile) {
+      render();
+    } else if (!document.querySelector('script[data-turnstile]')) {
+      const script = document.createElement("script");
+      script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+      script.async = true;
+      script.defer = true;
+      script.dataset.turnstile = "true";
+      script.addEventListener("load", render);
+      document.head.appendChild(script);
+    } else {
+      document.querySelector('script[data-turnstile]')?.addEventListener("load", render);
+      // Script tag already exists from a previous mount — poll briefly in
+      // case it finished loading before this effect ran.
+      const interval = setInterval(() => {
+        if ((window as any).turnstile) { clearInterval(interval); render(); }
+      }, 100);
+      setTimeout(() => clearInterval(interval), 5000);
+    }
+
+    return () => {
+      cancelled = true;
+      const w2 = window as any;
+      if (widgetIdRef.current && w2.turnstile) {
+        w2.turnstile.remove(widgetIdRef.current);
+        widgetIdRef.current = null;
+      }
+    };
+  }, [resetKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return <div ref={containerRef} />;
+}
+
 function SignInScreen() {
   const [email, setEmail] = useState(() => {
     if (typeof window === "undefined") return "";
@@ -266,6 +332,21 @@ function SignInScreen() {
   const [loading, setLoading] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaResetKey, setCaptchaResetKey] = useState(0);
+  // Fail open, not closed: if Turnstile's script is ever blocked (network
+  // issue, ad-blocker, a Cloudflare outage) this app must not become
+  // permanently un-sign-in-able for real family members over it. After a
+  // generous wait with no token, let the button become clickable anyway —
+  // worst case Supabase's own captcha check rejects it with a visible,
+  // recoverable error; that's still far better than a silently disabled
+  // button with no explanation, forever.
+  const [captchaTimedOut, setCaptchaTimedOut] = useState(false);
+  useEffect(() => {
+    setCaptchaTimedOut(false);
+    const t = setTimeout(() => setCaptchaTimedOut(true), 8000);
+    return () => clearTimeout(t);
+  }, [captchaResetKey]);
   const inviteMode = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("invite");
 
   async function sendMagicLink() {
@@ -284,6 +365,7 @@ function SignInScreen() {
       email,
       options: {
         emailRedirectTo: redirectTo,
+        captchaToken: captchaToken ?? undefined,
         // Bug fix: Supabase's email template data reflects the user's
         // STORED profile data, not just this one request — confirmed by
         // a real case where someone who'd been removed from a household,
@@ -297,6 +379,10 @@ function SignInScreen() {
     });
 
     setLoading(false);
+    // Turnstile tokens are single-use — get a fresh one for next time
+    // regardless of whether this attempt succeeded or failed.
+    setCaptchaToken(null);
+    setCaptchaResetKey((k) => k + 1);
     if (signInError) {
       setError(signInError.message);
       return;
@@ -378,16 +464,17 @@ function SignInScreen() {
               {inviteMode ? "Code not showing up?" : "Don't have a code yet?"}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Enter your email above and we'll email you a code to register/sign in.
+              Enter your email above and we'll email you a code to register.
             </p>
+            <TurnstileWidget key={captchaResetKey} resetKey={captchaResetKey} onToken={setCaptchaToken} />
             <Button
               type="button"
               variant="outline"
               onClick={sendMagicLink}
-              disabled={loading || !email}
+              disabled={loading || !email || (!captchaToken && !captchaTimedOut)}
               className="mt-2 w-full"
             >
-              {loading ? "Sending..." : "Email me a code"}
+              {loading ? "Sending..." : !captchaToken && !captchaTimedOut ? "Verifying you're human…" : "Email me a code"}
             </Button>
             {sentTo && <p className="mt-2 text-xs text-settled">New code sent to {sentTo}.</p>}
           </div>
