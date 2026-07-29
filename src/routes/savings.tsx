@@ -160,7 +160,7 @@ function SavingsRow({
   const isCPF = isCpfAccountType(a.account_type);
 
   const [cardOpen, setCardOpen] = useState(false);
-  const [section, setSection] = useState<"notes" | "history" | "documents" | null>(null);
+  const [section, setSection] = useState<"notes" | "reminders" | "history" | "documents" | null>(null);
 
   function openSection(target: "notes" | "history" | "documents") {
     setCardOpen(true);
@@ -249,6 +249,15 @@ function SavingsRow({
             id={a.id}
             value={a.notes}
           />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          id={`reminders-${a.id}`}
+          icon={<span>🔔</span>}
+          title="Reminders"
+          open={section === "reminders"}
+          onOpenChange={(o) => setSection(o ? "reminders" : null)}
+        >
           <RemindersList entityType="savings" entityId={a.id} />
           <div className="flex justify-end pt-1">
             <ReminderButton entityType="savings" entityId={a.id} />
