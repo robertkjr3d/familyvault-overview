@@ -136,6 +136,14 @@ export function RecordFormSheet({
 
       toast.success(isEdit ? "Saved" : `${cfg.label} added`);
       qc.invalidateQueries({ queryKey: [cfg.queryKey] });
+      // Bug fix (July 2026): MemberFilterBar's own per-member count badge
+      // keys its cache off the REAL table name (cfg.table), not this
+      // queryKey alias — for insurance_policies/savings_accounts those two
+      // strings differ ("insurance"/"savings" vs the real table name), so
+      // that count badge silently never refreshed after adding a record
+      // until a full page reload. Invalidating both covers every tab
+      // regardless of whether its alias happens to match its table name.
+      qc.invalidateQueries({ queryKey: [cfg.table] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       onOpenChange(false);
     } catch (err: any) {
