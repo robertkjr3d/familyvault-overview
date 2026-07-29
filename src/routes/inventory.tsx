@@ -1725,9 +1725,16 @@ return (
 <Label className="text-xs">Action / notes</Label>
 <Textarea rows={2} value={action} onChange={(e) => setAction(e.target.value)} />
 </div>
-<RemindersList entityType="inventory" entityId={item.id} />
-<div className="flex justify-end pt-1">
-<ReminderButton entityType="inventory" entityId={item.id} />
+<div className="rounded-xl border border-border bg-muted/40 p-3">
+  <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+    <Bell className="h-3.5 w-3.5 fill-yellow-500 text-yellow-500" /> Reminders
+  </div>
+  <div className="mt-2">
+    <RemindersList entityType="inventory" entityId={item.id} />
+  </div>
+  <div className="flex justify-end pt-2">
+    <ReminderButton entityType="inventory" entityId={item.id} />
+  </div>
 </div>
 
   <div className="flex gap-2">
