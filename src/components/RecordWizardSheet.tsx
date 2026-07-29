@@ -206,6 +206,7 @@ export function RecordWizardSheet({
             `Property saved, but the loan could not be saved (${loanErr.message}). Add it manually from the Loans tab and link it to "${values.name || "this property"}".`
           );
           qc.invalidateQueries({ queryKey: [cfg.queryKey] });
+          qc.invalidateQueries({ queryKey: [cfg.table] });
           qc.invalidateQueries({ queryKey: ["dashboard"] });
           onOpenChange(false);
           setSubmitting(false);
@@ -216,6 +217,10 @@ export function RecordWizardSheet({
 
       toast.success(`${cfg.label} added`);
       qc.invalidateQueries({ queryKey: [cfg.queryKey] });
+      // Bug fix (July 2026) — see matching fix + comment in RecordFormSheet.tsx:
+      // MemberFilterBar's count badge keys off the real table name, which
+      // differs from this queryKey alias for insurance_policies/savings_accounts.
+      qc.invalidateQueries({ queryKey: [cfg.table] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       onOpenChange(false);
     } catch (err: any) {
