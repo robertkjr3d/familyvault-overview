@@ -48,6 +48,7 @@ head: () => ({ meta: [{ title: "Home — FamilyHub SG" }] }),
 function Dashboard() {
 const { today } = useToday();
 const memberFilter = useAppStore((s) => s.memberFilter);
+const setMemberFilter = useAppStore((s) => s.setMemberFilter);
 const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
 const { canEdit } = useCurrentRole();
 const { data: members = [] } = useMembers();
@@ -157,6 +158,32 @@ const savings = scopeByMember(savingsQ.data ?? []);
 const inventoryItems = inventoryQ.data ?? [];
 const otherAssets = scopeByMember(otherAssetsQ.data ?? []);
 const healthConditions = scopeByMember(healthQ.data ?? []);
+
+// Bug fix (July 2026): a reminder set on another member's card (e.g. a
+// loan under Dad's tag) was showing on the dashboard with NO member tag at
+// all, and clicking through didn't land on anything because the current
+// member filter hid it. Root cause: buildUpcomingItems() resolves a
+// reminder's member by looking up its entity (the loan/policy/etc it's
+// attached to) in these SAME arrays above — but those are already
+// filtered to the CURRENTLY SELECTED member, so another member's entity
+// simply isn't in the list to find, and the lookup silently returns null.
+// The bell (AppHeader/AlertsSheet) never filters by member at all, so it
+// was never affected — confirmed by checking both files before writing
+// this fix, not assumed. Give buildUpcomingItems the FULL, unfiltered
+// lists for its entity lookups so a reminder always resolves the correct
+// member regardless of which member is currently selected; member-scoped
+// visibility is then applied once, uniformly, on the assembled alert
+// items below — the same real behavior as before for loans/insurance/etc
+// (their own member_id was already correct), now correctly extended to
+// reminders too instead of reminders leaking through untagged for every
+// filter state.
+const allPropertiesUnfiltered = propertiesQ.data ?? [];
+const allLoansUnfiltered = loansQ.data ?? [];
+const allInsuranceUnfiltered = insuranceQ.data ?? [];
+const allInvestmentsUnfiltered = investmentsQ.data ?? [];
+const allSavingsUnfiltered = savingsQ.data ?? [];
+const allOtherAssetsUnfiltered = otherAssetsQ.data ?? [];
+const allHealthConditionsUnfiltered = healthQ.data ?? [];
 
 // Household has zero records of any kind — used to gate the onboarding
 // wizard's auto-show so it only ever appears unprompted for a genuinely
@@ -283,7 +310,17 @@ const showSettingsNudge = salaryIncome === 0 && baseExpenses === 0;
 const horizon90 = 90;
 
 const allUpcoming = buildUpcomingItems(
-{ properties, loans, insurance, investments, savings, inventoryItems, reminders: remindersData ?? [], otherAssets },
+{
+  properties: allPropertiesUnfiltered,
+  loans: allLoansUnfiltered,
+  insurance: allInsuranceUnfiltered,
+  investments: allInvestmentsUnfiltered,
+  savings: allSavingsUnfiltered,
+  inventoryItems,
+  reminders: remindersData ?? [],
+  otherAssets: allOtherAssetsUnfiltered,
+  healthConditions: allHealthConditionsUnfiltered,
+},
 today,
 horizon90,
 {
@@ -292,7 +329,7 @@ insurance_days: appSettings?.insurance_days,
 fd_days: appSettings?.fd_days,
 warranty_days: appSettings?.warranty_days,
 }
-);
+).filter((u) => memberFilter === "all" || u.member_id === memberFilter);
 
 const upcoming = allUpcoming.filter(
 (u) => !dismissedKeys.has(`${u.sourceType}::${u.recordId}::${u.date}`)
@@ -449,7 +486,12 @@ return (
 <MemberFilterBar />
 
   {dueToday && (
-    <Link to={dueToday.href as any} hash={`record-${dueToday.recordId}`} className="block rounded-2xl bg-review p-4 text-review-foreground">
+    <Link
+      to={dueToday.href as any}
+      hash={`record-${dueToday.recordId}`}
+      onClick={() => setMemberFilter(dueToday.member_id ?? "all")}
+      className="block rounded-2xl bg-review p-4 text-review-foreground"
+    >
       <div className="text-xs font-semibold uppercase">Due today</div>
       <div className="mt-1 text-base font-bold">{dueToday.label} {dueToday.amount ? `· ${fmtMoney(dueToday.amount)}` : ""}</div>
     </Link>
@@ -579,7 +621,12 @@ return (
                   </span>
                 </div>
               ) : (
-                <Link to={u.href as any} hash={`record-${u.recordId}`} className="flex min-w-0 flex-1 flex-col gap-0.5 hover:bg-accent/40 rounded overflow-hidden">
+                <Link
+                  to={u.href as any}
+                  hash={`record-${u.recordId}`}
+                  onClick={() => setMemberFilter(u.member_id ?? "all")}
+                  className="flex min-w-0 flex-1 flex-col gap-0.5 hover:bg-accent/40 rounded overflow-hidden"
+                >
                   <div className="flex w-full min-w-0 items-center gap-2">
                     <span className={`w-12 shrink-0 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
                     <u.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -1109,6 +1156,7 @@ return c.href === "cash-flow" || c.href === "needs-attention" ? (
 
 function PrioritySection({ title, items, muted, showDate }: { title: string; items: any[]; muted?: boolean; showDate?: boolean }) {
 const [showAll, setShowAll] = useState(false);
+const setMemberFilter = useAppStore((s) => s.setMemberFilter);
 const visible = showAll ? items : items.slice(0, 8);
 return (
 <section className={`rounded-2xl border p-4 ${muted ? "border-review/40 bg-review-soft/40" : "border-urgent/40 bg-urgent-soft/30"}`}>
@@ -1121,7 +1169,12 @@ return (
 const dateInfo = showDate ? reviewDateInfo(kind, row) : null;
 return (
 <li key={i}>
-<Link to={href as any} hash={`record-${row.id}`} className="flex items-start gap-3 rounded-xl bg-card/80 p-3 hover:bg-card">
+<Link
+  to={href as any}
+  hash={`record-${row.id}`}
+  onClick={() => setMemberFilter(row.member_id ?? "all")}
+  className="flex items-start gap-3 rounded-xl bg-card/80 p-3 hover:bg-card"
+>
 <Icon className="mt-0.5 h-4 w-4 text-muted-foreground" />
 <div className="flex-1 min-w-0">
 <div className="flex flex-wrap items-center gap-2">
