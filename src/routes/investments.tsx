@@ -173,7 +173,7 @@ function InvestmentRow({
   })();
 
   const [cardOpen, setCardOpen] = useState(false);
-  const [section, setSection] = useState<"notes" | "history" | "documents" | null>(null);
+  const [section, setSection] = useState<"notes" | "reminders" | "history" | "documents" | null>(null);
 
   function openSection(target: "notes" | "history" | "documents") {
     setCardOpen(true);
@@ -271,6 +271,15 @@ function InvestmentRow({
             id={inv.id}
             value={inv.notes}
           />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          id={`reminders-${inv.id}`}
+          icon={<span>🔔</span>}
+          title="Reminders"
+          open={section === "reminders"}
+          onOpenChange={(o) => setSection(o ? "reminders" : null)}
+        >
           <RemindersList entityType="investment" entityId={inv.id} />
           <div className="flex justify-end pt-1">
             <ReminderButton entityType="investment" entityId={inv.id} />
