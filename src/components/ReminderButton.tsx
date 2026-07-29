@@ -37,6 +37,12 @@ export function ReminderButton({ entityType, entityId }: { entityType: string; e
     qc.invalidateQueries({ queryKey: ["alert-count"] });
     qc.invalidateQueries({ queryKey: ["alert-count-extras"] }); // alert-count itself no longer exists as a query - this is the key that actually needs invalidating now
     qc.invalidateQueries({ queryKey: ["alerts-extras"] });
+    // Bug fix (July 2026): none of the keys above are what the collapsed
+    // card's own bell-icon badge reads — that count comes from
+    // useEntityCounts()'s ["entity-counts", entityType, householdId] query,
+    // which was never being invalidated here at all, so the badge only ever
+    // updated on a full page reload.
+    qc.invalidateQueries({ queryKey: ["entity-counts"] });
     setOpen(false);
     setWhat("");
     setDate("");
