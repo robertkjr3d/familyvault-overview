@@ -101,7 +101,7 @@ function AssetRow({
   const [cardOpen, setCardOpen] = useState(false);
   const [section, setSection] = useState<"notes" | "reminders" | "history" | "documents" | null>(null);
 
-  function openSection(target: "notes" | "history" | "documents") {
+  function openSection(target: "notes" | "reminders" | "history" | "documents") {
     setCardOpen(true);
     setSection(target);
     setTimeout(() => {
@@ -129,7 +129,7 @@ function AssetRow({
         historyCount={historyCount}
         documentsCount={documentsCount}
         onNotesClick={() => openSection("notes")}
-        onReminderClick={() => openSection("notes")}
+        onReminderClick={() => openSection("reminders")}
         onHistoryClick={() => openSection("history")}
         onDocumentsClick={() => openSection("documents")}
         rightMeta={
