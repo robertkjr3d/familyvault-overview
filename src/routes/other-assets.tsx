@@ -99,7 +99,7 @@ function AssetRow({
   const dup = useDuplicateRecord("other_assets", asset);
 
   const [cardOpen, setCardOpen] = useState(false);
-  const [section, setSection] = useState<"notes" | "history" | "documents" | null>(null);
+  const [section, setSection] = useState<"notes" | "reminders" | "history" | "documents" | null>(null);
 
   function openSection(target: "notes" | "history" | "documents") {
     setCardOpen(true);
@@ -160,6 +160,15 @@ function AssetRow({
             id={asset.id}
             value={asset.notes}
           />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          id={`reminders-${asset.id}`}
+          icon={<span>🔔</span>}
+          title="Reminders"
+          open={section === "reminders"}
+          onOpenChange={(o) => setSection(o ? "reminders" : null)}
+        >
           <RemindersList entityType="other_asset" entityId={asset.id} />
           <div className="flex justify-end pt-1">
             <ReminderButton entityType="other_asset" entityId={asset.id} />
