@@ -42,6 +42,11 @@ export function RemindersList({ entityType, entityId }: { entityType: string; en
     qc.invalidateQueries({ queryKey: ["alerts-extras"] }); // alerts-all itself no longer exists (AlertsSheet migration) - this is its replacement
     qc.invalidateQueries({ queryKey: ["reminders-dashboard"] });
     qc.invalidateQueries({ queryKey: ["dashboard"] });
+    // Bug fix (July 2026) — see matching fix + comment in ReminderButton.tsx:
+    // the collapsed card's bell badge count comes from useEntityCounts(),
+    // never invalidated here before, so marking a reminder done didn't
+    // update it until a full page reload.
+    qc.invalidateQueries({ queryKey: ["entity-counts"] });
   }
 
   if (reminders.length === 0) return null;
