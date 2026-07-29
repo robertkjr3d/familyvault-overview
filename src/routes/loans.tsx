@@ -104,7 +104,7 @@ function LoanRow({
   const displayedMonthlyPayment = l.monthly_payment || calcPmt;
 
   const [cardOpen, setCardOpen] = useState(false);
-  const [section, setSection] = useState<"notes" | "history" | "documents" | null>(null);
+  const [section, setSection] = useState<"notes" | "reminders" | "history" | "documents" | null>(null);
 
   function openSection(target: "notes" | "history" | "documents") {
     setCardOpen(true);
@@ -181,6 +181,15 @@ function LoanRow({
           onOpenChange={(o) => setSection(o ? "notes" : null)}
         >
           <NotesEditor table="loans" queryKey="loans" id={l.id} value={l.notes} />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          id={`reminders-${l.id}`}
+          icon={<span>🔔</span>}
+          title="Reminders"
+          open={section === "reminders"}
+          onOpenChange={(o) => setSection(o ? "reminders" : null)}
+        >
           <RemindersList entityType="loan" entityId={l.id} />
           <div className="flex justify-end pt-1">
             <ReminderButton entityType="loan" entityId={l.id} />
