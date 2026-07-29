@@ -160,7 +160,7 @@ function PropertyRow({
   const cashFlow = netRent - (Number(p.monthly_payment) || 0);
 
   const [cardOpen, setCardOpen] = useState(false);
-  const [section, setSection] = useState<"notes" | "history" | "documents" | null>(null);
+  const [section, setSection] = useState<"notes" | "reminders" | "history" | "documents" | null>(null);
 
   function openSection(target: "notes" | "history" | "documents") {
     setCardOpen(true);
@@ -259,6 +259,14 @@ function PropertyRow({
           onOpenChange={(o) => setSection(o ? "notes" : null)}
         >
           <NotesEditor table="properties" queryKey="properties" id={p.id} value={p.notes} />
+        </CollapsibleSection>
+        <CollapsibleSection
+          id={`reminders-${p.id}`}
+          icon={<span>🔔</span>}
+          title="Reminders"
+          open={section === "reminders"}
+          onOpenChange={(o) => setSection(o ? "reminders" : null)}
+        >
           <RemindersList entityType="property" entityId={p.id} />
           <div className="flex justify-end pt-1">
             <ReminderButton entityType="property" entityId={p.id} />
