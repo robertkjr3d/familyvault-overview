@@ -36,6 +36,7 @@ const BELL_HORIZON_DAYS = 30;
 export function AlertsSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const today = new Date();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
+  const setMemberFilter = useAppStore((s) => s.setMemberFilter);
   const gate = open && !!activeHouseholdId;
 
   // Shared per-table data — uses the same query keys AppHeader/dashboard
@@ -103,6 +104,7 @@ export function AlertsSheet({ open, onOpenChange }: { open: boolean; onOpenChang
             inventoryItems: dataByKey.inventory_items,
             reminders: extras.reminders,
             otherAssets: dataByKey.other_assets,
+            healthConditions: dataByKey.health,
           },
           today,
           BELL_HORIZON_DAYS,
@@ -143,7 +145,7 @@ export function AlertsSheet({ open, onOpenChange }: { open: boolean; onOpenChang
                       <Link
                         to={item.href as any}
                         hash={`record-${item.recordId}`}
-                        onClick={() => onOpenChange(false)}
+                        onClick={() => { onOpenChange(false); setMemberFilter(item.member_id ?? "all"); }}
                         className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-card p-3 hover:bg-accent/50"
                       >
                         <Icon className="mt-0.5 h-4 w-4 text-muted-foreground" />
@@ -204,6 +206,7 @@ function Group({
   empty: string;
   onNav: () => void;
 }) {
+  const setMemberFilter = useAppStore((s) => s.setMemberFilter);
   return (
     <section>
       <h3 className={`mb-2 text-xs font-bold uppercase tracking-wider ${GROUP_TITLE_CLS[tone]}`}>
@@ -220,7 +223,7 @@ function Group({
                 <Link
                   to={src.href as any}
                   hash={`record-${row.id}`}
-                  onClick={onNav}
+                  onClick={() => { onNav(); setMemberFilter(row.member_id ?? "all"); }}
                   className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 hover:brightness-95 ${GROUP_TONE_CLS[tone]}`}
                 >
                   <Icon className="mt-0.5 h-4 w-4 text-muted-foreground" />
