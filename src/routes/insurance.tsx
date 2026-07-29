@@ -149,7 +149,7 @@ function InsuranceRow({
   const nextDue = computeNextOccurrence(p.start_date, p.frequency, p.end_date, new Date());
 
   const [cardOpen, setCardOpen] = useState(false);
-  const [section, setSection] = useState<"notes" | "history" | "documents" | null>(null);
+  const [section, setSection] = useState<"notes" | "reminders" | "history" | "documents" | null>(null);
 
   function openSection(target: "notes" | "history" | "documents") {
     setCardOpen(true);
@@ -235,6 +235,15 @@ function InsuranceRow({
             id={p.id}
             value={p.notes}
           />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          id={`reminders-${p.id}`}
+          icon={<span>🔔</span>}
+          title="Reminders"
+          open={section === "reminders"}
+          onOpenChange={(o) => setSection(o ? "reminders" : null)}
+        >
           <RemindersList entityType="insurance" entityId={p.id} />
           <div className="flex justify-end pt-1">
             <ReminderButton entityType="insurance" entityId={p.id} />
