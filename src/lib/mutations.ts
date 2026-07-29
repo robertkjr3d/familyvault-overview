@@ -12,6 +12,11 @@ export function useStatusMutation(table: string, queryKey: string) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [queryKey] });
+      // Bug fix (July 2026): MemberFilterBar's per-member count badge keys
+      // its cache off the real table name, not this queryKey alias — for
+      // insurance_policies/savings_accounts those differ, so that badge
+      // silently never refreshed after a status change until a page reload.
+      qc.invalidateQueries({ queryKey: [table] });
       qc.invalidateQueries({ queryKey: ["alert-count"] });
       qc.invalidateQueries({ queryKey: ["alert-count-extras"] }); // alert-count no longer exists as a query - this is the key that actually needs invalidating now
       qc.invalidateQueries({ queryKey: ["dashboard"] });
@@ -52,6 +57,8 @@ export function useDeleteMutation(table: string, queryKey: string, entityType?: 
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [queryKey] });
+      // Bug fix (July 2026) — see matching fix + comment in useStatusMutation above.
+      qc.invalidateQueries({ queryKey: [table] });
       qc.invalidateQueries({ queryKey: ["alert-count"] });
       qc.invalidateQueries({ queryKey: ["alert-count-extras"] }); // alert-count no longer exists as a query - this is the key that actually needs invalidating now
       qc.invalidateQueries({ queryKey: ["dashboard"] });
