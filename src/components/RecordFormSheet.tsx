@@ -333,7 +333,7 @@ function FieldInput({ f, value, onChange, members, properties, currency }: {
           type="date"
           value={value ?? ""}
           onChange={(e) => onChange(e.target.value)}
-          className="h-7 w-full pr-8"
+          className="h-9 w-full pr-8"
         />
         {hasDate && (
           <button
