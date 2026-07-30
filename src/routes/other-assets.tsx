@@ -8,7 +8,8 @@ import { MemberFilterBar } from "@/components/MemberFilterBar";
 import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
 import { sortByStatus } from "@/lib/sort";
-import { fmtMoney, fmtDate } from "@/lib/format";
+import { fmtMoney, fmtDate, groupByCurrency } from "@/lib/format";
+import { ForeignCurrencyTotals } from "@/components/ForeignCurrencyTotals";
 import { HashHighlight } from "@/components/HashHighlight";
 import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
@@ -45,7 +46,8 @@ function OtherAssetsPage() {
   });
 
   const groups = Array.from(new Set(items.map((i: any) => i.category)));
-  const totalValue = items.reduce((s: number, i: any) => s + (Number(i.estimated_value) || 0), 0);
+  const valueTotals = groupByCurrency(items, (i: any) => i.estimated_value);
+  const totalValue = valueTotals.sgd;
 
   return (
     <div className="space-y-4 pb-24">
@@ -80,6 +82,7 @@ function OtherAssetsPage() {
               <span className="text-muted-foreground">Total estimated value</span>
               <span className="font-bold">{fmtMoney(totalValue)} <span className="text-xs font-normal text-muted-foreground">(est.)</span></span>
             </div>
+            <ForeignCurrencyTotals foreign={valueTotals.foreign} />
             <p className="mt-1 text-[11px] text-muted-foreground">Values are manually entered estimates. Check "Value as of" dates.</p>
           </div>
         </>
@@ -135,14 +138,14 @@ function AssetRow({
         rightMeta={
           asset.estimated_value ? (
             <div className="text-right text-xs">
-              <div className="font-bold">{fmtMoney(asset.estimated_value)}</div>
+              <div className="font-bold">{fmtMoney(asset.estimated_value, asset.currency)}</div>
               <div className="text-muted-foreground">(est.)</div>
             </div>
           ) : null
         }
       >
         <Section title="Details">
-          <FieldRow label="Estimated value" value={asset.estimated_value ? `${fmtMoney(asset.estimated_value)} (est.)` : "—"} />
+          <FieldRow label="Estimated value" value={asset.estimated_value ? `${fmtMoney(asset.estimated_value, asset.currency)} (est.)` : "—"} />
           <FieldRow label="Value as of" value={asset.last_updated ? fmtDate(asset.last_updated) : "—"} />
           {asset.action && <FieldRow label="Action" value={asset.action} />}
         </Section>
