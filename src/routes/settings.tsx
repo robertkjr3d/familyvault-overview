@@ -272,13 +272,6 @@ function SettingsPage() {
         return m ? `${m.emoji ? m.emoji + " " : ""}${m.name}` : "Joint / Household";
       };
 
-      const fmtMoneyCcy = (n: number | null | undefined, ccy?: string | null) => {
-        const base = fmtMoney(n, ccy === "GBP" ? "GBP" : "SGD");
-        if (n == null || isNaN(Number(n))) return base;
-        if (ccy && ccy !== "SGD" && ccy !== "GBP") return `${base} ${ccy}`;
-        return base;
-      };
-
       const ownerKeys: (string | null)[] = [...members.map((m: any) => m.id), null];
       const PAGE_WIDTH_DXA = 9360;
 
@@ -351,7 +344,7 @@ function SettingsPage() {
           children.push(new Paragraph({ text: "Properties", heading: HeadingLevel.HEADING_2 }));
           children.push(makeTable(
             ["Name", "Current value", "Beneficiary / intended for"],
-            ownProps.map((p: any) => [p.name ?? "—", fmtMoneyCcy(p.current_value, p.currency), p.beneficiary || "—"]),
+            ownProps.map((p: any) => [p.name ?? "—", fmtMoney(p.current_value, p.currency), p.beneficiary || "—"]),
           ));
           children.push(new Paragraph({ text: "" }));
         }
@@ -383,7 +376,7 @@ function SettingsPage() {
           children.push(new Paragraph({ text: "Insurance Policies", heading: HeadingLevel.HEADING_2 }));
           children.push(makeTable(
             ["Policy", "Provider", "Sum assured", "Beneficiary"],
-            ownIns.map((p: any) => [p.name ?? "—", p.provider || "—", fmtMoneyCcy(p.sum_assured, p.currency), p.beneficiary || "—"]),
+            ownIns.map((p: any) => [p.name ?? "—", p.provider || "—", fmtMoney(p.sum_assured, p.currency), p.beneficiary || "—"]),
           ));
           children.push(new Paragraph({ text: "" }));
         }
