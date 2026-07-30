@@ -198,7 +198,7 @@ function SavingsRow({
         rightMeta={
           <div className="text-right text-xs">
             <div className="text-muted-foreground">Balance</div>
-            <div className="font-bold">{fmtMoney(a.balance)} <span className="text-[10px] font-normal text-muted-foreground">(est.)</span></div>
+            <div className="font-bold">{fmtMoney(a.balance, a.currency)} <span className="text-[10px] font-normal text-muted-foreground">(est.)</span></div>
             <div className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
               {isStale && (
                 <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: "hsl(38 95% 55%)" }} aria-label="Balance is stale" />
@@ -210,13 +210,13 @@ function SavingsRow({
         }
       >
         <Section title="Account">
-          <FieldRow label="Balance" value={fmtMoney(a.balance)} />
+          <FieldRow label="Balance" value={fmtMoney(a.balance, a.currency)} />
           <FieldRow label="Interest rate" value={fmtPct(a.interest_rate)} />
           {isFD && <FieldRow label={<AlertLabel text="Maturity" />} value={fmtDate(a.maturity_date)} />}
           {isCPF && (
             <>
               <FieldRow label={<AlertLabel text="Withdrawal eligible" />} value={fmtDate(a.withdrawal_date)} />
-              <FieldRow label="Est. monthly payout" value={fmtMoney(a.estimated_monthly_payout)} />
+              <FieldRow label="Est. monthly payout" value={fmtMoney(a.estimated_monthly_payout, a.currency)} />
               <p className="pt-1 text-[11px] text-muted-foreground">
                 Reference only — not used in the Lifetime Net Worth chart. The chart's CPF LIFE payout estimate is set under Settings.
               </p>
