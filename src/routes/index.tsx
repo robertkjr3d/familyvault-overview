@@ -159,6 +159,23 @@ const inventoryItems = inventoryQ.data ?? [];
 const otherAssets = scopeByMember(otherAssetsQ.data ?? []);
 const healthConditions = scopeByMember(healthQ.data ?? []);
 
+// Foreign-currency records are excluded from every dashboard money TOTAL
+// below (net worth, monthly in/out, allocation) — never converted or
+// counted at face value as SGD, which would be silently wrong. A record
+// with no currency value is legacy/default SGD. This does NOT touch the
+// raw arrays above — alerts/reminders/member counts should still include
+// foreign-currency records normally; only the money-summing math excludes
+// them. Kept in one place so every total stays consistent (a foreign
+// property was previously excluded from the allocation chart but NOT from
+// the main net-worth total — this fixes that inconsistency too).
+const isSgd = (r: any) => !r.currency || r.currency === "SGD";
+const sgdProperties = properties.filter(isSgd);
+const sgdLoans = loans.filter(isSgd);
+const sgdInsurance = insurance.filter(isSgd);
+const sgdInvestments = investments.filter(isSgd);
+const sgdSavings = savings.filter(isSgd);
+const sgdOtherAssets = otherAssets.filter(isSgd);
+
 // Bug fix (July 2026): a reminder set on another member's card (e.g. a
 // loan under Dad's tag) was showing on the dashboard with NO member tag at
 // all, and clicking through didn't land on anything because the current
@@ -232,38 +249,38 @@ await (supabase as any)
 queryClient.invalidateQueries({ queryKey: ["app_settings", activeHouseholdId] });
 }
 
-const propertyValue = properties.reduce((s: number, p: any) => s + (Number(p.current_value) || 0), 0);
-const investmentsValue = investments.reduce((s: number, i: any) => s + (Number(i.current_value) || 0), 0);
-const savingsValue = savings.reduce((s: number, a: any) => s + (Number(a.balance) || 0), 0);
-const otherAssetsValue = otherAssets.reduce((s: number, a: any) => s + (Number(a.estimated_value) || 0), 0);
+const propertyValue = sgdProperties.reduce((s: number, p: any) => s + (Number(p.current_value) || 0), 0);
+const investmentsValue = sgdInvestments.reduce((s: number, i: any) => s + (Number(i.current_value) || 0), 0);
+const savingsValue = sgdSavings.reduce((s: number, a: any) => s + (Number(a.balance) || 0), 0);
+const otherAssetsValue = sgdOtherAssets.reduce((s: number, a: any) => s + (Number(a.estimated_value) || 0), 0);
 // Surrender value of insurance policies (e.g. savings/endowment plans) — treated as a
 // static asset value, same convention as savings balances. Not grown over time in the
 // lifetime chart since modelling actual surrender value growth would require inputs
 // this app doesn't collect; kept simple and accurate to what's recorded today.
-const insuranceSurrenderValue = insurance.reduce((s: number, p: any) => s + (Number(p.surrender_value) || 0), 0);
+const insuranceSurrenderValue = sgdInsurance.reduce((s: number, p: any) => s + (Number(p.surrender_value) || 0), 0);
 const totalAssets = propertyValue + investmentsValue + savingsValue + otherAssetsValue + insuranceSurrenderValue;
-const totalLiabilities = loans.reduce((s: number, l: any) => s + (Number(l.balance) || 0), 0);
+const totalLiabilities = sgdLoans.reduce((s: number, l: any) => s + (Number(l.balance) || 0), 0);
 const netWorth = totalAssets - totalLiabilities;
 
 const salaryIncome = Number(appSettings?.monthly_income) || 0;
-const rentalIncome = properties.reduce((s: number, p: any) => s + (Number(p.monthly_rent) || 0), 0);
-const insurancePayoutIn = insurance.reduce((s: number, p: any) => s + insurancePayoutMonthly(p, today), 0);
-const investmentPayoutIn = investments.reduce((s: number, inv: any) => s + investmentPayoutMonthly(inv, today), 0);
+const rentalIncome = sgdProperties.reduce((s: number, p: any) => s + (Number(p.monthly_rent) || 0), 0);
+const insurancePayoutIn = sgdInsurance.reduce((s: number, p: any) => s + insurancePayoutMonthly(p, today), 0);
+const investmentPayoutIn = sgdInvestments.reduce((s: number, inv: any) => s + investmentPayoutMonthly(inv, today), 0);
 const monthlyIn = salaryIncome + rentalIncome + insurancePayoutIn + investmentPayoutIn;
 
 // Properties with a linked mortgage loan should not double-count monthly_payment
 
 const mortgagedPropertyIds = new Set(
-loans.filter((l: any) => l.property_id).map((l: any) => l.property_id)
+sgdLoans.filter((l: any) => l.property_id).map((l: any) => l.property_id)
 );
-const propertyOut = properties.reduce((s: number, p: any) => {
+const propertyOut = sgdProperties.reduce((s: number, p: any) => {
 const costs = propertyTotalCosts(p);
 const mortgage = mortgagedPropertyIds.has(p.id) ? 0 : (Number(p.monthly_payment) || 0);
 return s + costs + mortgage;
 }, 0);
-const loanOut = loans.reduce((s: number, l: any) => s + (Number(l.monthly_payment) || 0), 0);
-const insuranceOut = insurance.reduce((s: number, p: any) => s + insuranceMonthly(p), 0);
-const investmentPremiumOut = investments.reduce((s: number, inv: any) => s + investmentPremiumMonthly(inv, today), 0);
+const loanOut = sgdLoans.reduce((s: number, l: any) => s + (Number(l.monthly_payment) || 0), 0);
+const insuranceOut = sgdInsurance.reduce((s: number, p: any) => s + insuranceMonthly(p), 0);
+const investmentPremiumOut = sgdInvestments.reduce((s: number, inv: any) => s + investmentPremiumMonthly(inv, today), 0);
 const baseExpenses = Number(appSettings?.monthly_expenses) || 0;
 const monthlyOut = propertyOut + loanOut + insuranceOut + investmentPremiumOut + baseExpenses;
 const netCashFlow = monthlyIn - monthlyOut;
@@ -422,10 +439,9 @@ const alertCount = urgent.length + review.length + upcomingAlerts.length;
 const dueToday = upcoming.find((u) => u.date === today.toISOString().slice(0, 10));
 
 // Asset allocation
-const sgdProperties = properties.filter((p: any) => !p.currency || p.currency === "SGD");
 const allocProperty = sgdProperties.reduce((s: number, p: any) => s + (Number(p.current_value) || 0), 0);
-const allocInvestments = investments.reduce((s: number, i: any) => s + (Number(i.current_value) || 0), 0);
-const allocCash = savings.reduce((s: number, a: any) => s + (Number(a.balance) || 0), 0);
+const allocInvestments = sgdInvestments.reduce((s: number, i: any) => s + (Number(i.current_value) || 0), 0);
+const allocCash = sgdSavings.reduce((s: number, a: any) => s + (Number(a.balance) || 0), 0);
 const allocInsurance = insuranceSurrenderValue;
 const allocTotal = allocProperty + allocInvestments + allocCash + allocInsurance;
 const allocPctProperty = allocTotal > 0 ? (allocProperty / allocTotal) * 100 : 0;
@@ -434,7 +450,7 @@ const allocPctCash = allocTotal > 0 ? (allocCash / allocTotal) * 100 : 0;
 const allocPctInsurance = allocTotal > 0 ? (allocInsurance / allocTotal) * 100 : 0;
 
 // Insurance adequacy
-const activeInsurance = insurance.filter((p: any) => p.status !== "inactive");
+const activeInsurance = sgdInsurance.filter((p: any) => p.status !== "inactive");
 const totalSumAssured = activeInsurance.reduce((s: number, p: any) => s + (Number(p.sum_assured) || 0), 0);
 const policiesWithNoSumAssured = activeInsurance.filter((p: any) => !p.sum_assured).length;
 const incomeReplacementNeed = salaryIncome * 120;
