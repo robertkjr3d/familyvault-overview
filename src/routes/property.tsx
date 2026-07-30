@@ -225,7 +225,7 @@ function PropertyRow({
           <FieldRow label="Monthly payment" value={fmtMoney(p.monthly_payment, p.currency)} />
           {hasMismatch && (
             <div className="rounded-lg border border-review/40 bg-review-soft/30 px-3 py-2 text-xs text-muted-foreground">
-              ⚠ Linked loan ({linkedLoan.bank}) has a different monthly payment of {fmtMoney(linkedLoan.monthly_payment)}. The loan amount is used for cash flow calculations — update one to match.
+              ⚠ Linked loan ({linkedLoan.bank}) has a different monthly payment of {fmtMoney(linkedLoan.monthly_payment, linkedLoan.currency)}. The loan amount is used for cash flow calculations — update one to match.
             </div>
           )}
           <FieldRow label="Interest rate" value={fmtPct(p.interest_rate)} />
