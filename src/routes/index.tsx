@@ -287,21 +287,28 @@ const netCashFlow = monthlyIn - monthlyOut;
 
 // Per-record cash flow detail — same "what's adding/subtracting and from where"
 // pattern as the Lifetime Chart's Year Detail panel, but for this month's actual figures.
+// Bug fix (July 2026): this used to build from the raw, unfiltered arrays —
+// so expanding "Show breakdown" could list a foreign-currency record that
+// wasn't actually included in monthlyIn/monthlyOut above it (those already
+// used the SGD-only arrays), a visible mismatch between the total and its
+// own breakdown. Now built from the same sgd* arrays as the totals, so a
+// foreign-currency record simply doesn't appear here — consistent with
+// "foreign currency isn't counted on the dashboard" everywhere else.
 const inflowDetailItems: LineItem[] = [
 ...(salaryIncome > 0 ? [{ label: "Salary / income", amount: salaryIncome, href: "/settings" }] : []),
-...properties
+...sgdProperties
 .filter((p: any) => (Number(p.monthly_rent) || 0) > 0)
 .map((p: any) => ({ label: `${p.name ?? "Property"} rental`, amount: Number(p.monthly_rent) || 0, href: `/property#record-${p.id}` })),
-...insurance
+...sgdInsurance
 .filter((p: any) => insurancePayoutMonthly(p, today) > 0)
 .map((p: any) => ({ label: `${p.name ?? "Insurance"} payout`, amount: insurancePayoutMonthly(p, today), href: `/insurance#record-${p.id}`, timesPerYear: freqTimesPerYear(p.payout_frequency) })),
-...investments
+...sgdInvestments
 .filter((inv: any) => investmentPayoutMonthly(inv, today) > 0)
 .map((inv: any) => ({ label: `${inv.name ?? "ILP"} payout`, amount: investmentPayoutMonthly(inv, today), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.payout_frequency) })),
 ];
 
 const outflowDetailItems: LineItem[] = [
-...properties.flatMap((p: any) => {
+...sgdProperties.flatMap((p: any) => {
 const items: LineItem[] = [];
 const propHref = `/property#record-${p.id}`;
 const costs = propertyTotalCosts(p);
@@ -310,13 +317,13 @@ const mortgage = mortgagedPropertyIds.has(p.id) ? 0 : Number(p.monthly_payment) 
 if (mortgage > 0) items.push({ label: `${p.name ?? "Property"} mortgage`, amount: mortgage, href: propHref });
 return items;
 }),
-...loans
+...sgdLoans
 .filter((l: any) => (Number(l.monthly_payment) || 0) > 0)
 .map((l: any) => ({ label: `${l.bank ?? "Loan"} repayment`, amount: Number(l.monthly_payment) || 0, href: `/loans#record-${l.id}` })),
-...insurance
+...sgdInsurance
 .filter((p: any) => insuranceMonthly(p) > 0)
 .map((p: any) => ({ label: `${p.name ?? "Insurance"} premium`, amount: insuranceMonthly(p), href: `/insurance#record-${p.id}`, timesPerYear: freqTimesPerYear(p.frequency) })),
-...investments
+...sgdInvestments
 .filter((inv: any) => investmentPremiumMonthly(inv, today) > 0)
 .map((inv: any) => ({ label: `${inv.name ?? "ILP"} premium`, amount: investmentPremiumMonthly(inv, today), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.premium_frequency) })),
 ...(baseExpenses > 0 ? [{ label: "Other expenses (Settings)", amount: baseExpenses, href: "/settings" }] : []),
