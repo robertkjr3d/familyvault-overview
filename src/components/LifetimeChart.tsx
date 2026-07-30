@@ -10,6 +10,12 @@ import { useToday } from "@/lib/today";
 import { YearDetailPanel } from "@/components/YearDetailPanel";
 import { type ChartPoint, fmt, projectLifetimeChart } from "@/lib/lifetimeChartMath";
 
+function joinWithAnd(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+}
+
 type Props = {
   properties: any[];
   loans: any[];
@@ -74,21 +80,36 @@ export function LifetimeChart({
     },
   });
 
-  // Investments and savings without a currency field are treated as SGD.
-  // Once the currency field is added to investments, non-SGD ones will be excluded.
+  // Foreign-currency records are excluded from the lifetime projection
+  // entirely, not converted or counted at face value — mixing currencies
+  // into one SGD projection would silently understate/overstate net worth.
+  // Records without a currency value are legacy/default SGD.
+  const sgdProperties = properties.filter((p: any) => !p.currency || p.currency === "SGD");
+  const foreignProperties = properties.filter((p: any) => p.currency && p.currency !== "SGD");
+  const sgdLoans = loans.filter((l: any) => !l.currency || l.currency === "SGD");
+  const foreignLoans = loans.filter((l: any) => l.currency && l.currency !== "SGD");
+  const sgdInsurance = insurance.filter((p: any) => !p.currency || p.currency === "SGD");
+  const foreignInsurance = insurance.filter((p: any) => p.currency && p.currency !== "SGD");
   const sgdInvestments = investments.filter((inv: any) => !inv.currency || inv.currency === "SGD");
   const foreignInvestments = investments.filter((inv: any) => inv.currency && inv.currency !== "SGD");
   const sgdSavings = savings.filter((s: any) => !s.currency || s.currency === "SGD");
   const foreignSavings = savings.filter((s: any) => s.currency && s.currency !== "SGD");
-  const hasForeignExcluded = foreignInvestments.length > 0 || foreignSavings.length > 0;
+  const excludedCategories = [
+    foreignProperties.length > 0 && "properties",
+    foreignLoans.length > 0 && "loans",
+    foreignInsurance.length > 0 && "insurance policies",
+    foreignInvestments.length > 0 && "investments",
+    foreignSavings.length > 0 && "savings accounts",
+  ].filter(Boolean) as string[];
+  const hasForeignExcluded = excludedCategories.length > 0;
 
   const data = useMemo<ChartPoint[]>(() => projectLifetimeChart({
-    properties, loans, insurance, sgdSavings, sgdInvestments, plannedEvents,
+    properties: sgdProperties, loans: sgdLoans, insurance: sgdInsurance, sgdSavings, sgdInvestments, plannedEvents,
     startingNetWorth, monthlyIncome, monthlyExpenses, startYear,
     horizonYears: clampedHorizon, retirementYear, cpfStartYear, cpfMonthlyPayout,
     investmentGrowthRate, propertyAppreciationRate, inflationRate,
   }), [
-    properties, loans, insurance, sgdSavings, sgdInvestments, plannedEvents,
+    sgdProperties, sgdLoans, sgdInsurance, sgdSavings, sgdInvestments, plannedEvents,
     startingNetWorth, monthlyIncome, monthlyExpenses,
     retirementYear, cpfStartYear, cpfMonthlyPayout,
     investmentGrowthRate, propertyAppreciationRate, inflationRate,
@@ -192,11 +213,7 @@ export function LifetimeChart({
       )}
       {hasForeignExcluded && (
         <p className="rounded-lg bg-review-soft/40 px-3 py-2 text-xs text-muted-foreground">
-          ⚠ {foreignInvestments.length > 0 && foreignSavings.length > 0
-            ? "Some investments and savings accounts are"
-            : foreignInvestments.length > 0
-            ? "Some investments are"
-            : "Some savings accounts are"} in foreign currency and excluded from this projection. Only SGD assets are modelled.
+          ⚠ Some {joinWithAnd(excludedCategories)} {excludedCategories.length === 1 ? "is" : "are"} in foreign currency and excluded from this projection. Only SGD assets/liabilities are modelled.
         </p>
       )}
       {!hasIncome && (
