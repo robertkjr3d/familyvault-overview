@@ -13,7 +13,8 @@ import { MemberFilterBar } from "@/components/MemberFilterBar";
 import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
 import { sortByStatus } from "@/lib/sort";
-import { fmtMoney, fmtPct, fmtDate } from "@/lib/format";
+import { fmtMoney, fmtPct, fmtDate, groupByCurrency } from "@/lib/format";
+import { ForeignCurrencyTotals } from "@/components/ForeignCurrencyTotals";
 import { freqLabel } from "@/lib/options";
 import { HashHighlight } from "@/components/HashHighlight";
 import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
@@ -93,8 +94,11 @@ function InvestmentsPage() {
   });
 
   const groups = Array.from(new Set(items.map((i: any) => i.group_name)));
-  const totalCost = items.reduce((s: number, i: any) => s + (Number(i.cost_basis) || 0), 0);
-  const totalValue = items.reduce((s: number, i: any) => s + (Number(i.current_value) || 0), 0);
+  const costTotals = groupByCurrency(items, (i: any) => i.cost_basis);
+  const valueTotals = groupByCurrency(items, (i: any) => i.current_value);
+  const gainTotals = groupByCurrency(items, (i: any) => (Number(i.current_value) || 0) - (Number(i.cost_basis) || 0));
+  const totalCost = costTotals.sgd;
+  const totalValue = valueTotals.sgd;
 
   return (
     <div className="space-y-4">
@@ -126,8 +130,11 @@ function InvestmentsPage() {
           ))}
           <div className="rounded-2xl border border-border bg-card p-4 text-sm">
             <div className="flex justify-between"><span>Total invested</span><span className="font-bold">{fmtMoney(totalCost)}</span></div>
-            <div className="flex justify-between"><span>Current value</span><span className="font-bold">{fmtMoney(totalValue)}</span></div>
-            <div className="flex justify-between"><span>Gain / Loss</span><span className={`font-bold ${totalValue - totalCost >= 0 ? "text-settled" : "text-urgent"}`}>{fmtMoney(totalValue - totalCost)}</span></div>
+            <ForeignCurrencyTotals foreign={costTotals.foreign} />
+            <div className="mt-2 flex justify-between"><span>Current value</span><span className="font-bold">{fmtMoney(totalValue)}</span></div>
+            <ForeignCurrencyTotals foreign={valueTotals.foreign} />
+            <div className="mt-2 flex justify-between"><span>Gain / Loss</span><span className={`font-bold ${totalValue - totalCost >= 0 ? "text-settled" : "text-urgent"}`}>{fmtMoney(totalValue - totalCost)}</span></div>
+            <ForeignCurrencyTotals foreign={gainTotals.foreign} />
           </div>
         </>
       )}
@@ -213,8 +220,8 @@ function InvestmentRow({
             <div className="text-muted-foreground">
               Value (est.){staleIndicator}
             </div>
-            <div className="font-bold">{fmtMoney(inv.current_value)}</div>
-            <div className={gain >= 0 ? "text-settled" : "text-urgent"}>{fmtMoney(gain)}</div>
+            <div className="font-bold">{fmtMoney(inv.current_value, inv.currency)}</div>
+            <div className={gain >= 0 ? "text-settled" : "text-urgent"}>{fmtMoney(gain, inv.currency)}</div>
             <div className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
               {isStale && (
                 <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: "hsl(38 95% 55%)" }} aria-label="Value is stale" />
@@ -223,7 +230,7 @@ function InvestmentRow({
             </div>
             {premiumDisplay != null && (
               <div className="mt-1 font-semibold text-urgent">
-                −{fmtMoney(premiumDisplay.amt)}{premiumDisplay.suffix}
+                −{fmtMoney(premiumDisplay.amt, inv.currency)}{premiumDisplay.suffix}
               </div>
             )}
           </div>
@@ -240,19 +247,19 @@ function InvestmentRow({
           <UpdateValueInline id={inv.id} current={inv.current_value} />
         </div>
         <Section title="Holding">
-          <FieldRow label="Amount invested" value={fmtMoney(inv.cost_basis)} />
-          <FieldRow label="Current value (est.)" value={fmtMoney(inv.current_value)} />
+          <FieldRow label="Amount invested" value={fmtMoney(inv.cost_basis, inv.currency)} />
+          <FieldRow label="Current value (est.)" value={fmtMoney(inv.current_value, inv.currency)} />
           <FieldRow label="Value as of" value={fmtDate(inv.last_updated)} />
           <FieldRow
             label={<span className="inline-flex items-center">Projected return<InfoNote text="This rate is for your own reference only. The Lifetime Net Worth chart uses one global growth rate set in Settings → Projection Assumptions, not this field." /></span>}
             value={fmtPct(inv.projected_return_pct)}
           />
           {isILPOrEndowment && inv.coverage && <FieldRow label="Coverage" value={inv.coverage} />}
-          {isILPOrEndowment && inv.premium_amount && <FieldRow label="Premium amount" value={fmtMoney(inv.premium_amount)} />}
+          {isILPOrEndowment && inv.premium_amount && <FieldRow label="Premium amount" value={fmtMoney(inv.premium_amount, inv.currency)} />}
           {isILPOrEndowment && inv.premium_start_date && <FieldRow label="Premium start" value={fmtDate(inv.premium_start_date)} />}
           {isILPOrEndowment && inv.premium_frequency && <FieldRow label="Premium frequency" value={freqLabel(inv.premium_frequency)} />}
           {isILPOrEndowment && inv.premium_end_date && <FieldRow label="Premium end" value={fmtDate(inv.premium_end_date)} />}
-          {isILPOrEndowment && inv.payout_amount && <FieldRow label="Payout amount (est.)" value={fmtMoney(inv.payout_amount)} />}
+          {isILPOrEndowment && inv.payout_amount && <FieldRow label="Payout amount (est.)" value={fmtMoney(inv.payout_amount, inv.currency)} />}
           {isILPOrEndowment && inv.payout_start_date && <FieldRow label="Payout start" value={fmtDate(inv.payout_start_date)} />}
           {isILPOrEndowment && inv.payout_frequency && <FieldRow label="Payout frequency" value={freqLabel(inv.payout_frequency)} />}
           {isILPOrEndowment && inv.payout_end_date && <FieldRow label="Payout end" value={fmtDate(inv.payout_end_date)} />}
