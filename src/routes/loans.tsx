@@ -142,18 +142,18 @@ function LoanRow({
         rightMeta={
           <div className="text-right text-xs">
             <div className="text-muted-foreground">Balance</div>
-            <div className="font-bold">{fmtMoney(l.balance)} <span className="text-[10px] font-normal text-muted-foreground">(est.)</span></div>
+            <div className="font-bold">{fmtMoney(l.balance, l.currency)} <span className="text-[10px] font-normal text-muted-foreground">(est.)</span></div>
             {displayedMonthlyPayment && (
               <div className="font-semibold text-urgent">
-                −{fmtMoney(displayedMonthlyPayment)}/mo
+                −{fmtMoney(displayedMonthlyPayment, l.currency)}/mo
               </div>
             )}
           </div>
         }
       >
         <Section title="Loan details">
-          <FieldRow label="Original amount" value={fmtMoney(l.original_amount)} />
-          <FieldRow label="Current balance" value={fmtMoney(l.balance)} />
+          <FieldRow label="Original amount" value={fmtMoney(l.original_amount, l.currency)} />
+          <FieldRow label="Current balance" value={fmtMoney(l.balance, l.currency)} />
           <FieldRow label="Loan start" value={fmtDate(l.start_date)} />
           <FieldRow label="Term (years)" value={l.term_years ?? "—"} />
           <FieldRow label="Current rate" value={l.rate_label || fmtPct(l.rate)} />
@@ -162,10 +162,10 @@ function LoanRow({
           {l.action && <FieldRow label="Action" value={l.action} />}
           <FieldRow
             label="Est. monthly repayment"
-            value={calcPmt ? <span className="font-bold text-primary">{fmtMoney(calcPmt)}</span> : "—"}
+            value={calcPmt ? <span className="font-bold text-primary">{fmtMoney(calcPmt, l.currency)}</span> : "—"}
           />
           {calcBal != null && (
-            <FieldRow label="Est. balance today" value={<span className="text-muted-foreground">{fmtMoney(calcBal)}</span>} />
+            <FieldRow label="Est. balance today" value={<span className="text-muted-foreground">{fmtMoney(calcBal, l.currency)}</span>} />
           )}
         </Section>
 
