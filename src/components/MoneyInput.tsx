@@ -1,5 +1,4 @@
 import { Input } from "@/components/ui/input";
-import { CURRENCY_SYMBOLS } from "@/lib/options";
 
 function formatDisplay(v: string | number | null | undefined) {
   if (v == null || v === "") return "";
@@ -24,7 +23,11 @@ export function MoneyInput({
   placeholder?: string;
   id?: string;
 }) {
-  const sym = CURRENCY_SYMBOLS[currency] || "$";
+  // Only SGD keeps the "$" symbol. CURRENCY_SYMBOLS maps USD/AUD/HKD/CAD/NZD
+  // to that same "$" — which would make an entry in any of those currencies
+  // visually indistinguishable from SGD while typing. Showing the 3-letter
+  // code instead removes that ambiguity, matching fmtMoney()'s display.
+  const sym = currency === "SGD" ? "$" : currency;
   return (
     <div className="relative">
       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 select-none text-sm font-medium text-muted-foreground">
@@ -41,7 +44,7 @@ export function MoneyInput({
           if (raw === "" || raw === "-" || /^-?\d*\.?\d*$/.test(raw)) onChange(raw);
         }}
         placeholder={placeholder}
-        className="pl-7"
+        className={sym.length > 1 ? "pl-11" : "pl-7"}
       />
     </div>
   );
