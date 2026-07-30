@@ -871,6 +871,7 @@ export type Database = {
           property_id: string | null
           loan_end_date: string | null
           external_url: string | null
+          currency: string | null
         }
         Insert: {
           id?: string
@@ -896,6 +897,7 @@ export type Database = {
           property_id?: string | null
           loan_end_date?: string | null
           external_url?: string | null
+          currency?: string | null
         }
         Update: {
           id?: string
@@ -921,6 +923,7 @@ export type Database = {
           property_id?: string | null
           loan_end_date?: string | null
           external_url?: string | null
+          currency?: string | null
         }
         Relationships: [
           {
@@ -1013,6 +1016,7 @@ export type Database = {
           created_at: string
           updated_at: string
           household_id: string
+          currency: string | null
         }
         Insert: {
           id?: string
@@ -1029,6 +1033,7 @@ export type Database = {
           created_at?: string
           updated_at?: string
           household_id: string
+          currency?: string | null
         }
         Update: {
           id?: string
@@ -1045,6 +1050,7 @@ export type Database = {
           created_at?: string
           updated_at?: string
           household_id?: string
+          currency?: string | null
         }
         Relationships: [
           {
@@ -1429,6 +1435,7 @@ export type Database = {
           withdrawal_date: string | null
           estimated_monthly_payout: number | null
           joint_member_id: string | null
+          currency: string | null
         }
         Insert: {
           id?: string
@@ -1454,6 +1461,7 @@ export type Database = {
           withdrawal_date?: string | null
           estimated_monthly_payout?: number | null
           joint_member_id?: string | null
+          currency?: string | null
         }
         Update: {
           id?: string
@@ -1479,6 +1487,7 @@ export type Database = {
           withdrawal_date?: string | null
           estimated_monthly_payout?: number | null
           joint_member_id?: string | null
+          currency?: string | null
         }
         Relationships: [
           {
