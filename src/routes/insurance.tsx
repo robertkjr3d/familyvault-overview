@@ -9,7 +9,8 @@ import { MemberFilterBar } from "@/components/MemberFilterBar";
 import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
 import { sortByStatus } from "@/lib/sort";
-import { fmtMoney, fmtDate } from "@/lib/format";
+import { fmtMoney, fmtDate, groupByCurrency } from "@/lib/format";
+import { ForeignCurrencyTotals } from "@/components/ForeignCurrencyTotals";
 import { HashHighlight } from "@/components/HashHighlight";
 import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
 import { freqLabel, INSURANCE_CATEGORIES } from "@/lib/options";
@@ -48,12 +49,13 @@ function InsurancePage() {
     },
   });
 
-  const totalAnnual = items.reduce((s: number, i: any) => {
-    if (!i.premium) return s;
+  const annualTotals = groupByCurrency(items, (i: any) => {
+    if (!i.premium) return 0;
     const f = (i.frequency || "annual").toLowerCase();
     const mult = f.includes("month") ? 12 : f.includes("quart") ? 4 : f.includes("semi") ? 2 : 1;
-    return s + Number(i.premium) * mult;
-  }, 0);
+    return Number(i.premium) * mult;
+  });
+  const totalAnnual = annualTotals.sgd;
 
   const presentCategories = new Set(items.map((i: any) => i.category));
   const categories = INSURANCE_CATEGORIES.filter((c) => presentCategories.has(c));
@@ -68,6 +70,7 @@ function InsurancePage() {
       <p className="text-xs text-muted-foreground">
         {items.length} policies · {fmtMoney(totalAnnual)} / year total
       </p>
+      <ForeignCurrencyTotals foreign={annualTotals.foreign} />
       <MemberFilterBar table="insurance_policies" />
       <p className="text-[11px] text-muted-foreground">
         Looking for ILP or Endowment policies? Those are tracked under{" "}
@@ -189,11 +192,11 @@ function InsuranceRow({
         rightMeta={
           <div className="text-right text-xs">
             <div className="text-muted-foreground">Premium</div>
-            <div className="font-bold">{fmtMoney(p.premium)}/{freqLabel(p.frequency)}</div>
+            <div className="font-bold">{fmtMoney(p.premium, p.currency)}/{freqLabel(p.frequency)}</div>
             {p.surrender_value != null && (
               <div className="mt-1 text-settled">
                 <div className="text-[10px] text-muted-foreground">Surrender value</div>
-                <div className="font-semibold">{fmtMoney(p.surrender_value)}</div>
+                <div className="font-semibold">{fmtMoney(p.surrender_value, p.currency)}</div>
               </div>
             )}
           </div>
@@ -213,7 +216,7 @@ function InsuranceRow({
         </Section>
         {(p.payout_amount || p.payout_start_date || p.payout_end_date || p.beneficiary || p.surrender_value != null) && (
           <Section title="Payout">
-            {p.surrender_value != null && <FieldRow label="Surrender value (current)" value={fmtMoney(p.surrender_value)} />}
+            {p.surrender_value != null && <FieldRow label="Surrender value (current)" value={fmtMoney(p.surrender_value, p.currency)} />}
             {p.payout_amount && <FieldRow label="Payout amount (est.)" value={fmtMoney(p.payout_amount, p.currency)} />}
             {p.payout_start_date && <FieldRow label="Payout start" value={fmtDate(p.payout_start_date)} />}
             {p.payout_frequency && <FieldRow label="Payout frequency" value={freqLabel(p.payout_frequency)} />}
