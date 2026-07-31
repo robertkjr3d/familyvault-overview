@@ -25,6 +25,7 @@ import { DocumentsList } from "@/components/DocumentsList";
 import { ReminderButton } from "@/components/ReminderButton";
 import { RemindersList } from "@/components/RemindersList";
 import { useEntityCounts } from "@/lib/useEntityCounts";
+import { useFxRates } from "@/hooks/useFxRates";
 
 export const Route = createFileRoute("/investments")({
   component: InvestmentsPage,
@@ -79,6 +80,7 @@ function InvestmentsPage() {
   const status = useStatusMutation("investments", "investments");
   const del = useDeleteMutation("investments", "investments", "investment");
   const counts = useEntityCounts("investment", activeHouseholdId);
+  const { data: fxRates } = useFxRates();
 
   const { data: items = [] } = useQuery({
     queryKey: ["investments", memberFilter, activeHouseholdId],
@@ -130,11 +132,11 @@ function InvestmentsPage() {
           ))}
           <div className="rounded-2xl border border-border bg-card p-4 text-sm">
             <div className="flex justify-between"><span>Total invested</span><span className="font-bold">{fmtMoney(totalCost)}</span></div>
-            <ForeignCurrencyTotals foreign={costTotals.foreign} />
+            <ForeignCurrencyTotals foreign={costTotals.foreign} fx={fxRates} />
             <div className="mt-2 flex justify-between"><span>Current value</span><span className="font-bold">{fmtMoney(totalValue)}</span></div>
-            <ForeignCurrencyTotals foreign={valueTotals.foreign} />
+            <ForeignCurrencyTotals foreign={valueTotals.foreign} fx={fxRates} />
             <div className="mt-2 flex justify-between"><span>Gain / Loss</span><span className={`font-bold ${totalValue - totalCost >= 0 ? "text-settled" : "text-urgent"}`}>{fmtMoney(totalValue - totalCost)}</span></div>
-            <ForeignCurrencyTotals foreign={gainTotals.foreign} />
+            <ForeignCurrencyTotals foreign={gainTotals.foreign} fx={fxRates} />
           </div>
         </>
       )}
