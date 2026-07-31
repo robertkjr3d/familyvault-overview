@@ -17,9 +17,10 @@ export function fmtMoney(n: number | null | undefined, currency?: string | null)
 }
 
 // Splits a list of records into an SGD total plus a separate total per
-// foreign currency present — used for every tab's "total" section so
-// foreign-currency amounts are never silently added into the SGD figure.
-// A record with no currency value is legacy/default SGD.
+// foreign currency present. On its own this never mixes currencies — pair
+// it with totalWithFx() below to get one combined SGD-equivalent figure
+// once a cached rate is available. A record with no currency value is
+// legacy/default SGD.
 export function groupByCurrency<T extends { currency?: string | null }>(
   items: T[],
   amountOf: (item: T) => number | null | undefined,
@@ -60,6 +61,24 @@ export function convertToSgd(
   const rate = fx.rates[currency];
   if (!rate || !isFinite(rate) || rate <= 0) return null;
   return amount / rate;
+}
+
+// Combines a groupByCurrency() result into one SGD-equivalent figure,
+// converting each foreign currency total using the cached daily rate.
+// Any currency with no cached rate yet contributes $0 here (never counted
+// at face value in the wrong currency) — same safety behavior as the
+// estate-summary document export. Callers still have access to the raw
+// foreign totals separately (via groupByCurrency's `foreign` array) to show
+// each original amount alongside this combined figure, not instead of it.
+export function totalWithFx(
+  totals: { sgd: number; foreign: { currency: string; total: number }[] },
+  fx: FxRates | null | undefined,
+): number {
+  const convertedForeign = totals.foreign.reduce(
+    (s, f) => s + (convertToSgd(f.total, f.currency, fx) ?? 0),
+    0,
+  );
+  return totals.sgd + convertedForeign;
 }
 
 export function fmtPct(n: number | null | undefined) {
