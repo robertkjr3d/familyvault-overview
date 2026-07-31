@@ -13,8 +13,9 @@ import { MemberFilterBar } from "@/components/MemberFilterBar";
 import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
 import { sortByStatus } from "@/lib/sort";
-import { fmtMoney, fmtPct, fmtDate, groupByCurrency } from "@/lib/format";
+import { fmtMoney, fmtPct, fmtDate, groupByCurrency, totalWithFx } from "@/lib/format";
 import { ForeignCurrencyTotals } from "@/components/ForeignCurrencyTotals";
+import { FxInfoNote } from "@/components/FxInfoNote";
 import { freqLabel } from "@/lib/options";
 import { HashHighlight } from "@/components/HashHighlight";
 import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
@@ -99,8 +100,8 @@ function InvestmentsPage() {
   const costTotals = groupByCurrency(items, (i: any) => i.cost_basis);
   const valueTotals = groupByCurrency(items, (i: any) => i.current_value);
   const gainTotals = groupByCurrency(items, (i: any) => (Number(i.current_value) || 0) - (Number(i.cost_basis) || 0));
-  const totalCost = costTotals.sgd;
-  const totalValue = valueTotals.sgd;
+  const totalCost = totalWithFx(costTotals, fxRates);
+  const totalValue = totalWithFx(valueTotals, fxRates);
 
   return (
     <div className="space-y-4">
@@ -131,11 +132,28 @@ function InvestmentsPage() {
             </section>
           ))}
           <div className="rounded-2xl border border-border bg-card p-4 text-sm">
-            <div className="flex justify-between"><span>Total invested</span><span className="font-bold">{fmtMoney(totalCost)}</span></div>
+            <div className="flex justify-between">
+              <span>
+                Total invested{costTotals.foreign.length > 0 && <FxInfoNote fx={fxRates} />}
+              </span>
+              <span className="font-bold">{fmtMoney(totalCost)}</span>
+            </div>
             <ForeignCurrencyTotals foreign={costTotals.foreign} fx={fxRates} />
-            <div className="mt-2 flex justify-between"><span>Current value</span><span className="font-bold">{fmtMoney(totalValue)}</span></div>
+            <div className="mt-2 flex justify-between">
+              <span>
+                Current value{valueTotals.foreign.length > 0 && <FxInfoNote fx={fxRates} />}
+              </span>
+              <span className="font-bold">{fmtMoney(totalValue)}</span>
+            </div>
             <ForeignCurrencyTotals foreign={valueTotals.foreign} fx={fxRates} />
-            <div className="mt-2 flex justify-between"><span>Gain / Loss</span><span className={`font-bold ${totalValue - totalCost >= 0 ? "text-settled" : "text-urgent"}`}>{fmtMoney(totalValue - totalCost)}</span></div>
+            <div className="mt-2 flex justify-between">
+              <span>Gain / Loss{gainTotals.foreign.length > 0 && <FxInfoNote fx={fxRates} />}</span>
+              <span
+                className={`font-bold ${totalValue - totalCost >= 0 ? "text-settled" : "text-urgent"}`}
+              >
+                {fmtMoney(totalValue - totalCost)}
+              </span>
+            </div>
             <ForeignCurrencyTotals foreign={gainTotals.foreign} fx={fxRates} />
           </div>
         </>
