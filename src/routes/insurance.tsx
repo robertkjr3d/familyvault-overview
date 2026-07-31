@@ -22,6 +22,7 @@ import { ReminderButton } from "@/components/ReminderButton";
 import { RemindersList } from "@/components/RemindersList";
 import { computeNextOccurrence } from "@/lib/alerts";
 import { useEntityCounts } from "@/lib/useEntityCounts";
+import { useFxRates } from "@/hooks/useFxRates";
 
 export const Route = createFileRoute("/insurance")({
   component: InsurancePage,
@@ -34,6 +35,7 @@ function InsurancePage() {
   const status = useStatusMutation("insurance_policies", "insurance");
   const del = useDeleteMutation("insurance_policies", "insurance", "insurance");
   const counts = useEntityCounts("insurance", activeHouseholdId);
+  const { data: fxRates } = useFxRates();
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
 
   const { data: items = [] } = useQuery({
@@ -70,7 +72,7 @@ function InsurancePage() {
       <p className="text-xs text-muted-foreground">
         {items.length} policies · {fmtMoney(totalAnnual)} / year total
       </p>
-      <ForeignCurrencyTotals foreign={annualTotals.foreign} />
+      <ForeignCurrencyTotals foreign={annualTotals.foreign} fx={fxRates} />
       <MemberFilterBar table="insurance_policies" />
       <p className="text-[11px] text-muted-foreground">
         Looking for ILP or Endowment policies? Those are tracked under{" "}
