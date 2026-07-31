@@ -6,7 +6,8 @@ import { toast } from "sonner";
 import { useMembers } from "@/hooks/useMembers";
 import { useAppStore } from "@/lib/store";
 import { Trash2 } from "lucide-react";
-import { fmtMoney } from "@/lib/format";
+import { fmtMoney, convertToSgd } from "@/lib/format";
+import { useFxRates } from "@/hooks/useFxRates";
 import { runFullExport, runFullBackupZip } from "@/lib/fullExport";
 import { createDemoHousehold } from "@/lib/householdInvites";
 import { useCurrentRole } from "@/lib/useCurrentRole";
@@ -44,6 +45,7 @@ function SettingsPage() {
   const [generatingEstateDoc, setGeneratingEstateDoc] = useState(false);
   const [generatingFullExport, setGeneratingFullExport] = useState(false);
   const [generatingFullBackup, setGeneratingFullBackup] = useState(false);
+  const { data: fxRates } = useFxRates();
 
   const { data: settings } = useQuery({
     queryKey: ["app_settings", activeHouseholdId],
@@ -283,17 +285,54 @@ function SettingsPage() {
       const headerRow = (labels: string[]) =>
         new TableRow({ children: labels.map((l) => cell(l, { bold: true })) });
 
-      const dataRow = (values: string[]) =>
-        new TableRow({ children: values.map((v) => cell(v)) });
+      const dataRow = (values: string[], opts: { bold?: boolean } = {}) =>
+        new TableRow({ children: values.map((v) => cell(v, opts)) });
 
-      const makeTable = (labels: string[], rows: string[][]) => {
+      const makeTable = (labels: string[], rows: string[][], totalRow?: string[]) => {
         const colWidth = Math.floor(PAGE_WIDTH_DXA / labels.length);
         return new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           columnWidths: labels.map(() => colWidth),
-          rows: [headerRow(labels), ...rows.map(dataRow)],
+          rows: [
+            headerRow(labels),
+            ...rows.map((r) => dataRow(r)),
+            ...(totalRow ? [dataRow(totalRow, { bold: true })] : []),
+          ],
         });
       };
+
+      // Every foreign-currency amount in this document is converted to an
+      // SGD equivalent using the same daily-cached rate the rest of the app
+      // uses (see useFxRates) — standard practice for a Singapore asset/
+      // estate summary, where a single total estate value is expected in
+      // home currency. The original entered amount is always shown too, so
+      // nothing is hidden — just supplemented with a converted figure.
+      //
+      // If a rate isn't cached yet for a currency (e.g. brand new
+      // deployment), that item contributes $0 to every total rather than
+      // being silently counted at face value — a wrong-currency total would
+      // be worse than an incomplete one. Every such item is listed by name
+      // in a note at the end of the document so nothing is quietly lost.
+      const excludedForFx = new Set<string>();
+      function toSgd(amount: number | null | undefined, currency: string | null | undefined, label: string): number {
+        const amt = Number(amount) || 0;
+        const cur = currency || "SGD";
+        if (cur === "SGD" || amt === 0) return amt;
+        const converted = convertToSgd(amt, cur, fxRates);
+        if (converted == null) {
+          excludedForFx.add(label);
+          return 0;
+        }
+        return converted;
+      }
+      function fmtMoneyFx(amount: number | null | undefined, currency: string | null | undefined): string {
+        if (amount == null || isNaN(Number(amount))) return "—";
+        const cur = currency || "SGD";
+        const base = fmtMoney(amount, cur);
+        if (cur === "SGD") return base;
+        const sgd = convertToSgd(Number(amount), cur, fxRates);
+        return sgd != null ? `${base} (≈ ${fmtMoney(sgd)})` : `${base} (rate unavailable)`;
+      }
 
       const children: any[] = [];
 
@@ -304,17 +343,23 @@ function SettingsPage() {
       children.push(new Paragraph({ text: "" }));
       children.push(new Paragraph({
         children: [new TextRun({
-          text: "This document is a reference summary of assets and liabilities recorded in FamilyHub SG. It is intended to assist with estate planning discussions and does NOT constitute a legal will or binding instruction. Always consult a qualified lawyer or financial advisor for legal estate planning.",
+          text: "This document is a reference summary of assets and liabilities recorded in FamilyHub SG. It is intended to assist with estate planning discussions and does NOT constitute a legal will or binding instruction. Always consult a qualified lawyer or financial advisor for legal estate planning. Foreign-currency amounts are converted to SGD using the most recently cached daily exchange rate — a reference estimate, not a valuation.",
           italics: true, color: "999999",
         })],
       }));
       children.push(new Paragraph({ text: "" }));
 
-      const totalAssetsVal = properties.reduce((s: number, p: any) => s + (Number(p.current_value) || 0), 0)
-        + investments.reduce((s: number, i: any) => s + (Number(i.current_value) || 0), 0)
-        + savings.reduce((s: number, a: any) => s + (Number(a.balance) || 0), 0)
-        + otherAssets.reduce((s: number, a: any) => s + (Number(a.estimated_value) || 0), 0);
-      const totalLiabilitiesVal = loans.reduce((s: number, l: any) => s + (Number(l.balance) || 0), 0);
+      // Matches the same asset/liability definitions used on the dashboard's
+      // Net Worth Breakdown — including insurance SURRENDER value (the cash
+      // value if cancelled today) as an asset, not sum assured (a payout/
+      // coverage amount, not counted toward net worth anywhere in this app).
+      const totalAssetsVal =
+        properties.reduce((s: number, p: any) => s + toSgd(p.current_value, p.currency, `${ownerLabel(p.member_id)} — ${p.name ?? "Property"}`), 0) +
+        investments.reduce((s: number, i: any) => s + toSgd(i.current_value, i.currency, `${ownerLabel(i.member_id)} — ${i.name ?? "Investment"}`), 0) +
+        savings.reduce((s: number, a: any) => s + toSgd(a.balance, a.currency, `${ownerLabel(a.member_id)} — ${a.institution ?? "Savings"}`), 0) +
+        otherAssets.reduce((s: number, a: any) => s + toSgd(a.estimated_value, a.currency, `${ownerLabel(a.member_id)} — ${a.name ?? "Other asset"}`), 0) +
+        insurance.reduce((s: number, p: any) => s + toSgd(p.surrender_value, p.currency, `${ownerLabel(p.member_id)} — ${p.name ?? "Insurance"} (surrender value)`), 0);
+      const totalLiabilitiesVal = loans.reduce((s: number, l: any) => s + toSgd(l.balance, l.currency, `${ownerLabel(l.member_id)} — ${l.bank ?? "Loan"}`), 0);
 
       children.push(new Paragraph({ text: "Household Summary", heading: HeadingLevel.HEADING_1 }));
       children.push(makeTable(
@@ -340,11 +385,29 @@ function SettingsPage() {
 
         children.push(new Paragraph({ text: label, heading: HeadingLevel.HEADING_1 }));
 
+        const ownAssetsSgd =
+          ownProps.reduce((s: number, p: any) => s + toSgd(p.current_value, p.currency, `${label} — ${p.name ?? "Property"}`), 0) +
+          ownInv.reduce((s: number, i: any) => s + toSgd(i.current_value, i.currency, `${label} — ${i.name ?? "Investment"}`), 0) +
+          ownSav.reduce((s: number, a: any) => s + toSgd(a.balance, a.currency, `${label} — ${a.institution ?? "Savings"}`), 0) +
+          ownOther.reduce((s: number, a: any) => s + toSgd(a.estimated_value, a.currency, `${label} — ${a.name ?? "Other asset"}`), 0) +
+          ownIns.reduce((s: number, p: any) => s + toSgd(p.surrender_value, p.currency, `${label} — ${p.name ?? "Insurance"} (surrender value)`), 0);
+        const ownLiabilitiesSgd = ownLoans.reduce((s: number, l: any) => s + toSgd(l.balance, l.currency, `${label} — ${l.bank ?? "Loan"}`), 0);
+        children.push(makeTable(
+          ["", "Amount (SGD)"],
+          [
+            ["Total assets", fmtMoney(ownAssetsSgd)],
+            ["Total liabilities", fmtMoney(ownLiabilitiesSgd)],
+            ["Net worth", fmtMoney(ownAssetsSgd - ownLiabilitiesSgd)],
+          ],
+        ));
+        children.push(new Paragraph({ text: "" }));
+
         if (ownProps.length) {
           children.push(new Paragraph({ text: "Properties", heading: HeadingLevel.HEADING_2 }));
           children.push(makeTable(
             ["Name", "Current value", "Beneficiary / intended for"],
-            ownProps.map((p: any) => [p.name ?? "—", fmtMoney(p.current_value, p.currency), p.beneficiary || "—"]),
+            ownProps.map((p: any) => [p.name ?? "—", fmtMoneyFx(p.current_value, p.currency), p.beneficiary || "—"]),
+            ["Total", fmtMoney(ownProps.reduce((s: number, p: any) => s + toSgd(p.current_value, p.currency, `${label} — ${p.name ?? "Property"}`), 0)), ""],
           ));
           children.push(new Paragraph({ text: "" }));
         }
@@ -352,7 +415,8 @@ function SettingsPage() {
           children.push(new Paragraph({ text: "Investments", heading: HeadingLevel.HEADING_2 }));
           children.push(makeTable(
             ["Name", "Type", "Current value"],
-            ownInv.map((i: any) => [i.name ?? "—", i.group_name ?? "—", fmtMoney(i.current_value)]),
+            ownInv.map((i: any) => [i.name ?? "—", i.group_name ?? "—", fmtMoneyFx(i.current_value, i.currency)]),
+            ["Total", "", fmtMoney(ownInv.reduce((s: number, i: any) => s + toSgd(i.current_value, i.currency, `${label} — ${i.name ?? "Investment"}`), 0))],
           ));
           children.push(new Paragraph({ text: "" }));
         }
@@ -360,7 +424,8 @@ function SettingsPage() {
           children.push(new Paragraph({ text: "Savings & CPF", heading: HeadingLevel.HEADING_2 }));
           children.push(makeTable(
             ["Institution", "Account type", "Balance"],
-            ownSav.map((a: any) => [a.institution ?? "—", a.account_type ?? "—", fmtMoney(a.balance)]),
+            ownSav.map((a: any) => [a.institution ?? "—", a.account_type ?? "—", fmtMoneyFx(a.balance, a.currency)]),
+            ["Total", "", fmtMoney(ownSav.reduce((s: number, a: any) => s + toSgd(a.balance, a.currency, `${label} — ${a.institution ?? "Savings"}`), 0))],
           ));
           children.push(new Paragraph({ text: "" }));
         }
@@ -368,26 +433,46 @@ function SettingsPage() {
           children.push(new Paragraph({ text: "Other Assets", heading: HeadingLevel.HEADING_2 }));
           children.push(makeTable(
             ["Name", "Category", "Estimated value"],
-            ownOther.map((a: any) => [a.name ?? "—", a.category ?? "—", fmtMoney(a.estimated_value)]),
+            ownOther.map((a: any) => [a.name ?? "—", a.category ?? "—", fmtMoneyFx(a.estimated_value, a.currency)]),
+            ["Total", "", fmtMoney(ownOther.reduce((s: number, a: any) => s + toSgd(a.estimated_value, a.currency, `${label} — ${a.name ?? "Other asset"}`), 0))],
           ));
           children.push(new Paragraph({ text: "" }));
         }
         if (ownIns.length) {
           children.push(new Paragraph({ text: "Insurance Policies", heading: HeadingLevel.HEADING_2 }));
           children.push(makeTable(
-            ["Policy", "Provider", "Sum assured", "Beneficiary"],
-            ownIns.map((p: any) => [p.name ?? "—", p.provider || "—", fmtMoney(p.sum_assured, p.currency), p.beneficiary || "—"]),
+            ["Policy", "Provider", "Sum assured", "Surrender value", "Beneficiary"],
+            ownIns.map((p: any) => [p.name ?? "—", p.provider || "—", fmtMoneyFx(p.sum_assured, p.currency), fmtMoneyFx(p.surrender_value, p.currency), p.beneficiary || "—"]),
+            ["Total", "", "", fmtMoney(ownIns.reduce((s: number, p: any) => s + toSgd(p.surrender_value, p.currency, `${label} — ${p.name ?? "Insurance"} (surrender value)`), 0)), ""],
           ));
+          children.push(new Paragraph({ text: "" }));
+          children.push(new Paragraph({
+            children: [new TextRun({
+              text: "Sum assured is the policy's payout/coverage amount and is not included in the Net Worth total above. Surrender value — the cash value if the policy were cancelled today — is what counts toward Net Worth, consistent with the dashboard.",
+              italics: true, color: "999999", size: 16,
+            })],
+          }));
           children.push(new Paragraph({ text: "" }));
         }
         if (ownLoans.length) {
           children.push(new Paragraph({ text: "Liabilities (Loans)", heading: HeadingLevel.HEADING_2 }));
           children.push(makeTable(
             ["Bank", "Purpose", "Outstanding balance"],
-            ownLoans.map((l: any) => [l.bank ?? "—", l.purpose || "—", fmtMoney(l.balance)]),
+            ownLoans.map((l: any) => [l.bank ?? "—", l.purpose || "—", fmtMoneyFx(l.balance, l.currency)]),
+            ["Total", "", fmtMoney(ownLoans.reduce((s: number, l: any) => s + toSgd(l.balance, l.currency, `${label} — ${l.bank ?? "Loan"}`), 0))],
           ));
           children.push(new Paragraph({ text: "" }));
         }
+      }
+
+      if (excludedForFx.size > 0) {
+        children.push(new Paragraph({ text: "" }));
+        children.push(new Paragraph({
+          children: [new TextRun({
+            text: `Note: no cached exchange rate was available for the following item(s), so they are shown at their original amount only and contribute $0 to every SGD total above (never counted at face value in the wrong currency): ${Array.from(excludedForFx).join("; ")}.`,
+            italics: true, color: "999999", size: 16,
+          })],
+        }));
       }
 
       const doc = new Document({
