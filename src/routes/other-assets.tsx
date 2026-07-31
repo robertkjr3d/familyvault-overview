@@ -19,6 +19,7 @@ import { DocumentsList } from "@/components/DocumentsList";
 import { ReminderButton } from "@/components/ReminderButton";
 import { RemindersList } from "@/components/RemindersList";
 import { useEntityCounts } from "@/lib/useEntityCounts";
+import { useFxRates } from "@/hooks/useFxRates";
 
 export const Route = createFileRoute("/other-assets")({
   component: OtherAssetsPage,
@@ -31,6 +32,7 @@ function OtherAssetsPage() {
   const status = useStatusMutation("other_assets", "other_assets");
   const del = useDeleteMutation("other_assets", "other_assets", "other_asset");
   const counts = useEntityCounts("other_asset", activeHouseholdId);
+  const { data: fxRates } = useFxRates();
 
   const { data: items = [] } = useQuery({
     queryKey: ["other_assets", memberFilter, activeHouseholdId],
@@ -82,7 +84,7 @@ function OtherAssetsPage() {
               <span className="text-muted-foreground">Total estimated value</span>
               <span className="font-bold">{fmtMoney(totalValue)} <span className="text-xs font-normal text-muted-foreground">(est.)</span></span>
             </div>
-            <ForeignCurrencyTotals foreign={valueTotals.foreign} />
+            <ForeignCurrencyTotals foreign={valueTotals.foreign} fx={fxRates} />
             <p className="mt-1 text-[11px] text-muted-foreground">Values are manually entered estimates. Check "Value as of" dates.</p>
           </div>
         </>
