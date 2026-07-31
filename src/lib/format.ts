@@ -41,6 +41,27 @@ export function groupByCurrency<T extends { currency?: string | null }>(
   return { sgd, foreign };
 }
 
+// FX conversion — rates are cached once a day via a Cloudflare Cron Trigger
+// into the fx_rates table (base SGD: rates[currency] = how many units of
+// that currency equal 1 SGD, e.g. rates.USD = 0.74). See
+// src/hooks/useFxRates.ts for the read side and src/lib/fxRateCron.ts for
+// the write side. Never calls the FX provider directly from here.
+export type FxRates = { rateDate: string; rates: Record<string, number> };
+
+// Returns null (never throws) when there's no cached rate for this currency
+// yet — every caller must treat that as "just show the foreign amount on
+// its own", not as an error to surface to the user.
+export function convertToSgd(
+  amount: number,
+  currency: string,
+  fx: FxRates | null | undefined,
+): number | null {
+  if (!fx) return null;
+  const rate = fx.rates[currency];
+  if (!rate || !isFinite(rate) || rate <= 0) return null;
+  return amount / rate;
+}
+
 export function fmtPct(n: number | null | undefined) {
   if (n == null || isNaN(Number(n))) return "—";
   return `${Number(n).toFixed(2)}%`;
