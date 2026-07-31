@@ -9,7 +9,8 @@ import { MemberFilterBar } from "@/components/MemberFilterBar";
 import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
 import { sortByStatus } from "@/lib/sort";
-import { fmtMoney, fmtDate, groupByCurrency } from "@/lib/format";
+import { fmtMoney, fmtDate, groupByCurrency, totalWithFx } from "@/lib/format";
+import { FxInfoNote } from "@/components/FxInfoNote";
 import { ForeignCurrencyTotals } from "@/components/ForeignCurrencyTotals";
 import { HashHighlight } from "@/components/HashHighlight";
 import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
@@ -57,7 +58,7 @@ function InsurancePage() {
     const mult = f.includes("month") ? 12 : f.includes("quart") ? 4 : f.includes("semi") ? 2 : 1;
     return Number(i.premium) * mult;
   });
-  const totalAnnual = annualTotals.sgd;
+  const totalAnnual = totalWithFx(annualTotals, fxRates);
 
   const presentCategories = new Set(items.map((i: any) => i.category));
   const categories = INSURANCE_CATEGORIES.filter((c) => presentCategories.has(c));
@@ -71,6 +72,7 @@ function InsurancePage() {
       <h1 className="text-2xl font-bold tracking-tight">Insurance</h1>
       <p className="text-xs text-muted-foreground">
         {items.length} policies · {fmtMoney(totalAnnual)} / year total
+        {annualTotals.foreign.length > 0 && <FxInfoNote fx={fxRates} />}
       </p>
       <ForeignCurrencyTotals foreign={annualTotals.foreign} fx={fxRates} />
       <MemberFilterBar table="insurance_policies" />
