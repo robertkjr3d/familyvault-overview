@@ -8,7 +8,7 @@ import { MemberFilterBar } from "@/components/MemberFilterBar";
 import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
 import { sortByStatus } from "@/lib/sort";
-import { fmtMoney, fmtDate, fmtPct } from "@/lib/format";
+import { fmtMoney, fmtDate, fmtPct, groupByCurrency } from "@/lib/format";
 import { useState } from "react";
 import { differenceInDays, parseISO } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,8 @@ import { HistoryLog } from "@/components/HistoryLog";
 import { DocumentsList } from "@/components/DocumentsList";
 import { HashHighlight } from "@/components/HashHighlight";
 import { useEntityCounts } from "@/lib/useEntityCounts";
+import { ForeignCurrencyTotals } from "@/components/ForeignCurrencyTotals";
+import { useFxRates } from "@/hooks/useFxRates";
 
 export const Route = createFileRoute("/savings")({
   component: SavingsPage,
@@ -94,6 +96,7 @@ function SavingsPage() {
   const status = useStatusMutation("savings_accounts", "savings");
   const del = useDeleteMutation("savings_accounts", "savings", "savings");
   const counts = useEntityCounts("savings", activeHouseholdId);
+  const { data: fxRates } = useFxRates();
 
   const { data: items = [] } = useQuery({
     queryKey: ["savings", memberFilter, activeHouseholdId],
@@ -109,6 +112,7 @@ function SavingsPage() {
   });
 
   const groups = Array.from(new Set(items.map((i: any) => i.account_type || "Other"))).sort((a, b) => groupRank(a) - groupRank(b));
+  const balanceTotals = groupByCurrency(items, (i: any) => i.balance);
 
   return (
     <div className="space-y-4">
@@ -132,6 +136,15 @@ function SavingsPage() {
           </div>
         </section>
       ))}
+      {items.length > 0 && (
+        <div className="rounded-2xl border border-border bg-card p-4 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Total balance</span>
+            <span className="font-bold">{fmtMoney(balanceTotals.sgd)}</span>
+          </div>
+          <ForeignCurrencyTotals foreign={balanceTotals.foreign} fx={fxRates} />
+        </div>
+      )}
       <AddRecordFab configKey="savings_accounts" />
     </div>
   );
