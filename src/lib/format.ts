@@ -51,12 +51,15 @@ export type FxRates = { rateDate: string; rates: Record<string, number> };
 
 // Returns null (never throws) when there's no cached rate for this currency
 // yet — every caller must treat that as "just show the foreign amount on
-// its own", not as an error to surface to the user.
+// its own", not as an error to surface to the user. Handles "SGD" directly
+// (returns the amount unchanged) rather than requiring every caller to
+// guard for that themselves.
 export function convertToSgd(
   amount: number,
   currency: string,
   fx: FxRates | null | undefined,
 ): number | null {
+  if (currency === "SGD") return amount;
   if (!fx) return null;
   const rate = fx.rates[currency];
   if (!rate || !isFinite(rate) || rate <= 0) return null;
