@@ -8,7 +8,8 @@ import { MemberFilterBar } from "@/components/MemberFilterBar";
 import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
 import { sortByStatus } from "@/lib/sort";
-import { fmtMoney, fmtDate, fmtPct, groupByCurrency } from "@/lib/format";
+import { fmtMoney, fmtDate, fmtPct, groupByCurrency, totalWithFx } from "@/lib/format";
+import { FxInfoNote } from "@/components/FxInfoNote";
 import { useState } from "react";
 import { differenceInDays, parseISO } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -112,7 +113,10 @@ function SavingsPage() {
   });
 
   const groups = Array.from(new Set(items.map((i: any) => i.account_type || "Other"))).sort((a, b) => groupRank(a) - groupRank(b));
-  const balanceTotals = groupByCurrency(items, (i: any) => i.balance);
+  const cpfItems = items.filter((i: any) => isCpfAccountType(i.account_type));
+  const liquidItems = items.filter((i: any) => !isCpfAccountType(i.account_type));
+  const liquidTotals = groupByCurrency(liquidItems, (i: any) => i.balance);
+  const cpfTotals = groupByCurrency(cpfItems, (i: any) => i.balance);
 
   return (
     <div className="space-y-4">
@@ -137,12 +141,33 @@ function SavingsPage() {
         </section>
       ))}
       {items.length > 0 && (
-        <div className="rounded-2xl border border-border bg-card p-4 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Total balance</span>
-            <span className="font-bold">{fmtMoney(balanceTotals.sgd)}</span>
-          </div>
-          <ForeignCurrencyTotals foreign={balanceTotals.foreign} fx={fxRates} />
+        <div className="space-y-3">
+          {liquidItems.length > 0 && (
+            <div className="rounded-2xl border border-border bg-card p-4 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">
+                  Total liquid savings
+                  {liquidTotals.foreign.length > 0 && <FxInfoNote fx={fxRates} />}
+                </span>
+                <span className="font-bold">{fmtMoney(totalWithFx(liquidTotals, fxRates))}</span>
+              </div>
+              <ForeignCurrencyTotals foreign={liquidTotals.foreign} fx={fxRates} />
+            </div>
+          )}
+          {cpfItems.length > 0 && (
+            <div className="rounded-2xl border border-border bg-card p-4 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">
+                  Total CPF{cpfTotals.foreign.length > 0 && <FxInfoNote fx={fxRates} />}
+                </span>
+                <span className="font-bold">{fmtMoney(totalWithFx(cpfTotals, fxRates))}</span>
+              </div>
+              <ForeignCurrencyTotals foreign={cpfTotals.foreign} fx={fxRates} />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                CPF funds are not freely accessible like other savings — kept as a separate total.
+              </p>
+            </div>
+          )}
         </div>
       )}
       <AddRecordFab configKey="savings_accounts" />
