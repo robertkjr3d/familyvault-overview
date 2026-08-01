@@ -9,7 +9,10 @@ import { MemberFilterBar } from "@/components/MemberFilterBar";
 import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
 import { sortByStatus } from "@/lib/sort";
-import { fmtMoney, fmtDate, fmtMonth, fmtPct } from "@/lib/format";
+import { fmtMoney, fmtDate, fmtMonth, fmtPct, groupByCurrency, totalWithFx } from "@/lib/format";
+import { useFxRates } from "@/hooks/useFxRates";
+import { ForeignCurrencyTotals } from "@/components/ForeignCurrencyTotals";
+import { FxInfoNote } from "@/components/FxInfoNote";
 import { HashHighlight } from "@/components/HashHighlight";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { NotesEditor } from "@/components/NotesEditor";
@@ -35,6 +38,7 @@ function LoansPage() {
   const del = useDeleteMutation("loans", "loans", "loan");
   const { today } = useToday();
   const counts = useEntityCounts("loan", activeHouseholdId);
+  const { data: fxRates } = useFxRates();
 
   const { data: loans = [] } = useQuery({
     queryKey: ["loans", memberFilter, activeHouseholdId],
@@ -48,6 +52,8 @@ function LoansPage() {
       return data ?? [];
     },
   });
+
+  const balanceTotals = groupByCurrency(loans, (l: any) => l.balance);
 
   return (
     <div className="space-y-4">
@@ -67,6 +73,22 @@ function LoansPage() {
           />
         ))}
       </div>
+      {loans.length > 0 && (
+        <div className="rounded-2xl border border-urgent/40 bg-urgent-soft/20 p-4 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">
+              Total owed{balanceTotals.foreign.length > 0 && <FxInfoNote fx={fxRates} />}
+            </span>
+            <span className="font-bold text-urgent">
+              −{fmtMoney(totalWithFx(balanceTotals, fxRates))}
+            </span>
+          </div>
+          <ForeignCurrencyTotals foreign={balanceTotals.foreign} fx={fxRates} />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            This is a liability — it's subtracted from, not added to, your other totals.
+          </p>
+        </div>
+      )}
       <AddRecordFab configKey="loans" />
     </div>
   );
