@@ -10,7 +10,10 @@ import { MemberFilterBar } from "@/components/MemberFilterBar";
 import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
 import { sortByStatus } from "@/lib/sort";
-import { fmtMoney, fmtDate, fmtPct } from "@/lib/format";
+import { fmtMoney, fmtDate, fmtPct, groupByCurrency, totalWithFx } from "@/lib/format";
+import { useFxRates } from "@/hooks/useFxRates";
+import { ForeignCurrencyTotals } from "@/components/ForeignCurrencyTotals";
+import { FxInfoNote } from "@/components/FxInfoNote";
 import { HashHighlight } from "@/components/HashHighlight";
 import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
 import { PROPERTY_PURPOSE_LABEL } from "@/lib/options";
@@ -83,6 +86,17 @@ function PropertyPage() {
 
   const investments = properties.filter((p: any) => p.purpose !== "own_home");
   const homes = properties.filter((p: any) => p.purpose === "own_home");
+  const { data: fxRates } = useFxRates();
+  // Net of mortgage uses each property's own mortgage_balance field (same
+  // currency as the property, always in the same record) — not the Loans
+  // tab's balance for a linked loan, since that's a separate manually-
+  // entered number that could drift from this one. This matches what this
+  // page's own "Loan vs Value %" figure already uses per property.
+  const grossTotals = groupByCurrency(properties, (p: any) => p.current_value);
+  const netTotals = groupByCurrency(
+    properties,
+    (p: any) => (Number(p.current_value) || 0) - (Number(p.mortgage_balance) || 0),
+  );
 
   return (
     <div className="space-y-4">
@@ -122,6 +136,27 @@ function PropertyPage() {
             ))}
           </div>
         </details>
+      )}
+      {properties.length > 0 && (
+        <div className="rounded-2xl border border-border bg-card p-4 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">
+              Total gross value{grossTotals.foreign.length > 0 && <FxInfoNote fx={fxRates} />}
+            </span>
+            <span className="font-bold">{fmtMoney(totalWithFx(grossTotals, fxRates))}</span>
+          </div>
+          <ForeignCurrencyTotals foreign={grossTotals.foreign} fx={fxRates} />
+          <div className="mt-2 flex justify-between">
+            <span className="text-muted-foreground">
+              Net of mortgage{netTotals.foreign.length > 0 && <FxInfoNote fx={fxRates} />}
+            </span>
+            <span className="font-bold">{fmtMoney(totalWithFx(netTotals, fxRates))}</span>
+          </div>
+          <ForeignCurrencyTotals foreign={netTotals.foreign} fx={fxRates} />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Net of mortgage uses each property's own "Mortgage" balance field — update it there to keep this accurate.
+          </p>
+        </div>
       )}
       <AddRecordFab configKey="properties" />
     </div>
