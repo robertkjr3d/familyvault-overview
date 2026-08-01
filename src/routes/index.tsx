@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToday } from "@/lib/today";
 import { fmtMoney, fmtDate, fmtMonth } from "@/lib/format";
+import { isCpfAccountType } from "@/lib/options";
 import { MemberFilterBar } from "@/components/MemberFilterBar";
 import { MemberTag } from "@/components/MemberTag";
 import { StatusBadge } from "@/components/StatusToggle";
@@ -252,6 +253,12 @@ queryClient.invalidateQueries({ queryKey: ["app_settings", activeHouseholdId] })
 const propertyValue = sgdProperties.reduce((s: number, p: any) => s + (Number(p.current_value) || 0), 0);
 const investmentsValue = sgdInvestments.reduce((s: number, i: any) => s + (Number(i.current_value) || 0), 0);
 const savingsValue = sgdSavings.reduce((s: number, a: any) => s + (Number(a.balance) || 0), 0);
+// Split purely for the Net Worth Breakdown display below — savingsValue itself
+// (used in totalAssets and the Emergency Fund check) is unchanged and still
+// the combined figure. liquidSavingsValue + cpfValue always equals
+// savingsValue exactly, since both come from the same sgdSavings array.
+const liquidSavingsValue = sgdSavings.reduce((s: number, a: any) => s + (isCpfAccountType(a.account_type) ? 0 : Number(a.balance) || 0), 0);
+const cpfValue = sgdSavings.reduce((s: number, a: any) => s + (isCpfAccountType(a.account_type) ? Number(a.balance) || 0 : 0), 0);
 const otherAssetsValue = sgdOtherAssets.reduce((s: number, a: any) => s + (Number(a.estimated_value) || 0), 0);
 // Surrender value of insurance policies (e.g. savings/endowment plans) — treated as a
 // static asset value, same convention as savings balances. Not grown over time in the
@@ -565,7 +572,8 @@ return (
       <div className="space-y-1 border-t border-border/40 px-4 pb-4 pt-3 text-sm">
         <BreakdownRow label="Properties" value={fmtMoney(propertyValue)} />
         <BreakdownRow label="Investments" value={fmtMoney(investmentsValue)} />
-        <BreakdownRow label="Savings & CPF" value={fmtMoney(savingsValue)} />
+        <BreakdownRow label="Savings" value={fmtMoney(liquidSavingsValue)} />
+        <BreakdownRow label="CPF" value={fmtMoney(cpfValue)} />
         <BreakdownRow label="Insurance (surrender value)" value={fmtMoney(insuranceSurrenderValue)} />
         <BreakdownRow label="Other Assets" value={fmtMoney(otherAssetsValue)} />
         <div className="my-2 border-t border-dashed border-border" />
