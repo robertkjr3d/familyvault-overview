@@ -8,7 +8,8 @@ import { MemberFilterBar } from "@/components/MemberFilterBar";
 import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
 import { sortByStatus } from "@/lib/sort";
-import { fmtMoney, fmtDate, groupByCurrency } from "@/lib/format";
+import { fmtMoney, fmtDate, groupByCurrency, totalWithFx } from "@/lib/format";
+import { FxInfoNote } from "@/components/FxInfoNote";
 import { ForeignCurrencyTotals } from "@/components/ForeignCurrencyTotals";
 import { HashHighlight } from "@/components/HashHighlight";
 import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
@@ -49,7 +50,7 @@ function OtherAssetsPage() {
 
   const groups = Array.from(new Set(items.map((i: any) => i.category)));
   const valueTotals = groupByCurrency(items, (i: any) => i.estimated_value);
-  const totalValue = valueTotals.sgd;
+  const totalValue = totalWithFx(valueTotals, fxRates);
 
   return (
     <div className="space-y-4 pb-24">
@@ -81,7 +82,9 @@ function OtherAssetsPage() {
           ))}
           <div className="rounded-2xl border border-border bg-card p-4 text-sm">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Total estimated value</span>
+              <span className="text-muted-foreground">
+                Total estimated value{valueTotals.foreign.length > 0 && <FxInfoNote fx={fxRates} />}
+              </span>
               <span className="font-bold">{fmtMoney(totalValue)} <span className="text-xs font-normal text-muted-foreground">(est.)</span></span>
             </div>
             <ForeignCurrencyTotals foreign={valueTotals.foreign} fx={fxRates} />
