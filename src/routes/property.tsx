@@ -10,7 +10,7 @@ import { MemberFilterBar } from "@/components/MemberFilterBar";
 import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
 import { sortByStatus } from "@/lib/sort";
-import { fmtMoney, fmtDate, fmtPct, groupByCurrency, totalWithFx } from "@/lib/format";
+import { fmtMoney, fmtDate, fmtPct, groupByCurrency, totalWithFx, convertToSgd, type FxRates } from "@/lib/format";
 import { useFxRates } from "@/hooks/useFxRates";
 import { ForeignCurrencyTotals } from "@/components/ForeignCurrencyTotals";
 import { FxInfoNote } from "@/components/FxInfoNote";
@@ -66,7 +66,7 @@ function PropertyPage() {
     enabled: !!activeHouseholdId,
     queryFn: async () => {
       if (!activeHouseholdId) return [];
-      const { data } = await supabase.from("loans").select("id, property_id, monthly_payment, bank").eq("household_id", activeHouseholdId);
+      const { data } = await supabase.from("loans").select("id, property_id, monthly_payment, bank, balance, currency").eq("household_id", activeHouseholdId);
       return data ?? [];
     },
   });
@@ -109,6 +109,7 @@ function PropertyPage() {
             key={p.id}
             p={p}
             loans={loans}
+            fx={fxRates}
             onStatus={(s) => status.mutate({ id: p.id, status: s })}
             onDelete={() => del.mutate(p.id)}
             reminderCount={counts.reminderCounts[p.id] || 0}
@@ -127,6 +128,7 @@ function PropertyPage() {
                 key={p.id}
                 p={p}
                 loans={loans}
+                fx={fxRates}
                 onStatus={(s) => status.mutate({ id: p.id, status: s })}
                 onDelete={() => del.mutate(p.id)}
                 reminderCount={counts.reminderCounts[p.id] || 0}
@@ -173,15 +175,48 @@ function AlertLabel({ text }: { text: string }) {
 }
 
 function PropertyRow({
-  p, loans, onStatus, onDelete, reminderCount, historyCount, documentsCount,
+  p,
+  loans,
+  fx,
+  onStatus,
+  onDelete,
+  reminderCount,
+  historyCount,
+  documentsCount,
 }: {
-  p: any; loans: any[]; onStatus: (s: any) => void; onDelete: () => void;
-  reminderCount: number; historyCount: number; documentsCount: number;
+  p: any;
+  loans: any[];
+  fx?: FxRates | null;
+  onStatus: (s: any) => void;
+  onDelete: () => void;
+  reminderCount: number;
+  historyCount: number;
+  documentsCount: number;
 }) {
   const edit = useEditRecord("properties", p);
   const dup = useDuplicateRecord("properties", p);
   const linkedLoan = loans.find((l: any) => l.property_id === p.id);
-  const hasMismatch = linkedLoan && Number(linkedLoan.monthly_payment) !== Number(p.monthly_payment);
+  const hasMismatch =
+    linkedLoan && Number(linkedLoan.monthly_payment) !== Number(p.monthly_payment);
+  // Compares via SGD-equivalent so this still works correctly even if the
+  // linked loan happens to be entered in a different currency than the
+  // property. If either side's currency has no cached rate yet, this stays
+  // false rather than risk a false "mismatch" warning built on a bad number.
+  const propertyMortgageSgd = convertToSgd(
+    Number(p.mortgage_balance) || 0,
+    p.currency || "SGD",
+    fx,
+  );
+  const loanBalanceSgd = linkedLoan
+    ? convertToSgd(Number(linkedLoan.balance) || 0, linkedLoan.currency || "SGD", fx)
+    : null;
+  const hasBalanceMismatch =
+    linkedLoan != null &&
+    linkedLoan.balance != null &&
+    p.mortgage_balance != null &&
+    propertyMortgageSgd != null &&
+    loanBalanceSgd != null &&
+    Math.round(propertyMortgageSgd) !== Math.round(loanBalanceSgd);
   const costs = totalCosts(p);
   const gainPa = capitalGainPa(p);
   const target = parseTargetPct(p.strategy);
@@ -261,6 +296,11 @@ function PropertyRow({
           {hasMismatch && (
             <div className="rounded-lg border border-review/40 bg-review-soft/30 px-3 py-2 text-xs text-muted-foreground">
               ⚠ Linked loan ({linkedLoan.bank}) has a different monthly payment of {fmtMoney(linkedLoan.monthly_payment, linkedLoan.currency)}. The loan amount is used for cash flow calculations — update one to match.
+            </div>
+          )}
+          {hasBalanceMismatch && (
+            <div className="rounded-lg border border-review/40 bg-review-soft/30 px-3 py-2 text-xs text-muted-foreground">
+              ⚠ Linked loan ({linkedLoan.bank}) shows a balance of {fmtMoney(linkedLoan.balance, linkedLoan.currency)}, which doesn't match this property's Mortgage balance of {fmtMoney(p.mortgage_balance, p.currency)}. This property's "Net of mortgage" total uses the figure above — update one so they agree.
             </div>
           )}
           <FieldRow label="Interest rate" value={fmtPct(p.interest_rate)} />
