@@ -2,7 +2,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToday } from "@/lib/today";
-import { fmtMoney, fmtDate, fmtMonth } from "@/lib/format";
+import { fmtMoney, fmtDate, fmtMonth, groupByCurrency, totalWithFx, type FxRates } from "@/lib/format";
+import { useFxRates } from "@/hooks/useFxRates";
+import { FxInfoNote } from "@/components/FxInfoNote";
 import { isCpfAccountType } from "@/lib/options";
 import { MemberFilterBar } from "@/components/MemberFilterBar";
 import { MemberTag } from "@/components/MemberTag";
@@ -14,7 +16,7 @@ import type { UpcomingItem } from "@/lib/alerts";
 import { freqTimesPerYear, propertyTotalCosts, insuranceMonthly, investmentPremiumMonthly, insurancePayoutMonthly, investmentPayoutMonthly } from "@/lib/lifetimeChartMath";
 import type { LineItem } from "@/lib/lifetimeChartMath";
 import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check, Info, Gem, Heart, Wallet, Package } from "lucide-react";
-import { useState, useRef, useEffect, lazy, Suspense } from "react";
+import { useState, useRef, useEffect, lazy, Suspense, type ReactNode } from "react";
 import { fmtPct } from "@/lib/format";
 import { HashHighlight } from "@/components/HashHighlight";
 import { useMembers } from "@/hooks/useMembers";
@@ -90,6 +92,7 @@ const loansQ = useLoans(activeHouseholdId, gate);
 const insuranceQ = useInsurancePolicies(activeHouseholdId, gate);
 const investmentsQ = useInvestments(activeHouseholdId, gate);
 const savingsQ = useSavingsAccounts(activeHouseholdId, gate);
+const { data: fxRates } = useFxRates();
 const healthQ = useHealthConditions(activeHouseholdId, gate);
 const otherAssetsQ = useOtherAssets(activeHouseholdId, gate);
 const inventoryQ = useInventoryItems(activeHouseholdId, gate);
@@ -174,8 +177,6 @@ const sgdProperties = properties.filter(isSgd);
 const sgdLoans = loans.filter(isSgd);
 const sgdInsurance = insurance.filter(isSgd);
 const sgdInvestments = investments.filter(isSgd);
-const sgdSavings = savings.filter(isSgd);
-const sgdOtherAssets = otherAssets.filter(isSgd);
 
 // Bug fix (July 2026): a reminder set on another member's card (e.g. a
 // loan under Dad's tag) was showing on the dashboard with NO member tag at
@@ -250,24 +251,63 @@ await (supabase as any)
 queryClient.invalidateQueries({ queryKey: ["app_settings", activeHouseholdId] });
 }
 
-const propertyValue = sgdProperties.reduce((s: number, p: any) => s + (Number(p.current_value) || 0), 0);
-const investmentsValue = sgdInvestments.reduce((s: number, i: any) => s + (Number(i.current_value) || 0), 0);
-const savingsValue = sgdSavings.reduce((s: number, a: any) => s + (Number(a.balance) || 0), 0);
-// Split purely for the Net Worth Breakdown display below — savingsValue itself
-// (used in totalAssets and the Emergency Fund check) is unchanged and still
-// the combined figure. liquidSavingsValue + cpfValue always equals
-// savingsValue exactly, since both come from the same sgdSavings array.
-const liquidSavingsValue = sgdSavings.reduce((s: number, a: any) => s + (isCpfAccountType(a.account_type) ? 0 : Number(a.balance) || 0), 0);
-const cpfValue = sgdSavings.reduce((s: number, a: any) => s + (isCpfAccountType(a.account_type) ? Number(a.balance) || 0 : 0), 0);
-const otherAssetsValue = sgdOtherAssets.reduce((s: number, a: any) => s + (Number(a.estimated_value) || 0), 0);
+// Net Worth is FX-inclusive: computed from the FULL arrays (not the sgd*
+// arrays above, which stay SGD-only and are still used for Monthly Cash
+// Flow, deliberately left untouched — see governing notes). Each category
+// uses groupByCurrency + totalWithFx, same pattern as every tab total in
+// the app: foreign amounts are converted using the cached daily rate, and
+// any currency with no cached rate yet contributes $0 rather than being
+// counted at face value in the wrong currency — never silently wrong.
+const propertyTotals = groupByCurrency(properties, (p: any) => p.current_value);
+const investmentTotals = groupByCurrency(investments, (i: any) => i.current_value);
+const otherAssetsTotals = groupByCurrency(otherAssets, (a: any) => a.estimated_value);
+const insuranceSurrenderTotals = groupByCurrency(insurance, (p: any) => p.surrender_value);
+const loanTotals = groupByCurrency(loans, (l: any) => l.balance);
+// Liquid savings and CPF are split from the full savings array so both
+// are independently FX-inclusive — this is also what the Emergency Fund
+// check below reads (liquidSavingsValue), so a foreign-currency liquid
+// savings account now correctly counts toward it, while CPF (in any
+// currency) still correctly never does.
+const liquidSavingsTotals = groupByCurrency(
+  savings.filter((a: any) => !isCpfAccountType(a.account_type)),
+  (a: any) => a.balance,
+);
+const cpfTotals = groupByCurrency(
+  savings.filter((a: any) => isCpfAccountType(a.account_type)),
+  (a: any) => a.balance,
+);
+
+const propertyValue = totalWithFx(propertyTotals, fxRates);
+const investmentsValue = totalWithFx(investmentTotals, fxRates);
+const liquidSavingsValue = totalWithFx(liquidSavingsTotals, fxRates);
+const cpfValue = totalWithFx(cpfTotals, fxRates);
+const savingsValue = liquidSavingsValue + cpfValue;
+const otherAssetsValue = totalWithFx(otherAssetsTotals, fxRates);
 // Surrender value of insurance policies (e.g. savings/endowment plans) — treated as a
 // static asset value, same convention as savings balances. Not grown over time in the
 // lifetime chart since modelling actual surrender value growth would require inputs
 // this app doesn't collect; kept simple and accurate to what's recorded today.
-const insuranceSurrenderValue = sgdInsurance.reduce((s: number, p: any) => s + (Number(p.surrender_value) || 0), 0);
+const insuranceSurrenderValue = totalWithFx(insuranceSurrenderTotals, fxRates);
 const totalAssets = propertyValue + investmentsValue + savingsValue + otherAssetsValue + insuranceSurrenderValue;
-const totalLiabilities = sgdLoans.reduce((s: number, l: any) => s + (Number(l.balance) || 0), 0);
+const totalLiabilities = totalWithFx(loanTotals, fxRates);
 const netWorth = totalAssets - totalLiabilities;
+// Whether the Net Worth KPI's info note (explaining the FX conversion)
+// should show at all — only when at least one category actually has a
+// foreign-currency entry somewhere in the household.
+const netWorthHasForeign =
+  propertyTotals.foreign.length > 0 ||
+  investmentTotals.foreign.length > 0 ||
+  otherAssetsTotals.foreign.length > 0 ||
+  insuranceSurrenderTotals.foreign.length > 0 ||
+  loanTotals.foreign.length > 0 ||
+  liquidSavingsTotals.foreign.length > 0 ||
+  cpfTotals.foreign.length > 0;
+const netWorthSub = netWorthHasForeign ? (
+  <span>
+    Includes foreign currency, converted at today's rate
+    <FxInfoNote fx={fxRates} />
+  </span>
+) : undefined;
 
 const salaryIncome = Number(appSettings?.monthly_income) || 0;
 const rentalIncome = sgdProperties.reduce((s: number, p: any) => s + (Number(p.monthly_rent) || 0), 0);
@@ -452,16 +492,25 @@ const alertCount = urgent.length + review.length + upcomingAlerts.length;
 
 const dueToday = upcoming.find((u) => u.date === today.toISOString().slice(0, 10));
 
-// Asset allocation
-const allocProperty = sgdProperties.reduce((s: number, p: any) => s + (Number(p.current_value) || 0), 0);
-const allocInvestments = sgdInvestments.reduce((s: number, i: any) => s + (Number(i.current_value) || 0), 0);
-const allocCash = sgdSavings.reduce((s: number, a: any) => s + (Number(a.balance) || 0), 0);
+// Asset allocation — same FX-inclusive figures as the Net Worth Breakdown
+// above (allocInsurance was already an alias of insuranceSurrenderValue;
+// these three now follow the same pattern instead of separately
+// re-summing the SGD-only arrays).
+const allocProperty = propertyValue;
+const allocInvestments = investmentsValue;
+const allocCash = savingsValue;
 const allocInsurance = insuranceSurrenderValue;
 const allocTotal = allocProperty + allocInvestments + allocCash + allocInsurance;
 const allocPctProperty = allocTotal > 0 ? (allocProperty / allocTotal) * 100 : 0;
 const allocPctInvestments = allocTotal > 0 ? (allocInvestments / allocTotal) * 100 : 0;
 const allocPctCash = allocTotal > 0 ? (allocCash / allocTotal) * 100 : 0;
 const allocPctInsurance = allocTotal > 0 ? (allocInsurance / allocTotal) * 100 : 0;
+const allocHasForeign =
+  propertyTotals.foreign.length > 0 ||
+  investmentTotals.foreign.length > 0 ||
+  liquidSavingsTotals.foreign.length > 0 ||
+  cpfTotals.foreign.length > 0 ||
+  insuranceSurrenderTotals.foreign.length > 0;
 
 // Insurance adequacy
 const activeInsurance = sgdInsurance.filter((p: any) => p.status !== "inactive");
@@ -534,7 +583,7 @@ return (
   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
     <Kpi label="Total Assets" value={fmtMoney(totalAssets)} />
     <Kpi label="Total Liabilities" value={fmtMoney(totalLiabilities)} />
-    <Kpi label="Net Worth" value={fmtMoney(netWorth)} accent="gold" big sub="SGD only · foreign currency excluded" />
+    <Kpi label="Net Worth" value={fmtMoney(netWorth)} accent="gold" big sub={netWorthSub} />
     <button
       type="button"
       onClick={() => window.dispatchEvent(new CustomEvent("fh:open-alerts"))}
@@ -568,7 +617,9 @@ return (
       onClick={() => setBreakdownOpen((v) => !v)}
       className="flex w-full items-center justify-between p-4 text-left"
     >
-      <h2 className="text-sm font-bold">Net Worth Breakdown</h2>
+      <h2 className="text-sm font-bold">
+        Net Worth Breakdown{netWorthHasForeign && <FxInfoNote fx={fxRates} />}
+      </h2>
       <ChevronDown className={`h-4 w-4 transition ${breakdownOpen ? "rotate-180" : ""}`} />
     </button>
     {breakdownOpen && (
@@ -777,6 +828,8 @@ return (
     allocPctInvestments={allocPctInvestments}
     allocPctCash={allocPctCash}
     allocPctInsurance={allocPctInsurance}
+    hasForeign={allocHasForeign}
+    fx={fxRates}
   />
 
   {/* INSURANCE ADEQUACY */}
@@ -855,7 +908,7 @@ return (
 );
 }
 
-function Kpi({ label, value, accent, big, sub }: { label: string; value: string; accent?: "good" | "bad" | "neutral" | "gold"; big?: boolean; sub?: string }) {
+function Kpi({ label, value, accent, big, sub }: { label: string; value: string; accent?: "good" | "bad" | "neutral" | "gold"; big?: boolean; sub?: ReactNode }) {
 const valueColor = accent === "good" ? "text-settled" : accent === "bad" ? "text-urgent" : accent === "gold" ? "text-primary" : "";
 const borderTop = accent === "bad" ? "bg-urgent-soft/30 border-urgent/30" : accent === "gold" ? "border-primary/40" : "";
 return (
@@ -980,9 +1033,11 @@ return null;
 function AssetAllocationCard({
 allocProperty, allocInvestments, allocCash, allocInsurance, allocTotal,
 allocPctProperty, allocPctInvestments, allocPctCash, allocPctInsurance,
+hasForeign, fx,
 }: {
 allocProperty: number; allocInvestments: number; allocCash: number; allocInsurance: number; allocTotal: number;
 allocPctProperty: number; allocPctInvestments: number; allocPctCash: number; allocPctInsurance: number;
+hasForeign: boolean; fx?: FxRates | null;
 }) {
 const isEmpty = allocTotal === 0;
 const segments = [
@@ -997,7 +1052,16 @@ return (
 <section className="rounded-2xl border border-border bg-card p-4">
 <div className="mb-3 flex items-center justify-between">
 <h2 className="text-sm font-bold">Asset Allocation</h2>
-<span className="text-xs text-muted-foreground">SGD assets only</span>
+<span className="flex items-center text-xs text-muted-foreground">
+  {hasForeign ? (
+    <>
+      Includes converted foreign currency
+      <FxInfoNote fx={fx} />
+    </>
+  ) : (
+    "SGD"
+  )}
+</span>
 </div>
 {isEmpty ? (
 <p className="py-2 text-xs text-muted-foreground">No asset values recorded yet. Add properties, investments, or savings to see your allocation.</p>
