@@ -213,7 +213,7 @@ export function LifetimeChart({
       )}
       {hasForeignExcluded && (
         <p className="rounded-lg bg-review-soft/40 px-3 py-2 text-xs text-muted-foreground">
-          ⚠ Some {joinWithAnd(excludedCategories)} {excludedCategories.length === 1 ? "is" : "are"} in foreign currency and excluded from this projection. Only SGD assets/liabilities are modelled.
+          ⚠ Some {joinWithAnd(excludedCategories)} {excludedCategories.length === 1 ? "is" : "are"} in foreign currency. {excludedCategories.length === 1 ? "It's" : "They're"} included in your starting net worth above at today's converted rate, but this projection doesn't model future growth, shrinkage, or paydown for them — held at a flat converted value for every year shown.
         </p>
       )}
       {!hasIncome && (
@@ -291,7 +291,7 @@ export function LifetimeChart({
         shortfallYear={shortfallYear?.year ?? null}
       />
       <p className="text-[10px] text-muted-foreground">
-        Projection only · inflation-adjusted expenses · property &amp; investment growth modelled at assumed rates · foreign currency excluded · not financial advice
+        Projection only · inflation-adjusted expenses · property &amp; investment growth modelled at assumed rates · foreign currency included at today's converted rate, not modelled to grow · not financial advice
       </p>
     </div>
   );
