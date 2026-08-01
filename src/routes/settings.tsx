@@ -7,6 +7,7 @@ import { useMembers } from "@/hooks/useMembers";
 import { useAppStore } from "@/lib/store";
 import { Trash2 } from "lucide-react";
 import { fmtMoney, convertToSgd } from "@/lib/format";
+import { isCpfAccountType } from "@/lib/options";
 import { useFxRates } from "@/hooks/useFxRates";
 import { runFullExport, runFullBackupZip } from "@/lib/fullExport";
 import { createDemoHousehold } from "@/lib/householdInvites";
@@ -421,13 +422,58 @@ function SettingsPage() {
           children.push(new Paragraph({ text: "" }));
         }
         if (ownSav.length) {
-          children.push(new Paragraph({ text: "Savings & CPF", heading: HeadingLevel.HEADING_2 }));
-          children.push(makeTable(
-            ["Institution", "Account type", "Balance"],
-            ownSav.map((a: any) => [a.institution ?? "—", a.account_type ?? "—", fmtMoneyFx(a.balance, a.currency)]),
-            ["Total", "", fmtMoney(ownSav.reduce((s: number, a: any) => s + toSgd(a.balance, a.currency, `${label} — ${a.institution ?? "Savings"}`), 0))],
-          ));
-          children.push(new Paragraph({ text: "" }));
+          const ownLiquidSav = ownSav.filter((a: any) => !isCpfAccountType(a.account_type));
+          const ownCpfSav = ownSav.filter((a: any) => isCpfAccountType(a.account_type));
+          if (ownLiquidSav.length) {
+            children.push(new Paragraph({ text: "Savings", heading: HeadingLevel.HEADING_2 }));
+            children.push(
+              makeTable(
+                ["Institution", "Account type", "Balance"],
+                ownLiquidSav.map((a: any) => [
+                  a.institution ?? "—",
+                  a.account_type ?? "—",
+                  fmtMoneyFx(a.balance, a.currency),
+                ]),
+                [
+                  "Total",
+                  "",
+                  fmtMoney(
+                    ownLiquidSav.reduce(
+                      (s: number, a: any) =>
+                        s + toSgd(a.balance, a.currency, `${label} — ${a.institution ?? "Savings"}`),
+                      0,
+                    ),
+                  ),
+                ],
+              ),
+            );
+            children.push(new Paragraph({ text: "" }));
+          }
+          if (ownCpfSav.length) {
+            children.push(new Paragraph({ text: "CPF", heading: HeadingLevel.HEADING_2 }));
+            children.push(
+              makeTable(
+                ["Institution", "Account type", "Balance"],
+                ownCpfSav.map((a: any) => [
+                  a.institution ?? "—",
+                  a.account_type ?? "—",
+                  fmtMoneyFx(a.balance, a.currency),
+                ]),
+                [
+                  "Total",
+                  "",
+                  fmtMoney(
+                    ownCpfSav.reduce(
+                      (s: number, a: any) =>
+                        s + toSgd(a.balance, a.currency, `${label} — ${a.institution ?? "Savings"}`),
+                      0,
+                    ),
+                  ),
+                ],
+              ),
+            );
+            children.push(new Paragraph({ text: "" }));
+          }
         }
         if (ownOther.length) {
           children.push(new Paragraph({ text: "Other Assets", heading: HeadingLevel.HEADING_2 }));
