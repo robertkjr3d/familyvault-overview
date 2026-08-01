@@ -2,8 +2,9 @@ import { fmtMoney, convertToSgd, type FxRates } from "@/lib/format";
 
 /**
  * Shows each foreign-currency total on its own line, kept visibly separate
- * from the SGD figure above it — never added together, since summing
- * different currencies into one number would be misleading. Renders
+ * from the SGD figure above it for readability — the headline total above
+ * this (via totalWithFx()) already includes each of these converted in, so
+ * this is a transparency breakdown, not an additional amount to add. Renders
  * nothing when there's nothing foreign to show.
  *
  * When a cached fx rate is available (see useFxRates), also shows a
@@ -27,7 +28,7 @@ export function ForeignCurrencyTotals({
         const sgdEquivalent = convertToSgd(f.total, f.currency, fx);
         return (
           <span key={f.currency}>
-            + {fmtMoney(f.total, f.currency)}
+            {fmtMoney(f.total, f.currency)}
             {sgdEquivalent != null && (
               <span className="text-muted-foreground/70">
                 {" "}
