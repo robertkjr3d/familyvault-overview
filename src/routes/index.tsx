@@ -484,9 +484,12 @@ return { label: "Cash flow", status: "fail", detail: `${fmtMoney(netCashFlow)} m
 })(),
 (() => {
 if (baseExpenses === 0) return { label: "Emergency fund", status: "incomplete", detail: "Set monthly expenses in Settings to calculate", href: "/settings" };
-if (savingsValue >= monthlyOut * 3) return { label: "Emergency fund", status: "pass", detail: `${(savingsValue / monthlyOut).toFixed(1)} months of expenses covered`, href: "/savings" };
-if (savingsValue >= monthlyOut) return { label: "Emergency fund", status: "warning", detail: `Only ${(savingsValue / monthlyOut).toFixed(1)} months covered — aim for 3+`, href: "/savings" };
-return { label: "Emergency fund", status: "fail", detail: "Less than 1 month of expenses in savings", href: "/savings" };
+// Deliberately excludes CPF — it isn't freely withdrawable for an actual
+// emergency, unlike liquidSavingsValue. Stated in the detail text so this
+// exclusion is visible in the app, not just in a code comment.
+if (liquidSavingsValue >= monthlyOut * 3) return { label: "Emergency fund", status: "pass", detail: `${(liquidSavingsValue / monthlyOut).toFixed(1)} months of expenses covered (excl. CPF)`, href: "/savings" };
+if (liquidSavingsValue >= monthlyOut) return { label: "Emergency fund", status: "warning", detail: `Only ${(liquidSavingsValue / monthlyOut).toFixed(1)} months covered (excl. CPF) — aim for 3+`, href: "/savings" };
+return { label: "Emergency fund", status: "fail", detail: "Less than 1 month of expenses in savings (excl. CPF)", href: "/savings" };
 })(),
 (() => {
 if (adequacyStatus === "unset") return { label: "Insurance coverage", status: "incomplete", detail: "Set monthly income in Settings to calculate", href: "/settings" };
