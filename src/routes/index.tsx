@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToday } from "@/lib/today";
-import { fmtMoney, fmtDate, fmtMonth, groupByCurrency, totalWithFx, type FxRates } from "@/lib/format";
+import { fmtMoney, fmtDate, fmtMonth, groupByCurrency, totalWithFx, convertToSgd, type FxRates } from "@/lib/format";
 import { useFxRates } from "@/hooks/useFxRates";
 import { FxInfoNote } from "@/components/FxInfoNote";
 import { isCpfAccountType } from "@/lib/options";
@@ -163,20 +163,11 @@ const inventoryItems = inventoryQ.data ?? [];
 const otherAssets = scopeByMember(otherAssetsQ.data ?? []);
 const healthConditions = scopeByMember(healthQ.data ?? []);
 
-// Foreign-currency records are excluded from every dashboard money TOTAL
-// below (net worth, monthly in/out, allocation) — never converted or
-// counted at face value as SGD, which would be silently wrong. A record
-// with no currency value is legacy/default SGD. This does NOT touch the
-// raw arrays above — alerts/reminders/member counts should still include
-// foreign-currency records normally; only the money-summing math excludes
-// them. Kept in one place so every total stays consistent (a foreign
-// property was previously excluded from the allocation chart but NOT from
-// the main net-worth total — this fixes that inconsistency too).
-const isSgd = (r: any) => !r.currency || r.currency === "SGD";
-const sgdProperties = properties.filter(isSgd);
-const sgdLoans = loans.filter(isSgd);
-const sgdInsurance = insurance.filter(isSgd);
-const sgdInvestments = investments.filter(isSgd);
+// Foreign-currency records are no longer excluded from dashboard money
+// totals — see toSgdAmount() and the groupByCurrency()/totalWithFx() calls
+// below, which convert each one via the cached daily rate instead. Raw
+// arrays above (properties, loans, etc.) are untouched either way — alerts/
+// reminders/member counts always included foreign-currency records normally.
 
 // Bug fix (July 2026): a reminder set on another member's card (e.g. a
 // loan under Dad's tag) was showing on the dashboard with NO member tag at
@@ -309,70 +300,81 @@ const netWorthSub = netWorthHasForeign ? (
   </span>
 ) : undefined;
 
+// Converts one record's monthly cash-flow amount to SGD using its own
+// currency field — same safety rule as every other total on this page: a
+// currency with no cached rate yet contributes $0, never counted at face
+// value in the wrong currency.
+function toSgdAmount(amount: number | null | undefined, currency: string | null | undefined): number {
+  return convertToSgd(Number(amount) || 0, currency || "SGD", fxRates) ?? 0;
+}
+
 const salaryIncome = Number(appSettings?.monthly_income) || 0;
-const rentalIncome = sgdProperties.reduce((s: number, p: any) => s + (Number(p.monthly_rent) || 0), 0);
-const insurancePayoutIn = sgdInsurance.reduce((s: number, p: any) => s + insurancePayoutMonthly(p, today), 0);
-const investmentPayoutIn = sgdInvestments.reduce((s: number, inv: any) => s + investmentPayoutMonthly(inv, today), 0);
+const rentalIncome = properties.reduce((s: number, p: any) => s + toSgdAmount(p.monthly_rent, p.currency), 0);
+const insurancePayoutIn = insurance.reduce((s: number, p: any) => s + toSgdAmount(insurancePayoutMonthly(p, today), p.currency), 0);
+const investmentPayoutIn = investments.reduce((s: number, inv: any) => s + toSgdAmount(investmentPayoutMonthly(inv, today), inv.currency), 0);
 const monthlyIn = salaryIncome + rentalIncome + insurancePayoutIn + investmentPayoutIn;
 
 // Properties with a linked mortgage loan should not double-count monthly_payment
-
+// (uses the full loans array, not just SGD ones — a foreign-currency loan can
+// still be linked to a property and should still suppress the fallback figure)
 const mortgagedPropertyIds = new Set(
-sgdLoans.filter((l: any) => l.property_id).map((l: any) => l.property_id)
+loans.filter((l: any) => l.property_id).map((l: any) => l.property_id)
 );
-const propertyOut = sgdProperties.reduce((s: number, p: any) => {
-const costs = propertyTotalCosts(p);
-const mortgage = mortgagedPropertyIds.has(p.id) ? 0 : (Number(p.monthly_payment) || 0);
+const propertyOut = properties.reduce((s: number, p: any) => {
+const costs = toSgdAmount(propertyTotalCosts(p), p.currency);
+const mortgage = mortgagedPropertyIds.has(p.id) ? 0 : toSgdAmount(p.monthly_payment, p.currency);
 return s + costs + mortgage;
 }, 0);
-const loanOut = sgdLoans.reduce((s: number, l: any) => s + (Number(l.monthly_payment) || 0), 0);
-const insuranceOut = sgdInsurance.reduce((s: number, p: any) => s + insuranceMonthly(p), 0);
-const investmentPremiumOut = sgdInvestments.reduce((s: number, inv: any) => s + investmentPremiumMonthly(inv, today), 0);
+const loanOut = loans.reduce((s: number, l: any) => s + toSgdAmount(l.monthly_payment, l.currency), 0);
+const insuranceOut = insurance.reduce((s: number, p: any) => s + toSgdAmount(insuranceMonthly(p), p.currency), 0);
+const investmentPremiumOut = investments.reduce((s: number, inv: any) => s + toSgdAmount(investmentPremiumMonthly(inv, today), inv.currency), 0);
 const baseExpenses = Number(appSettings?.monthly_expenses) || 0;
 const monthlyOut = propertyOut + loanOut + insuranceOut + investmentPremiumOut + baseExpenses;
 const netCashFlow = monthlyIn - monthlyOut;
+const cashFlowHasForeign =
+  properties.some((p: any) => p.currency && p.currency !== "SGD") ||
+  loans.some((l: any) => l.currency && l.currency !== "SGD") ||
+  insurance.some((p: any) => p.currency && p.currency !== "SGD") ||
+  investments.some((inv: any) => inv.currency && inv.currency !== "SGD");
 
 // Per-record cash flow detail — same "what's adding/subtracting and from where"
 // pattern as the Lifetime Chart's Year Detail panel, but for this month's actual figures.
-// Bug fix (July 2026): this used to build from the raw, unfiltered arrays —
-// so expanding "Show breakdown" could list a foreign-currency record that
-// wasn't actually included in monthlyIn/monthlyOut above it (those already
-// used the SGD-only arrays), a visible mismatch between the total and its
-// own breakdown. Now built from the same sgd* arrays as the totals, so a
-// foreign-currency record simply doesn't appear here — consistent with
-// "foreign currency isn't counted on the dashboard" everywhere else.
+// Built from the FULL arrays with each amount converted via toSgdAmount, so a
+// foreign-currency record now appears here already converted to SGD — matching
+// monthlyIn/monthlyOut above it exactly, never a mismatch between a total and
+// its own breakdown (see the July 2026 bug note in memory this replaced).
 const inflowDetailItems: LineItem[] = [
 ...(salaryIncome > 0 ? [{ label: "Salary / income", amount: salaryIncome, href: "/settings" }] : []),
-...sgdProperties
-.filter((p: any) => (Number(p.monthly_rent) || 0) > 0)
-.map((p: any) => ({ label: `${p.name ?? "Property"} rental`, amount: Number(p.monthly_rent) || 0, href: `/property#record-${p.id}` })),
-...sgdInsurance
-.filter((p: any) => insurancePayoutMonthly(p, today) > 0)
-.map((p: any) => ({ label: `${p.name ?? "Insurance"} payout`, amount: insurancePayoutMonthly(p, today), href: `/insurance#record-${p.id}`, timesPerYear: freqTimesPerYear(p.payout_frequency) })),
-...sgdInvestments
-.filter((inv: any) => investmentPayoutMonthly(inv, today) > 0)
-.map((inv: any) => ({ label: `${inv.name ?? "ILP"} payout`, amount: investmentPayoutMonthly(inv, today), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.payout_frequency) })),
+...properties
+.filter((p: any) => toSgdAmount(p.monthly_rent, p.currency) > 0)
+.map((p: any) => ({ label: `${p.name ?? "Property"} rental`, amount: toSgdAmount(p.monthly_rent, p.currency), href: `/property#record-${p.id}` })),
+...insurance
+.filter((p: any) => toSgdAmount(insurancePayoutMonthly(p, today), p.currency) > 0)
+.map((p: any) => ({ label: `${p.name ?? "Insurance"} payout`, amount: toSgdAmount(insurancePayoutMonthly(p, today), p.currency), href: `/insurance#record-${p.id}`, timesPerYear: freqTimesPerYear(p.payout_frequency) })),
+...investments
+.filter((inv: any) => toSgdAmount(investmentPayoutMonthly(inv, today), inv.currency) > 0)
+.map((inv: any) => ({ label: `${inv.name ?? "ILP"} payout`, amount: toSgdAmount(investmentPayoutMonthly(inv, today), inv.currency), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.payout_frequency) })),
 ];
 
 const outflowDetailItems: LineItem[] = [
-...sgdProperties.flatMap((p: any) => {
+...properties.flatMap((p: any) => {
 const items: LineItem[] = [];
 const propHref = `/property#record-${p.id}`;
-const costs = propertyTotalCosts(p);
+const costs = toSgdAmount(propertyTotalCosts(p), p.currency);
 if (costs > 0) items.push({ label: `${p.name ?? "Property"} costs`, amount: costs, href: propHref });
-const mortgage = mortgagedPropertyIds.has(p.id) ? 0 : Number(p.monthly_payment) || 0;
+const mortgage = mortgagedPropertyIds.has(p.id) ? 0 : toSgdAmount(p.monthly_payment, p.currency);
 if (mortgage > 0) items.push({ label: `${p.name ?? "Property"} mortgage`, amount: mortgage, href: propHref });
 return items;
 }),
-...sgdLoans
-.filter((l: any) => (Number(l.monthly_payment) || 0) > 0)
-.map((l: any) => ({ label: `${l.bank ?? "Loan"} repayment`, amount: Number(l.monthly_payment) || 0, href: `/loans#record-${l.id}` })),
-...sgdInsurance
-.filter((p: any) => insuranceMonthly(p) > 0)
-.map((p: any) => ({ label: `${p.name ?? "Insurance"} premium`, amount: insuranceMonthly(p), href: `/insurance#record-${p.id}`, timesPerYear: freqTimesPerYear(p.frequency) })),
-...sgdInvestments
-.filter((inv: any) => investmentPremiumMonthly(inv, today) > 0)
-.map((inv: any) => ({ label: `${inv.name ?? "ILP"} premium`, amount: investmentPremiumMonthly(inv, today), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.premium_frequency) })),
+...loans
+.filter((l: any) => toSgdAmount(l.monthly_payment, l.currency) > 0)
+.map((l: any) => ({ label: `${l.bank ?? "Loan"} repayment`, amount: toSgdAmount(l.monthly_payment, l.currency), href: `/loans#record-${l.id}` })),
+...insurance
+.filter((p: any) => toSgdAmount(insuranceMonthly(p), p.currency) > 0)
+.map((p: any) => ({ label: `${p.name ?? "Insurance"} premium`, amount: toSgdAmount(insuranceMonthly(p), p.currency), href: `/insurance#record-${p.id}`, timesPerYear: freqTimesPerYear(p.frequency) })),
+...investments
+.filter((inv: any) => toSgdAmount(investmentPremiumMonthly(inv, today), inv.currency) > 0)
+.map((inv: any) => ({ label: `${inv.name ?? "ILP"} premium`, amount: toSgdAmount(investmentPremiumMonthly(inv, today), inv.currency), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.premium_frequency) })),
 ...(baseExpenses > 0 ? [{ label: "Other expenses (Settings)", amount: baseExpenses, href: "/settings" }] : []),
 ];
 
@@ -512,9 +514,15 @@ const allocHasForeign =
   cpfTotals.foreign.length > 0 ||
   insuranceSurrenderTotals.foreign.length > 0;
 
-// Insurance adequacy
-const activeInsurance = sgdInsurance.filter((p: any) => p.status !== "inactive");
-const totalSumAssured = activeInsurance.reduce((s: number, p: any) => s + (Number(p.sum_assured) || 0), 0);
+// Insurance adequacy — uses the full insurance array, not a currency-filtered
+// subset, so a foreign-currency policy still counts toward "active policies"
+// and its completeness check, and its sum assured is converted via the same
+// FX-inclusive pattern as every other total on this page. Previously this
+// excluded foreign policies entirely, which could understate someone's
+// real coverage and wrongly show "not adequately covered."
+const activeInsurance = insurance.filter((p: any) => p.status !== "inactive");
+const sumAssuredTotals = groupByCurrency(activeInsurance, (p: any) => p.sum_assured);
+const totalSumAssured = totalWithFx(sumAssuredTotals, fxRates);
 const policiesWithNoSumAssured = activeInsurance.filter((p: any) => !p.sum_assured).length;
 const incomeReplacementNeed = salaryIncome * 120;
 const coverageRatio = incomeReplacementNeed > 0 ? totalSumAssured / incomeReplacementNeed : null;
@@ -752,7 +760,9 @@ return (
   {/* MONTHLY CASH FLOW BARS */}
  <section ref={cashFlowRef} className={`scroll-mt-28 rounded-2xl border border-border bg-card p-4 transition-all ${highlight === "cash-flow" ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}>
     <div className="mb-3 flex items-center justify-between">
-      <h2 className="text-sm font-bold">Monthly Cash Flow</h2>
+      <h2 className="text-sm font-bold">
+        Monthly Cash Flow{cashFlowHasForeign && <FxInfoNote fx={fxRates} />}
+      </h2>
       {(inflowDetailItems.length > 0 || outflowDetailItems.length > 0) && (
         <button
           onClick={() => setCashFlowDetailOpen((v) => !v)}
@@ -840,6 +850,8 @@ return (
     adequacyStatus={adequacyStatus}
     policiesWithNoSumAssured={policiesWithNoSumAssured}
     activePolicyCount={activeInsurance.length}
+    hasForeign={sumAssuredTotals.foreign.length > 0}
+    fx={fxRates}
   />
 
   {/* FINANCIAL HEALTH */}
@@ -1111,6 +1123,8 @@ coverageRatio,
 adequacyStatus,
 policiesWithNoSumAssured,
 activePolicyCount,
+hasForeign,
+fx,
 }: {
 totalSumAssured: number;
 incomeReplacementNeed: number;
@@ -1118,6 +1132,8 @@ coverageRatio: number | null;
 adequacyStatus: "covered" | "partial" | "none" | "unset";
 policiesWithNoSumAssured: number;
 activePolicyCount: number;
+hasForeign: boolean;
+fx?: FxRates | null;
 }) {
 const statusConfig = {
 covered:  { label: "Adequately covered",  bar: "bg-settled",  text: "text-settled",  border: "border-settled/30  bg-settled/5" },
@@ -1145,7 +1161,9 @@ return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Sum Assured</div>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Sum Assured{hasForeign && <FxInfoNote fx={fx} />}
+          </div>
           <div className="mt-0.5 text-lg font-bold">{fmtMoney(totalSumAssured)}</div>
           {policiesWithNoSumAssured > 0 && (
             <div className="text-[10px] text-muted-foreground">{policiesWithNoSumAssured} polic{policiesWithNoSumAssured === 1 ? "y" : "ies"} missing sum assured</div>
