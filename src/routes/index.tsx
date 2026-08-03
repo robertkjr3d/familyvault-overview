@@ -64,6 +64,7 @@ const queryClient = useQueryClient();
 const cashFlowRef = useRef<any>(null);
 const needsAttentionRef = useRef<any>(null);
 const lifetimeChartRef = useRef<any>(null);
+const netWorthBreakdownRef = useRef<any>(null);
 const [highlight, setHighlight] = useState<string | null>(null);
 const [onboardingOpen, setOnboardingOpen] = useState(false);
 const [chartInfoOpen, setChartInfoOpen] = useState(false);
@@ -74,6 +75,14 @@ if (!ref.current) return;
 ref.current.scrollIntoView({ behavior: "smooth", block: "start" });
 setHighlight(key);
 setTimeout(() => setHighlight((h) => (h === key ? null : h)), 1800);
+}
+
+// Opens the (collapsible, closed-by-default) Net Worth Breakdown card and
+// scrolls to it. Opening first is safe: the card's ref sits on its outer
+// header, so revealing the rows below doesn't move that anchor point.
+function openNetWorthBreakdown() {
+setBreakdownOpen(true);
+scrollTo(netWorthBreakdownRef, "net-worth-breakdown");
 }
 
 // Shared per-table data — same query keys AppHeader and the alerts bell use,
@@ -589,9 +598,27 @@ return (
 
   {/* KPI ROW */}
   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-    <Kpi label="Total Assets" value={fmtMoney(totalAssets)} />
-    <Kpi label="Total Liabilities" value={fmtMoney(totalLiabilities)} />
-    <Kpi label="Net Worth" value={fmtMoney(netWorth)} accent="gold" big sub={netWorthSub} />
+    <button type="button" onClick={openNetWorthBreakdown} className="text-left w-full h-full">
+      <Kpi label="Total Assets" value={fmtMoney(totalAssets)} />
+    </button>
+    <button type="button" onClick={openNetWorthBreakdown} className="text-left w-full h-full">
+      <Kpi label="Total Liabilities" value={fmtMoney(totalLiabilities)} />
+    </button>
+    {/* Not a <button>: netWorthSub can render FxInfoNote's own "ⓘ" button,
+        and nesting <button> inside <button> is invalid HTML that this SSR
+        app can't safely rely on browsers to fix up. div+role="button" gets
+        the same tap behavior and keyboard access without the nesting. */}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={openNetWorthBreakdown}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openNetWorthBreakdown(); }
+      }}
+      className="text-left w-full h-full cursor-pointer"
+    >
+      <Kpi label="Net Worth" value={fmtMoney(netWorth)} accent="gold" big sub={netWorthSub} />
+    </div>
     <button
       type="button"
       onClick={() => window.dispatchEvent(new CustomEvent("fh:open-alerts"))}
@@ -620,7 +647,10 @@ return (
   </button>
 
   {/* NET WORTH BREAKDOWN */}
-  <section className="rounded-2xl border border-border bg-card">
+  <section
+    ref={netWorthBreakdownRef}
+    className={`scroll-mt-28 rounded-2xl border border-border bg-card transition-all ${highlight === "net-worth-breakdown" ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
+  >
     <button
       onClick={() => setBreakdownOpen((v) => !v)}
       className="flex w-full items-center justify-between p-4 text-left"
@@ -647,6 +677,12 @@ return (
         <div className="flex items-center justify-between pt-1">
           <span className="text-base font-bold">NET WORTH</span>
           <span className="text-2xl font-bold text-primary">{fmtMoney(netWorth)}</span>
+        </div>
+        <div className="mt-2 border-t border-border/40 pt-2 text-center text-[11px] text-muted-foreground">
+          For a full itemized list of assets and liabilities,{" "}
+          <Link to="/settings" hash="export-summary" className="font-semibold text-primary underline">
+            tap Export in Settings
+          </Link>.
         </div>
       </div>
     )}
