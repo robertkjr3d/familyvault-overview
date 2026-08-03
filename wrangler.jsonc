@@ -6,5 +6,8 @@
   "main": "src/server.ts",
   "triggers": {
     "crons": ["0 20 * * *"]
-  }
+  },
+  "r2_buckets": [
+    { "binding": "BACKUPS_BUCKET", "bucket_name": "familyhub-backups" }
+  ]
 }
