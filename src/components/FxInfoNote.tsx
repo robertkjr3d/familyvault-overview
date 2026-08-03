@@ -16,7 +16,7 @@ export function FxInfoNote({ fx }: { fx?: FxRates | null }) {
     <span className="relative inline-flex">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
         className="ml-1 flex h-3.5 w-3.5 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
         aria-label="About the foreign currency conversion"
       >
