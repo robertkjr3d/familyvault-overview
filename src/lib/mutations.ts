@@ -29,6 +29,28 @@ export function useDeleteMutation(table: string, queryKey: string, entityType?: 
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      // Snapshot the full row into the Recycle Bin BEFORE deleting anything.
+      // If this snapshot fails, the delete does not proceed either — a
+      // delete should never happen without a recovery copy existing first.
+      // Attached documents/reminders are NOT snapshotted (known v1 limit —
+      // restoring a record won't bring those back, only the record itself).
+      const { data: rowToDelete, error: fetchError } = await supabase
+        .from(table as any)
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+      if (fetchError) throw fetchError;
+      if (rowToDelete) {
+        const { error: trashError } = await supabase.from("deleted_records" as any).insert({
+          household_id: (rowToDelete as any).household_id,
+          table_name: table,
+          entity_type: entityType ?? null,
+          record_id: id,
+          record_data: rowToDelete,
+        });
+        if (trashError) throw trashError;
+      }
+
       // Before deleting the entity row, clean up any uploaded files in Storage
       // so they don't become orphans. External links (bucket = "external") have
       // no Storage file — only rows where bucket = "vault-docs" need a remove call.
@@ -64,7 +86,8 @@ export function useDeleteMutation(table: string, queryKey: string, entityType?: 
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["alerts-all"] });
       qc.invalidateQueries({ queryKey: ["alerts-extras"] }); // alerts-all no longer exists (AlertsSheet migration) - this is its replacement
-      toast.success("Deleted");
+      qc.invalidateQueries({ queryKey: ["deleted-records"] });
+      toast.success("Deleted — recoverable from Settings > Recycle Bin for 30 days");
     },
     onError: (e: any) => toast.error(e.message),
   });
