@@ -9,6 +9,7 @@ import { Trash2 } from "lucide-react";
 import { fmtMoney, convertToSgd } from "@/lib/format";
 import { isCpfAccountType } from "@/lib/options";
 import { recordConfigs } from "@/lib/recordConfigs";
+import { purgeDocumentsFor } from "@/lib/mutations";
 import { useFxRates } from "@/hooks/useFxRates";
 import { runFullExport, runFullBackupZip } from "@/lib/fullExport";
 import { createDemoHousehold } from "@/lib/householdInvites";
@@ -1425,7 +1426,12 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
 // Loans, Insurance, Investments, Savings, Other Assets, Health) snapshots
 // the row here first (see src/lib/mutations.ts) before actually deleting
 // it. Restoring re-inserts the exact snapshot — same id, same fields —
-// back into its original table. Does NOT cover Inventory or Members
+// back into its original table, plus any reminders that were attached
+// (also snapshotted, in related_reminders). Documents are handled
+// differently: they're never actually deleted while something sits in
+// the trash (see mutations.ts), so they just reappear on their own once
+// restored — actual document/storage cleanup only happens on permanent
+// delete (see purgeDocumentsFor). Does NOT cover Inventory or Members
 // (their delete buttons don't go through the shared hook yet) or account/
 // household deletion (a separate, much bigger cascade — see the daily
 // snapshot backup feature for that scenario instead). Auto-expires after
@@ -1463,6 +1469,17 @@ function RecycleBin({ householdId }: { householdId: string | null }) {
       toast.error(`Could not restore — ${insertError.message}`);
       return;
     }
+    // Restore any reminders that were attached when this was deleted.
+    // Documents don't need this step — they were never actually deleted
+    // while this sat in the trash (see mutations.ts), so they're already
+    // showing again now that the record is back with the same id.
+    const reminders = Array.isArray(item.related_reminders) ? item.related_reminders : [];
+    if (reminders.length > 0) {
+      const { error: reminderError } = await (supabase as any).from("reminders").insert(reminders);
+      if (reminderError) {
+        toast.error(`Restored, but its reminders couldn't be brought back — ${reminderError.message}`);
+      }
+    }
     await (supabase as any).from("deleted_records").delete().eq("id", item.id);
     const queryKey = recordConfigs[item.table_name]?.queryKey ?? item.table_name;
     await qc.invalidateQueries({ queryKey: ["deleted-records", householdId] });
@@ -1472,8 +1489,12 @@ function RecycleBin({ householdId }: { householdId: string | null }) {
     toast.success(`Restored: ${recordLabel(item.record_data)}`);
   }
 
-  async function permanentlyDeleteItem(id: string) {
-    await (supabase as any).from("deleted_records").delete().eq("id", id);
+  async function permanentlyDeleteItem(item: any) {
+    // This is the moment documents actually get removed — deferred from
+    // delete-time so they're still recoverable while the record sat in
+    // the trash. See mutations.ts's purgeDocumentsFor for why.
+    await purgeDocumentsFor(item.entity_type, item.record_id);
+    await (supabase as any).from("deleted_records").delete().eq("id", item.id);
     await qc.invalidateQueries({ queryKey: ["deleted-records", householdId] });
     toast.success("Removed permanently.");
   }
@@ -1481,6 +1502,9 @@ function RecycleBin({ householdId }: { householdId: string | null }) {
   async function clearAll() {
     if (!householdId) return;
     if (!confirm("Permanently empty the Recycle Bin? Nothing in it can be restored after this.")) return;
+    for (const item of trash) {
+      await purgeDocumentsFor((item as any).entity_type, (item as any).record_id);
+    }
     const { error } = await (supabase as any).from("deleted_records").delete().eq("household_id", householdId);
     if (error) { toast.error("Could not empty the Recycle Bin."); return; }
     await qc.invalidateQueries({ queryKey: ["deleted-records", householdId] });
@@ -1503,7 +1527,7 @@ function RecycleBin({ householdId }: { householdId: string | null }) {
       {expanded && (
         <div className="mt-3">
           <p className="mb-3 text-xs text-muted-foreground">
-            Deleted entries stay here for 30 days before being permanently removed. Restoring brings back the entry itself — attached documents and reminders are not restored. Doesn't cover Inventory, Members, or account deletion.
+            Deleted entries stay here for 30 days before being permanently removed. Restoring brings back the entry, its documents, and its reminders. Doesn't cover Inventory, Members, or account deletion.
           </p>
           {trashCount === 0 ? (
             <p className="py-4 text-center text-sm text-muted-foreground">Nothing in the Recycle Bin.</p>
@@ -1530,7 +1554,7 @@ function RecycleBin({ householdId }: { householdId: string | null }) {
                           Restore
                         </button>
                         <button
-                          onPointerDown={() => permanentlyDeleteItem(item.id)}
+                          onPointerDown={() => permanentlyDeleteItem(item)}
                           className="rounded px-2 py-1 text-xs font-semibold text-urgent hover:bg-urgent/10"
                         >
                           Delete
