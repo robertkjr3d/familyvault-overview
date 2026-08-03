@@ -3,6 +3,7 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { runFxRateFetch } from "./lib/fxRateCron";
+import { runTrashCleanup } from "./lib/trashCleanupCron";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -87,6 +88,11 @@ export default {
     env: { SUPABASE_URL?: string; SUPABASE_SERVICE_ROLE_KEY?: string },
     ctx: { waitUntil: (promise: Promise<unknown>) => void },
   ) {
+    // Both functions catch their own errors internally and never throw, so
+    // one failing (e.g. Frankfurter is down) never prevents the other from
+    // running. Deliberately sharing this one trigger rather than adding a
+    // second — see trashCleanupCron.ts for why.
     ctx.waitUntil(runFxRateFetch(env));
+    ctx.waitUntil(runTrashCleanup(env));
   },
 };
