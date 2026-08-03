@@ -18,6 +18,7 @@ import { deleteAccount } from "@/lib/accountDeletion";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { NativeSelect } from "@/components/ui/native-select";
+import { HashHighlight } from "@/components/HashHighlight";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -955,9 +956,11 @@ function SettingsPage() {
           <p className="px-1 text-[11px] text-muted-foreground">
             "Export everything" gives you a spreadsheet with 10-year links to your files. "Download full backup" downloads the actual files too, in one .zip — nothing depends on FamilyHub SG still running.
           </p>
-          <button onClick={exportAssetSummaryDocx} disabled={generatingEstateDoc} className="rounded-lg border border-border px-3 py-2 text-sm font-semibold">
-            {generatingEstateDoc ? "Generating…" : "Export Asset & Liability Summary (.docx)"}
-          </button>
+          <HashHighlight id="export-summary">
+            <button onClick={exportAssetSummaryDocx} disabled={generatingEstateDoc} className="w-full rounded-lg border border-border px-3 py-2 text-sm font-semibold">
+              {generatingEstateDoc ? "Generating…" : "Export Asset & Liability Summary (.docx)"}
+            </button>
+          </HashHighlight>
           {hasDemoData && (
             <button onClick={clearDemo} className="rounded-lg border border-urgent/40 px-3 py-2 text-sm font-semibold text-urgent">
               Remove sample data
