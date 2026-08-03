@@ -8,6 +8,7 @@ import { useAppStore } from "@/lib/store";
 import { Trash2 } from "lucide-react";
 import { fmtMoney, convertToSgd } from "@/lib/format";
 import { isCpfAccountType } from "@/lib/options";
+import { recordConfigs } from "@/lib/recordConfigs";
 import { useFxRates } from "@/hooks/useFxRates";
 import { runFullExport, runFullBackupZip } from "@/lib/fullExport";
 import { createDemoHousehold } from "@/lib/householdInvites";
@@ -1006,6 +1007,9 @@ function SettingsPage() {
       {/* Completed & Dismissed */}
       <DismissedHistory householdId={activeHouseholdId} />
 
+      {/* Recycle Bin */}
+      <RecycleBin householdId={activeHouseholdId} />
+
       {/* Account */}
       <section className="rounded-2xl border border-border bg-card p-4">
         <h2 className="mb-3 text-sm font-bold">Account</h2>
@@ -1407,6 +1411,140 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
                 className="mt-4 w-full rounded-lg border border-urgent/40 px-3 py-2 text-sm font-semibold text-urgent"
               >
                 Clear all (permanent)
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ── Recycle Bin ────────────────────────────────────────────────────────────
+// Every delete across the 7 tables behind useDeleteMutation (Properties,
+// Loans, Insurance, Investments, Savings, Other Assets, Health) snapshots
+// the row here first (see src/lib/mutations.ts) before actually deleting
+// it. Restoring re-inserts the exact snapshot — same id, same fields —
+// back into its original table. Does NOT cover Inventory or Members
+// (their delete buttons don't go through the shared hook yet) or account/
+// household deletion (a separate, much bigger cascade — see the daily
+// snapshot backup feature for that scenario instead). Auto-expires after
+// 30 days via the Cloudflare Cron job that also fetches FX rates.
+
+function recordLabel(row: Record<string, any>): string {
+  return row.name || row.bank || row.institution || row.provider || "Untitled record";
+}
+
+function RecycleBin({ householdId }: { householdId: string | null }) {
+  const qc = useQueryClient();
+  const [expanded, setExpanded] = useState(false);
+
+  const { data: trash = [] } = useQuery({
+    queryKey: ["deleted-records", householdId],
+    enabled: !!householdId,
+    queryFn: async () => {
+      if (!householdId) return [];
+      const { data } = await (supabase as any)
+        .from("deleted_records")
+        .select("*")
+        .eq("household_id", householdId)
+        .order("deleted_at", { ascending: false });
+      return data ?? [];
+    },
+  });
+
+  async function restoreItem(item: any) {
+    // Re-insert the snapshotted row back into its original table, preserving
+    // its original id, then remove it from the trash. If the re-insert fails
+    // (e.g. it references a member that's since been deleted), the trash
+    // entry stays put so nothing is lost — just tell the user why.
+    const { error: insertError } = await (supabase as any).from(item.table_name).insert(item.record_data);
+    if (insertError) {
+      toast.error(`Could not restore — ${insertError.message}`);
+      return;
+    }
+    await (supabase as any).from("deleted_records").delete().eq("id", item.id);
+    const queryKey = recordConfigs[item.table_name]?.queryKey ?? item.table_name;
+    await qc.invalidateQueries({ queryKey: ["deleted-records", householdId] });
+    await qc.invalidateQueries({ queryKey: [queryKey] });
+    await qc.invalidateQueries({ queryKey: [item.table_name] });
+    await qc.invalidateQueries({ queryKey: ["dashboard"] });
+    toast.success(`Restored: ${recordLabel(item.record_data)}`);
+  }
+
+  async function permanentlyDeleteItem(id: string) {
+    await (supabase as any).from("deleted_records").delete().eq("id", id);
+    await qc.invalidateQueries({ queryKey: ["deleted-records", householdId] });
+    toast.success("Removed permanently.");
+  }
+
+  async function clearAll() {
+    if (!householdId) return;
+    if (!confirm("Permanently empty the Recycle Bin? Nothing in it can be restored after this.")) return;
+    const { error } = await (supabase as any).from("deleted_records").delete().eq("household_id", householdId);
+    if (error) { toast.error("Could not empty the Recycle Bin."); return; }
+    await qc.invalidateQueries({ queryKey: ["deleted-records", householdId] });
+    toast.success("Recycle Bin emptied.");
+  }
+
+  const trashCount = trash.length;
+
+  return (
+    <section className="rounded-2xl border border-border bg-card p-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-bold flex items-center gap-1.5">
+          <span>🗑️</span> Recycle Bin
+        </h2>
+        <button onPointerDown={() => setExpanded((v) => !v)} className="flex items-center gap-1 text-xs font-semibold text-primary">
+          {expanded ? "Hide" : `Show (${trashCount})`}
+          <span className={`transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}>▾</span>
+        </button>
+      </div>
+      {expanded && (
+        <div className="mt-3">
+          <p className="mb-3 text-xs text-muted-foreground">
+            Deleted entries stay here for 30 days before being permanently removed. Restoring brings back the entry itself — attached documents and reminders are not restored. Doesn't cover Inventory, Members, or account deletion.
+          </p>
+          {trashCount === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">Nothing in the Recycle Bin.</p>
+          ) : (
+            <>
+              <ul className="divide-y divide-border">
+                {trash.map((item: any) => {
+                  const deletedAtDate = item.deleted_at ? new Date(item.deleted_at) : null;
+                  const deletedOn = deletedAtDate && !isNaN(deletedAtDate.getTime())
+                    ? deletedAtDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+                    : "recently";
+                  const categoryLabel = recordConfigs[item.table_name]?.label ?? item.table_name;
+                  return (
+                    <li key={item.id} className="flex items-start justify-between gap-2 py-2.5">
+                      <div className="flex-1 min-w-0">
+                        <p className="truncate text-sm font-medium">{recordLabel(item.record_data)}</p>
+                        <p className="text-xs text-muted-foreground">{categoryLabel} · Deleted {deletedOn}</p>
+                      </div>
+                      <div className="flex shrink-0 gap-1.5 pt-0.5">
+                        <button
+                          onPointerDown={() => restoreItem(item)}
+                          className="rounded px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/10"
+                        >
+                          Restore
+                        </button>
+                        <button
+                          onPointerDown={() => permanentlyDeleteItem(item.id)}
+                          className="rounded px-2 py-1 text-xs font-semibold text-urgent hover:bg-urgent/10"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              <button
+                onPointerDown={clearAll}
+                className="mt-4 w-full rounded-lg border border-urgent/40 px-3 py-2 text-sm font-semibold text-urgent"
+              >
+                Empty Recycle Bin (permanent)
               </button>
             </>
           )}
