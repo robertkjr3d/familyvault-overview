@@ -14,7 +14,7 @@ import { useFxRates } from "@/hooks/useFxRates";
 import { runFullExport, runFullBackupZip } from "@/lib/fullExport";
 import { createDemoHousehold } from "@/lib/householdInvites";
 import { useCurrentRole } from "@/lib/useCurrentRole";
-import { deleteAccount } from "@/lib/accountDeletion";
+import { deleteAccount, HOUSEHOLD_BLOCKING_TABLES } from "@/lib/accountDeletion";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -211,7 +211,8 @@ function SettingsPage() {
     if (!confirm("Are you sure? This cannot be undone.")) return;
     const tables = ["properties", "loans", "insurance_policies", "investments", "savings_accounts", "health_conditions"];
     for (const t of tables) {
-      await supabase.from(t as any).delete().eq("is_demo", true);
+      const { error } = await supabase.from(t as any).delete().eq("is_demo", true);
+      if (error) { toast.error(`Couldn't clear ${t}: ${error.message}`); return; }
     }
     qc.invalidateQueries();
     toast.success("Demo data cleared");
@@ -613,11 +614,21 @@ function SettingsPage() {
     if (!demoHousehold) return;
     if (!confirm("Delete the Demo Household and all its sample data? This cannot be undone.")) return;
     const demoId = (demoHousehold as any).id;
-    const tables = ["properties", "loans", "insurance_policies", "investments", "savings_accounts", "members", "app_settings", "household_users"];
-    for (const t of tables) {
-      await supabase.from(t as any).delete().eq("household_id", demoId);
+    // Was previously a hand-copied 8-table list missing 9 of the 16 tables
+    // that actually block a household delete (gobag_items, inventory_*,
+    // rate schedules, documents, history, reminders) — a demo household
+    // that had been used to explore those tabs would fail to fully delete,
+    // silently, since nothing here checked for errors. Now reuses the same
+    // canonical list already verified for real account deletion.
+    for (const t of HOUSEHOLD_BLOCKING_TABLES) {
+      const { error } = await supabase.from(t as any).delete().eq("household_id", demoId);
+      if (error) { toast.error(`Couldn't clear ${t}: ${error.message}`); return; }
     }
-    await supabase.from("households" as any).delete().eq("id", demoId);
+    const { error: huErr } = await supabase.from("household_users" as any).delete().eq("household_id", demoId);
+    if (huErr) { toast.error(huErr.message); return; }
+    const { data, error: hErr } = await supabase.from("households" as any).delete().eq("id", demoId).select("id").maybeSingle();
+    if (hErr) { toast.error(hErr.message); return; }
+    if (!data) { toast.error("Nothing was deleted — you may not have permission to remove this household."); return; }
     if (activeHouseholdId === demoId) {
       const { data: memberships } = await supabase
         .from("household_users" as any)
@@ -1183,7 +1194,9 @@ function PlannedEvents({ householdId, currency }: { householdId: string | null; 
   }
 
   async function deleteEvent(id: string) {
-    await supabase.from("planned_cashflow_events" as any).delete().eq("id", id);
+    const { data, error } = await supabase.from("planned_cashflow_events" as any).delete().eq("id", id).select("id").maybeSingle();
+    if (error) { toast.error(error.message); return; }
+    if (!data) { toast.error("Nothing was deleted — you may not have permission to remove this."); return; }
     qc.invalidateQueries({ queryKey: ["planned_events", householdId] });
     qc.invalidateQueries({ queryKey: ["planned_events_chart", householdId] });
   }
