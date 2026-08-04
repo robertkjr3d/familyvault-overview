@@ -143,10 +143,18 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
 
   async function del(id: string, doc: any) {
     if (!confirm("Delete this document?")) return;
+    // DB row first, confirmed: if this fails, nothing else should happen.
+    // Storage cleanup happens after and stays best-effort (same reasoning
+    // as accountDeletion.ts's own storage cleanup) — a leftover file in
+    // storage is a small cost issue, but deleting the file while the DB
+    // row survives would leave a document card pointing at nothing.
+    const { data, error } = await supabase.from("record_documents").delete().eq("id", id).select("id").maybeSingle();
+    if (error) { toast.error(error.message); return; }
+    if (!data) { toast.error("Nothing was deleted — you may not have permission to remove this."); return; }
     if (doc.bucket !== "external") {
       await supabase.storage.from("vault-docs").remove([doc.path]);
     }
-    await supabase.from("record_documents").delete().eq("id", id);
+    toast.success("Document removed");
     qc.invalidateQueries({ queryKey: ["docs", entityType, entityId] });
   }
 
