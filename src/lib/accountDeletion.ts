@@ -17,7 +17,7 @@ const deleteAccountPayloadSchema = z.object({
 // ON DELETE CASCADE or ON DELETE SET NULL - never blocking. The only
 // blocking relationship each of these has is its own household_id column
 // pointing at households(id).
-const HOUSEHOLD_BLOCKING_TABLES = [
+export const HOUSEHOLD_BLOCKING_TABLES = [
   "app_settings",
   "gobag_items",
   "health_conditions",
