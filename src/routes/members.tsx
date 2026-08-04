@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Trash2, Save, UserPlus } from "lucide-react";
 import { HashHighlight } from "@/components/HashHighlight";
+import { useCurrentRole } from "@/lib/useCurrentRole";
 
 export const Route = createFileRoute("/members")({
   component: MembersPage,
@@ -41,6 +42,7 @@ function MembersPage() {
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const memberFilter = useAppStore((s) => s.memberFilter);
   const setMemberFilter = useAppStore((s) => s.setMemberFilter);
+  const { role: currentRole } = useCurrentRole();
 
   const [newName, setNewName] = useState("");
   const [newShortName, setNewShortName] = useState("");
@@ -140,12 +142,19 @@ function MembersPage() {
   }
 
   async function deleteMember(member: MemberRow) {
+    // Owner-only: removing a person is more destructive than editing their
+    // name/color (which any editor can still do), and this matches what's
+    // already documented as intended for member-removal elsewhere in the
+    // app. Checked here too, not just via hiding the button below, since
+    // the button being hidden doesn't stop this function being callable.
+    if (currentRole !== "owner") { toast.error("Only the household owner can remove a member."); return; }
     if (members.length <= 1) { toast.error("At least one member is required."); return; }
     if (!confirm(`Delete member "${member.name}"?`)) return;
     setDeletingId(member.id);
     try {
-      const { error } = await supabase.from("members" as any).delete().eq("id", member.id);
+      const { data, error } = await supabase.from("members" as any).delete().eq("id", member.id).select("id").maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("Nothing was deleted — you may not have permission to remove this member.");
       if (memberFilter === member.id) setMemberFilter("all");
       toast.success("Member deleted.");
       void qc.invalidateQueries({ queryKey: ["members"] });
@@ -283,14 +292,16 @@ function MembersPage() {
                         <Save className="mr-1.5 h-4 w-4" />
                         {savingId === member.id ? "Saving..." : "Save"}
                       </Button>
-                      <Button
-                        variant="outline" className="text-urgent"
-                        onClick={() => deleteMember(member)}
-                        disabled={deletingId === member.id || savingId === member.id}
-                      >
-                        <Trash2 className="mr-1.5 h-4 w-4" />
-                        {deletingId === member.id ? "Deleting..." : "Delete"}
-                      </Button>
+                      {currentRole === "owner" && (
+                        <Button
+                          variant="outline" className="text-urgent"
+                          onClick={() => deleteMember(member)}
+                          disabled={deletingId === member.id || savingId === member.id}
+                        >
+                          <Trash2 className="mr-1.5 h-4 w-4" />
+                          {deletingId === member.id ? "Deleting..." : "Delete"}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </HashHighlight>
