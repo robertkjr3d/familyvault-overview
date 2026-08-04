@@ -9,5 +9,14 @@
   },
   "r2_buckets": [
     { "binding": "BACKUPS_BUCKET", "bucket_name": "familyhub-backups" }
-  ]
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "persist": true
+    }
+  }
 }
