@@ -393,6 +393,19 @@ function computeSmartDefaults(fields: FieldDef[], records: Record<string, any>[]
   const result: Record<string, any> = {};
   for (const f of fields) {
     if (!SMART_DEFAULT_KEYS.has(f.key)) continue;
+    if (f.key === "member_id") {
+      // Owner defaults to whoever the LAST record in this tab was added
+      // for, not the most common owner overall — matches the real workflow
+      // of adding several records in a row for the same person. (Every
+      // other smart-default field still uses "most common": e.g. currency
+      // should NOT flip because of one recent one-off foreign purchase.)
+      const withDates = records.filter((r) => r.member_id != null && r.created_at);
+      const last = withDates.length
+        ? withDates.reduce((a, b) => (new Date(a.created_at) > new Date(b.created_at) ? a : b)).member_id
+        : mostCommon(records.map((r) => r.member_id));
+      if (last !== undefined) result[f.key] = last;
+      continue;
+    }
     const common = mostCommon(records.map((r) => r[f.key]));
     if (common !== undefined) result[f.key] = common;
   }
