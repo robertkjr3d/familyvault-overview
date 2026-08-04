@@ -719,6 +719,8 @@ const [editingId, setEditingId] = useState("");
 const [editingLabel, setEditingLabel] = useState("");
 const [editingCategory, setEditingCategory] = useState("");
 
+const [pendingId, setPendingId] = useState<string | null>(null);
+
 const done = items.filter((g: any) => g.checked).length;
 const categorySuggestions = useMemo(() => {
 const fromItems = items.map((g: any) => (g.category ?? "").trim()).filter(Boolean);
@@ -726,7 +728,13 @@ return Array.from(new Set([...CHECKLIST_CATEGORY_PRESETS, ...fromItems])).sort((
 }, [items]);
 
 async function toggle(id: string, checked: boolean) {
-await supabase.from(table).update({ checked }).eq("id", id);
+setPendingId(id);
+const { data, error } = await supabase.from(table).update({ checked }).eq("id", id).select("id").maybeSingle();
+setPendingId(null);
+if (error) toast.error(error.message);
+else if (!data) toast.error("Nothing was updated — you may not have permission to edit this.");
+// Always refetch, success or not: the checkbox is controlled from server
+// data, so on failure this is also what snaps it back to the true value.
 qc.invalidateQueries({ queryKey: [queryKey, activeHouseholdId] });
 }
 
@@ -744,13 +752,19 @@ if (enableCategories) payload.category = newCategory.trim() || null;
 const { error } = await supabase.from(table).insert(payload);
 setAdding(false);
 if (error) { toast.error(error.message); return; }
+toast.success("Item added");
 setNewLabel("");
 setNewCategory("");
 qc.invalidateQueries({ queryKey: [queryKey, activeHouseholdId] });
 }
 
 async function deleteItem(id: string) {
-await supabase.from(table).delete().eq("id", id);
+setPendingId(id);
+const { data, error } = await supabase.from(table).delete().eq("id", id).select("id").maybeSingle();
+setPendingId(null);
+if (error) toast.error(error.message);
+else if (!data) toast.error("Nothing was deleted — you may not have permission to remove this.");
+else toast.success("Item removed");
 qc.invalidateQueries({ queryKey: [queryKey, activeHouseholdId] });
 }
 
@@ -758,12 +772,18 @@ async function saveEdit(id: string, categoryOverride?: string) {
 if (!editingLabel.trim()) { setEditingId(""); return; }
 const payload: Record<string, unknown> = { label: editingLabel.trim() };
 if (enableCategories) payload.category = (categoryOverride ?? editingCategory).trim() || null;
-await supabase.from(table).update(payload).eq("id", id);
+setPendingId(id);
+const { data, error } = await supabase.from(table).update(payload).eq("id", id).select("id").maybeSingle();
+setPendingId(null);
 setEditingId("");
 setEditingLabel("");
 setEditingCategory("");
+if (error) toast.error(error.message);
+else if (!data) toast.error("Nothing was saved — you may not have permission to edit this.");
+else toast.success("Saved");
 qc.invalidateQueries({ queryKey: [queryKey, activeHouseholdId] });
 }
+
 
 function renderItem(g: any) {
 const isEditing = editingId === g.id;
@@ -796,10 +816,10 @@ return (
 <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
 <input
 type="checkbox"
-defaultChecked={g.checked}
-disabled={!canEdit}
+checked={!!g.checked}
+disabled={!canEdit || pendingId === g.id}
 onChange={(e) => toggle(g.id, e.target.checked)}
-className="h-4 w-4 shrink-0 rounded border-border"
+className="h-4 w-4 shrink-0 rounded border-border disabled:opacity-60"
 />
 {rowContent}
 </label>
@@ -807,14 +827,16 @@ className="h-4 w-4 shrink-0 rounded border-border"
 <>
 <button
 onClick={() => { setEditingId(g.id); setEditingLabel(g.label); setEditingCategory(g.category ?? ""); }}
-className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent"
+disabled={pendingId === g.id}
+className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent disabled:opacity-60"
 aria-label="Edit item"
 >
 <span className="text-sm">✏️</span>
 </button>
 <button
 onClick={() => deleteItem(g.id)}
-className="shrink-0 rounded-md p-1 text-urgent hover:bg-urgent/10"
+disabled={pendingId === g.id}
+className="shrink-0 rounded-md p-1 text-urgent hover:bg-urgent/10 disabled:opacity-60"
 aria-label="Delete item"
 >
 <Trash2 className="h-3.5 w-3.5" />
