@@ -1,5 +1,33 @@
 import { createClient } from "@supabase/supabase-js";
 
+// Small retry wrapper for the daily table-read loop below. This loop makes
+// 22 sequential requests using the same client/credentials that fx-cron and
+// trash-cleanup-cron also use successfully in the same invocation — so a
+// one-off failure here (e.g. the PGRST303 "JWT issued at future" seen once,
+// Aug 2026) looks like a transient timing blip rather than a real problem
+// with the credentials themselves. This loop has 22x the exposure to that
+// kind of blip compared to the other two crons' 1-3 calls each, so it's the
+// one that actually needs a retry, not a signal something is wrong with the
+// approach. Two retries, short fixed backoff — deliberately not fancier
+// than that; if it's still failing after 3 attempts total, that's a real
+// problem worth surfacing loudly (the caller aborts the whole run), not
+// something to keep silently retrying around.
+async function selectAllWithRetry(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  table: string,
+  attempts = 3,
+): Promise<{ data: unknown[] | null; error: { message: string } | null }> {
+  let lastError: { message: string } | null = null;
+  for (let i = 0; i < attempts; i++) {
+    const { data, error } = await admin.from(table).select("*");
+    if (!error) return { data, error: null };
+    lastError = error;
+    if (i < attempts - 1) await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+  }
+  return { data: null, error: lastError };
+}
+
 // Runs from the same daily Cloudflare Cron Trigger as the FX rate fetch and
 // trash cleanup (see src/server.ts's `scheduled` export) — no new trigger
 // slot used. Writes one JSON file per day to the `familyhub-backups` R2
@@ -80,14 +108,14 @@ export async function runDailyBackup(env: BackupEnv): Promise<void> {
 
   const snapshot: Record<string, unknown> = {};
   for (const table of BACKUP_TABLES) {
-    const { data, error } = await admin.from(table).select("*");
+    const { data, error } = await selectAllWithRetry(admin, table);
     if (error) {
       // Abort the WHOLE day's backup rather than write a partial one — a
       // snapshot silently missing one table is worse than no snapshot at
       // all for a disaster-recovery tool, since nothing would flag the gap
       // until someone actually needed that table's data back.
       console.error(
-        `[backup-cron] Failed to read table "${table}" — aborting this run rather than writing an incomplete snapshot.`,
+        `[backup-cron] Failed to read table "${table}" after retries — aborting this run rather than writing an incomplete snapshot.`,
         error,
       );
       return;

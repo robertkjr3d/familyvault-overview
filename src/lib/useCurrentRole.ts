@@ -27,12 +27,13 @@ export function useCurrentRole() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("household_users" as any)
-        .select("household_id, role, households(id, name)")
+        .select("household_id, role, has_seen_tour, households(id, name)")
         .eq("user_id", user!.id);
       if (error) throw error;
       return (data ?? []) as unknown as Array<{
         household_id: string;
         role: Role;
+        has_seen_tour: boolean;
         households: { id: string; name: string } | null;
       }>;
     },
@@ -48,8 +49,12 @@ export function useCurrentRole() {
   const role: Role | null = selectedMembership?.role ?? null;
   const householdId: string | null = selectedMembership?.household_id ?? null;
   const householdName: string | null = selectedMembership?.households?.name ?? null;
+  // undefined (not false) while loading, so callers can tell "don't know
+  // yet" apart from "confirmed not seen" and avoid a flash of the welcome
+  // screen before the real value arrives.
+  const hasSeenTour: boolean | undefined = selectedMembership ? selectedMembership.has_seen_tour : undefined;
 
   const canEdit = role === "owner" || role === "member";
 
-  return { role, canEdit, isViewer: role === "viewer", isLoading, householdId, householdName };
+  return { role, canEdit, isViewer: role === "viewer", isLoading, householdId, householdName, hasSeenTour };
 }
