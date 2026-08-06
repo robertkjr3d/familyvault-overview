@@ -192,7 +192,7 @@ export function RecordFormSheet({
                   <div className="border-b border-border pb-1.5 pt-1 text-sm font-bold">{sec.title}</div>
                 )}
                 {visibleFields.map((f) => (
-                  <div key={f.key} className="space-y-1.5">
+                  <div key={f.key} className="space-y-1.5" data-tour={`field-${f.key}`}>
                     <Label htmlFor={f.key} className="text-xs">
                       <span className="flex items-center gap-1">
                         {f.label}
@@ -217,7 +217,7 @@ export function RecordFormSheet({
             <Button type="button" variant="outline" className="flex-1 cursor-pointer" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" className="flex-1 cursor-pointer" disabled={submitting}>
+            <Button type="submit" className="flex-1 cursor-pointer" disabled={submitting} data-tour="record-save">
               {submitting ? "Saving…" : "Save"}
             </Button>
           </div>

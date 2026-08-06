@@ -101,6 +101,7 @@ function TabItem({ t }: { t: Tab }) {
       <Link
         to={t.to}
         activeOptions={{ exact: t.to === "/" }}
+        data-tour={t.to === "/loans" ? "nav-loans" : t.to === "/" ? "nav-home" : undefined}
         className="group relative flex flex-col items-center py-2 text-[10px] text-muted-foreground transition-colors data-[status=active]:text-primary"
       >
         <span className="flex flex-col items-center gap-0.5 rounded-xl px-3 py-1 transition-colors group-data-[status=active]:bg-primary/10">

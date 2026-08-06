@@ -123,6 +123,7 @@ export function RecordCard({
 
   return (
     <article
+      data-tour="record-card"
       className={cn(
         "group relative rounded-2xl border shadow-sm transition",
         tintBg[status],
@@ -144,6 +145,7 @@ export function RecordCard({
         {onDuplicate && canEdit && (
           <button
             onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
+            data-tour="duplicate-icon"
             className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-background/60 hover:text-foreground"
             aria-label="Duplicate"
             title="Duplicate"
@@ -219,6 +221,7 @@ export function RecordCard({
             onClick={() => setOpen((v) => !v)}
             className="flex items-center"
             aria-label="Toggle status"
+            data-tour="status-toggle"
           >
             <StatusToggle value={status} onChange={onStatusChange} disabled={!canEdit} />
           </button>
@@ -250,7 +253,7 @@ export function RecordCard({
             </div>
           )}
         </div>
-        <button onClick={() => setOpen((v) => !v)} className="flex items-center gap-2" aria-label="Toggle details">
+        <button onClick={() => setOpen((v) => !v)} className="flex items-center gap-2" aria-label="Toggle details" data-tour="expand-card">
           {updatedAt && (() => {
             const updMs = new Date(updatedAt).getTime();
             const creMs = createdAt ? new Date(createdAt).getTime() : updMs;

@@ -41,7 +41,7 @@ export function MemberFilterBar({
   }, [table, countRows]);
 
   return (
-    <div className={cn("flex flex-wrap gap-2", className)}>
+    <div className={cn("flex flex-wrap gap-2", className)} data-tour="member-filter">
       <FilterChip
         active={memberFilter === "all"}
         onClick={() => setMemberFilter("all")}

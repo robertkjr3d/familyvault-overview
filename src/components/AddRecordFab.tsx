@@ -50,6 +50,7 @@ export function AddRecordFab({ configKey }: { configKey: keyof typeof recordConf
         type="button"
         aria-label={`Add ${cfg.label}`}
         onClick={onFabClick}
+        data-tour="add-record-fab"
         className="fixed bottom-24 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full text-white shadow-[0_4px_14px_rgba(0,0,0,0.18)] transition-transform duration-150 ease-out active:scale-95"
         style={{ background: "var(--aza)" }}
       >

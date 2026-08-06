@@ -11,6 +11,7 @@ export function CollapsibleSection({
   open: openProp,
   onOpenChange,
   children,
+  dataTour,
 }: {
   icon?: ReactNode;
   title: string;
@@ -24,6 +25,8 @@ export function CollapsibleSection({
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   children: ReactNode;
+  /** Optional anchor for the guided tour to target this specific section's header. */
+  dataTour?: string;
 }) {
   const [internalOpen, setInternalOpen] = useState(defaultOpen);
   const isControlled = openProp !== undefined;
@@ -42,6 +45,7 @@ export function CollapsibleSection({
       <button
         type="button"
         onClick={toggle}
+        data-tour={dataTour}
         className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm font-semibold"
       >
         <span className="flex items-center gap-2">
