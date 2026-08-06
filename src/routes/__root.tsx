@@ -13,6 +13,8 @@ import type { FormEvent } from "react";
 
 import appCss from "../styles.css?url";
 import { BottomTabs } from "@/components/BottomTabs";
+import { GuidedTour } from "@/components/GuidedTour";
+import { TourWelcomeScreen } from "@/components/TourWelcomeScreen";
 import { AppHeader } from "@/components/AppHeader";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -202,6 +204,8 @@ function RootContent() {
           <Outlet />
         </main>
         <BottomTabs />
+        <GuidedTour />
+        <TourWelcomeScreen />
         <Toaster position="bottom-right" richColors closeButton offset={{ bottom: 80 }} duration={1000} />
       </div>
     </ErrorBoundary>

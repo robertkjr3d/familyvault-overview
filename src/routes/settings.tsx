@@ -980,6 +980,28 @@ function SettingsPage() {
         </div>
       </section>
 
+      {/* Guided Tour */}
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <h2 className="mb-1 text-sm font-bold">Take the Tour</h2>
+        <p className="mb-3 text-xs text-muted-foreground">
+          A quick walkthrough of adding your first record and setting a reminder — the same tour new members see automatically on their first login.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => useAppStore.getState().startTour("core")}
+            className="rounded-lg border border-border px-3 py-2 text-sm font-semibold"
+          >
+            Take the Tour
+          </button>
+          <button
+            onClick={() => useAppStore.getState().startTour("extras")}
+            className="rounded-lg border border-border px-3 py-2 text-sm font-semibold"
+          >
+            More Tips & Tricks
+          </button>
+        </div>
+      </section>
+
       {/* Demo Mode */}
       <section className="rounded-2xl border border-review/40 bg-review-soft/20 p-4">
         <h2 className="mb-1 text-sm font-bold">Demo Mode</h2>

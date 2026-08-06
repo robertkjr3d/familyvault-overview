@@ -211,6 +211,7 @@ function LoanRow({
           title="Reminders"
           open={section === "reminders"}
           onOpenChange={(o) => setSection(o ? "reminders" : null)}
+          dataTour="reminders-section"
         >
           <RemindersList entityType="loan" entityId={l.id} />
           <div className="flex justify-end pt-1">

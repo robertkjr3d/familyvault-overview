@@ -694,7 +694,7 @@ return (
   </div>
 
   {/* DUE IN NEXT 90 DAYS */}
-  <section className="rounded-2xl border border-border bg-card p-4">
+  <section className="rounded-2xl border border-border bg-card p-4" data-tour="upcoming-section">
     <div className="mb-3 flex items-center justify-between">
       <h2 className="text-sm font-bold tracking-tight">Due in the Next 90 Days</h2>
       <div className="flex items-center gap-2">

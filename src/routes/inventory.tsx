@@ -1571,7 +1571,7 @@ return (
 <div className="space-y-1.5">
 <Label className="text-xs flex items-center gap-1">Warranty/Expiry date <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" /></Label>
 <div className="relative flex items-center">
-<Input type="date" value={warranty} onChange={(e) => setWarranty(e.target.value)} className="h-7 w-full pr-8" />
+<Input type="date" value={warranty} onChange={(e) => setWarranty(e.target.value)} className="h-9 w-full pr-8" />
 {warranty && (
 <button type="button" onClick={() => setWarranty("")} className="absolute right-2 flex items-center justify-center text-muted-foreground hover:text-foreground" aria-label="Clear date">
 <X className="h-4 w-4" />
@@ -1735,7 +1735,7 @@ return (
 <div className="space-y-1.5">
 <Label className="text-xs flex items-center gap-1">Warranty/Expiry date <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" /></Label>
 <div className="relative flex items-center">
-<Input type="date" value={warranty} onChange={(e) => setWarranty(e.target.value)} className="h-7 w-full pr-8" />
+<Input type="date" value={warranty} onChange={(e) => setWarranty(e.target.value)} className="h-9 w-full pr-8" />
 {warranty && (
 <button type="button" onClick={() => setWarranty("")} className="absolute right-2 flex items-center justify-center text-muted-foreground hover:text-foreground" aria-label="Clear date">
 <X className="h-4 w-4" />
