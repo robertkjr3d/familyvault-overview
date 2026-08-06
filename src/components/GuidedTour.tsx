@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "@tanstack/react-router";
 import { Pointer, X } from "lucide-react";
 import { useAppStore } from "@/lib/store";
@@ -33,7 +33,7 @@ export function GuidedTour() {
   const step = steps[tourStep];
 
   const [rect, setRect] = useState<Rect | null>(null);
-  const foundElRef = useRef<HTMLElement | null>(null);
+  const [foundEl, setFoundEl] = useState<HTMLElement | null>(null);
 
   // Navigate to this step's route if we're not already there. Generic and
   // safe to run on every step (not just the first) — if the user got here
@@ -53,26 +53,29 @@ export function GuidedTour() {
   // Find the target element. Polls rather than assuming it exists yet,
   // since it may only appear after a route change finishes rendering or a
   // Sheet finishes opening. MutationObserver catches most cases instantly;
-  // the interval is a defensive fallback.
+  // the interval is a defensive fallback. Tracks the element itself (not
+  // just its position) so a re-rendered replacement node — even one that
+  // lands at the exact same screen position — is detected and re-bound.
   useEffect(() => {
-    foundElRef.current = null;
+    setFoundEl(null);
     setRect(null);
     setStuck(false);
     if (!step) return;
     let cancelled = false;
+    let currentEl: HTMLElement | null = null;
 
     function tryFind() {
       const el = document.querySelector<HTMLElement>(`[data-tour="${step!.target}"]`);
-      if (el && !cancelled && foundElRef.current !== el) {
-        foundElRef.current = el;
+      if (el && !cancelled && currentEl !== el) {
+        currentEl = el;
+        setFoundEl(el);
         el.scrollIntoView({ behavior: "smooth", block: "center" });
         setTimeout(() => { if (!cancelled) updateRect(); }, 350);
       }
     }
     function updateRect() {
-      const el = foundElRef.current;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
+      if (!currentEl) return;
+      const r = currentEl.getBoundingClientRect();
       setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
     }
 
@@ -83,11 +86,9 @@ export function GuidedTour() {
     const onScrollResize = () => updateRect();
     window.addEventListener("scroll", onScrollResize, true);
     window.addEventListener("resize", onScrollResize);
-    // Safety net: if this step's target genuinely never shows up (e.g. the
-    // Extras tour's first step needs an existing record card and there
-    // isn't one yet), don't leave the person stuck under a dark overlay
-    // with no way out.
-    const stuckTimer = window.setTimeout(() => { if (!cancelled && !foundElRef.current) setStuck(true); }, 6000);
+    // Safety net: if this step's target genuinely never shows up, don't
+    // leave the person stuck under a dark overlay with no way out.
+    const stuckTimer = window.setTimeout(() => { if (!cancelled && !currentEl) setStuck(true); }, 6000);
 
     return () => {
       cancelled = true;
@@ -101,15 +102,16 @@ export function GuidedTour() {
 
   // Advancing the tour is also wired to a real click/tap on the actual
   // spotlighted element — the whole point of this tour is that people
-  // interact with the real app, not a copy of it.
+  // interact with the real app, not a copy of it. Depending on foundEl
+  // itself (not on rect) means this always attaches to the CURRENT real
+  // node, even if a re-render swapped it for a new one at the same spot.
   useEffect(() => {
-    const el = foundElRef.current;
-    if (!el || !rect) return;
+    if (!foundEl) return;
     const handler = () => advance();
-    el.addEventListener("click", handler);
-    return () => el.removeEventListener("click", handler);
+    foundEl.addEventListener("click", handler);
+    return () => foundEl.removeEventListener("click", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rect, tourStep, activeTour]);
+  }, [foundEl]);
 
   function advance() {
     if (tourStep >= steps.length - 1) {
@@ -129,18 +131,29 @@ export function GuidedTour() {
   if (!step) return null;
 
   if (stuck) {
+    const isLastStep = tourStep >= steps.length - 1;
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4">
         <div className="w-full max-w-sm rounded-2xl bg-card p-5 text-center shadow-2xl">
           <p className="text-sm text-muted-foreground">
-            Couldn't find what to show next here — this part of the tour needs at least one record already added.
+            Couldn't find what to show next here — maybe it's already done, or this step needs something set up first.
           </p>
-          <button
-            onClick={skip}
-            className="mt-4 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
-          >
-            Close tour
-          </button>
+          <div className="mt-4 flex flex-col gap-2">
+            {!isLastStep && (
+              <button
+                onClick={advanceTour}
+                className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+              >
+                Skip this step, keep going
+              </button>
+            )}
+            <button
+              onClick={skip}
+              className="rounded-full px-4 py-2 text-sm font-semibold text-muted-foreground"
+            >
+              Close tour
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -176,10 +189,11 @@ function Spotlight({ rect }: { rect: Rect | null }) {
         style={{ top, left, width: rect.width + PAD * 2, height: rect.height + PAD * 2 }}
       />
       <Pointer
-        className="absolute h-9 w-9 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.5)] animate-tour-point"
-        style={{ top: bottom - 6, left: left + 4 }}
-        strokeWidth={2.25}
-        fill="currentColor"
+        className="absolute h-9 w-9 drop-shadow-[0_2px_4px_rgba(0,0,0,0.35)] animate-tour-point"
+        style={{ top: bottom - 6, left: left + 4, color: "white" }}
+        strokeWidth={1.75}
+        stroke="#1a1a1a"
+        fill="white"
       />
     </>
   );
@@ -195,21 +209,48 @@ function TourCard({
   const vw = typeof window !== "undefined" ? window.innerWidth : 400;
   const vh = typeof window !== "undefined" ? window.innerHeight : 800;
 
-  const preferBelow = (step.placement ?? "bottom") === "bottom";
+  const placement = step.placement ?? "bottom";
   const spotBottom = rect.top + rect.height + PAD;
   const spotTop = rect.top - PAD;
-  const spaceBelow = vh - spotBottom;
-  const spaceAbove = spotTop;
-  const placeBelow = preferBelow ? spaceBelow > 140 || spaceBelow > spaceAbove : spaceBelow > spaceAbove;
+  const spotRight = rect.left + rect.width + PAD;
+  const spotLeft = rect.left - PAD;
 
-  const top = placeBelow ? Math.min(spotBottom + 40, vh - 180) : undefined;
-  const bottom = !placeBelow ? Math.max(vh - spotTop + 40, 16) : undefined;
-  const left = Math.min(Math.max(rect.left + rect.width / 2 - CARD_W / 2, MARGIN), vw - CARD_W - MARGIN);
+  let top: number | undefined;
+  let bottom: number | undefined;
+  let left: number;
+
+  if (placement === "left" || placement === "right") {
+    // Side placement: keep the card vertically level with the target,
+    // offset horizontally — this is what actually keeps it clear of a
+    // corner element like the FAB, instead of centering on top of it.
+    const desiredTop = rect.top + rect.height / 2 - 90;
+    top = Math.min(Math.max(desiredTop, MARGIN), vh - 200);
+    const fitsLeft = spotLeft - CARD_W - MARGIN > 0;
+    if (placement === "left" && fitsLeft) {
+      left = spotLeft - CARD_W - MARGIN;
+    } else if (placement === "right" && spotRight + CARD_W + MARGIN < vw) {
+      left = spotRight + MARGIN;
+    } else {
+      // Doesn't fit on the requested side (e.g. a narrow phone) — fall
+      // back to centered above/below rather than running off-screen.
+      left = Math.min(Math.max(rect.left + rect.width / 2 - CARD_W / 2, MARGIN), vw - CARD_W - MARGIN);
+      const spaceBelow = vh - spotBottom;
+      if (spaceBelow > 140) { top = spotBottom + 16; } else { top = undefined; bottom = Math.max(vh - spotTop + 16, 16); }
+    }
+  } else {
+    const preferBelow = placement === "bottom";
+    const spaceBelow = vh - spotBottom;
+    const spaceAbove = spotTop;
+    const placeBelow = preferBelow ? spaceBelow > 140 || spaceBelow > spaceAbove : spaceBelow > spaceAbove;
+    top = placeBelow ? Math.min(spotBottom + 16, vh - 200) : undefined;
+    bottom = !placeBelow ? Math.max(vh - spotTop + 16, 16) : undefined;
+    left = Math.min(Math.max(rect.left + rect.width / 2 - CARD_W / 2, MARGIN), vw - CARD_W - MARGIN);
+  }
 
   return (
     <div
       className="absolute rounded-2xl bg-card p-4 shadow-2xl border border-border"
-      style={{ width: CARD_W, left, top, bottom: bottom !== undefined ? bottom : undefined }}
+      style={{ width: CARD_W, left, top, bottom }}
     >
       <div className="mb-1.5 flex items-center justify-between">
         <span className="text-[11px] font-semibold text-muted-foreground">{index + 1} / {total}</span>
