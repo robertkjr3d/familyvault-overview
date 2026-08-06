@@ -368,6 +368,7 @@ export type Database = {
           role: string
           invited_by: string | null
           created_at: string
+          has_seen_tour: boolean
         }
         Insert: {
           household_id: string
@@ -375,6 +376,7 @@ export type Database = {
           role?: string
           invited_by?: string | null
           created_at?: string
+          has_seen_tour?: boolean
         }
         Update: {
           household_id?: string
@@ -382,6 +384,7 @@ export type Database = {
           role?: string
           invited_by?: string | null
           created_at?: string
+          has_seen_tour?: boolean
         }
         Relationships: [
           {
