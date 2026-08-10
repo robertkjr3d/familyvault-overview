@@ -21,6 +21,12 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { acceptPendingInvitesForCurrentUser, createOwnHousehold } from "@/lib/householdInvites";
+import {
+  acceptPendingAdvisorInvitesForCurrentUser,
+  listClientHouseholdsForAdvisor,
+} from "@/lib/advisorAccess";
+import { computeRootViewMode } from "@/lib/rootViewMode";
+import { AdvisorHome } from "@/components/AdvisorHome";
 import { useAppStore } from "@/lib/store";
 import { toast } from "sonner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -155,6 +161,39 @@ function RootContent() {
     };
   }, [session?.user?.id, setActiveHouseholdId, queryClient]);
 
+  // Separate and independent from the family-invite effect above on purpose:
+  // an advisor accepting a share doesn't join a household or need the
+  // inviteCheckDone/household-switch gating that effect carefully manages —
+  // merging the two risked disturbing logic already tuned for a real
+  // incident history in this exact file. See acceptPendingAdvisorInvitesForCurrentUser
+  // in advisorAccess.ts for what this actually does.
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    let cancelled = false;
+
+    void acceptPendingAdvisorInvitesForCurrentUser()
+      .then((result) => {
+        if (cancelled) return;
+        if (result?.acceptedHouseholdIds?.length) {
+          toast.success(
+            result.acceptedHouseholdIds.length > 1
+              ? "You now have advisor access to multiple households."
+              : "You now have advisor access to a household.",
+          );
+        }
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        const message =
+          error instanceof Error ? error.message : "Unable to check for pending advisor invites.";
+        toast.error(message);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id]);
+
   const { data: memberships, isLoading: membershipsLoading } = useQuery({
     queryKey: ["household-memberships", session?.user?.id],
     enabled: !!session?.user?.id && !isPublicRoute,
@@ -168,11 +207,30 @@ function RootContent() {
     },
   });
 
+  // Only relevant once memberships is known to be empty, but firing it in
+  // parallel (rather than waiting) keeps this simple and costs nothing for
+  // the common family-user case, who just gets an unused empty result.
+  const { data: advisorClientsData, isLoading: advisorClientsLoading } = useQuery({
+    queryKey: ["advisor-clients", session?.user?.id],
+    enabled: !!session?.user?.id && !isPublicRoute,
+    queryFn: () => listClientHouseholdsForAdvisor(),
+  });
+
   if (isPublicRoute) {
     return <Outlet />;
   }
 
-  if (!initialized) {
+  const viewMode = computeRootViewMode({
+    initialized,
+    hasSession: !!session,
+    inviteCheckDone,
+    membershipsLoading,
+    membershipsCount: memberships ? memberships.length : null,
+    advisorClientsLoading,
+    advisorClientsCount: advisorClientsData ? advisorClientsData.clients.length : null,
+  });
+
+  if (viewMode === "loading") {
     return (
       <div className="flex min-h-screen items-center justify-center p-6 text-sm text-muted-foreground">
         Loading...
@@ -180,20 +238,16 @@ function RootContent() {
     );
   }
 
-  if (!session) {
+  if (viewMode === "sign-in") {
     return <SignInScreen />;
   }
 
-  if (!inviteCheckDone || membershipsLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center p-6 text-sm text-muted-foreground">
-        Loading...
-      </div>
-    );
+  if (viewMode === "no-access") {
+    return <NoHouseholdScreen />;
   }
 
-  if (memberships && memberships.length === 0) {
-    return <NoHouseholdScreen />;
+  if (viewMode === "advisor-only") {
+    return <AdvisorHome />;
   }
 
   return (
