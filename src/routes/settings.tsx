@@ -19,6 +19,7 @@ import { useAuthSession } from "@/hooks/useAuthSession";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { NativeSelect } from "@/components/ui/native-select";
 import { HashHighlight } from "@/components/HashHighlight";
+import { AdvisorSharingSection } from "@/components/AdvisorSharingSection";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -708,6 +709,8 @@ function SettingsPage() {
           </ul>
         </div>
       </section>
+
+      <AdvisorSharingSection />
 
       {/* Household Finances */}
       <section className="rounded-2xl border border-border bg-card p-4">
