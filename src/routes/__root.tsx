@@ -73,7 +73,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <head><HeadContent /></head>
+      <head>
+        <HeadContent />
+      </head>
       <body>
         {children}
         <Scripts />
@@ -134,7 +136,7 @@ function RootContent() {
           toast.success(
             result.acceptedHouseholdIds.length > 1
               ? "Invitations accepted."
-              : "Invitation accepted."
+              : "Invitation accepted.",
           );
         }
         if (cancelled) return;
@@ -152,7 +154,8 @@ function RootContent() {
       .catch((error: unknown) => {
         if (cancelled) return;
         setInviteCheckDone(true);
-        const message = error instanceof Error ? error.message : "Unable to check for pending invites.";
+        const message =
+          error instanceof Error ? error.message : "Unable to check for pending invites.";
         toast.error(message);
       });
 
@@ -172,9 +175,15 @@ function RootContent() {
     let cancelled = false;
 
     void acceptPendingAdvisorInvitesForCurrentUser()
-      .then((result) => {
+      .then(async (result) => {
         if (cancelled) return;
         if (result?.acceptedHouseholdIds?.length) {
+          // This was the actual bug: the link was created successfully (this
+          // toast fired), but nothing told react-query the advisor-clients
+          // query was now stale, so rootViewMode kept deciding based on the
+          // old (zero-clients) snapshot forever — stuck on "no household
+          // access" even after a genuinely successful accept.
+          await queryClient.invalidateQueries({ queryKey: ["advisor-clients"] });
           toast.success(
             result.acceptedHouseholdIds.length > 1
               ? "You now have advisor access to multiple households."
@@ -192,7 +201,7 @@ function RootContent() {
     return () => {
       cancelled = true;
     };
-  }, [session?.user?.id]);
+  }, [session?.user?.id, queryClient]);
 
   const { data: memberships, isLoading: membershipsLoading } = useQuery({
     queryKey: ["household-memberships", session?.user?.id],
@@ -228,6 +237,9 @@ function RootContent() {
     membershipsCount: memberships ? memberships.length : null,
     advisorClientsLoading,
     advisorClientsCount: advisorClientsData ? advisorClientsData.clients.length : null,
+    wantsAdvisorView:
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("view") === "advisor",
   });
 
   if (viewMode === "loading") {
@@ -260,7 +272,13 @@ function RootContent() {
         <BottomTabs />
         <GuidedTour />
         <TourWelcomeScreen />
-        <Toaster position="bottom-right" richColors closeButton offset={{ bottom: 80 }} duration={1000} />
+        <Toaster
+          position="bottom-right"
+          richColors
+          closeButton
+          offset={{ bottom: 80 }}
+          duration={1000}
+        />
       </div>
     </ErrorBoundary>
   );
@@ -298,11 +316,16 @@ function NoHouseholdScreen() {
         <div className="p-6">
           <h1 className="text-lg font-semibold tracking-tight">No household access</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            You're signed in, but you're not currently part of any household. If you were
-            recently removed, or you're waiting on an invite, check with whoever manages the
-            household you're expecting access to. Otherwise, you can start your own.
+            You're signed in, but you're not currently part of any household. If you were recently
+            removed, or you're waiting on an invite, check with whoever manages the household you're
+            expecting access to. Otherwise, you can start your own.
           </p>
-          <Button type="button" onClick={handleCreateOwn} disabled={creating} className="mt-5 w-full">
+          <Button
+            type="button"
+            onClick={handleCreateOwn}
+            disabled={creating}
+            className="mt-5 w-full"
+          >
             {creating ? "Creating..." : "Create your own household"}
           </Button>
           <Button type="button" variant="outline" onClick={handleSignOut} className="mt-2 w-full">
@@ -328,7 +351,13 @@ const TURNSTILE_SITE_KEY = "0x4AAAAAAD-_TZ38lRs8wlpW";
  * onToken(token) once a token is ready; parent must call reset() to get a
  * fresh token after each use, since Turnstile tokens are single-use.
  */
-function TurnstileWidget({ onToken, resetKey }: { onToken: (token: string | null) => void; resetKey: number }) {
+function TurnstileWidget({
+  onToken,
+  resetKey,
+}: {
+  onToken: (token: string | null) => void;
+  resetKey: number;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
 
@@ -340,16 +369,22 @@ function TurnstileWidget({ onToken, resetKey }: { onToken: (token: string | null
       if (cancelled || !containerRef.current || !w.turnstile) return;
       widgetIdRef.current = w.turnstile.render(containerRef.current, {
         sitekey: TURNSTILE_SITE_KEY,
-        callback: (token: string) => { if (!cancelled) onToken(token); },
-        "expired-callback": () => { if (!cancelled) onToken(null); },
-        "error-callback": () => { if (!cancelled) onToken(null); },
+        callback: (token: string) => {
+          if (!cancelled) onToken(token);
+        },
+        "expired-callback": () => {
+          if (!cancelled) onToken(null);
+        },
+        "error-callback": () => {
+          if (!cancelled) onToken(null);
+        },
       });
     }
 
     const w = window as any;
     if (w.turnstile) {
       render();
-    } else if (!document.querySelector('script[data-turnstile]')) {
+    } else if (!document.querySelector("script[data-turnstile]")) {
       const script = document.createElement("script");
       script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
       script.async = true;
@@ -358,11 +393,14 @@ function TurnstileWidget({ onToken, resetKey }: { onToken: (token: string | null
       script.addEventListener("load", render);
       document.head.appendChild(script);
     } else {
-      document.querySelector('script[data-turnstile]')?.addEventListener("load", render);
+      document.querySelector("script[data-turnstile]")?.addEventListener("load", render);
       // Script tag already exists from a previous mount — poll briefly in
       // case it finished loading before this effect ran.
       const interval = setInterval(() => {
-        if ((window as any).turnstile) { clearInterval(interval); render(); }
+        if ((window as any).turnstile) {
+          clearInterval(interval);
+          render();
+        }
       }, 100);
       setTimeout(() => clearInterval(interval), 5000);
     }
@@ -405,13 +443,17 @@ function SignInScreen() {
     const t = setTimeout(() => setCaptchaTimedOut(true), 8000);
     return () => clearTimeout(t);
   }, [captchaResetKey]);
-  const inviteMode = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("invite");
+  const inviteMode =
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).has("invite");
 
   async function sendMagicLink() {
     setLoading(true);
     setError(null);
 
-    const inviteToken = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("invite") : null;
+    const inviteToken =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("invite")
+        : null;
     const base = typeof window !== "undefined" ? window.location.origin : undefined;
     let redirectTo = base;
     if (base && typeof window !== "undefined") {
@@ -524,7 +566,11 @@ function SignInScreen() {
             <p className="mt-1 text-xs text-muted-foreground">
               Enter your email above and we'll email you a code to register.
             </p>
-            <TurnstileWidget key={captchaResetKey} resetKey={captchaResetKey} onToken={setCaptchaToken} />
+            <TurnstileWidget
+              key={captchaResetKey}
+              resetKey={captchaResetKey}
+              onToken={setCaptchaToken}
+            />
             <Button
               type="button"
               variant="outline"
@@ -532,7 +578,11 @@ function SignInScreen() {
               disabled={loading || !email || (!captchaToken && !captchaTimedOut)}
               className="mt-2 w-full"
             >
-              {loading ? "Sending..." : !captchaToken && !captchaTimedOut ? "Verifying you're human…" : "Email me a code"}
+              {loading
+                ? "Sending..."
+                : !captchaToken && !captchaTimedOut
+                  ? "Verifying you're human…"
+                  : "Email me a code"}
             </Button>
             {sentTo && <p className="mt-2 text-xs text-settled">New code sent to {sentTo}.</p>}
           </div>
@@ -541,8 +591,14 @@ function SignInScreen() {
 
           <p className="mt-5 text-center text-[11px] text-muted-foreground">
             By continuing, you agree to our{" "}
-            <Link to="/terms" className="underline">Terms of Service</Link> and{" "}
-            <Link to="/privacy" className="underline">Privacy Policy</Link>.
+            <Link to="/terms" className="underline">
+              Terms of Service
+            </Link>{" "}
+            and{" "}
+            <Link to="/privacy" className="underline">
+              Privacy Policy
+            </Link>
+            .
           </p>
         </div>
       </div>
