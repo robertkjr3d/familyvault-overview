@@ -108,7 +108,13 @@ export function AdvisorHome() {
           />
         )}
 
-        <div className="mt-8 border-t border-border/40 pt-4">
+        <div className="mt-8 space-y-2 border-t border-border/40 pt-4">
+          <a
+            href="/"
+            className="block w-full rounded-lg border border-border px-4 py-2 text-center text-sm font-semibold text-primary"
+          >
+            ← Back to FamilyHub
+          </a>
           <Button type="button" variant="outline" onClick={handleSignOut} className="w-full">
             Sign out
           </Button>
