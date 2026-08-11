@@ -6,6 +6,7 @@ import {
   revokeAdvisorAccess,
   cancelPendingAdvisorInvite,
   listAdvisorsForHousehold,
+  listClientHouseholdsForAdvisor,
 } from "@/lib/advisorAccess";
 import { useCurrentRole } from "@/lib/useCurrentRole";
 
@@ -29,6 +30,15 @@ export function AdvisorSharingSection() {
     queryKey: ["advisor-access", householdId],
     enabled: !!householdId,
     queryFn: () => listAdvisorsForHousehold({ data: { householdId: householdId! } }),
+  });
+
+  // Independent of everything else on this screen: does THIS person also
+  // happen to have advisor access to some other household? If so, they need
+  // a discoverable way to actually reach that view — a dual-role person
+  // otherwise has no path to it at all once they also have a household.
+  const { data: myAdvisorClients } = useQuery({
+    queryKey: ["advisor-clients"],
+    queryFn: () => listClientHouseholdsForAdvisor(),
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["advisor-access", householdId] });
@@ -92,6 +102,15 @@ export function AdvisorSharingSection() {
   return (
     <section className="rounded-2xl border border-border bg-card p-4">
       <h2 className="mb-1 text-sm font-bold">Financial Advisor Access</h2>
+      {(myAdvisorClients?.clients.length ?? 0) > 0 && (
+        <a
+          href="/?view=advisor"
+          className="mb-3 block rounded-lg bg-accent px-3 py-2 text-xs font-medium text-accent-foreground"
+        >
+          You also have adviser access to {myAdvisorClients!.clients.length} household
+          {myAdvisorClients!.clients.length === 1 ? "" : "s"} — tap to view →
+        </a>
+      )}
       <p className="mb-3 text-xs text-muted-foreground">
         Share a limited view with an adviser you work with. Insurance and investments show real
         entries; a net worth summary (if you choose to share it) shows one combined total only —
