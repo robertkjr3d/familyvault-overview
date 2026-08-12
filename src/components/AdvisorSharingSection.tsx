@@ -9,6 +9,7 @@ import {
   listClientHouseholdsForAdvisor,
 } from "@/lib/advisorAccess";
 import { useCurrentRole } from "@/lib/useCurrentRole";
+import { useMembers } from "@/hooks/useMembers";
 
 const CATEGORY_LABELS: Record<string, string> = {
   canViewInsurance: "Insurance",
@@ -25,6 +26,15 @@ export function AdvisorSharingSection() {
   const [canViewInsurance, setCanViewInsurance] = useState(true);
   const [canViewInvestments, setCanViewInvestments] = useState(true);
   const [canViewNetworthSummary, setCanViewNetworthSummary] = useState(true);
+  // Deliberately starts empty, not "everyone" — sharing a member is an
+  // opt-in action the household owner takes per person, not a default.
+  const [memberIds, setMemberIds] = useState<string[]>([]);
+
+  const { data: members = [] } = useMembers();
+
+  function toggleMember(id: string) {
+    setMemberIds((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ["advisor-access", householdId],
@@ -52,11 +62,13 @@ export function AdvisorSharingSection() {
           canViewInsurance,
           canViewInvestments,
           canViewNetworthSummary,
+          memberIds,
         },
       }),
     onSuccess: () => {
       toast.success(`Invite sent to ${email}`);
       setEmail("");
+      setMemberIds([]);
       invalidate();
     },
     onError: (error: unknown) => {
@@ -129,6 +141,11 @@ export function AdvisorSharingSection() {
                 <p className="truncate text-[10px] text-muted-foreground">
                   {activeCategoryLabels(a) || "No categories shared"}
                 </p>
+                <p className="truncate text-[10px] text-muted-foreground">
+                  {a.memberNames.length > 0
+                    ? `Sees: ${a.memberNames.join(", ")}`
+                    : "No members shared — nothing visible yet"}
+                </p>
                 {(() => {
                   const renewedAt = new Date(a.consentRenewedAt);
                   const daysLeft = Math.round(
@@ -199,6 +216,10 @@ export function AdvisorSharingSection() {
           onSubmit={(e) => {
             e.preventDefault();
             if (!email.trim() || !householdId) return;
+            if (memberIds.length === 0) {
+              toast.error("Select at least one member to share.");
+              return;
+            }
             inviteMutation.mutate();
           }}
         >
@@ -215,6 +236,30 @@ export function AdvisorSharingSection() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">
+              Which household members can they see
+            </p>
+            {members.length === 0 && (
+              <p className="text-xs text-muted-foreground">No members set up yet.</p>
+            )}
+            {members.map((m) => (
+              <label key={m.id} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={memberIds.includes(m.id)}
+                  onChange={() => toggleMember(m.id)}
+                />
+                {m.name}
+              </label>
+            ))}
+            <p className="text-xs text-muted-foreground">
+              An FA sees each selected member as a separate profile — never a combined household
+              total. Anything not tied to one member (e.g. unassigned records) is visible on every
+              selected member's profile.
+            </p>
           </div>
 
           <div className="space-y-1.5">
@@ -255,7 +300,7 @@ export function AdvisorSharingSection() {
           <button
             type="submit"
             className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-            disabled={inviteMutation.isPending || !householdId}
+            disabled={inviteMutation.isPending || !householdId || memberIds.length === 0}
           >
             {inviteMutation.isPending ? "Sending..." : "Share access"}
           </button>

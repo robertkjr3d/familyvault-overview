@@ -6,6 +6,7 @@ import {
   getClientRecordsForAdvisor,
   getAdvisorNetworthSummary,
   STALE_AFTER_DAYS,
+  ADVISOR_ALERT_HORIZON_DAYS,
 } from "@/lib/advisorAccess";
 import { generateAndDownloadAdvisorPdf } from "@/lib/advisorPdf";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,8 +22,13 @@ const CATEGORY_TITLES: Record<string, string> = {
   investments: "Investments",
 };
 
+// A "client" here is a (household, member) PAIR — a household that has
+// shared 2 members with the same advisor produces 2 separate cards, never
+// one combined household total. See listClientHouseholdsForAdvisor.
+type SelectedClient = { householdId: string; memberId: string };
+
 export function AdvisorHome() {
-  const [selectedHouseholdId, setSelectedHouseholdId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<SelectedClient | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["advisor-clients"],
@@ -34,7 +40,9 @@ export function AdvisorHome() {
   }
 
   const clients = data?.clients ?? [];
-  const selectedClient = clients.find((c) => c.householdId === selectedHouseholdId) ?? null;
+  const selectedClient =
+    clients.find((c) => c.householdId === selected?.householdId && c.memberId === selected?.memberId) ??
+    null;
 
   return (
     <div className="min-h-screen bg-background pb-16">
@@ -58,23 +66,24 @@ export function AdvisorHome() {
                   : (() => {
                       const dueCount = clients.filter((c) => c.upcomingCount > 0).length;
                       return dueCount > 0
-                        ? `${dueCount} of ${clients.length} client${clients.length === 1 ? "" : "s"} ${dueCount === 1 ? "has" : "have"} something due soon.`
-                        : `${clients.length} client${clients.length === 1 ? "" : "s"} — nothing due in the next ${30} days.`;
+                        ? `${dueCount} of ${clients.length} client${clients.length === 1 ? "" : "s"} ${dueCount === 1 ? "has" : "have"} something due in the next ${ADVISOR_ALERT_HORIZON_DAYS} days — insurance & investments only.`
+                        : `${clients.length} client${clients.length === 1 ? "" : "s"} — nothing due in the next ${ADVISOR_ALERT_HORIZON_DAYS} days (insurance & investments only).`;
                     })()}
             </p>
             <div className="space-y-2">
               {clients.map((c) => (
                 <button
-                  key={c.householdId}
+                  key={`${c.householdId}:${c.memberId}`}
                   onPointerDown={(e) => {
                     e.preventDefault();
-                    setSelectedHouseholdId(c.householdId);
+                    setSelected({ householdId: c.householdId, memberId: c.memberId });
                   }}
                   className="flex w-full items-center justify-between rounded-2xl border border-border bg-card p-4 text-left"
                 >
                   <div className="min-w-0">
-                    <p className="truncate font-semibold">{c.householdName}</p>
+                    <p className="truncate font-semibold">{c.memberName}</p>
                     <p className="truncate text-xs text-muted-foreground">
+                      {c.householdName} ·{" "}
                       {[c.canViewInsurance && "Insurance", c.canViewInvestments && "Investments"]
                         .filter(Boolean)
                         .join(", ") || "No categories shared"}
@@ -103,8 +112,10 @@ export function AdvisorHome() {
           <ClientDetail
             householdId={selectedClient.householdId}
             householdName={selectedClient.householdName}
+            memberId={selectedClient.memberId}
+            memberName={selectedClient.memberName}
             canViewNetworthSummary={selectedClient.canViewNetworthSummary}
-            onBack={() => setSelectedHouseholdId(null)}
+            onBack={() => setSelected(null)}
           />
         )}
 
@@ -134,23 +145,32 @@ export function AdvisorHome() {
 function ClientDetail({
   householdId,
   householdName,
+  memberId,
+  memberName,
   canViewNetworthSummary,
   onBack,
 }: {
   householdId: string;
   householdName: string;
+  memberId: string;
+  memberName: string;
   canViewNetworthSummary: boolean;
   onBack: () => void;
 }) {
   const { data, isLoading, error } = useQuery({
-    queryKey: ["advisor-client-records", householdId],
-    queryFn: () => getClientRecordsForAdvisor({ data: { householdId } }),
+    queryKey: ["advisor-client-records", householdId, memberId],
+    queryFn: () => getClientRecordsForAdvisor({ data: { householdId, memberId } }),
   });
 
   // Deliberately a separate query from the records above — on a slow
   // connection, one being slow must never block the other from showing up
   // as soon as it's ready, and a failure here shouldn't blank the records
   // list that loaded fine.
+  //
+  // Net worth is intentionally still household-level, not member-level —
+  // savings/properties/loans feed this number and have their own
+  // joint-ownership semantics that per-member scoping doesn't cover yet.
+  // Shown once per household regardless of which member card is open.
   const {
     data: networth,
     isLoading: networthLoading,
@@ -168,10 +188,12 @@ function ClientDetail({
     try {
       await generateAndDownloadAdvisorPdf({
         householdName,
+        memberName,
         generatedAt: new Date(),
         netWorth: canViewNetworthSummary && networth ? networth : null,
         records,
         staleAfterDays: STALE_AFTER_DAYS,
+        upcomingHorizonDays: ADVISOR_ALERT_HORIZON_DAYS,
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Unable to generate the PDF.");
@@ -207,14 +229,17 @@ function ClientDetail({
         ← All clients
       </button>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-bold">{householdName}</h2>
+        <div className="min-w-0">
+          <h2 className="truncate text-base font-bold">{memberName}</h2>
+          <p className="truncate text-xs text-muted-foreground">{householdName}</p>
+        </div>
         <button
           onPointerDown={(e) => {
             e.preventDefault();
             if (!isLoading && !isDownloading) void handleDownloadPdf();
           }}
           disabled={isLoading || isDownloading}
-          className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-primary disabled:opacity-40"
+          className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-primary disabled:opacity-40"
         >
           {isDownloading ? "Generating..." : "Download PDF"}
         </button>
@@ -234,7 +259,7 @@ function ClientDetail({
           {!networthLoading && networth?.hasData && (
             <>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Net worth (combined total)
+                Household net worth (combined total — not {memberName}'s individually)
               </p>
               <p className="text-2xl font-bold">{fmtMoney(networth.netWorth, "SGD")}</p>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -287,7 +312,7 @@ function ClientDetail({
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {[
-                      r.member_name,
+                      r.member_id == null ? "Unassigned" : r.member_name,
                       r.end_date && `Ends ${fmtDate(r.end_date)}`,
                       r.is_giro && "GIRO",
                     ]
