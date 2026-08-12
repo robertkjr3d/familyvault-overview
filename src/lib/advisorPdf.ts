@@ -16,9 +16,11 @@ export type AdvisorPdfRecord = {
   record_name: string;
   insurance_category?: string | null;
   premium?: number | null;
+  frequency?: string | null;
   sum_assured?: number | null;
   currency?: string | null;
   member_name?: string | null;
+  member_id?: string | null;
   end_date?: string | null;
   is_giro?: boolean | null;
   last_updated?: string | null;
@@ -26,6 +28,11 @@ export type AdvisorPdfRecord = {
 
 export type AdvisorPdfData = {
   householdName: string;
+  // Set when the PDF is for one member's card, not a whole-household view —
+  // the FA-side dashboard is now always member-scoped, so this is populated
+  // in practice, but stays optional so this function has no hard dependency
+  // on that caller.
+  memberName?: string | null;
   generatedAt: Date;
   netWorth: {
     totalAssets: number;
@@ -35,6 +42,11 @@ export type AdvisorPdfData = {
   } | null;
   records: AdvisorPdfRecord[];
   staleAfterDays: number;
+  // Single source of truth for the "upcoming" window is
+  // ADVISOR_ALERT_HORIZON_DAYS in advisorAccess.ts — passed in by the
+  // caller rather than hardcoded here a second time, so the badge count on
+  // the dashboard and this PDF can never silently drift apart.
+  upcomingHorizonDays: number;
 };
 
 function fmtMoneyForPdf(n: number | null | undefined, currency?: string | null): string {
@@ -43,6 +55,28 @@ function fmtMoneyForPdf(n: number | null | undefined, currency?: string | null):
   const formatted = rounded.toLocaleString("en-US");
   const code = currency && currency !== "SGD" ? currency : "$";
   return code === "$" ? `$${formatted}` : `${code} ${formatted}`;
+}
+
+// FREQ_LABEL is the app's own existing frequency-label map (src/lib/options.ts)
+// — reused here rather than re-guessing labels, so "monthly" reads the same
+// way everywhere in the app, in the PDF included.
+const FREQ_LABEL: Record<string, string> = {
+  annual: "year",
+  "semi-annual": "half-year",
+  quarterly: "quarter",
+  monthly: "month",
+  "one-off": "one-off",
+};
+
+function fmtAmountForPdf(r: AdvisorPdfRecord): { value: string; label: string } {
+  if (r.category === "investments") {
+    return { value: fmtMoneyForPdf(r.sum_assured, r.currency), label: "Current value" };
+  }
+  const amount = r.premium ?? r.sum_assured;
+  const value = fmtMoneyForPdf(amount, r.currency);
+  if (r.premium == null) return { value, label: "Sum assured" };
+  const freqLabel = r.frequency ? FREQ_LABEL[r.frequency] : null;
+  return { value, label: freqLabel ? `Premium / ${freqLabel}` : "Premium" };
 }
 
 function fmtDateForPdf(d: string | null | undefined): string {
@@ -70,7 +104,8 @@ export async function generateAndDownloadAdvisorPdf(data: AdvisorPdfData) {
   const pdfLib = await import("https://esm.sh/pdf-lib@1.17.1");
   const bytes = await buildAdvisorPdfBytes(pdfLib, data);
   const blob = new Blob([new Uint8Array(bytes)], { type: "application/pdf" });
-  const safeName = data.householdName.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+  const namePart = [data.householdName, data.memberName].filter(Boolean).join("-");
+  const safeName = namePart.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
   downloadBlob(blob, `${safeName}-summary-${data.generatedAt.toISOString().slice(0, 10)}.pdf`);
 }
 
@@ -112,6 +147,16 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
     font: fontBold,
     color: colorPrimary,
   });
+  if (data.memberName) {
+    y -= 20;
+    page.drawText(data.memberName, {
+      x: margin,
+      y,
+      size: 12,
+      font,
+      color: colorMuted,
+    });
+  }
   y -= 8;
   page.drawLine({
     start: { x: margin, y },
@@ -170,13 +215,20 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
     y -= 34;
   }
 
-  // --- Upcoming alerts (30-day horizon, computed by the caller) ---
+  // --- Upcoming alerts, bounded on BOTH ends. The previous version only
+  // checked `days <= horizonDays`, so a policy that lapsed over a year ago
+  // (a large NEGATIVE days value) also passed and showed up as "upcoming" —
+  // confirmed bug, not a display quirk. Requiring days >= 0 as well fixes
+  // it. Sorted soonest-first, matching what "upcoming" should mean rather
+  // than whatever order the query happened to return.
   const now = Date.now();
-  const soon = data.records.filter((r) => {
-    if (!r.end_date) return false;
-    const days = (new Date(r.end_date).getTime() - now) / (1000 * 60 * 60 * 24);
-    return days <= 30;
-  });
+  const soon = data.records
+    .filter((r) => {
+      if (!r.end_date) return false;
+      const days = (new Date(r.end_date).getTime() - now) / (1000 * 60 * 60 * 24);
+      return days >= 0 && days <= data.upcomingHorizonDays;
+    })
+    .sort((a, b) => new Date(a.end_date!).getTime() - new Date(b.end_date!).getTime());
   if (soon.length > 0) {
     const boxHeight = 20 + soon.length * 16;
     page.drawRectangle({
@@ -187,7 +239,7 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
       color: colorUrgentBg,
     });
     let alertY = y - 16;
-    page.drawText("UPCOMING", {
+    page.drawText(`UPCOMING PREMIUMS — NEXT ${data.upcomingHorizonDays} DAYS`, {
       x: margin + 10,
       y: alertY,
       size: 9,
@@ -196,7 +248,7 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
     });
     alertY -= 16;
     for (const r of soon) {
-      page.drawText(`${r.record_name} — ${fmtDateForPdf(r.end_date)}`, {
+      page.drawText(`${r.record_name} — due ${fmtDateForPdf(r.end_date)}`, {
         x: margin + 10,
         y: alertY,
         size: 10,
@@ -208,10 +260,22 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
     y -= boxHeight + 24;
   }
 
-  // --- Itemized records, no year-by-year breakdown ---
+  // --- Itemized records, no year-by-year breakdown. Sorted chronologically
+  // (soonest end date first, undated items last) rather than alphabetically
+  // — the query's default alpha-by-name order is fine for lookup, but a
+  // premium/renewal list read top-to-bottom should read like a to-do list,
+  // not a phone book.
   const byCategory: Record<string, AdvisorPdfRecord[]> = {};
   for (const r of data.records) {
     (byCategory[r.category] ??= []).push(r);
+  }
+  for (const items of Object.values(byCategory)) {
+    items.sort((a, b) => {
+      if (!a.end_date && !b.end_date) return 0;
+      if (!a.end_date) return 1;
+      if (!b.end_date) return -1;
+      return new Date(a.end_date).getTime() - new Date(b.end_date).getTime();
+    });
   }
   const categoryTitles: Record<string, string> = {
     insurance: "Insurance",
@@ -230,9 +294,8 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
     y -= 20;
     for (const r of items) {
       if (y < 100) break;
-      const amount = category === "investments" ? r.sum_assured : (r.premium ?? r.sum_assured);
+      const { value: amountStr, label: amountLabel } = fmtAmountForPdf(r);
       page.drawText(r.record_name, { x: margin, y, size: 10, font, color: rgb(0, 0, 0) });
-      const amountStr = fmtMoneyForPdf(amount, r.currency);
       page.drawText(amountStr, {
         x: width - margin - font.widthOfTextAtSize(amountStr, 10),
         y,
@@ -240,8 +303,16 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
         font,
         color: rgb(0, 0, 0),
       });
-      y -= 14;
-      const subLine = [r.insurance_category, r.member_name, r.is_giro ? "GIRO" : null]
+      y -= 11;
+      page.drawText(amountLabel, {
+        x: width - margin - font.widthOfTextAtSize(amountLabel, 7.5),
+        y,
+        size: 7.5,
+        font,
+        color: colorMuted,
+      });
+      y -= 3;
+      const subLine = [r.insurance_category, r.member_id == null ? "Unassigned" : r.member_name, r.is_giro ? "GIRO" : null]
         .filter(Boolean)
         .join(" · ");
       if (subLine) {
