@@ -26,6 +26,15 @@ export type AdvisorPdfRecord = {
   last_updated?: string | null;
 };
 
+// Deliberately just {date, label, overdue?} — the caller's alerts.ts engine
+// already produced the correct label text ("X — premium due" / "— premium
+// overdue"), so this function only ever displays it, never recomputes it.
+export type AdvisorPdfUpcomingItem = {
+  date: string;
+  label: string;
+  overdue?: boolean;
+};
+
 export type AdvisorPdfData = {
   householdName: string;
   // Set when the PDF is for one member's card, not a whole-household view —
@@ -41,6 +50,12 @@ export type AdvisorPdfData = {
     hasData: boolean;
   } | null;
   records: AdvisorPdfRecord[];
+  // Pre-computed by the caller via the shared alerts.ts engine (start_date +
+  // frequency, not a raw end_date — see the fix note where this used to be
+  // derived locally). This function trusts it entirely rather than
+  // re-deriving anything from `records`, which is exactly what went wrong
+  // before: a second, simpler, WRONG version of the same calculation.
+  upcomingPremiums: AdvisorPdfUpcomingItem[];
   staleAfterDays: number;
   // Single source of truth for the "upcoming" window is
   // ADVISOR_ALERT_HORIZON_DAYS in advisorAccess.ts — passed in by the
@@ -49,12 +64,24 @@ export type AdvisorPdfData = {
   upcomingHorizonDays: number;
 };
 
+// Mirrors src/lib/format.ts's fmtMoney exactly (SGD keeps "$", every other
+// currency shows its 3-letter code instead — deliberately, per that file's
+// own comment: a shared "$" across SGD/USD/AUD/HKD/CAD/NZD would be
+// silently misleading). Reimplemented here rather than imported, since this
+// file is deliberately kept free of other app-module imports (see the note
+// at the top of this file) — but the LOGIC still needs to match exactly,
+// not just resemble it, or this PDF would show different money formatting
+// than the rest of the app for no real reason.
 function fmtMoneyForPdf(n: number | null | undefined, currency?: string | null): string {
-  if (n == null) return "—";
-  const rounded = Math.round(n);
-  const formatted = rounded.toLocaleString("en-US");
-  const code = currency && currency !== "SGD" ? currency : "$";
-  return code === "$" ? `$${formatted}` : `${code} ${formatted}`;
+  if (n == null || Number.isNaN(Number(n))) return "—";
+  const cur = currency || "SGD";
+  const prefix = cur === "SGD" ? "$" : cur;
+  const abs = Math.abs(Number(n));
+  const str =
+    abs >= 1_000_000
+      ? (Number(n) / 1_000_000).toFixed(2) + "M"
+      : Number(n).toLocaleString("en-SG", { maximumFractionDigits: 0 });
+  return `${prefix}${str}`;
 }
 
 // FREQ_LABEL is the app's own existing frequency-label map (src/lib/options.ts)
@@ -67,6 +94,88 @@ const FREQ_LABEL: Record<string, string> = {
   monthly: "month",
   "one-off": "one-off",
 };
+
+// Canonical order copied directly from src/lib/options.ts (INSURANCE_CATEGORIES,
+// INVESTMENT_TYPES) — the same order the record-entry forms use, not a fresh
+// ordering invented for this view. A protection-gap review groups by TYPE
+// (Life, Critical Illness, Disability...), not by insurer brand — provider
+// name is still shown as a sub-line per item, just not the grouping key.
+const INSURANCE_CATEGORY_ORDER = [
+  "Life", "Health", "Critical Illness", "Disability", "Personal Accident",
+  "Car", "Home", "Travel", "Mortgage", "Other",
+];
+const INVESTMENT_TYPE_ORDER = [
+  "Unit Trust / Fund", "Exchange Traded Fund (ETF)", "Stocks / Shares",
+  "ILP (Investment-Linked Policy)", "Endowment", "Bonds", "REITs",
+  "Cryptocurrency", "Cash / Money Market", "SRS", "CPF-OA Investment", "Other",
+];
+
+function orderIndex(order: string[], name: string | null | undefined): number {
+  const idx = order.indexOf(name ?? "");
+  return idx === -1 ? order.length : idx; // unrecognised/blank sorts after every known type
+}
+
+export type AdvisorRecordSubgroup = {
+  name: string;
+  items: AdvisorPdfRecord[];
+  // Per-currency, never summed across currencies — a household with both
+  // SGD and USD holdings in the same asset class gets two subtotal lines,
+  // not one meaningless blended number.
+  subtotals: { currency: string; amount: number }[];
+};
+
+export type AdvisorCategoryGroup = {
+  category: string;
+  categoryTitle: string;
+  subgroups: AdvisorRecordSubgroup[];
+};
+
+// Single source of truth for how records are grouped and ordered — used by
+// both this file's PDF renderer and AdvisorHome.tsx's on-screen list, so
+// the two can never show a different grouping or a different subtotal for
+// the same data.
+export function groupAdvisorRecords(records: AdvisorPdfRecord[]): AdvisorCategoryGroup[] {
+  const categoryTitles: Record<string, string> = { insurance: "Insurance", investments: "Investments" };
+  const categoryOrder = ["insurance", "investments"];
+
+  const byCategory: Record<string, AdvisorPdfRecord[]> = {};
+  for (const r of records) (byCategory[r.category] ??= []).push(r);
+
+  return categoryOrder
+    .filter((c) => (byCategory[c]?.length ?? 0) > 0)
+    .map((category) => {
+      const order = category === "insurance" ? INSURANCE_CATEGORY_ORDER : INVESTMENT_TYPE_ORDER;
+      const bySubgroup: Record<string, AdvisorPdfRecord[]> = {};
+      for (const r of byCategory[category]) {
+        (bySubgroup[r.insurance_category ?? "Other"] ??= []).push(r);
+      }
+      const subgroupNames = Object.keys(bySubgroup).sort(
+        (a, b) => orderIndex(order, a) - orderIndex(order, b) || a.localeCompare(b),
+      );
+      const subgroups = subgroupNames.map((name) => {
+        const items = [...bySubgroup[name]].sort((a, b) => {
+          if (!a.end_date && !b.end_date) return 0;
+          if (!a.end_date) return 1;
+          if (!b.end_date) return -1;
+          return new Date(a.end_date).getTime() - new Date(b.end_date).getTime();
+        });
+        // Subtotal is always sum_assured (coverage for insurance, current
+        // value for investments — see AdvisorPdfRecord/the view's aliasing)
+        // — never the premium. Premium is a recurring cost; sum_assured is
+        // "how much coverage/value exists in this category," which is the
+        // actual professional question a subtotal here should answer.
+        const byCurrency: Record<string, number> = {};
+        for (const r of items) {
+          if (r.sum_assured == null) continue;
+          const currency = r.currency || "SGD";
+          byCurrency[currency] = (byCurrency[currency] ?? 0) + r.sum_assured;
+        }
+        const subtotals = Object.entries(byCurrency).map(([currency, amount]) => ({ currency, amount }));
+        return { name, items, subtotals };
+      });
+      return { category, categoryTitle: categoryTitles[category] ?? category, subgroups };
+    });
+}
 
 function fmtAmountForPdf(r: AdvisorPdfRecord): { value: string; label: string } {
   if (r.category === "investments") {
@@ -215,20 +324,15 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
     y -= 34;
   }
 
-  // --- Upcoming alerts, bounded on BOTH ends. The previous version only
-  // checked `days <= horizonDays`, so a policy that lapsed over a year ago
-  // (a large NEGATIVE days value) also passed and showed up as "upcoming" —
-  // confirmed bug, not a display quirk. Requiring days >= 0 as well fixes
-  // it. Sorted soonest-first, matching what "upcoming" should mean rather
-  // than whatever order the query happened to return.
-  const now = Date.now();
-  const soon = data.records
-    .filter((r) => {
-      if (!r.end_date) return false;
-      const days = (new Date(r.end_date).getTime() - now) / (1000 * 60 * 60 * 24);
-      return days >= 0 && days <= data.upcomingHorizonDays;
-    })
-    .sort((a, b) => new Date(a.end_date!).getTime() - new Date(b.end_date!).getTime());
+  // --- Upcoming premiums. Previously derived locally from each record's
+  // end_date, which is wrong on two counts: end_date is a policy/premium
+  // SCHEDULE's end date, not the next amount actually due (that's dynamic —
+  // start_date + frequency, rolled forward — computed by alerts.ts), and a
+  // missing lower bound on top of that let already-lapsed dates through as
+  // "upcoming." Now takes the caller's pre-computed list directly instead
+  // of re-deriving anything here — same list the on-screen dashboard box
+  // shows, so the two can't disagree.
+  const soon = data.upcomingPremiums;
   if (soon.length > 0) {
     const boxHeight = 20 + soon.length * 16;
     page.drawRectangle({
@@ -247,8 +351,8 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
       color: colorUrgent,
     });
     alertY -= 16;
-    for (const r of soon) {
-      page.drawText(`${r.record_name} — due ${fmtDateForPdf(r.end_date)}`, {
+    for (const item of soon) {
+      page.drawText(`${item.label} — ${fmtDateForPdf(item.date)}`, {
         x: margin + 10,
         y: alertY,
         size: 10,
@@ -260,31 +364,17 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
     y -= boxHeight + 24;
   }
 
-  // --- Itemized records, no year-by-year breakdown. Sorted chronologically
-  // (soonest end date first, undated items last) rather than alphabetically
-  // — the query's default alpha-by-name order is fine for lookup, but a
-  // premium/renewal list read top-to-bottom should read like a to-do list,
-  // not a phone book.
-  const byCategory: Record<string, AdvisorPdfRecord[]> = {};
-  for (const r of data.records) {
-    (byCategory[r.category] ??= []).push(r);
-  }
-  for (const items of Object.values(byCategory)) {
-    items.sort((a, b) => {
-      if (!a.end_date && !b.end_date) return 0;
-      if (!a.end_date) return 1;
-      if (!b.end_date) return -1;
-      return new Date(a.end_date).getTime() - new Date(b.end_date).getTime();
-    });
-  }
-  const categoryTitles: Record<string, string> = {
-    insurance: "Insurance",
-    investments: "Investments",
-  };
+  // --- Itemized records, grouped by type/asset class (not alphabetically,
+  // not by provider) with a subtotal per group — matches how a real
+  // protection-gap or portfolio review reads: "how much Critical Illness
+  // coverage exists in total," not an alphabetical name list. Uses the same
+  // groupAdvisorRecords() the on-screen dashboard list uses, so the two
+  // can't show different groupings for the same data.
+  const categoryGroups = groupAdvisorRecords(data.records);
 
-  for (const [category, items] of Object.entries(byCategory)) {
+  for (const catGroup of categoryGroups) {
     if (y < 120) break; // Single page for v1 -- see accompanying note to the user
-    page.drawText(categoryTitles[category] ?? category, {
+    page.drawText(catGroup.categoryTitle, {
       x: margin,
       y,
       size: 13,
@@ -292,37 +382,70 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
       color: colorPrimary,
     });
     y -= 20;
-    for (const r of items) {
+
+    for (const sub of catGroup.subgroups) {
       if (y < 100) break;
-      const { value: amountStr, label: amountLabel } = fmtAmountForPdf(r);
-      page.drawText(r.record_name, { x: margin, y, size: 10, font, color: rgb(0, 0, 0) });
-      page.drawText(amountStr, {
-        x: width - margin - font.widthOfTextAtSize(amountStr, 10),
+      page.drawText(sub.name.toUpperCase(), {
+        x: margin,
         y,
-        size: 10,
-        font,
-        color: rgb(0, 0, 0),
-      });
-      y -= 11;
-      page.drawText(amountLabel, {
-        x: width - margin - font.widthOfTextAtSize(amountLabel, 7.5),
-        y,
-        size: 7.5,
-        font,
+        size: 9,
+        font: fontBold,
         color: colorMuted,
       });
-      y -= 3;
-      const subLine = [r.insurance_category, r.member_id == null ? "Unassigned" : r.member_name, r.is_giro ? "GIRO" : null]
-        .filter(Boolean)
-        .join(" · ");
-      if (subLine) {
-        page.drawText(subLine, { x: margin, y, size: 8, font, color: colorMuted });
-        y -= 14;
-      } else {
-        y -= 4;
+      y -= 16;
+
+      for (const r of sub.items) {
+        if (y < 90) break;
+        const { value: amountStr, label: amountLabel } = fmtAmountForPdf(r);
+        page.drawText(r.record_name, { x: margin, y, size: 10, font, color: rgb(0, 0, 0) });
+        page.drawText(amountStr, {
+          x: width - margin - font.widthOfTextAtSize(amountStr, 10),
+          y,
+          size: 10,
+          font,
+          color: rgb(0, 0, 0),
+        });
+        y -= 11;
+        page.drawText(amountLabel, {
+          x: width - margin - font.widthOfTextAtSize(amountLabel, 7.5),
+          y,
+          size: 7.5,
+          font,
+          color: colorMuted,
+        });
+        y -= 3;
+        // insurance_category is dropped from this sub-line now that it's
+        // the subgroup heading above — repeating it per item would be
+        // redundant.
+        const subLine = [r.member_id == null ? "Unassigned" : r.member_name, r.is_giro ? "GIRO" : null]
+          .filter(Boolean)
+          .join(" · ");
+        if (subLine) {
+          page.drawText(subLine, { x: margin, y, size: 8, font, color: colorMuted });
+          y -= 14;
+        } else {
+          y -= 4;
+        }
       }
+
+      if (y >= 90) {
+        const totalLabel = catGroup.category === "investments" ? "Total value" : "Total sum assured";
+        for (const st of sub.subtotals) {
+          if (y < 80) break;
+          const line = `${totalLabel}: ${fmtMoneyForPdf(st.amount, st.currency)}`;
+          page.drawText(line, {
+            x: width - margin - font.widthOfTextAtSize(line, 9),
+            y,
+            size: 9,
+            font: fontBold,
+            color: colorPrimary,
+          });
+          y -= 14;
+        }
+      }
+      y -= 10;
     }
-    y -= 16;
+    y -= 10;
   }
 
   // --- Provenance footer ---
