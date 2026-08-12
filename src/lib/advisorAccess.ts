@@ -27,6 +27,9 @@ const sendInvitePayloadSchema = z.object({
   canViewInsurance: z.boolean().default(true),
   canViewInvestments: z.boolean().default(true),
   canViewNetworthSummary: z.boolean().default(true),
+  // Which household members this advisor may see. Required, not optional —
+  // access is opt-in per member, never a default of "everyone."
+  memberIds: z.array(z.string().uuid()).min(1, "Select at least one member to share."),
 });
 
 const revokePayloadSchema = z.object({
@@ -40,6 +43,14 @@ const updatePermissionsPayloadSchema = z.object({
   canViewInsurance: z.boolean(),
   canViewInvestments: z.boolean(),
   canViewNetworthSummary: z.boolean(),
+  memberIds: z.array(z.string().uuid()).min(1, "Select at least one member to share."),
+});
+
+// Separate from listPayloadSchema (household-only, used by the family-side
+// screens) — the FA-side detail view is now scoped to one member at a time.
+const clientRecordsPayloadSchema = z.object({
+  householdId: z.string().uuid(),
+  memberId: z.string().uuid(),
 });
 
 const cancelInvitePayloadSchema = z.object({
@@ -138,6 +149,7 @@ export const sendAdvisorInvite = createServerFn({ method: "POST" })
       can_view_insurance: data.canViewInsurance,
       can_view_investments: data.canViewInvestments,
       can_view_networth_summary: data.canViewNetworthSummary,
+      member_ids: data.memberIds,
       invited_by_user_id: userId,
       token,
     });
@@ -202,7 +214,7 @@ export const acceptPendingAdvisorInvitesForCurrentUser = createServerFn({ method
     const { data: invites, error: invitesError } = await supabaseAdmin
       .from("advisor_invites" as any)
       .select(
-        "id, household_id, can_view_insurance, can_view_investments, can_view_networth_summary",
+        "id, household_id, can_view_insurance, can_view_investments, can_view_networth_summary, member_ids",
       )
       .eq("invited_email", userEmail)
       .is("accepted_at", null)
@@ -219,7 +231,7 @@ export const acceptPendingAdvisorInvitesForCurrentUser = createServerFn({ method
       // exact same row back to active with fresh permissions — it never
       // creates a second row. Verified directly: invite -> accept -> revoke
       // -> re-invite -> re-accept leaves exactly one row every time.
-      const { error: linkError } = await supabaseAdmin
+      const { data: linkRow, error: linkError } = await supabaseAdmin
         .from("advisor_household_links" as any)
         .upsert(
           {
@@ -233,8 +245,24 @@ export const acceptPendingAdvisorInvitesForCurrentUser = createServerFn({ method
             revoked_at: null,
           },
           { onConflict: "household_id,advisor_user_id" },
-        );
+        )
+        .select("id")
+        .single();
       if (linkError) throw linkError;
+
+      // Member grants are fully replaced on every accept, same "leave
+      // exactly one clean state" philosophy as the link upsert above —
+      // re-inviting with a different member selection can't leave stale
+      // grants behind from an earlier invite.
+      const linkId = (linkRow as any).id;
+      await supabaseAdmin.from("advisor_link_members" as any).delete().eq("link_id", linkId);
+      const memberIds: string[] = invite.member_ids ?? [];
+      if (memberIds.length > 0) {
+        const { error: membersError } = await supabaseAdmin
+          .from("advisor_link_members" as any)
+          .insert(memberIds.map((memberId) => ({ link_id: linkId, member_id: memberId })));
+        if (membersError) throw membersError;
+      }
 
       await supabaseAdmin
         .from("advisor_invites" as any)
@@ -293,6 +321,16 @@ export const updateAdvisorPermissions = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw error;
     if (!updated) throw new Error("Active advisor link not found for that household.");
+
+    // Full replace, same reasoning as the accept-invite path: whatever
+    // member set is passed in becomes the complete grant, never additive.
+    const linkId = (updated as any).id;
+    await supabaseAdmin.from("advisor_link_members" as any).delete().eq("link_id", linkId);
+    const { error: membersError } = await supabaseAdmin
+      .from("advisor_link_members" as any)
+      .insert(data.memberIds.map((memberId) => ({ link_id: linkId, member_id: memberId })));
+    if (membersError) throw membersError;
+
     return { ok: true };
   });
 
@@ -312,7 +350,7 @@ export const listAdvisorsForHousehold = createServerFn({ method: "POST" })
     const { data: linkRows, error: linksError } = await supabaseAdmin
       .from("advisor_household_links" as any)
       .select(
-        "advisor_user_id, can_view_insurance, can_view_investments, can_view_networth_summary, linked_at, consent_renewed_at",
+        "id, advisor_user_id, can_view_insurance, can_view_investments, can_view_networth_summary, linked_at, consent_renewed_at",
       )
       .eq("household_id", data.householdId)
       .eq("status", "active");
@@ -335,6 +373,24 @@ export const listAdvisorsForHousehold = createServerFn({ method: "POST" })
       }
     }
 
+    // Which household members each link actually grants — shown to the
+    // owner as e.g. "Dad, You" so it's obvious at a glance without opening
+    // an edit form.
+    const linkIds = (linkRows ?? []).map((r: any) => r.id);
+    const memberNamesByLink = new Map<string, string[]>();
+    if (linkIds.length > 0) {
+      const { data: linkMemberRows, error: linkMembersError } = await supabaseAdmin
+        .from("advisor_link_members" as any)
+        .select("link_id, member_id, members(name)")
+        .in("link_id", linkIds);
+      if (linkMembersError) throw linkMembersError;
+      for (const row of (linkMemberRows ?? []) as any[]) {
+        const arr = memberNamesByLink.get(row.link_id) ?? [];
+        arr.push(row.members?.name ?? "Member");
+        memberNamesByLink.set(row.link_id, arr);
+      }
+    }
+
     const advisors = (linkRows ?? []).map((r: any) => ({
       advisorUserId: r.advisor_user_id,
       email: profilesById.get(r.advisor_user_id)?.email ?? "(email unavailable)",
@@ -342,6 +398,7 @@ export const listAdvisorsForHousehold = createServerFn({ method: "POST" })
       canViewInsurance: r.can_view_insurance,
       canViewInvestments: r.can_view_investments,
       canViewNetworthSummary: r.can_view_networth_summary,
+      memberNames: memberNamesByLink.get(r.id) ?? [],
       linkedAt: r.linked_at,
       consentRenewedAt: r.consent_renewed_at,
     }));
@@ -445,20 +502,28 @@ export const getAdvisorNetworthSummary = createServerFn({ method: "POST" })
     return { totalAssets, totalLiabilities, netWorth, hasData: components.length > 0 };
   });
 
-// Full record list for ONE client, for the FA's own detail view. Deliberately
-// uses the caller's own authenticated session (context.supabase), NOT
-// supabaseAdmin — the view's has_advisor_access() check and RLS then
-// genuinely gate this response, rather than this function's own household_id
-// filter being the only thing standing between an advisor and the wrong data.
+// Full record list for ONE client MEMBER, for the FA's own detail view.
+// Deliberately uses the caller's own authenticated session (context.supabase),
+// NOT supabaseAdmin — the view's has_advisor_access() check and RLS then
+// genuinely gate this response, rather than this function's own filters
+// being the only thing standing between an advisor and the wrong data.
+//
+// The view itself already restricts rows to what this advisor can see
+// ANYWHERE in the household — the member_id filter below is what narrows
+// that down to the ONE member's card being viewed (an advisor linked to
+// two members of the same household must not see member B's records while
+// looking at member A's page). Unassigned records (member_id null) are
+// included on every member's card, matching the household owner's choice.
 export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(listPayloadSchema)
+  .inputValidator(clientRecordsPayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase } = context;
     const { data: rows, error } = await supabase
       .from("advisor_client_summary_view" as any)
       .select("*")
       .eq("household_id", data.householdId)
+      .or(`member_id.eq.${data.memberId},member_id.is.null`)
       .order("category", { ascending: true })
       .order("record_name", { ascending: true });
     if (error) throw error;
@@ -481,14 +546,42 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
     const { data: links, error } = await supabaseAdmin
       .from("advisor_household_links" as any)
       .select(
-        "household_id, can_view_insurance, can_view_investments, can_view_networth_summary, households(name)",
+        "id, household_id, can_view_insurance, can_view_investments, can_view_networth_summary, households(name)",
       )
       .eq("advisor_user_id", userId)
       .eq("status", "active");
     if (error) throw error;
 
     const linkRows = (links ?? []) as any[];
+    const linkIds = linkRows.map((l) => l.id);
     const householdIds = linkRows.map((l) => l.household_id);
+
+    // Which members each link actually grants access to — this is what
+    // turns "a household" into "1-3 separate client cards."
+    const membersByLink = new Map<string, string[]>();
+    if (linkIds.length > 0) {
+      const { data: linkMembers, error: lmError } = await supabaseAdmin
+        .from("advisor_link_members" as any)
+        .select("link_id, member_id")
+        .in("link_id", linkIds);
+      if (lmError) throw lmError;
+      for (const row of (linkMembers ?? []) as any[]) {
+        const arr = membersByLink.get(row.link_id) ?? [];
+        arr.push(row.member_id);
+        membersByLink.set(row.link_id, arr);
+      }
+    }
+
+    const allMemberIds = [...new Set([...membersByLink.values()].flat())];
+    const memberNameById = new Map<string, string>();
+    if (allMemberIds.length > 0) {
+      const { data: memberRows, error: memberError } = await supabaseAdmin
+        .from("members" as any)
+        .select("id, name")
+        .in("id", allMemberIds);
+      if (memberError) throw memberError;
+      for (const m of (memberRows ?? []) as any[]) memberNameById.set(m.id, m.name);
+    }
 
     // Fetch once for all households, then group in memory — avoids one
     // round trip per client for what's meant to be a fast overview page.
@@ -527,7 +620,14 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
     const today = new Date();
     const staleCutoff = new Date(today.getTime() - STALE_AFTER_DAYS * 24 * 60 * 60 * 1000);
 
-    const clients = linkRows.map((l) => {
+    // One card per (household, member) — never a combined household total.
+    // A household that has shared 2 members with the same advisor produces
+    // 2 cards here, not 1. An unassigned record (member_id null) counts
+    // toward EVERY member card for that household, matching the household
+    // owner's explicit choice that unassigned records aren't hidden from
+    // anyone who can see at least one member of that household.
+    const clients = linkRows.flatMap((l) => {
+      const memberIds = membersByLink.get(l.id) ?? [];
       const insuranceRows = l.can_view_insurance
         ? (insuranceByHousehold.get(l.household_id) ?? [])
         : [];
@@ -548,42 +648,53 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
           }))
         : [];
 
-      let upcomingCount = 0;
-      try {
-        const items = buildUpcomingItems(
-          {
-            properties: [],
-            loans: [],
-            insurance: insuranceRows,
-            investments: investmentRows,
-            savings: [],
-            inventoryItems: [],
-            reminders: [],
-          },
-          today,
-          ADVISOR_ALERT_HORIZON_DAYS,
+      return memberIds.map((memberId) => {
+        const memberInsurance = insuranceRows.filter(
+          (r: any) => r.member_id === memberId || r.member_id == null,
         );
-        upcomingCount = items.length;
-      } catch {
-        // Never let an alert-computation issue take down the whole client
-        // list — worst case, this one client just shows no badge.
-        upcomingCount = 0;
-      }
+        const memberInvestments = investmentRows.filter(
+          (r: any) => r.member_id === memberId || r.member_id == null,
+        );
 
-      const allRecords = [...insuranceRows, ...investmentRows];
-      const staleCount = allRecords.filter(
-        (r) => r.updated_at && new Date(r.updated_at) < staleCutoff,
-      ).length;
+        let upcomingCount = 0;
+        try {
+          const items = buildUpcomingItems(
+            {
+              properties: [],
+              loans: [],
+              insurance: memberInsurance,
+              investments: memberInvestments,
+              savings: [],
+              inventoryItems: [],
+              reminders: [],
+            },
+            today,
+            ADVISOR_ALERT_HORIZON_DAYS,
+          );
+          upcomingCount = items.length;
+        } catch {
+          // Never let an alert-computation issue take down the whole client
+          // list — worst case, this one card just shows no badge.
+          upcomingCount = 0;
+        }
 
-      return {
-        householdId: l.household_id,
-        householdName: l.households?.name ?? "Household",
-        canViewInsurance: l.can_view_insurance,
-        canViewInvestments: l.can_view_investments,
-        canViewNetworthSummary: l.can_view_networth_summary,
-        upcomingCount,
-        staleCount,
-      };
+        const allRecords = [...memberInsurance, ...memberInvestments];
+        const staleCount = allRecords.filter(
+          (r: any) => r.updated_at && new Date(r.updated_at) < staleCutoff,
+        ).length;
+
+        return {
+          householdId: l.household_id,
+          householdName: l.households?.name ?? "Household",
+          memberId,
+          memberName: memberNameById.get(memberId) ?? "Member",
+          canViewInsurance: l.can_view_insurance,
+          canViewInvestments: l.can_view_investments,
+          canViewNetworthSummary: l.can_view_networth_summary,
+          upcomingCount,
+          staleCount,
+        };
+      });
     });
 
     // Clients needing attention surface first — the entire point of an
