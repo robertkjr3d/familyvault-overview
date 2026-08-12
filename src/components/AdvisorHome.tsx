@@ -326,7 +326,11 @@ function ClientDetail({
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {[
-                          r.member_id == null ? "Unassigned" : r.member_name,
+                          // Scoped to one member already — showing their own
+                          // name on every line was redundant. Unassigned is
+                          // the one case worth flagging, since it's the only
+                          // one NOT implied by being on this page.
+                          r.member_id == null ? "Unassigned" : null,
                           r.end_date && `Ends ${fmtDate(r.end_date)}`,
                           r.is_giro && "GIRO",
                         ]
