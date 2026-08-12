@@ -573,9 +573,25 @@ async function computeAdvisorUpcomingPremiums(
   } catch {
     items = [];
   }
-  return items.filter(
-    (i) => i.sourceType === "insurance_next_due" || i.sourceType === "investment_premium_due",
-  );
+  // buildUpcomingItems() is a client/UI-oriented helper — every item it
+  // returns carries `icon`, a live Lucide React component reference (see
+  // alerts.ts). That's harmless when the caller stays in the browser, but
+  // getClientRecordsForAdvisor returns this across a server-function
+  // response boundary, which has to serialize it — a React component isn't
+  // serializable, and shipping it caused the whole response to fail (a
+  // confirmed, real incident, not a hypothetical: this is exactly what
+  // produced the "Seroval Error" toast and an apparently-empty detail page
+  // and PDF). Mapped down to a plain, serialization-safe shape containing
+  // only what the FA-side UI and PDF actually use — never returning the
+  // raw alerts.ts item directly from a server function again.
+  return items
+    .filter((i) => i.sourceType === "insurance_next_due" || i.sourceType === "investment_premium_due")
+    .map((i) => ({
+      recordId: i.recordId,
+      date: i.date,
+      label: i.label,
+      overdue: !!i.overdue,
+    }));
 }
 
 // Full record list for ONE client MEMBER, for the FA's own detail view.
