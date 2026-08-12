@@ -224,7 +224,7 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  const page = pdfDoc.addPage([595.28, 841.89]); // A4
+  let page = pdfDoc.addPage([595.28, 841.89]); // A4
   const { width, height } = page.getSize();
   const margin = 48;
   const contentWidth = width - margin * 2;
@@ -238,6 +238,24 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
   const colorLiability = rgb(0.72, 0.2, 0.15);
 
   let y = height - margin;
+
+  // Real pagination, replacing the old "Single page for v1" cap that was
+  // silently cutting off content — confirmed real incident: a household
+  // with enough insurance records could push Investments off the page
+  // entirely with no indication anything was missing. newPage() draws a
+  // light continuation header so a multi-page PDF still reads as one
+  // coherent document handed to a professional, not truncated output that
+  // happens to have extra pages tacked on.
+  function newPage(): void {
+    page = pdfDoc.addPage([595.28, 841.89]);
+    y = height - margin;
+    const label = `${data.householdName}${data.memberName ? " — " + data.memberName : ""} (continued)`;
+    page.drawText(label, { x: margin, y, size: 9, font, color: colorMuted });
+    y -= 24;
+  }
+  function ensureSpace(minY: number): void {
+    if (y < minY) newPage();
+  }
 
   // --- Header ---
   page.drawText("FamilyHub SG", { x: margin, y, size: 10, font, color: colorMuted });
@@ -335,6 +353,7 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
   const soon = data.upcomingPremiums;
   if (soon.length > 0) {
     const boxHeight = 20 + soon.length * 16;
+    ensureSpace(boxHeight + 60); // +60 leaves room below for the itemized section's own header
     page.drawRectangle({
       x: margin,
       y: y - boxHeight,
@@ -373,7 +392,7 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
   const categoryGroups = groupAdvisorRecords(data.records);
 
   for (const catGroup of categoryGroups) {
-    if (y < 120) break; // Single page for v1 -- see accompanying note to the user
+    ensureSpace(120);
     page.drawText(catGroup.categoryTitle, {
       x: margin,
       y,
@@ -384,7 +403,7 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
     y -= 20;
 
     for (const sub of catGroup.subgroups) {
-      if (y < 100) break;
+      ensureSpace(100);
       page.drawText(sub.name.toUpperCase(), {
         x: margin,
         y,
@@ -395,7 +414,7 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
       y -= 16;
 
       for (const r of sub.items) {
-        if (y < 90) break;
+        ensureSpace(90);
         const { value: amountStr, label: amountLabel } = fmtAmountForPdf(r);
         page.drawText(r.record_name, { x: margin, y, size: 10, font, color: rgb(0, 0, 0) });
         page.drawText(amountStr, {
@@ -417,7 +436,12 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
         // insurance_category is dropped from this sub-line now that it's
         // the subgroup heading above — repeating it per item would be
         // redundant.
-        const subLine = [r.member_id == null ? "Unassigned" : r.member_name, r.is_giro ? "GIRO" : null]
+        // Every item on this page is either this member's own record or
+        // Unassigned — the page is already scoped to one member, so
+        // repeating their name on every line was pure redundancy. Only
+        // Unassigned is worth flagging, since that's the one case that
+        // ISN'T implied by being on this page.
+        const subLine = [r.member_id == null ? "Unassigned" : null, r.is_giro ? "GIRO" : null]
           .filter(Boolean)
           .join(" · ");
         if (subLine) {
@@ -428,20 +452,18 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
         }
       }
 
-      if (y >= 90) {
-        const totalLabel = catGroup.category === "investments" ? "Total value" : "Total sum assured";
-        for (const st of sub.subtotals) {
-          if (y < 80) break;
-          const line = `${totalLabel}: ${fmtMoneyForPdf(st.amount, st.currency)}`;
-          page.drawText(line, {
-            x: width - margin - font.widthOfTextAtSize(line, 9),
-            y,
-            size: 9,
-            font: fontBold,
-            color: colorPrimary,
-          });
-          y -= 14;
-        }
+      const totalLabel = catGroup.category === "investments" ? "Total value" : "Total sum assured";
+      for (const st of sub.subtotals) {
+        ensureSpace(80);
+        const line = `${totalLabel}: ${fmtMoneyForPdf(st.amount, st.currency)}`;
+        page.drawText(line, {
+          x: width - margin - font.widthOfTextAtSize(line, 9),
+          y,
+          size: 9,
+          font: fontBold,
+          color: colorPrimary,
+        });
+        y -= 14;
       }
       y -= 10;
     }
