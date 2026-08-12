@@ -502,6 +502,82 @@ export const getAdvisorNetworthSummary = createServerFn({ method: "POST" })
     return { totalAssets, totalLiabilities, netWorth, hasData: components.length > 0 };
   });
 
+// FA-side alert horizon and staleness window — single source of truth for
+// the client-list badge, the detail-page box, and the PDF. Moved above both
+// getClientRecordsForAdvisor and listClientHouseholdsForAdvisor since both
+// now depend on it.
+export const ADVISOR_ALERT_HORIZON_DAYS = 30;
+export const STALE_AFTER_DAYS = 180;
+
+// Shared shape-adapter: buildUpcomingItems() (alerts.ts) expects an
+// investment row's premium fields under their ORIGINAL column names
+// (premium_start_date, premium_frequency, premium_end_date, premium_amount,
+// group_name) — verified directly against alerts.ts, not guessed. Used by
+// both the badge count and the detail/PDF list so there is exactly one
+// place this mapping is written.
+function mapInvestmentForAlerts(inv: {
+  id: string;
+  name: string;
+  group_name: string | null;
+  premium_amount: number | null;
+  premium_start_date: string | null;
+  premium_end_date: string | null;
+  premium_frequency: string | null;
+  is_giro: boolean | null;
+  member_id: string | null;
+}) {
+  return {
+    id: inv.id,
+    name: inv.name,
+    group_name: inv.group_name,
+    premium_amount: inv.premium_amount,
+    premium_start_date: inv.premium_start_date,
+    premium_end_date: inv.premium_end_date,
+    premium_frequency: inv.premium_frequency,
+    is_giro: inv.is_giro,
+    member_id: inv.member_id,
+  };
+}
+
+// The single computation behind "X due soon" everywhere on the FA side.
+// Deliberately narrower than the family dashboard's own alert list: only
+// premium DUE/OVERDUE occurrences (computed from start_date + frequency via
+// the shared alerts.ts engine — never a stored end_date, which is a
+// schedule END date, not a due date). "Policy ends"/"premiums end" items
+// that buildUpcomingItems also returns are excluded here, since a header
+// that says "Upcoming Premiums" showing a policy's END date would be its
+// own new version of the exact bug this replaces. Revisit if you want a
+// separate "policy ending soon" section later — that's a real, distinct,
+// useful thing, just not what this list is for.
+async function computeAdvisorUpcomingPremiums(
+  insuranceRows: any[],
+  investmentRows: any[],
+  today: Date,
+) {
+  const { buildUpcomingItems } = await import("@/lib/alerts");
+  let items: Awaited<ReturnType<typeof buildUpcomingItems>> = [];
+  try {
+    items = buildUpcomingItems(
+      {
+        properties: [],
+        loans: [],
+        insurance: insuranceRows,
+        investments: investmentRows.map(mapInvestmentForAlerts),
+        savings: [],
+        inventoryItems: [],
+        reminders: [],
+      },
+      today,
+      ADVISOR_ALERT_HORIZON_DAYS,
+    );
+  } catch {
+    items = [];
+  }
+  return items.filter(
+    (i) => i.sourceType === "insurance_next_due" || i.sourceType === "investment_premium_due",
+  );
+}
+
 // Full record list for ONE client MEMBER, for the FA's own detail view.
 // Deliberately uses the caller's own authenticated session (context.supabase),
 // NOT supabaseAdmin — the view's has_advisor_access() check and RLS then
@@ -527,21 +603,50 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
       .order("category", { ascending: true })
       .order("record_name", { ascending: true });
     if (error) throw error;
-    return { records: (rows ?? []) as any[] };
+
+    // Fetched from the base tables, not the view — buildUpcomingItems needs
+    // start_date/frequency/premium under their real names, and the view
+    // deliberately aliases investments' columns onto the generic
+    // insurance-shaped names for the itemized display above, which isn't
+    // the shape this needs. Uses the FA's own RLS-scoped session, same as
+    // the query above — the new member-aware advisor_select policy on
+    // these two base tables (added in the member-scoping migration) is
+    // exactly what makes this safe to query directly.
+    const [{ data: insuranceRows, error: insError }, { data: investmentRows, error: invError }] =
+      await Promise.all([
+        supabase
+          .from("insurance_policies" as any)
+          .select("id, name, premium, start_date, end_date, frequency, is_giro, member_id")
+          .eq("household_id", data.householdId)
+          .or(`member_id.eq.${data.memberId},member_id.is.null`),
+        supabase
+          .from("investments" as any)
+          .select(
+            "id, name, group_name, premium_amount, premium_start_date, premium_end_date, premium_frequency, is_giro, member_id",
+          )
+          .eq("household_id", data.householdId)
+          .or(`member_id.eq.${data.memberId},member_id.is.null`),
+      ]);
+    if (insError) throw insError;
+    if (invError) throw invError;
+
+    const upcomingPremiums = await computeAdvisorUpcomingPremiums(
+      insuranceRows ?? [],
+      investmentRows ?? [],
+      new Date(),
+    );
+
+    return { records: (rows ?? []) as any[], upcomingPremiums };
   });
 
 // FA-side: which households have an active link to the current user.
 // Minimal on purpose — the actual dashboard content (alerts, PDF data)
 // is the next piece; this just answers "who am I connected to."
-export const ADVISOR_ALERT_HORIZON_DAYS = 30;
-export const STALE_AFTER_DAYS = 180;
-
 export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { userId } = context;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { buildUpcomingItems } = await import("@/lib/alerts");
 
     const { data: links, error } = await supabaseAdmin
       .from("advisor_household_links" as any)
@@ -626,76 +731,59 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
     // toward EVERY member card for that household, matching the household
     // owner's explicit choice that unassigned records aren't hidden from
     // anyone who can see at least one member of that household.
-    const clients = linkRows.flatMap((l) => {
-      const memberIds = membersByLink.get(l.id) ?? [];
-      const insuranceRows = l.can_view_insurance
-        ? (insuranceByHousehold.get(l.household_id) ?? [])
-        : [];
-      const investmentRows = l.can_view_investments
-        ? (investmentsByHousehold.get(l.household_id) ?? []).map((inv: any) => ({
-            // Map onto the field names buildUpcomingItems expects for
-            // investments — verified against alerts.ts directly, not guessed.
-            id: inv.id,
-            name: inv.name,
-            group_name: inv.group_name,
-            premium_amount: inv.premium_amount,
-            premium_start_date: inv.premium_start_date,
-            premium_end_date: inv.premium_end_date,
-            premium_frequency: inv.premium_frequency,
-            is_giro: inv.is_giro,
-            member_id: inv.member_id,
-            updated_at: inv.updated_at,
-          }))
-        : [];
+    //
+    // Built with Promise.all + flatMap rather than a plain synchronous
+    // flatMap because computeAdvisorUpcomingPremiums is async (it uses the
+    // real alerts.ts engine, not a re-derived count) — this is the exact
+    // same computation getClientRecordsForAdvisor uses for the detail page,
+    // so the badge here can never show a number the detail page then
+    // fails to explain.
+    const clientLists = await Promise.all(
+      linkRows.map(async (l) => {
+        const memberIds = membersByLink.get(l.id) ?? [];
+        const insuranceRows = l.can_view_insurance
+          ? (insuranceByHousehold.get(l.household_id) ?? [])
+          : [];
+        const investmentRows = l.can_view_investments
+          ? (investmentsByHousehold.get(l.household_id) ?? [])
+          : [];
 
-      return memberIds.map((memberId) => {
-        const memberInsurance = insuranceRows.filter(
-          (r: any) => r.member_id === memberId || r.member_id == null,
+        return Promise.all(
+          memberIds.map(async (memberId) => {
+            const memberInsurance = insuranceRows.filter(
+              (r: any) => r.member_id === memberId || r.member_id == null,
+            );
+            const memberInvestments = investmentRows.filter(
+              (r: any) => r.member_id === memberId || r.member_id == null,
+            );
+
+            const upcomingPremiums = await computeAdvisorUpcomingPremiums(
+              memberInsurance,
+              memberInvestments,
+              today,
+            );
+
+            const allRecords = [...memberInsurance, ...memberInvestments];
+            const staleCount = allRecords.filter(
+              (r: any) => r.updated_at && new Date(r.updated_at) < staleCutoff,
+            ).length;
+
+            return {
+              householdId: l.household_id,
+              householdName: l.households?.name ?? "Household",
+              memberId,
+              memberName: memberNameById.get(memberId) ?? "Member",
+              canViewInsurance: l.can_view_insurance,
+              canViewInvestments: l.can_view_investments,
+              canViewNetworthSummary: l.can_view_networth_summary,
+              upcomingCount: upcomingPremiums.length,
+              staleCount,
+            };
+          }),
         );
-        const memberInvestments = investmentRows.filter(
-          (r: any) => r.member_id === memberId || r.member_id == null,
-        );
-
-        let upcomingCount = 0;
-        try {
-          const items = buildUpcomingItems(
-            {
-              properties: [],
-              loans: [],
-              insurance: memberInsurance,
-              investments: memberInvestments,
-              savings: [],
-              inventoryItems: [],
-              reminders: [],
-            },
-            today,
-            ADVISOR_ALERT_HORIZON_DAYS,
-          );
-          upcomingCount = items.length;
-        } catch {
-          // Never let an alert-computation issue take down the whole client
-          // list — worst case, this one card just shows no badge.
-          upcomingCount = 0;
-        }
-
-        const allRecords = [...memberInsurance, ...memberInvestments];
-        const staleCount = allRecords.filter(
-          (r: any) => r.updated_at && new Date(r.updated_at) < staleCutoff,
-        ).length;
-
-        return {
-          householdId: l.household_id,
-          householdName: l.households?.name ?? "Household",
-          memberId,
-          memberName: memberNameById.get(memberId) ?? "Member",
-          canViewInsurance: l.can_view_insurance,
-          canViewInvestments: l.can_view_investments,
-          canViewNetworthSummary: l.can_view_networth_summary,
-          upcomingCount,
-          staleCount,
-        };
-      });
-    });
+      }),
+    );
+    const clients = clientLists.flat();
 
     // Clients needing attention surface first — the entire point of an
     // "at a glance" list is not making the advisor click through everyone.
