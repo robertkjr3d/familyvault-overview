@@ -553,6 +553,7 @@ async function computeAdvisorUpcomingPremiums(
   insuranceRows: any[],
   investmentRows: any[],
   today: Date,
+  dismissedKeys: Set<string>,
 ) {
   const { buildUpcomingItems } = await import("@/lib/alerts");
   let items: Awaited<ReturnType<typeof buildUpcomingItems>> = [];
@@ -584,8 +585,17 @@ async function computeAdvisorUpcomingPremiums(
   // and PDF). Mapped down to a plain, serialization-safe shape containing
   // only what the FA-side UI and PDF actually use — never returning the
   // raw alerts.ts item directly from a server function again.
+  //
+  // Dismissed-key check uses the EXACT same key format as the household's
+  // own bell/dashboard (AlertsSheet.tsx: `${sourceType}::${recordId}::${date}`)
+  // — a real incident, not a hypothetical: without this, an item the
+  // household owner explicitly marked done kept showing on the advisor side
+  // forever, since buildUpcomingItems() itself has no notion of "handled" —
+  // that state lives entirely in dismissed_dashboard_items, a table this
+  // computation wasn't reading at all before.
   return items
     .filter((i) => i.sourceType === "insurance_next_due" || i.sourceType === "investment_premium_due")
+    .filter((i) => !dismissedKeys.has(`${i.sourceType}::${i.recordId}::${i.date}`))
     .map((i) => ({
       recordId: i.recordId,
       date: i.date,
@@ -646,10 +656,26 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
     if (insError) throw insError;
     if (invError) throw invError;
 
+    // dismissed_dashboard_items has no advisor-facing RLS policy — and it
+    // shouldn't, the FA never sees these rows directly — so this needs
+    // supabaseAdmin specifically for this one lookup, used only to compute
+    // which keys to filter out below. Everything else in this function
+    // stays on the FA's own RLS-scoped session.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: dismissedRows, error: dismissedError } = await supabaseAdmin
+      .from("dismissed_dashboard_items" as any)
+      .select("record_id, source_type, dismissed_date")
+      .eq("household_id", data.householdId);
+    if (dismissedError) throw dismissedError;
+    const dismissedKeys = new Set(
+      (dismissedRows ?? []).map((d: any) => `${d.source_type}::${d.record_id}::${d.dismissed_date}`),
+    );
+
     const upcomingPremiums = await computeAdvisorUpcomingPremiums(
       insuranceRows ?? [],
       investmentRows ?? [],
       new Date(),
+      dismissedKeys,
     );
 
     return { records: (rows ?? []) as any[], upcomingPremiums };
@@ -738,6 +764,25 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
       }
     }
 
+    // Same "this household owner marked it done" state the household's own
+    // bell/dashboard respects (dismissed_dashboard_items) — without this,
+    // the advisor side has no notion of "handled" at all, since
+    // buildUpcomingItems() itself is a pure date computation with no
+    // persisted dismissal state of its own.
+    const dismissedByHousehold = new Map<string, Set<string>>();
+    if (householdIds.length > 0) {
+      const { data: dismissedRows, error: dismissedError } = await supabaseAdmin
+        .from("dismissed_dashboard_items" as any)
+        .select("household_id, record_id, source_type, dismissed_date")
+        .in("household_id", householdIds);
+      if (dismissedError) throw dismissedError;
+      for (const d of (dismissedRows ?? []) as any[]) {
+        const set = dismissedByHousehold.get(d.household_id) ?? new Set<string>();
+        set.add(`${d.source_type}::${d.record_id}::${d.dismissed_date}`);
+        dismissedByHousehold.set(d.household_id, set);
+      }
+    }
+
     const today = new Date();
     const staleCutoff = new Date(today.getTime() - STALE_AFTER_DAYS * 24 * 60 * 60 * 1000);
 
@@ -764,6 +809,8 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
           ? (investmentsByHousehold.get(l.household_id) ?? [])
           : [];
 
+        const dismissedKeys = dismissedByHousehold.get(l.household_id) ?? new Set<string>();
+
         return Promise.all(
           memberIds.map(async (memberId) => {
             const memberInsurance = insuranceRows.filter(
@@ -777,6 +824,7 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
               memberInsurance,
               memberInvestments,
               today,
+              dismissedKeys,
             );
 
             const allRecords = [...memberInsurance, ...memberInvestments];
