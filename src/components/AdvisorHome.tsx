@@ -8,7 +8,7 @@ import {
   STALE_AFTER_DAYS,
   ADVISOR_ALERT_HORIZON_DAYS,
 } from "@/lib/advisorAccess";
-import { generateAndDownloadAdvisorPdf } from "@/lib/advisorPdf";
+import { generateAndDownloadAdvisorPdf, groupAdvisorRecords } from "@/lib/advisorPdf";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { fmtMoney, fmtDate } from "@/lib/format";
@@ -16,11 +16,6 @@ import { fmtMoney, fmtDate } from "@/lib/format";
 async function handleSignOut() {
   await supabase.auth.signOut();
 }
-
-const CATEGORY_TITLES: Record<string, string> = {
-  insurance: "Insurance",
-  investments: "Investments",
-};
 
 // A "client" here is a (household, member) PAIR — a household that has
 // shared 2 members with the same advisor produces 2 separate cards, never
@@ -192,6 +187,7 @@ function ClientDetail({
         generatedAt: new Date(),
         netWorth: canViewNetworthSummary && networth ? networth : null,
         records,
+        upcomingPremiums,
         staleAfterDays: STALE_AFTER_DAYS,
         upcomingHorizonDays: ADVISOR_ALERT_HORIZON_DAYS,
       });
@@ -212,10 +208,10 @@ function ClientDetail({
   }
 
   const records = data?.records ?? [];
-  const byCategory = records.reduce<Record<string, typeof records>>((acc, r) => {
-    (acc[r.category] ??= []).push(r);
-    return acc;
-  }, {});
+  const upcomingPremiums = data?.upcomingPremiums ?? [];
+  // Same shared function advisorPdf.ts uses — same order, same subgroups,
+  // same subtotals, so this screen and the downloaded PDF can't disagree.
+  const categoryGroups = groupAdvisorRecords(records);
 
   return (
     <div>
@@ -271,6 +267,24 @@ function ClientDetail({
         </section>
       )}
 
+      {!isLoading && upcomingPremiums.length > 0 && (
+        <section className="mb-4 rounded-2xl border border-urgent/30 bg-urgent/5 p-4">
+          <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-urgent">
+            Upcoming Premiums — Next {ADVISOR_ALERT_HORIZON_DAYS} Days
+          </h3>
+          <div className="space-y-1.5">
+            {upcomingPremiums.map((item) => (
+              <div key={`${item.recordId}-${item.date}`} className="flex items-center justify-between text-sm">
+                <span className={item.overdue ? "font-semibold text-urgent" : "text-foreground"}>
+                  {item.label}
+                </span>
+                <span className="shrink-0 text-xs text-muted-foreground">{fmtDate(item.date)}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
 
       {!isLoading && records.length === 0 && (
@@ -279,56 +293,68 @@ function ClientDetail({
         </p>
       )}
 
-      {Object.entries(byCategory).map(([category, items]) => (
-        <section key={category} className="mb-4 rounded-2xl border border-border bg-card p-4">
-          <h3 className="mb-2 text-sm font-bold">{CATEGORY_TITLES[category] ?? category}</h3>
-          <div className="space-y-2">
-            {items.map((r) => {
-              const primaryAmount =
-                category === "investments" ? r.sum_assured : (r.premium ?? r.sum_assured);
-              const primaryLabel =
-                category === "investments"
-                  ? "Current value"
-                  : r.premium != null
-                    ? "Premium"
-                    : "Sum assured";
-              const isStale =
-                !!r.last_updated &&
-                Date.now() - new Date(r.last_updated).getTime() >
-                  STALE_AFTER_DAYS * 24 * 60 * 60 * 1000;
-              return (
-                <div key={r.record_id} className="rounded-lg bg-background/50 px-3 py-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">{r.record_name}</p>
-                      {r.insurance_category && (
-                        <p className="text-[10px] text-muted-foreground">{r.insurance_category}</p>
-                      )}
+      {categoryGroups.map((catGroup) => (
+        <section key={catGroup.category} className="mb-4 rounded-2xl border border-border bg-card p-4">
+          <h3 className="mb-2 text-sm font-bold">{catGroup.categoryTitle}</h3>
+          {catGroup.subgroups.map((sub) => (
+            <div key={sub.name} className="mb-3 last:mb-0">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {sub.name}
+              </p>
+              <div className="space-y-2">
+                {sub.items.map((r) => {
+                  const primaryAmount =
+                    catGroup.category === "investments" ? r.sum_assured : (r.premium ?? r.sum_assured);
+                  const primaryLabel =
+                    catGroup.category === "investments"
+                      ? "Current value"
+                      : r.premium != null
+                        ? "Premium"
+                        : "Sum assured";
+                  const isStale =
+                    !!r.last_updated &&
+                    Date.now() - new Date(r.last_updated).getTime() >
+                      STALE_AFTER_DAYS * 24 * 60 * 60 * 1000;
+                  return (
+                    <div key={r.record_id} className="rounded-lg bg-background/50 px-3 py-2 text-sm">
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium">{r.record_name}</p>
+                        <div className="text-right">
+                          <p className="font-semibold">{fmtMoney(primaryAmount, r.currency)}</p>
+                          <p className="text-[10px] text-muted-foreground">{primaryLabel}</p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {[
+                          r.member_id == null ? "Unassigned" : r.member_name,
+                          r.end_date && `Ends ${fmtDate(r.end_date)}`,
+                          r.is_giro && "GIRO",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || "—"}
+                      </p>
+                      <p
+                        className={`mt-1 text-[10px] ${isStale ? "font-medium text-review-foreground" : "text-muted-foreground"}`}
+                      >
+                        Shared by client · updated {fmtDate(r.last_updated)}
+                        {isStale ? " · please confirm this is still accurate" : ""}
+                      </p>
                     </div>
-                    <div className="text-right">
-                      <p className="font-semibold">{fmtMoney(primaryAmount, r.currency)}</p>
-                      <p className="text-[10px] text-muted-foreground">{primaryLabel}</p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {[
-                      r.member_id == null ? "Unassigned" : r.member_name,
-                      r.end_date && `Ends ${fmtDate(r.end_date)}`,
-                      r.is_giro && "GIRO",
-                    ]
-                      .filter(Boolean)
-                      .join(" · ") || "—"}
-                  </p>
-                  <p
-                    className={`mt-1 text-[10px] ${isStale ? "font-medium text-review-foreground" : "text-muted-foreground"}`}
-                  >
-                    Shared by client · updated {fmtDate(r.last_updated)}
-                    {isStale ? " · please confirm this is still accurate" : ""}
-                  </p>
+                  );
+                })}
+              </div>
+              {sub.subtotals.length > 0 && (
+                <div className="mt-1.5 space-y-0.5 text-right text-xs font-semibold text-muted-foreground">
+                  {sub.subtotals.map((st) => (
+                    <p key={st.currency}>
+                      {catGroup.category === "investments" ? "Total value" : "Total sum assured"}:{" "}
+                      {fmtMoney(st.amount, st.currency)}
+                    </p>
+                  ))}
                 </div>
-              );
-            })}
-          </div>
+              )}
+            </div>
+          ))}
         </section>
       ))}
     </div>
