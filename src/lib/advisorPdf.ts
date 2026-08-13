@@ -33,6 +33,8 @@ export type AdvisorPdfUpcomingItem = {
   date: string;
   label: string;
   overdue?: boolean;
+  amount?: number | null;
+  currency?: string | null;
 };
 
 export type AdvisorPdfData = {
@@ -178,24 +180,37 @@ export function groupAdvisorRecords(records: AdvisorPdfRecord[]): AdvisorCategor
 }
 
 // Exported so AdvisorHome.tsx's on-screen list uses the exact same amount
-// formatting as the PDF — one line, frequency inline ("$1,200/month"),
-// rather than a separate label line underneath. That second line was the
-// actual cause of the visual overlap you saw: at typical PDF line spacing,
-// two stacked text lines that close together read as touching. Removing
-// the second line removes the crowding at the source instead of nudging
-// pixel offsets. It also kills the "Premium" repeated on every single row"
-// complaint — see the subgroup column header below, which states the kind
-// of amount ONCE per group instead of once per item.
+// formatting as the PDF — one line, frequency inline ("$1,200/month").
+// Deliberately never appends an annotation like "(sum assured)" onto the
+// number itself — a confusing thing to read from a real report ("goes
+// beyond alignment" was the direct symptom of trying that). When there's no
+// premium to show, the caller adds a "Sum assured only" tag to the existing
+// sub-line instead, which already has working spacing for exactly this.
 export function formatAdvisorAmount(r: AdvisorPdfRecord): string {
   if (r.category === "investments") {
     return fmtMoneyForPdf(r.sum_assured, r.currency);
   }
   if (r.premium == null) {
-    return `${fmtMoneyForPdf(r.sum_assured, r.currency)} (sum assured)`;
+    return fmtMoneyForPdf(r.sum_assured, r.currency);
   }
   const value = fmtMoneyForPdf(r.premium, r.currency);
   const freqLabel = r.frequency ? FREQ_LABEL[r.frequency] : null;
   return freqLabel ? `${value}/${freqLabel}` : value;
+}
+
+function truncateToWidth(
+  text: string,
+  maxWidth: number,
+  f: { widthOfTextAtSize(t: string, size: number): number },
+  size: number,
+): string {
+  if (maxWidth <= 0) return "";
+  if (f.widthOfTextAtSize(text, size) <= maxWidth) return text;
+  let truncated = text;
+  while (truncated.length > 1 && f.widthOfTextAtSize(truncated + "…", size) > maxWidth) {
+    truncated = truncated.slice(0, -1);
+  }
+  return truncated + "…";
 }
 
 function fmtDateForPdf(d: string | null | undefined): string {
@@ -372,12 +387,17 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
       color: colorUrgentBg,
     });
     let alertY = y - 16;
+    // Neutral, not red — the tinted box background already signals "this
+    // section is about upcoming premiums." Coloring the header the same
+    // red as overdue items made the caption and the urgent content read as
+    // one undifferentiated block. Red is now reserved entirely for the
+    // OVERDUE badge/text below, where it actually means something.
     page.drawText(`UPCOMING PREMIUMS — NEXT ${data.upcomingHorizonDays} DAYS`, {
       x: margin + 10,
       y: alertY,
       size: 9,
       font: fontBold,
-      color: colorUrgent,
+      color: rgb(0.35, 0.35, 0.38),
     });
     alertY -= 16;
     for (const item of soon) {
@@ -387,18 +407,34 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
         page.drawText(prefix, { x: itemX, y: alertY, size: 9, font: fontBold, color: colorUrgent });
         itemX += fontBold.widthOfTextAtSize(prefix, 9);
       }
+      // Amount was missing entirely before — the box said something was
+      // due and when, never how much, which isn't useful to an FA on its
+      // own.
+      const amountStr = item.amount != null ? fmtMoneyForPdf(item.amount, item.currency) : null;
+      const amountWidth = amountStr ? font.widthOfTextAtSize(amountStr, 10) : 0;
+      const textMaxWidth = width - margin - 10 - itemX - (amountStr ? amountWidth + 10 : 0);
+      const labelText = truncateToWidth(`${item.label} — ${fmtDateForPdf(item.date)}`, textMaxWidth, font, 10);
       // Only genuinely overdue items get red — everything else in this box
       // is upcoming, not urgent, and was previously drawn in the same red
       // as both the header AND overdue items, so nothing stood out from
       // anything else. Reserving the color for what's actually overdue is
       // what makes the badge above mean something.
-      page.drawText(`${item.label} — ${fmtDateForPdf(item.date)}`, {
+      page.drawText(labelText, {
         x: itemX,
         y: alertY,
         size: 10,
         font,
         color: item.overdue ? colorUrgent : rgb(0, 0, 0),
       });
+      if (amountStr) {
+        page.drawText(amountStr, {
+          x: width - margin - 10 - amountWidth,
+          y: alertY,
+          size: 10,
+          font,
+          color: item.overdue ? colorUrgent : rgb(0, 0, 0),
+        });
+      }
       alertY -= 16;
     }
     y -= boxHeight + 24;
@@ -434,7 +470,7 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
         color: colorMuted,
       });
       page.drawText(columnLabel, {
-        x: width - margin - font.widthOfTextAtSize(columnLabel, 8),
+        x: width - margin - fontBold.widthOfTextAtSize(columnLabel, 8),
         y,
         size: 8,
         font: fontBold,
@@ -452,16 +488,37 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
       for (const r of sub.items) {
         ensureSpace(90);
         const amountStr = formatAdvisorAmount(r);
-        page.drawText(r.record_name, { x: margin, y, size: 10, font, color: rgb(0, 0, 0) });
+        // Neither side was ever width-constrained before — a long record
+        // name plus a long amount string had no guard against colliding in
+        // the middle of the row. Reserving fixed room for the amount side
+        // and truncating the name to fit removes that risk outright rather
+        // than hoping typical data stays short enough.
+        const amountWidth = font.widthOfTextAtSize(amountStr, 10);
+        const nameMaxWidth = contentWidth - amountWidth - 16;
+        page.drawText(truncateToWidth(r.record_name, nameMaxWidth, font, 10), {
+          x: margin,
+          y,
+          size: 10,
+          font,
+          color: rgb(0, 0, 0),
+        });
         page.drawText(amountStr, {
-          x: width - margin - font.widthOfTextAtSize(amountStr, 10),
+          x: width - margin - amountWidth,
           y,
           size: 10,
           font,
           color: rgb(0, 0, 0),
         });
         y -= 14; // one line only now — no second (label) line competing for this space
-        const subLine = [r.member_id == null ? "Unassigned" : null, r.is_giro ? "GIRO" : null]
+        // "Sum assured only" replaces the old inline "(sum assured)" text
+        // that used to clutter the number itself — same information, but
+        // as a proper tag in the line that already has working spacing for
+        // this, not glued onto a dollar figure.
+        const subLine = [
+          r.member_id == null ? "Unassigned" : null,
+          r.category !== "investments" && r.premium == null ? "Sum assured only" : null,
+          r.is_giro ? "GIRO" : null,
+        ]
           .filter(Boolean)
           .join(" · ");
         if (subLine) {
@@ -477,7 +534,7 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
         ensureSpace(80);
         const line = `${totalLabel}: ${fmtMoneyForPdf(st.amount, st.currency)}`;
         page.drawText(line, {
-          x: width - margin - font.widthOfTextAtSize(line, 9),
+          x: width - margin - fontBold.widthOfTextAtSize(line, 9),
           y,
           size: 9,
           font: fontBold,
