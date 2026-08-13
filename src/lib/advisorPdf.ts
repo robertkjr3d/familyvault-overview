@@ -177,15 +177,25 @@ export function groupAdvisorRecords(records: AdvisorPdfRecord[]): AdvisorCategor
     });
 }
 
-function fmtAmountForPdf(r: AdvisorPdfRecord): { value: string; label: string } {
+// Exported so AdvisorHome.tsx's on-screen list uses the exact same amount
+// formatting as the PDF — one line, frequency inline ("$1,200/month"),
+// rather than a separate label line underneath. That second line was the
+// actual cause of the visual overlap you saw: at typical PDF line spacing,
+// two stacked text lines that close together read as touching. Removing
+// the second line removes the crowding at the source instead of nudging
+// pixel offsets. It also kills the "Premium" repeated on every single row"
+// complaint — see the subgroup column header below, which states the kind
+// of amount ONCE per group instead of once per item.
+export function formatAdvisorAmount(r: AdvisorPdfRecord): string {
   if (r.category === "investments") {
-    return { value: fmtMoneyForPdf(r.sum_assured, r.currency), label: "Current value" };
+    return fmtMoneyForPdf(r.sum_assured, r.currency);
   }
-  const amount = r.premium ?? r.sum_assured;
-  const value = fmtMoneyForPdf(amount, r.currency);
-  if (r.premium == null) return { value, label: "Sum assured" };
+  if (r.premium == null) {
+    return `${fmtMoneyForPdf(r.sum_assured, r.currency)} (sum assured)`;
+  }
+  const value = fmtMoneyForPdf(r.premium, r.currency);
   const freqLabel = r.frequency ? FREQ_LABEL[r.frequency] : null;
-  return { value, label: freqLabel ? `Premium / ${freqLabel}` : "Premium" };
+  return freqLabel ? `${value}/${freqLabel}` : value;
 }
 
 function fmtDateForPdf(d: string | null | undefined): string {
@@ -371,12 +381,23 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
     });
     alertY -= 16;
     for (const item of soon) {
+      let itemX = margin + 10;
+      if (item.overdue) {
+        const prefix = "OVERDUE — ";
+        page.drawText(prefix, { x: itemX, y: alertY, size: 9, font: fontBold, color: colorUrgent });
+        itemX += fontBold.widthOfTextAtSize(prefix, 9);
+      }
+      // Only genuinely overdue items get red — everything else in this box
+      // is upcoming, not urgent, and was previously drawn in the same red
+      // as both the header AND overdue items, so nothing stood out from
+      // anything else. Reserving the color for what's actually overdue is
+      // what makes the badge above mean something.
       page.drawText(`${item.label} — ${fmtDateForPdf(item.date)}`, {
-        x: margin + 10,
+        x: itemX,
         y: alertY,
         size: 10,
         font,
-        color: colorUrgent,
+        color: item.overdue ? colorUrgent : rgb(0, 0, 0),
       });
       alertY -= 16;
     }
@@ -404,6 +425,7 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
 
     for (const sub of catGroup.subgroups) {
       ensureSpace(100);
+      const columnLabel = catGroup.category === "investments" ? "VALUE" : "PREMIUM";
       page.drawText(sub.name.toUpperCase(), {
         x: margin,
         y,
@@ -411,11 +433,25 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
         font: fontBold,
         color: colorMuted,
       });
+      page.drawText(columnLabel, {
+        x: width - margin - font.widthOfTextAtSize(columnLabel, 8),
+        y,
+        size: 8,
+        font: fontBold,
+        color: colorMuted,
+      });
+      y -= 6;
+      page.drawLine({
+        start: { x: margin, y },
+        end: { x: width - margin, y },
+        thickness: 0.5,
+        color: colorBorder,
+      });
       y -= 16;
 
       for (const r of sub.items) {
         ensureSpace(90);
-        const { value: amountStr, label: amountLabel } = fmtAmountForPdf(r);
+        const amountStr = formatAdvisorAmount(r);
         page.drawText(r.record_name, { x: margin, y, size: 10, font, color: rgb(0, 0, 0) });
         page.drawText(amountStr, {
           x: width - margin - font.widthOfTextAtSize(amountStr, 10),
@@ -424,31 +460,15 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
           font,
           color: rgb(0, 0, 0),
         });
-        y -= 11;
-        page.drawText(amountLabel, {
-          x: width - margin - font.widthOfTextAtSize(amountLabel, 7.5),
-          y,
-          size: 7.5,
-          font,
-          color: colorMuted,
-        });
-        y -= 3;
-        // insurance_category is dropped from this sub-line now that it's
-        // the subgroup heading above — repeating it per item would be
-        // redundant.
-        // Every item on this page is either this member's own record or
-        // Unassigned — the page is already scoped to one member, so
-        // repeating their name on every line was pure redundancy. Only
-        // Unassigned is worth flagging, since that's the one case that
-        // ISN'T implied by being on this page.
+        y -= 14; // one line only now — no second (label) line competing for this space
         const subLine = [r.member_id == null ? "Unassigned" : null, r.is_giro ? "GIRO" : null]
           .filter(Boolean)
           .join(" · ");
         if (subLine) {
           page.drawText(subLine, { x: margin, y, size: 8, font, color: colorMuted });
-          y -= 14;
+          y -= 16;
         } else {
-          y -= 4;
+          y -= 6;
         }
       }
 
