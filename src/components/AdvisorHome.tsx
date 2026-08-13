@@ -268,25 +268,32 @@ function ClientDetail({
       )}
 
       {!isLoading && upcomingPremiums.length > 0 && (
-        <section className="mb-4 rounded-2xl border border-urgent/30 bg-urgent/5 p-4">
-          <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-urgent">
+        <section className="mb-4 rounded-2xl border border-l-4 border-border border-l-urgent bg-card p-4">
+          <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
             Upcoming Premiums — Next {ADVISOR_ALERT_HORIZON_DAYS} Days
           </h3>
           <div className="space-y-1.5">
             {upcomingPremiums.map((item) => (
-              <div key={`${item.recordId}-${item.date}`} className="flex items-center justify-between text-sm">
+              <div key={`${item.recordId}-${item.date}`} className="flex items-center justify-between gap-3 text-sm">
                 <span className="flex min-w-0 items-center gap-1.5">
                   {item.overdue && (
                     <span className="shrink-0 rounded-full bg-urgent/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-urgent">
                       Overdue
                     </span>
                   )}
-                  <span className="truncate text-foreground">{item.label}</span>
+                  <span className={`truncate ${item.overdue ? "font-medium text-urgent" : "text-foreground"}`}>
+                    {item.label}
+                  </span>
                 </span>
-                <span
-                  className={`shrink-0 text-xs ${item.overdue ? "font-semibold text-urgent" : "text-muted-foreground"}`}
-                >
-                  {fmtDate(item.date)}
+                <span className="flex shrink-0 items-center gap-2">
+                  {item.amount != null && (
+                    <span className={`text-xs font-semibold ${item.overdue ? "text-urgent" : "text-foreground"}`}>
+                      {fmtMoney(item.amount, item.currency)}
+                    </span>
+                  )}
+                  <span className={`text-xs ${item.overdue ? "text-urgent" : "text-muted-foreground"}`}>
+                    {fmtDate(item.date)}
+                  </span>
                 </span>
               </div>
             ))}
@@ -334,6 +341,12 @@ function ClientDetail({
                           // the one case worth flagging, since it's the only
                           // one NOT implied by being on this page.
                           r.member_id == null ? "Unassigned" : null,
+                          // Replaces the old inline "(sum assured)" text
+                          // that used to clutter the amount itself — same
+                          // fix as the PDF.
+                          catGroup.category !== "investments" && r.premium == null
+                            ? "Sum assured only"
+                            : null,
                           r.end_date && `Ends ${fmtDate(r.end_date)}`,
                           r.is_giro && "GIRO",
                         ]
@@ -343,7 +356,7 @@ function ClientDetail({
                       <p
                         className={`mt-1 text-[10px] ${isStale ? "font-medium text-review-foreground" : "text-muted-foreground"}`}
                       >
-                        Shared by client · updated {fmtDate(r.last_updated)}
+                        Updated {fmtDate(r.last_updated)}
                         {isStale ? " · please confirm this is still accurate" : ""}
                       </p>
                     </div>
