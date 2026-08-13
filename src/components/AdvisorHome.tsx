@@ -1,14 +1,23 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Toaster, toast } from "sonner";
 import {
   listClientHouseholdsForAdvisor,
   getClientRecordsForAdvisor,
   getAdvisorNetworthSummary,
+  upsertAdvisorNote,
+  deleteAdvisorNote,
   STALE_AFTER_DAYS,
   ADVISOR_ALERT_HORIZON_DAYS,
 } from "@/lib/advisorAccess";
-import { generateAndDownloadAdvisorPdf, groupAdvisorRecords, formatAdvisorAmount } from "@/lib/advisorPdf";
+import {
+  generateAndDownloadAdvisorPdf,
+  groupAdvisorRecords,
+  formatAdvisorAmount,
+  NET_WORTH_CATEGORY_ORDER,
+  NET_WORTH_CATEGORY_LABELS,
+  NET_WORTH_CATEGORY_COLORS,
+} from "@/lib/advisorPdf";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { fmtMoney, fmtDate } from "@/lib/format";
@@ -137,6 +146,228 @@ export function AdvisorHome() {
   );
 }
 
+// One FA-authored note per record — "what do you recommend for this item."
+// Read-modify-write is entirely client-driven (open -> edit -> Save/Cancel)
+// rather than autosave, so a half-typed thought never silently becomes the
+// visible recommendation a client reads.
+function RecordNote({
+  record,
+  householdId,
+  memberId,
+}: {
+  record: any;
+  householdId: string;
+  memberId: string;
+}) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(record.note ?? "");
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      upsertAdvisorNote({
+        data: {
+          householdId,
+          memberId,
+          recordCategory: record.category,
+          recordId: record.record_id,
+          note: draft.trim(),
+        },
+      }),
+    onSuccess: () => {
+      setEditing(false);
+      void queryClient.invalidateQueries({ queryKey: ["advisor-client-records", householdId, memberId] });
+    },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : "Unable to save note.");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteAdvisorNote({ data: { noteId: record.noteId } }),
+    onSuccess: () => {
+      setDraft("");
+      void queryClient.invalidateQueries({ queryKey: ["advisor-client-records", householdId, memberId] });
+    },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : "Unable to remove note.");
+    },
+  });
+
+  if (editing) {
+    return (
+      <div className="mt-2 space-y-1.5">
+        <textarea
+          className="w-full rounded-lg border border-input bg-background p-2 text-xs"
+          rows={2}
+          maxLength={2000}
+          placeholder="What do you recommend for this item?"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="rounded-md bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground disabled:opacity-50"
+            disabled={saveMutation.isPending || draft.trim().length === 0}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              saveMutation.mutate();
+            }}
+          >
+            {saveMutation.isPending ? "Saving..." : "Save"}
+          </button>
+          <button
+            type="button"
+            className="rounded-md border border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
+            onPointerDown={(e) => {
+              e.preventDefault();
+              setDraft(record.note ?? "");
+              setEditing(false);
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (record.note) {
+    return (
+      <div className="mt-2 rounded-lg border border-primary/15 bg-primary/5 p-2">
+        <p className="text-[9px] font-bold uppercase tracking-wide text-primary/70">Your note</p>
+        <p className="whitespace-pre-wrap text-xs text-foreground">{record.note}</p>
+        <div className="mt-1 flex gap-3">
+          <button
+            type="button"
+            className="text-[10px] font-medium text-primary"
+            onPointerDown={(e) => {
+              e.preventDefault();
+              setDraft(record.note ?? "");
+              setEditing(true);
+            }}
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            className="text-[10px] font-medium text-muted-foreground disabled:opacity-50"
+            disabled={deleteMutation.isPending}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              deleteMutation.mutate();
+            }}
+          >
+            {deleteMutation.isPending ? "Removing..." : "Remove"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="mt-2 text-[10px] font-medium text-primary"
+      onPointerDown={(e) => {
+        e.preventDefault();
+        setEditing(true);
+      }}
+    >
+      + Add note
+    </button>
+  );
+}
+
+// Same category order/colors as the PDF donut (advisorPdf.ts) — imported,
+// not re-declared, so a category is never a different color on screen than
+// in the exported PDF for the same household.
+function NetWorthDonut({
+  breakdown,
+  totalAssets,
+  totalLiabilities,
+  netWorth,
+}: {
+  breakdown: Record<string, number> | undefined;
+  totalAssets: number;
+  totalLiabilities: number;
+  netWorth: number;
+}) {
+  const slices = (NET_WORTH_CATEGORY_ORDER as readonly string[])
+    .map((key) => ({ key, value: breakdown?.[key] ?? 0 }))
+    .filter((s) => s.value > 0);
+
+  const size = 140;
+  const strokeWidth = 24;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  let cumulative = 0;
+
+  return (
+    <div className="flex flex-wrap items-center gap-4">
+      <div className="relative shrink-0" style={{ width: size, height: size }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            strokeWidth={strokeWidth}
+            className="stroke-border"
+          />
+          {totalAssets > 0 &&
+            slices.map((s) => {
+              const fraction = s.value / totalAssets;
+              const dash = fraction * circumference;
+              const offset = cumulative * circumference;
+              cumulative += fraction;
+              const [r, g, b] = NET_WORTH_CATEGORY_COLORS[s.key] ?? [0.5, 0.5, 0.5];
+              return (
+                <circle
+                  key={s.key}
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  fill="none"
+                  stroke={`rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`}
+                  strokeWidth={strokeWidth}
+                  strokeDasharray={`${dash} ${circumference - dash}`}
+                  strokeDashoffset={-offset}
+                />
+              );
+            })}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center px-2 text-center">
+          <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">Net Worth</p>
+          <p className="text-sm font-bold leading-tight">{fmtMoney(netWorth, "SGD")}</p>
+        </div>
+      </div>
+      <div className="min-w-[160px] flex-1 space-y-1">
+        {slices.map((s) => {
+          const [r, g, b] = NET_WORTH_CATEGORY_COLORS[s.key] ?? [0.5, 0.5, 0.5];
+          const pct = totalAssets > 0 ? Math.round((s.value / totalAssets) * 100) : 0;
+          return (
+            <div key={s.key} className="flex items-center gap-1.5 text-xs">
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{
+                  backgroundColor: `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`,
+                }}
+              />
+              <span className="truncate text-muted-foreground">{NET_WORTH_CATEGORY_LABELS[s.key] ?? s.key}</span>
+              <span className="ml-auto shrink-0 font-medium text-foreground">{pct}%</span>
+            </div>
+          );
+        })}
+        {totalLiabilities > 0 && (
+          <p className="pt-1 text-xs font-semibold text-urgent">Liabilities: {fmtMoney(totalLiabilities, "SGD")}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ClientDetail({
   householdId,
   householdName,
@@ -254,14 +485,15 @@ function ClientDetail({
           )}
           {!networthLoading && networth?.hasData && (
             <>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Household net worth (combined total — not {memberName}'s individually)
               </p>
-              <p className="text-2xl font-bold">{fmtMoney(networth.netWorth, "SGD")}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {fmtMoney(networth.totalAssets, "SGD")} assets −{" "}
-                {fmtMoney(networth.totalLiabilities, "SGD")} liabilities
-              </p>
+              <NetWorthDonut
+                breakdown={networth.breakdown}
+                totalAssets={networth.totalAssets}
+                totalLiabilities={networth.totalLiabilities}
+                netWorth={networth.netWorth}
+              />
             </>
           )}
         </section>
@@ -359,6 +591,7 @@ function ClientDetail({
                         Updated {fmtDate(r.last_updated)}
                         {isStale ? " · please confirm this is still accurate" : ""}
                       </p>
+                      <RecordNote record={r} householdId={householdId} memberId={memberId} />
                     </div>
                   );
                 })}
