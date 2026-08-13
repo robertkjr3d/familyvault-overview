@@ -53,6 +53,18 @@ const clientRecordsPayloadSchema = z.object({
   memberId: z.string().uuid(),
 });
 
+const upsertNotePayloadSchema = z.object({
+  householdId: z.string().uuid(),
+  memberId: z.string().uuid(),
+  recordCategory: z.enum(["insurance", "investments"]),
+  recordId: z.string().uuid(),
+  note: z.string().trim().min(1, "Note can't be empty.").max(2000, "Keep it under 2000 characters."),
+});
+
+const deleteNotePayloadSchema = z.object({
+  noteId: z.string().uuid(),
+});
+
 const cancelInvitePayloadSchema = z.object({
   householdId: z.string().uuid(),
   email: z.string().email(),
@@ -499,7 +511,25 @@ export const getAdvisorNetworthSummary = createServerFn({ method: "POST" })
     );
     const netWorth = totalAssets - totalLiabilities;
 
-    return { totalAssets, totalLiabilities, netWorth, hasData: components.length > 0 };
+    return {
+      totalAssets,
+      totalLiabilities,
+      netWorth,
+      hasData: components.length > 0,
+      // Every one of these was already being computed above just to be
+      // summed into totalAssets — exposing them costs nothing extra and is
+      // exactly the breakdown a donut/allocation chart needs. Zero-value
+      // categories are kept (not filtered here) so the chart can decide
+      // whether to omit a 0% slice.
+      breakdown: {
+        property: propertyValue,
+        investments: investmentsValue,
+        savings: savingsValue,
+        otherAssets: otherAssetsValue,
+        insuranceSurrender: insuranceSurrenderValue,
+        liabilities: totalLiabilities,
+      },
+    };
   });
 
 // FA-side alert horizon and staleness window — single source of truth for
@@ -640,6 +670,26 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
       .order("record_name", { ascending: true });
     if (error) throw error;
 
+    // The advisor's own notes on these records — RLS on advisor_record_notes
+    // already restricts this to rows where advisor_user_id = auth.uid(),
+    // so no extra filter is needed beyond household_id; an FA can never see
+    // another advisor's notes on the same record.
+    const { data: noteRows, error: notesError } = await supabase
+      .from("advisor_record_notes" as any)
+      .select("id, record_id, note, updated_at")
+      .eq("household_id", data.householdId);
+    if (notesError) throw notesError;
+    const noteByRecordId = new Map((noteRows ?? []).map((n: any) => [n.record_id, n]));
+    const recordsWithNotes = (rows ?? []).map((r: any) => {
+      const noteRow = noteByRecordId.get(r.record_id) as any;
+      return {
+        ...r,
+        note: noteRow?.note ?? null,
+        noteId: noteRow?.id ?? null,
+        noteUpdatedAt: noteRow?.updated_at ?? null,
+      };
+    });
+
     // Fetched from the base tables, not the view — buildUpcomingItems needs
     // start_date/frequency/premium under their real names, and the view
     // deliberately aliases investments' columns onto the generic
@@ -688,7 +738,61 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
       dismissedKeys,
     );
 
-    return { records: (rows ?? []) as any[], upcomingPremiums };
+    return { records: recordsWithNotes, upcomingPremiums };
+  });
+
+// FA writes/edits their recommendation for one record. Runs on the FA's own
+// RLS-scoped session (not supabaseAdmin) deliberately — advisor_record_notes'
+// own INSERT/UPDATE policies (has_advisor_access, member+category-aware)
+// are the actual gate here, not a manual check in this handler. If access
+// was revoked or never granted for this member/category, the upsert fails
+// with a real Postgres RLS error instead of silently succeeding.
+export const upsertAdvisorNote = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(upsertNotePayloadSchema)
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: link, error: linkError } = await supabase
+      .from("advisor_household_links" as any)
+      .select("id")
+      .eq("household_id", data.householdId)
+      .eq("advisor_user_id", userId)
+      .eq("status", "active")
+      .maybeSingle();
+    if (linkError) throw linkError;
+    if (!link) throw new Error("No active link to this household.");
+
+    const { error } = await supabase.from("advisor_record_notes" as any).upsert(
+      {
+        link_id: (link as any).id,
+        household_id: data.householdId,
+        member_id: data.memberId,
+        advisor_user_id: userId,
+        record_category: data.recordCategory,
+        record_id: data.recordId,
+        note: data.note,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "link_id,record_id" },
+    );
+    if (error) throw error;
+    return { ok: true };
+  });
+
+// Ownership-only (no access re-check) — deliberately simpler than the write
+// policies above, see the migration's comment on why delete doesn't need
+// the same has_advisor_access gate insert/update do.
+export const deleteAdvisorNote = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(deleteNotePayloadSchema)
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    const { error } = await supabase
+      .from("advisor_record_notes" as any)
+      .delete()
+      .eq("id", data.noteId);
+    if (error) throw error;
+    return { ok: true };
   });
 
 // FA-side: which households have an active link to the current user.
