@@ -8,7 +8,7 @@ import {
   STALE_AFTER_DAYS,
   ADVISOR_ALERT_HORIZON_DAYS,
 } from "@/lib/advisorAccess";
-import { generateAndDownloadAdvisorPdf, groupAdvisorRecords } from "@/lib/advisorPdf";
+import { generateAndDownloadAdvisorPdf, groupAdvisorRecords, formatAdvisorAmount } from "@/lib/advisorPdf";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { fmtMoney, fmtDate } from "@/lib/format";
@@ -275,10 +275,19 @@ function ClientDetail({
           <div className="space-y-1.5">
             {upcomingPremiums.map((item) => (
               <div key={`${item.recordId}-${item.date}`} className="flex items-center justify-between text-sm">
-                <span className={item.overdue ? "font-semibold text-urgent" : "text-foreground"}>
-                  {item.label}
+                <span className="flex min-w-0 items-center gap-1.5">
+                  {item.overdue && (
+                    <span className="shrink-0 rounded-full bg-urgent/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-urgent">
+                      Overdue
+                    </span>
+                  )}
+                  <span className="truncate text-foreground">{item.label}</span>
                 </span>
-                <span className="shrink-0 text-xs text-muted-foreground">{fmtDate(item.date)}</span>
+                <span
+                  className={`shrink-0 text-xs ${item.overdue ? "font-semibold text-urgent" : "text-muted-foreground"}`}
+                >
+                  {fmtDate(item.date)}
+                </span>
               </div>
             ))}
           </div>
@@ -298,31 +307,25 @@ function ClientDetail({
           <h3 className="mb-2 text-sm font-bold">{catGroup.categoryTitle}</h3>
           {catGroup.subgroups.map((sub) => (
             <div key={sub.name} className="mb-3 last:mb-0">
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {sub.name}
-              </p>
+              <div className="mb-1.5 flex items-center justify-between">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {sub.name}
+                </p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {catGroup.category === "investments" ? "Value" : "Premium"}
+                </p>
+              </div>
               <div className="space-y-2">
                 {sub.items.map((r) => {
-                  const primaryAmount =
-                    catGroup.category === "investments" ? r.sum_assured : (r.premium ?? r.sum_assured);
-                  const primaryLabel =
-                    catGroup.category === "investments"
-                      ? "Current value"
-                      : r.premium != null
-                        ? "Premium"
-                        : "Sum assured";
                   const isStale =
                     !!r.last_updated &&
                     Date.now() - new Date(r.last_updated).getTime() >
                       STALE_AFTER_DAYS * 24 * 60 * 60 * 1000;
                   return (
                     <div key={r.record_id} className="rounded-lg bg-background/50 px-3 py-2 text-sm">
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium">{r.record_name}</p>
-                        <div className="text-right">
-                          <p className="font-semibold">{fmtMoney(primaryAmount, r.currency)}</p>
-                          <p className="text-[10px] text-muted-foreground">{primaryLabel}</p>
-                        </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="min-w-0 flex-1 truncate font-medium">{r.record_name}</p>
+                        <p className="shrink-0 font-semibold">{formatAdvisorAmount(r)}</p>
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {[
