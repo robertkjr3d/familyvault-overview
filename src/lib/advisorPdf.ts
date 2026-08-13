@@ -24,6 +24,7 @@ export type AdvisorPdfRecord = {
   end_date?: string | null;
   is_giro?: boolean | null;
   last_updated?: string | null;
+  note?: string | null;
 };
 
 // Deliberately just {date, label, overdue?} — the caller's alerts.ts engine
@@ -50,6 +51,14 @@ export type AdvisorPdfData = {
     totalLiabilities: number;
     netWorth: number;
     hasData: boolean;
+    breakdown?: {
+      property: number;
+      investments: number;
+      savings: number;
+      otherAssets: number;
+      insuranceSurrender: number;
+      liabilities: number;
+    };
   } | null;
   records: AdvisorPdfRecord[];
   // Pre-computed by the caller via the shared alerts.ts engine (start_date +
@@ -74,6 +83,33 @@ export type AdvisorPdfData = {
 // at the top of this file) — but the LOGIC still needs to match exactly,
 // not just resemble it, or this PDF would show different money formatting
 // than the rest of the app for no real reason.
+// Shared between the on-screen donut and the PDF donut, so a category is
+// always the same color in both places. Order here is also the legend/draw
+// order for both renderers.
+export const NET_WORTH_CATEGORY_ORDER = [
+  "property",
+  "investments",
+  "savings",
+  "otherAssets",
+  "insuranceSurrender",
+] as const;
+
+export const NET_WORTH_CATEGORY_LABELS: Record<string, string> = {
+  property: "Property",
+  investments: "Investments",
+  savings: "Savings",
+  otherAssets: "Other Assets",
+  insuranceSurrender: "Insurance (Surrender Value)",
+};
+
+export const NET_WORTH_CATEGORY_COLORS: Record<string, [number, number, number]> = {
+  property: [0.2, 0.35, 0.6],
+  investments: [0.16, 0.55, 0.42],
+  savings: [0.78, 0.58, 0.11],
+  otherAssets: [0.48, 0.42, 0.68],
+  insuranceSurrender: [0.75, 0.45, 0.52],
+};
+
 function fmtMoneyForPdf(n: number | null | undefined, currency?: string | null): string {
   if (n == null || Number.isNaN(Number(n))) return "—";
   const cur = currency || "SGD";
@@ -213,6 +249,55 @@ function truncateToWidth(
   return truncated + "…";
 }
 
+function wrapTextToWidth(
+  text: string,
+  maxWidth: number,
+  f: { widthOfTextAtSize(t: string, size: number): number },
+  size: number,
+): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (f.widthOfTextAtSize(candidate, size) <= maxWidth) {
+      current = candidate;
+    } else {
+      if (current) lines.push(current);
+      current = word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+// Verified empirically before use (not assumed) — see the sandbox test that
+// caught this: pdf-lib's drawSvgPath applies an internal Y-flip meant for
+// embedding normal SVG icons, so raw path coordinates land off-page unless
+// Y is negated here, and the arc sweep-flags need inverting to compensate
+// for that same flip reversing the arc's rotational direction. First
+// attempt with neither fix rendered nothing; second (Y negated, flags not
+// inverted) rendered a distorted overlapping shape; this version, checked
+// against an actual rasterized render, produces a clean proportional ring.
+function wedgePath(
+  cx: number,
+  cy: number,
+  rOuter: number,
+  rInner: number,
+  startAngle: number,
+  endAngle: number,
+): string {
+  const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
+  const p = (r: number, a: number) => `${(cx + r * Math.cos(a)).toFixed(2)} ${(-(cy + r * Math.sin(a))).toFixed(2)}`;
+  return [
+    `M ${p(rOuter, startAngle)}`,
+    `A ${rOuter} ${rOuter} 0 ${largeArc} 0 ${p(rOuter, endAngle)}`,
+    `L ${p(rInner, endAngle)}`,
+    `A ${rInner} ${rInner} 0 ${largeArc} 1 ${p(rInner, startAngle)}`,
+    "Z",
+  ].join(" ");
+}
+
 function fmtDateForPdf(d: string | null | undefined): string {
   if (!d) return "—";
   const date = new Date(d);
@@ -259,7 +344,6 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
   const colorUrgent = rgb(0.72, 0.2, 0.15);
   const colorUrgentBg = rgb(0.98, 0.93, 0.92);
   const colorBorder = rgb(0.85, 0.85, 0.87);
-  const colorAsset = rgb(0.2, 0.5, 0.35);
   const colorLiability = rgb(0.72, 0.2, 0.15);
 
   let y = height - margin;
@@ -318,53 +402,86 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
   });
   y -= 36;
 
-  // --- Net worth focal point ---
+  // --- Net worth focal point: donut, not a bar ---
   if (data.netWorth?.hasData) {
     page.drawText("NET WORTH (COMBINED TOTAL)", { x: margin, y, size: 9, font, color: colorMuted });
-    y -= 30;
-    const netWorthStr = fmtMoneyForPdf(data.netWorth.netWorth, "SGD");
-    page.drawText(netWorthStr, { x: margin, y, size: 34, font: fontBold, color: colorPrimary });
-    y -= 26;
+    y -= 20;
 
-    // Simple assets-vs-liabilities bar -- deliberately not a multi-year
-    // projection (see file header comment for why).
-    const barWidth = contentWidth;
-    const barHeight = 14;
-    const total = Math.max(data.netWorth.totalAssets, 1);
-    const liabilityFraction = Math.min(data.netWorth.totalLiabilities / total, 1);
-    page.drawRectangle({
-      x: margin,
-      y: y - barHeight,
-      width: barWidth,
-      height: barHeight,
-      color: colorAsset,
-    });
-    if (liabilityFraction > 0) {
-      page.drawRectangle({
-        x: margin,
-        y: y - barHeight,
-        width: barWidth * liabilityFraction,
-        height: barHeight,
-        color: colorLiability,
-      });
+    const donutSize = 130;
+    const rOuter = donutSize / 2;
+    const rInner = rOuter * 0.6;
+    ensureSpace(donutSize + 30);
+    const cx = margin + rOuter;
+    const cy = y - rOuter;
+
+    const totalAssets = Math.max(data.netWorth.totalAssets, 0);
+    const breakdown = data.netWorth.breakdown;
+    const slices = breakdown
+      ? NET_WORTH_CATEGORY_ORDER.map((key) => ({ key, value: breakdown[key] ?? 0 })).filter(
+          (s) => s.value > 0,
+        )
+      : [];
+
+    if (totalAssets > 0 && slices.length > 0) {
+      let angle = -Math.PI / 2;
+      for (const s of slices) {
+        const frac = s.value / totalAssets;
+        const sweep = frac * 2 * Math.PI;
+        const [r, g, b] = NET_WORTH_CATEGORY_COLORS[s.key] ?? [0.5, 0.5, 0.5];
+        page.drawSvgPath(wedgePath(cx, cy, rOuter, rInner, angle, angle + sweep), {
+          x: 0,
+          y: 0,
+          color: rgb(r, g, b),
+        });
+        angle += sweep;
+      }
+    } else {
+      // No category breakdown available (e.g. an older summary shape) —
+      // an empty ring keeps the layout identical either way rather than
+      // the page jumping around depending on whether this data exists.
+      page.drawEllipse({ x: cx, y: cy, xScale: rOuter, yScale: rOuter, color: colorBorder });
+      page.drawEllipse({ x: cx, y: cy, xScale: rInner, yScale: rInner, color: rgb(1, 1, 1) });
     }
-    y -= barHeight + 14;
-    page.drawText(`Assets: ${fmtMoneyForPdf(data.netWorth.totalAssets, "SGD")}`, {
-      x: margin,
-      y,
-      size: 10,
-      font,
-      color: colorAsset,
+
+    // Center KPI — width measured with the actual font used to draw it
+    // (fontBold), the exact discipline that was missing in the two earlier
+    // alignment bugs this session.
+    const netWorthStr = fmtMoneyForPdf(data.netWorth.netWorth, "SGD");
+    const centerSize = netWorthStr.length > 10 ? 10 : 12;
+    page.drawText(netWorthStr, {
+      x: cx - fontBold.widthOfTextAtSize(netWorthStr, centerSize) / 2,
+      y: cy - centerSize / 3,
+      size: centerSize,
+      font: fontBold,
+      color: colorPrimary,
     });
-    const liabText = `Liabilities: ${fmtMoneyForPdf(data.netWorth.totalLiabilities, "SGD")}`;
-    page.drawText(liabText, {
-      x: width - margin - font.widthOfTextAtSize(liabText, 10),
-      y,
-      size: 10,
+    const capLabel = "NET WORTH";
+    page.drawText(capLabel, {
+      x: cx - font.widthOfTextAtSize(capLabel, 6) / 2,
+      y: cy + centerSize / 2 + 4,
+      size: 6,
       font,
-      color: colorLiability,
+      color: colorMuted,
     });
-    y -= 34;
+
+    // Legend to the right of the ring.
+    const legendX = margin + donutSize + 24;
+    let legendY = cy + rOuter - 6;
+    for (const s of slices) {
+      const [r, g, b] = NET_WORTH_CATEGORY_COLORS[s.key] ?? [0.5, 0.5, 0.5];
+      page.drawRectangle({ x: legendX, y: legendY - 7, width: 8, height: 8, color: rgb(r, g, b) });
+      const pct = Math.round((s.value / totalAssets) * 100);
+      const label = `${NET_WORTH_CATEGORY_LABELS[s.key] ?? s.key} — ${pct}%`;
+      page.drawText(label, { x: legendX + 14, y: legendY, size: 9, font, color: rgb(0.15, 0.15, 0.18) });
+      legendY -= 15;
+    }
+    if (data.netWorth.totalLiabilities > 0) {
+      legendY -= 4;
+      const liabText = `Liabilities: ${fmtMoneyForPdf(data.netWorth.totalLiabilities, "SGD")}`;
+      page.drawText(liabText, { x: legendX, y: legendY, size: 9, font: fontBold, color: colorLiability });
+    }
+
+    y -= donutSize + 20;
   }
 
   // --- Upcoming premiums. Previously derived locally from each record's
@@ -526,6 +643,35 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
           y -= 16;
         } else {
           y -= 6;
+        }
+
+        // FA's own recommendation for this specific item. Capped at 5
+        // wrapped lines (long notes get a trailing "…") so one very long
+        // note can't dominate the page — still generous room for a real
+        // paragraph, not just a phrase. Space for the WHOLE block is
+        // reserved with ensureSpace() before any of it is drawn, so a note
+        // can't get split awkwardly across a page break mid-sentence.
+        if (r.note) {
+          const noteLines = wrapTextToWidth(r.note, contentWidth - 16, font, 9);
+          const shown = noteLines.slice(0, 5);
+          if (noteLines.length > 5) shown[4] = shown[4].replace(/\s*\S*$/, "") + "…";
+          const noteBoxHeight = 16 + shown.length * 13 + 8;
+          ensureSpace(noteBoxHeight + 20);
+          page.drawRectangle({
+            x: margin,
+            y: y - noteBoxHeight,
+            width: contentWidth,
+            height: noteBoxHeight,
+            color: rgb(0.95, 0.96, 0.98),
+          });
+          let noteY = y - 12;
+          page.drawText("ADVISER'S NOTE", { x: margin + 8, y: noteY, size: 7, font: fontBold, color: colorPrimary });
+          noteY -= 13;
+          for (const line of shown) {
+            page.drawText(line, { x: margin + 8, y: noteY, size: 9, font, color: rgb(0.15, 0.15, 0.18) });
+            noteY -= 13;
+          }
+          y -= noteBoxHeight + 10;
         }
       }
 
