@@ -593,6 +593,14 @@ async function computeAdvisorUpcomingPremiums(
   // forever, since buildUpcomingItems() itself has no notion of "handled" —
   // that state lives entirely in dismissed_dashboard_items, a table this
   // computation wasn't reading at all before.
+  // UpcomingItem carries `amount` but no currency at all — built from a
+  // lookup against the source rows instead, so the FA can actually see how
+  // much is due, not just that something is due (a real gap: the box
+  // previously showed a label and a date with no dollar figure anywhere).
+  const currencyByRecordId = new Map<string, string | null>();
+  for (const r of insuranceRows) currencyByRecordId.set(r.id, r.currency ?? null);
+  for (const r of investmentRows) currencyByRecordId.set(r.id, r.currency ?? null);
+
   return items
     .filter((i) => i.sourceType === "insurance_next_due" || i.sourceType === "investment_premium_due")
     .filter((i) => !dismissedKeys.has(`${i.sourceType}::${i.recordId}::${i.date}`))
@@ -601,6 +609,8 @@ async function computeAdvisorUpcomingPremiums(
       date: i.date,
       label: i.label,
       overdue: !!i.overdue,
+      amount: i.amount ?? null,
+      currency: currencyByRecordId.get(i.recordId) ?? null,
     }));
 }
 
@@ -642,13 +652,13 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
       await Promise.all([
         supabase
           .from("insurance_policies" as any)
-          .select("id, name, premium, start_date, end_date, frequency, is_giro, member_id")
+          .select("id, name, premium, start_date, end_date, frequency, is_giro, member_id, currency")
           .eq("household_id", data.householdId)
           .or(`member_id.eq.${data.memberId},member_id.is.null`),
         supabase
           .from("investments" as any)
           .select(
-            "id, name, group_name, premium_amount, premium_start_date, premium_end_date, premium_frequency, is_giro, member_id",
+            "id, name, group_name, premium_amount, premium_start_date, premium_end_date, premium_frequency, is_giro, member_id, currency",
           )
           .eq("household_id", data.householdId)
           .or(`member_id.eq.${data.memberId},member_id.is.null`),
@@ -740,13 +750,13 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
           supabaseAdmin
             .from("insurance_policies" as any)
             .select(
-              "id, household_id, name, premium, start_date, end_date, frequency, is_giro, member_id, updated_at",
+              "id, household_id, name, premium, start_date, end_date, frequency, is_giro, member_id, updated_at, currency",
             )
             .in("household_id", householdIds),
           supabaseAdmin
             .from("investments" as any)
             .select(
-              "id, household_id, name, group_name, premium_amount, premium_start_date, premium_end_date, premium_frequency, is_giro, member_id, updated_at",
+              "id, household_id, name, group_name, premium_amount, premium_start_date, premium_end_date, premium_frequency, is_giro, member_id, updated_at, currency",
             )
             .in("household_id", householdIds),
         ]);
