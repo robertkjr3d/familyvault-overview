@@ -795,7 +795,60 @@ export const deleteAdvisorNote = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// FA-side: which households have an active link to the current user.
+// Household-side: every FA note on this household's records, with the
+// writing advisor's name attached — this is what lets a client see "your
+// adviser recommends..." on their own insurance/investment pages. Returns
+// ALL notes for the household (not deduplicated per record) since more
+// than one advisor can be linked to a household, and each can leave their
+// own note on the same record — the unique constraint is (link_id,
+// record_id), not (record_id) alone, so a record can legitimately carry
+// more than one advisor's note. The caller groups by recordId as needed.
+export const getAdvisorNotesForHousehold = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(listPayloadSchema)
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    // RLS (advisor_record_notes_select) already restricts this to rows the
+    // caller can see — a member of this household, or the advisor who
+    // wrote it. A household member calling this only ever gets their own
+    // household's notes; no extra filtering needed beyond household_id.
+    const { data: noteRows, error } = await supabase
+      .from("advisor_record_notes" as any)
+      .select("id, record_id, record_category, note, advisor_user_id, updated_at")
+      .eq("household_id", data.householdId);
+    if (error) throw error;
+
+    const advisorIds = [...new Set((noteRows ?? []).map((n: any) => n.advisor_user_id))];
+    const nameById = new Map<string, string>();
+    if (advisorIds.length > 0) {
+      // user_profiles is self-only RLS on the client — a household member's
+      // own session can't read the advisor's profile directly, so this one
+      // lookup runs as supabaseAdmin, same targeted-by-id pattern already
+      // used in listAdvisorsForHousehold. Nothing else in this function
+      // uses admin access; the notes themselves are still genuinely
+      // RLS-gated above.
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: profiles, error: profilesError } = await supabaseAdmin
+        .from("user_profiles" as any)
+        .select("user_id, display_name, email")
+        .in("user_id", advisorIds);
+      if (profilesError) throw profilesError;
+      for (const p of (profiles ?? []) as any[]) {
+        nameById.set(p.user_id, p.display_name || p.email || "Your adviser");
+      }
+    }
+
+    const notes = (noteRows ?? []).map((n: any) => ({
+      id: n.id,
+      recordId: n.record_id,
+      recordCategory: n.record_category,
+      note: n.note,
+      advisorName: nameById.get(n.advisor_user_id) ?? "Your adviser",
+      updatedAt: n.updated_at,
+    }));
+
+    return { notes };
+  });
 // Minimal on purpose — the actual dashboard content (alerts, PDF data)
 // is the next piece; this just answers "who am I connected to."
 export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
