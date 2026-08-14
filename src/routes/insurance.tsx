@@ -24,6 +24,7 @@ import { RemindersList } from "@/components/RemindersList";
 import { computeNextOccurrence } from "@/lib/alerts";
 import { useEntityCounts } from "@/lib/useEntityCounts";
 import { useFxRates } from "@/hooks/useFxRates";
+import { getAdvisorNotesForHousehold } from "@/lib/advisorAccess";
 
 export const Route = createFileRoute("/insurance")({
   component: InsurancePage,
@@ -51,6 +52,23 @@ function InsurancePage() {
       return data ?? [];
     },
   });
+
+  // Separate query, deliberately independent of `items` above — if this
+  // fails or is slow, the actual insurance list must still render
+  // normally. Every existing calculation below (annualTotals, categories,
+  // etc.) is untouched and only ever reads `items`.
+  const { data: advisorNotesData } = useQuery({
+    queryKey: ["advisor-notes", activeHouseholdId],
+    enabled: !!activeHouseholdId,
+    queryFn: () => getAdvisorNotesForHousehold({ data: { householdId: activeHouseholdId! } }),
+  });
+  const advisorNotesByRecordId = new Map<string, NonNullable<typeof advisorNotesData>["notes"]>();
+  for (const n of advisorNotesData?.notes ?? []) {
+    if (n.recordCategory !== "insurance") continue;
+    const arr = advisorNotesByRecordId.get(n.recordId) ?? [];
+    arr.push(n);
+    advisorNotesByRecordId.set(n.recordId, arr);
+  }
 
   const annualTotals = groupByCurrency(items, (i: any) => {
     if (!i.premium) return 0;
@@ -123,6 +141,7 @@ function InsurancePage() {
                 reminderCount={counts.reminderCounts[p.id] || 0}
                 historyCount={counts.historyCounts[p.id] || 0}
                 documentsCount={counts.documentsCounts[p.id] || 0}
+                advisorNotes={advisorNotesByRecordId.get(p.id) ?? []}
               />
             ))}
           </div>
@@ -143,10 +162,11 @@ function AlertLabel({ text }: { text: string }) {
 }
 
 function InsuranceRow({
-  p, onStatus, onDelete, reminderCount, historyCount, documentsCount,
+  p, onStatus, onDelete, reminderCount, historyCount, documentsCount, advisorNotes,
 }: {
   p: any; onStatus: (s: any) => void; onDelete: () => void;
   reminderCount: number; historyCount: number; documentsCount: number;
+  advisorNotes: any[];
 }) {
   const edit = useEditRecord("insurance_policies", p);
   const dup = useDuplicateRecord("insurance_policies", p);
@@ -243,6 +263,25 @@ function InsuranceRow({
             value={p.notes}
           />
         </CollapsibleSection>
+
+        {advisorNotes.length > 0 && (
+          <CollapsibleSection
+            icon={<span>💬</span>}
+            title="Adviser's Note"
+            count={advisorNotes.length}
+            defaultOpen
+          >
+            <div className="space-y-3">
+              {advisorNotes.map((n) => (
+                <div key={n.id} className="rounded-lg border border-primary/15 bg-primary/5 p-2.5">
+                  <p className="text-[10px] font-semibold text-primary/80">{n.advisorName}</p>
+                  <p className="whitespace-pre-wrap text-sm text-foreground">{n.note}</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">Updated {fmtDate(n.updatedAt)}</p>
+                </div>
+              ))}
+            </div>
+          </CollapsibleSection>
+        )}
 
         <CollapsibleSection
           id={`reminders-${p.id}`}
