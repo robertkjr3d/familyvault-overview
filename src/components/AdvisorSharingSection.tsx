@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   sendAdvisorInvite,
   revokeAdvisorAccess,
+  updateAdvisorPermissions,
   cancelPendingAdvisorInvite,
   listAdvisorsForHousehold,
   listClientHouseholdsForAdvisor,
@@ -11,11 +12,214 @@ import {
 import { useCurrentRole } from "@/lib/useCurrentRole";
 import { useMembers } from "@/hooks/useMembers";
 
-const CATEGORY_LABELS: Record<string, string> = {
-  canViewInsurance: "Insurance",
-  canViewInvestments: "Investments",
-  canViewNetworthSummary: "Net worth summary",
+type AdvisorEntry = {
+  advisorUserId: string;
+  email: string;
+  displayName: string | null;
+  canViewInsurance: boolean;
+  canViewInvestments: boolean;
+  canViewNetworthSummary: boolean;
+  memberNames: string[];
+  memberIds: string[];
+  consentRenewedAt: string;
 };
+
+// Each row owns its own edit state (draft values, editing on/off) rather
+// than the parent tracking "which row is being edited" — same pattern as
+// RecordNote on the FA dashboard: open -> edit -> explicit Save/Cancel,
+// never autosave, so a half-changed permission set never silently becomes
+// live access.
+function AdvisorRow({
+  advisor,
+  members,
+  householdId,
+  isOwner,
+  onRevoke,
+  revokePending,
+}: {
+  advisor: AdvisorEntry;
+  members: { id: string; name: string }[];
+  householdId: string;
+  isOwner: boolean;
+  onRevoke: () => void;
+  revokePending: boolean;
+}) {
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [draftInsurance, setDraftInsurance] = useState(advisor.canViewInsurance);
+  const [draftInvestments, setDraftInvestments] = useState(advisor.canViewInvestments);
+  const [draftNetworth, setDraftNetworth] = useState(advisor.canViewNetworthSummary);
+  const [draftMemberIds, setDraftMemberIds] = useState<string[]>(advisor.memberIds);
+
+  function toggleDraftMember(id: string) {
+    setDraftMemberIds((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
+  }
+
+  function resetDraft() {
+    setDraftInsurance(advisor.canViewInsurance);
+    setDraftInvestments(advisor.canViewInvestments);
+    setDraftNetworth(advisor.canViewNetworthSummary);
+    setDraftMemberIds(advisor.memberIds);
+  }
+
+  const updateMutation = useMutation({
+    mutationFn: () =>
+      updateAdvisorPermissions({
+        data: {
+          householdId,
+          advisorUserId: advisor.advisorUserId,
+          canViewInsurance: draftInsurance,
+          canViewInvestments: draftInvestments,
+          canViewNetworthSummary: draftNetworth,
+          memberIds: draftMemberIds,
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Access updated.");
+      setEditing(false);
+      void qc.invalidateQueries({ queryKey: ["advisor-access", householdId] });
+    },
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : "Unable to update access.");
+    },
+  });
+
+  if (editing) {
+    return (
+      <div className="rounded-lg border border-primary/30 bg-primary/5 p-2.5 text-xs">
+        <p className="mb-2 font-medium">{advisor.displayName ?? advisor.email}</p>
+
+        <p className="mb-1 font-medium text-muted-foreground">Members</p>
+        <div className="mb-2 space-y-1">
+          {members.map((m) => (
+            <label key={m.id} className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={draftMemberIds.includes(m.id)}
+                onChange={() => toggleDraftMember(m.id)}
+              />
+              {m.name}
+            </label>
+          ))}
+        </div>
+
+        <p className="mb-1 font-medium text-muted-foreground">Categories</p>
+        <div className="mb-1 space-y-1">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={draftInsurance}
+              onChange={(e) => setDraftInsurance(e.target.checked)}
+            />
+            Insurance
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={draftInvestments}
+              onChange={(e) => setDraftInvestments(e.target.checked)}
+            />
+            Investments
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={draftNetworth}
+              onChange={(e) => setDraftNetworth(e.target.checked)}
+            />
+            Net worth summary
+          </label>
+        </div>
+        {draftMemberIds.length === 0 && (
+          <p className="mb-2 text-[10px] font-medium text-urgent">
+            At least one member must stay selected — remove them below instead if you want to stop
+            sharing entirely.
+          </p>
+        )}
+
+        <div className="mt-2 flex gap-2">
+          <button
+            type="button"
+            className="rounded-md bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground disabled:opacity-50"
+            disabled={updateMutation.isPending || draftMemberIds.length === 0}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              updateMutation.mutate();
+            }}
+          >
+            {updateMutation.isPending ? "Saving..." : "Save"}
+          </button>
+          <button
+            type="button"
+            className="rounded-md border border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
+            onPointerDown={(e) => {
+              e.preventDefault();
+              resetDraft();
+              setEditing(false);
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const renewedAt = new Date(advisor.consentRenewedAt);
+  const daysLeft = Math.round(365 - (Date.now() - renewedAt.getTime()) / (1000 * 60 * 60 * 24));
+
+  return (
+    <div className="flex items-center justify-between gap-2 text-xs">
+      <div className="min-w-0">
+        <p className="truncate font-medium">{advisor.displayName ?? advisor.email}</p>
+        <p className="truncate text-[10px] text-muted-foreground">
+          {[
+            advisor.canViewInsurance && "Insurance",
+            advisor.canViewInvestments && "Investments",
+            advisor.canViewNetworthSummary && "Net worth summary",
+          ]
+            .filter(Boolean)
+            .join(", ") || "No categories shared"}
+        </p>
+        <p className="truncate text-[10px] text-muted-foreground">
+          {advisor.memberNames.length > 0
+            ? `Sees: ${advisor.memberNames.join(", ")}`
+            : "No members shared — nothing visible yet"}
+        </p>
+        {daysLeft <= 30 && (
+          <p className="text-[10px] font-medium text-review-foreground">
+            {daysLeft <= 0
+              ? "Access expired — share again to continue"
+              : `Renews in ${daysLeft} days — share again to continue`}
+          </p>
+        )}
+      </div>
+      {isOwner && (
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-primary hover:bg-primary/10"
+            onPointerDown={(e) => {
+              e.preventDefault();
+              setEditing(true);
+            }}
+          >
+            Edit
+          </button>
+          <button
+            className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-urgent hover:bg-urgent/10 disabled:opacity-40"
+            disabled={revokePending}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              onRevoke();
+            }}
+          >
+            Stop sharing
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function AdvisorSharingSection() {
   const { role, householdId } = useCurrentRole();
@@ -100,17 +304,6 @@ export function AdvisorSharingSection() {
     },
   });
 
-  function activeCategoryLabels(a: {
-    canViewInsurance: boolean;
-    canViewInvestments: boolean;
-    canViewNetworthSummary: boolean;
-  }) {
-    return Object.entries(CATEGORY_LABELS)
-      .filter(([key]) => (a as Record<string, boolean>)[key])
-      .map(([, label]) => label)
-      .join(", ");
-  }
-
   return (
     <section className="rounded-2xl border border-border bg-card p-4">
       <h2 className="mb-1 text-sm font-bold">Financial Advisor Access</h2>
@@ -135,49 +328,18 @@ export function AdvisorSharingSection() {
       {!isLoading && (
         <div className="space-y-1 rounded-lg border border-border p-2">
           {data?.advisors.map((a) => (
-            <div key={a.advisorUserId} className="flex items-center justify-between gap-2 text-xs">
-              <div className="min-w-0">
-                <p className="truncate font-medium">{a.displayName ?? a.email}</p>
-                <p className="truncate text-[10px] text-muted-foreground">
-                  {activeCategoryLabels(a) || "No categories shared"}
-                </p>
-                <p className="truncate text-[10px] text-muted-foreground">
-                  {a.memberNames.length > 0
-                    ? `Sees: ${a.memberNames.join(", ")}`
-                    : "No members shared — nothing visible yet"}
-                </p>
-                {(() => {
-                  const renewedAt = new Date(a.consentRenewedAt);
-                  const daysLeft = Math.round(
-                    365 - (Date.now() - renewedAt.getTime()) / (1000 * 60 * 60 * 24),
-                  );
-                  if (daysLeft <= 30) {
-                    return (
-                      <p className="text-[10px] font-medium text-review-foreground">
-                        {daysLeft <= 0
-                          ? "Access expired — share again to continue"
-                          : `Renews in ${daysLeft} days — share again to continue`}
-                      </p>
-                    );
-                  }
-                  return null;
-                })()}
-              </div>
-              {isOwner && (
-                <button
-                  className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold text-urgent hover:bg-urgent/10 disabled:opacity-40"
-                  disabled={revokeMutation.isPending}
-                  onPointerDown={(e) => {
-                    e.preventDefault();
-                    if (!confirm(`Stop sharing your data with ${a.displayName ?? a.email}?`))
-                      return;
-                    revokeMutation.mutate(a.advisorUserId);
-                  }}
-                >
-                  Stop sharing
-                </button>
-              )}
-            </div>
+            <AdvisorRow
+              key={a.advisorUserId}
+              advisor={a}
+              members={members}
+              householdId={householdId!}
+              isOwner={isOwner}
+              revokePending={revokeMutation.isPending}
+              onRevoke={() => {
+                if (!confirm(`Stop sharing your data with ${a.displayName ?? a.email}?`)) return;
+                revokeMutation.mutate(a.advisorUserId);
+              }}
+            />
           ))}
 
           {data?.pending.map((p) => (
