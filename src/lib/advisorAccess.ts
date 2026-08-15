@@ -387,9 +387,11 @@ export const listAdvisorsForHousehold = createServerFn({ method: "POST" })
 
     // Which household members each link actually grants — shown to the
     // owner as e.g. "Dad, You" so it's obvious at a glance without opening
-    // an edit form.
+    // an edit form. IDs (not just names) are kept too, so an edit form can
+    // pre-check the right boxes without a second round trip.
     const linkIds = (linkRows ?? []).map((r: any) => r.id);
     const memberNamesByLink = new Map<string, string[]>();
+    const memberIdsByLink = new Map<string, string[]>();
     if (linkIds.length > 0) {
       const { data: linkMemberRows, error: linkMembersError } = await supabaseAdmin
         .from("advisor_link_members" as any)
@@ -397,9 +399,12 @@ export const listAdvisorsForHousehold = createServerFn({ method: "POST" })
         .in("link_id", linkIds);
       if (linkMembersError) throw linkMembersError;
       for (const row of (linkMemberRows ?? []) as any[]) {
-        const arr = memberNamesByLink.get(row.link_id) ?? [];
-        arr.push(row.members?.name ?? "Member");
-        memberNamesByLink.set(row.link_id, arr);
+        const names = memberNamesByLink.get(row.link_id) ?? [];
+        names.push(row.members?.name ?? "Member");
+        memberNamesByLink.set(row.link_id, names);
+        const ids = memberIdsByLink.get(row.link_id) ?? [];
+        ids.push(row.member_id);
+        memberIdsByLink.set(row.link_id, ids);
       }
     }
 
@@ -411,6 +416,7 @@ export const listAdvisorsForHousehold = createServerFn({ method: "POST" })
       canViewInvestments: r.can_view_investments,
       canViewNetworthSummary: r.can_view_networth_summary,
       memberNames: memberNamesByLink.get(r.id) ?? [],
+      memberIds: memberIdsByLink.get(r.id) ?? [],
       linkedAt: r.linked_at,
       consentRenewedAt: r.consent_renewed_at,
     }));
@@ -738,7 +744,37 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
       dismissedKeys,
     );
 
-    return { records: recordsWithNotes, upcomingPremiums };
+    // "N items not shared" disclosure. RLS makes hidden records invisible
+    // to `records` above by design — that's the whole point — but that
+    // also means the FA's own session literally cannot tell "nothing more
+    // exists" apart from "something is hidden." This is the one place that
+    // gap gets closed: a COUNT only (head: true means no row data is even
+    // transferred, just the count in the response headers — the cheapest
+    // form this query could take), never which items or their content.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [{ count: hiddenInsuranceCount }, { count: hiddenInvestmentsCount }] = await Promise.all([
+      supabaseAdmin
+        .from("insurance_policies" as any)
+        .select("id", { count: "exact", head: true })
+        .eq("household_id", data.householdId)
+        .eq("hidden_from_advisors", true)
+        .or(`member_id.eq.${data.memberId},member_id.is.null`),
+      supabaseAdmin
+        .from("investments" as any)
+        .select("id", { count: "exact", head: true })
+        .eq("household_id", data.householdId)
+        .eq("hidden_from_advisors", true)
+        .or(`member_id.eq.${data.memberId},member_id.is.null`),
+    ]);
+
+    return {
+      records: recordsWithNotes,
+      upcomingPremiums,
+      hiddenCounts: {
+        insurance: hiddenInsuranceCount ?? 0,
+        investments: hiddenInvestmentsCount ?? 0,
+      },
+    };
   });
 
 // FA writes/edits their recommendation for one record. Runs on the FA's own
@@ -899,6 +935,17 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
 
     // Fetch once for all households, then group in memory — avoids one
     // round trip per client for what's meant to be a fast overview page.
+    //
+    // Selects hidden_from_advisors rather than filtering it out here: this
+    // query runs as supabaseAdmin (bypasses RLS entirely, so the RLS-level
+    // hide check does nothing for this path on its own), and the count of
+    // hidden items is itself needed below for the "N items not shared"
+    // disclosure — fetching once and splitting in memory avoids a second
+    // round trip for that. Flagged during the pre-build risk pass as the
+    // one place this feature could silently fail to hide anything — the
+    // badge count is exactly what showed a similar mismatch before
+    // (upcomingCount vs the detail view), so this isn't left to be found
+    // by testing.
     const insuranceByHousehold = new Map<string, any[]>();
     const investmentsByHousehold = new Map<string, any[]>();
     if (householdIds.length > 0) {
@@ -907,13 +954,13 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
           supabaseAdmin
             .from("insurance_policies" as any)
             .select(
-              "id, household_id, name, premium, start_date, end_date, frequency, is_giro, member_id, updated_at, currency",
+              "id, household_id, name, premium, start_date, end_date, frequency, is_giro, member_id, updated_at, currency, hidden_from_advisors",
             )
             .in("household_id", householdIds),
           supabaseAdmin
             .from("investments" as any)
             .select(
-              "id, household_id, name, group_name, premium_amount, premium_start_date, premium_end_date, premium_frequency, is_giro, member_id, updated_at, currency",
+              "id, household_id, name, group_name, premium_amount, premium_start_date, premium_end_date, premium_frequency, is_giro, member_id, updated_at, currency, hidden_from_advisors",
             )
             .in("household_id", householdIds),
         ]);
@@ -980,12 +1027,21 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
 
         return Promise.all(
           memberIds.map(async (memberId) => {
-            const memberInsurance = insuranceRows.filter(
+            const memberInsuranceAll = insuranceRows.filter(
               (r: any) => r.member_id === memberId || r.member_id == null,
             );
-            const memberInvestments = investmentRows.filter(
+            const memberInvestmentsAll = investmentRows.filter(
               (r: any) => r.member_id === memberId || r.member_id == null,
             );
+            // Visible-only for every actual computation below — this is
+            // the manual equivalent of what advisor_select's RLS check
+            // does for every other read path, needed here specifically
+            // because this function runs as supabaseAdmin.
+            const memberInsurance = memberInsuranceAll.filter((r: any) => !r.hidden_from_advisors);
+            const memberInvestments = memberInvestmentsAll.filter((r: any) => !r.hidden_from_advisors);
+            const hiddenCount =
+              memberInsuranceAll.filter((r: any) => r.hidden_from_advisors).length +
+              memberInvestmentsAll.filter((r: any) => r.hidden_from_advisors).length;
 
             const upcomingPremiums = await computeAdvisorUpcomingPremiums(
               memberInsurance,
@@ -1009,6 +1065,7 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
               canViewNetworthSummary: l.can_view_networth_summary,
               upcomingCount: upcomingPremiums.length,
               staleCount,
+              hiddenCount,
             };
           }),
         );
