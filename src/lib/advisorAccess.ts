@@ -74,6 +74,14 @@ const listPayloadSchema = z.object({
   householdId: z.string().uuid(),
 });
 
+const networthPayloadSchema = listPayloadSchema.extend({
+  // Optional — an omitted memberId keeps the whole-household total
+  // available for any future non-member-scoped caller, though the current
+  // caller (AdvisorHome.tsx) always passes it now that every card is one
+  // member's own view.
+  memberId: z.string().uuid().optional(),
+});
+
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
@@ -451,10 +459,11 @@ export const listAdvisorsForHousehold = createServerFn({ method: "POST" })
 // via the separate loans total.
 export const getAdvisorNetworthSummary = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(listPayloadSchema)
+  .inputValidator(networthPayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase } = context;
     const { groupByCurrency, totalWithFx } = await import("@/lib/format");
+    const { isCpfAccountType } = await import("@/lib/options");
 
     const { data: rows, error } = await supabase
       .from("advisor_networth_components_view" as any)
@@ -477,65 +486,75 @@ export const getAdvisorNetworthSummary = createServerFn({ method: "POST" })
       ? { rateDate: (fxRow as any).rate_date, rates: (fxRow as any).rates }
       : null;
 
-    const byType = (t: string) => components.filter((r) => r.source_type === t);
-    const isCpf = (r: any) => (r.account_type ?? "").startsWith("CPF-");
-    const savingsRows = byType("savings");
+    // Single computation used for both the whole-household total and the
+    // per-member total below — same reasoning as computeAdvisorUpcomingPremiums
+    // being shared by the badge and the detail view: one calculation, never
+    // two that could quietly drift apart.
+    function computeTotals(rowsForScope: any[]) {
+      const byType = (t: string) => rowsForScope.filter((r) => r.source_type === t);
+      const savingsRows = byType("savings");
 
-    const propertyValue = totalWithFx(
-      groupByCurrency(byType("property"), (r) => r.amount),
-      fxRates,
-    );
-    const investmentsValue = totalWithFx(
-      groupByCurrency(byType("investment"), (r) => r.amount),
-      fxRates,
-    );
-    const liquidSavingsValue = totalWithFx(
-      groupByCurrency(
-        savingsRows.filter((r) => !isCpf(r)),
-        (r) => r.amount,
-      ),
-      fxRates,
-    );
-    const cpfValue = totalWithFx(
-      groupByCurrency(savingsRows.filter(isCpf), (r) => r.amount),
-      fxRates,
-    );
-    const savingsValue = liquidSavingsValue + cpfValue;
-    const otherAssetsValue = totalWithFx(
-      groupByCurrency(byType("other_asset"), (r) => r.amount),
-      fxRates,
-    );
-    const insuranceSurrenderValue = totalWithFx(
-      groupByCurrency(byType("insurance_surrender"), (r) => r.amount),
-      fxRates,
-    );
-    const totalAssets =
-      propertyValue + investmentsValue + savingsValue + otherAssetsValue + insuranceSurrenderValue;
-    const totalLiabilities = totalWithFx(
-      groupByCurrency(byType("loan"), (r) => r.amount),
-      fxRates,
-    );
-    const netWorth = totalAssets - totalLiabilities;
+      const propertyValue = totalWithFx(groupByCurrency(byType("property"), (r) => r.amount), fxRates);
+      const investmentsValue = totalWithFx(
+        groupByCurrency(byType("investment"), (r) => r.amount),
+        fxRates,
+      );
+      const liquidSavingsValue = totalWithFx(
+        groupByCurrency(
+          savingsRows.filter((r) => !isCpfAccountType(r.account_type)),
+          (r) => r.amount,
+        ),
+        fxRates,
+      );
+      const cpfValue = totalWithFx(
+        groupByCurrency(savingsRows.filter((r) => isCpfAccountType(r.account_type)), (r) => r.amount),
+        fxRates,
+      );
+      const savingsValue = liquidSavingsValue + cpfValue;
+      const otherAssetsValue = totalWithFx(
+        groupByCurrency(byType("other_asset"), (r) => r.amount),
+        fxRates,
+      );
+      const insuranceSurrenderValue = totalWithFx(
+        groupByCurrency(byType("insurance_surrender"), (r) => r.amount),
+        fxRates,
+      );
+      const totalAssets =
+        propertyValue + investmentsValue + savingsValue + otherAssetsValue + insuranceSurrenderValue;
+      const totalLiabilities = totalWithFx(groupByCurrency(byType("loan"), (r) => r.amount), fxRates);
+      const netWorth = totalAssets - totalLiabilities;
 
-    return {
-      totalAssets,
-      totalLiabilities,
-      netWorth,
-      hasData: components.length > 0,
-      // Every one of these was already being computed above just to be
-      // summed into totalAssets — exposing them costs nothing extra and is
-      // exactly the breakdown a donut/allocation chart needs. Zero-value
-      // categories are kept (not filtered here) so the chart can decide
-      // whether to omit a 0% slice.
-      breakdown: {
-        property: propertyValue,
-        investments: investmentsValue,
-        savings: savingsValue,
-        otherAssets: otherAssetsValue,
-        insuranceSurrender: insuranceSurrenderValue,
-        liabilities: totalLiabilities,
-      },
-    };
+      return {
+        totalAssets,
+        totalLiabilities,
+        netWorth,
+        hasData: rowsForScope.length > 0,
+        breakdown: {
+          property: propertyValue,
+          investments: investmentsValue,
+          savings: savingsValue,
+          otherAssets: otherAssetsValue,
+          insuranceSurrender: insuranceSurrenderValue,
+          liabilities: totalLiabilities,
+        },
+      };
+    }
+
+    if (!data.memberId) {
+      return computeTotals(components);
+    }
+
+    // Per-member: plain equality on member_id, deliberately matching the
+    // household dashboard's own scopeByMember() exactly (verified in
+    // index.tsx, not assumed) — no special handling of savings'
+    // joint_member_id, since the household's own per-member view doesn't
+    // do anything special with it either. Unassigned rows (member_id null)
+    // are excluded here, same as scopeByMember — different from how
+    // insurance/investments records handle "unassigned" elsewhere in this
+    // feature (shown on every card), because net worth is a pure sum with
+    // no itemized list to show an unattributed entry in.
+    const memberComponents = components.filter((r) => r.member_id === data.memberId);
+    return computeTotals(memberComponents);
   });
 
 // FA-side alert horizon and staleness window — single source of truth for
@@ -1015,62 +1034,83 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
     // same computation getClientRecordsForAdvisor uses for the detail page,
     // so the badge here can never show a number the detail page then
     // fails to explain.
+    //
+    // Each household's whole processing block is now wrapped individually
+    // — Promise.all fails fast by default, so one household hitting an
+    // unexpected error (malformed data, a future code change introducing a
+    // new failure point, anything not already handled inside
+    // computeAdvisorUpcomingPremiums's own try/catch) would otherwise
+    // reject the ENTIRE list, making every other household's cards vanish
+    // too — indistinguishable from "you have no clients at all." Found
+    // during a full audit, not from a reproduced incident, but the failure
+    // mode it would produce is exactly the kind of confusing, hard-to-
+    // diagnose symptom worth closing off entirely rather than leaving as a
+    // latent risk once spotted.
     const clientLists = await Promise.all(
       linkRows.map(async (l) => {
-        const memberIds = membersByLink.get(l.id) ?? [];
-        const insuranceRows = l.can_view_insurance
-          ? (insuranceByHousehold.get(l.household_id) ?? [])
-          : [];
-        const investmentRows = l.can_view_investments
-          ? (investmentsByHousehold.get(l.household_id) ?? [])
-          : [];
+        try {
+          const memberIds = membersByLink.get(l.id) ?? [];
+          const insuranceRows = l.can_view_insurance
+            ? (insuranceByHousehold.get(l.household_id) ?? [])
+            : [];
+          const investmentRows = l.can_view_investments
+            ? (investmentsByHousehold.get(l.household_id) ?? [])
+            : [];
 
-        const dismissedKeys = dismissedByHousehold.get(l.household_id) ?? new Set<string>();
+          const dismissedKeys = dismissedByHousehold.get(l.household_id) ?? new Set<string>();
 
-        return Promise.all(
-          memberIds.map(async (memberId) => {
-            const memberInsuranceAll = insuranceRows.filter(
-              (r: any) => r.member_id === memberId || r.member_id == null,
-            );
-            const memberInvestmentsAll = investmentRows.filter(
-              (r: any) => r.member_id === memberId || r.member_id == null,
-            );
-            // Visible-only for every actual computation below — this is
-            // the manual equivalent of what advisor_select's RLS check
-            // does for every other read path, needed here specifically
-            // because this function runs as supabaseAdmin.
-            const memberInsurance = memberInsuranceAll.filter((r: any) => !r.hidden_from_advisors);
-            const memberInvestments = memberInvestmentsAll.filter((r: any) => !r.hidden_from_advisors);
-            const hiddenCount =
-              memberInsuranceAll.filter((r: any) => r.hidden_from_advisors).length +
-              memberInvestmentsAll.filter((r: any) => r.hidden_from_advisors).length;
+          return await Promise.all(
+            memberIds.map(async (memberId) => {
+              const memberInsuranceAll = insuranceRows.filter(
+                (r: any) => r.member_id === memberId || r.member_id == null,
+              );
+              const memberInvestmentsAll = investmentRows.filter(
+                (r: any) => r.member_id === memberId || r.member_id == null,
+              );
+              // Visible-only for every actual computation below — this is
+              // the manual equivalent of what advisor_select's RLS check
+              // does for every other read path, needed here specifically
+              // because this function runs as supabaseAdmin.
+              const memberInsurance = memberInsuranceAll.filter((r: any) => !r.hidden_from_advisors);
+              const memberInvestments = memberInvestmentsAll.filter(
+                (r: any) => !r.hidden_from_advisors,
+              );
+              const hiddenCount =
+                memberInsuranceAll.filter((r: any) => r.hidden_from_advisors).length +
+                memberInvestmentsAll.filter((r: any) => r.hidden_from_advisors).length;
 
-            const upcomingPremiums = await computeAdvisorUpcomingPremiums(
-              memberInsurance,
-              memberInvestments,
-              today,
-              dismissedKeys,
-            );
+              const upcomingPremiums = await computeAdvisorUpcomingPremiums(
+                memberInsurance,
+                memberInvestments,
+                today,
+                dismissedKeys,
+              );
 
-            const allRecords = [...memberInsurance, ...memberInvestments];
-            const staleCount = allRecords.filter(
-              (r: any) => r.updated_at && new Date(r.updated_at) < staleCutoff,
-            ).length;
+              const allRecords = [...memberInsurance, ...memberInvestments];
+              const staleCount = allRecords.filter(
+                (r: any) => r.updated_at && new Date(r.updated_at) < staleCutoff,
+              ).length;
 
-            return {
-              householdId: l.household_id,
-              householdName: l.households?.name ?? "Household",
-              memberId,
-              memberName: memberNameById.get(memberId) ?? "Member",
-              canViewInsurance: l.can_view_insurance,
-              canViewInvestments: l.can_view_investments,
-              canViewNetworthSummary: l.can_view_networth_summary,
-              upcomingCount: upcomingPremiums.length,
-              staleCount,
-              hiddenCount,
-            };
-          }),
-        );
+              return {
+                householdId: l.household_id,
+                householdName: l.households?.name ?? "Household",
+                memberId,
+                memberName: memberNameById.get(memberId) ?? "Member",
+                canViewInsurance: l.can_view_insurance,
+                canViewInvestments: l.can_view_investments,
+                canViewNetworthSummary: l.can_view_networth_summary,
+                upcomingCount: upcomingPremiums.length,
+                staleCount,
+                hiddenCount,
+              };
+            }),
+          );
+        } catch {
+          // This one household is skipped — not the whole list. Worst case,
+          // one client card is temporarily missing instead of every client
+          // for this advisor appearing to not exist.
+          return [];
+        }
       }),
     );
     const clients = clientLists.flat();
