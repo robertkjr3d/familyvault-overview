@@ -92,6 +92,11 @@ export function AdvisorHome() {
                         .filter(Boolean)
                         .join(", ") || "No categories shared"}
                     </p>
+                    {c.hiddenCount > 0 && (
+                      <p className="truncate text-[10px] text-muted-foreground">
+                        + {c.hiddenCount} item{c.hiddenCount === 1 ? "" : "s"} not shared
+                      </p>
+                    )}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     {c.upcomingCount > 0 && (
@@ -419,6 +424,7 @@ function ClientDetail({
         netWorth: canViewNetworthSummary && networth ? networth : null,
         records,
         upcomingPremiums,
+        hiddenCounts,
         staleAfterDays: STALE_AFTER_DAYS,
         upcomingHorizonDays: ADVISOR_ALERT_HORIZON_DAYS,
       });
@@ -440,6 +446,7 @@ function ClientDetail({
 
   const records = data?.records ?? [];
   const upcomingPremiums = data?.upcomingPremiums ?? [];
+  const hiddenCounts = data?.hiddenCounts ?? { insurance: 0, investments: 0 };
   // Same shared function advisorPdf.ts uses — same order, same subgroups,
   // same subtotals, so this screen and the downloaded PDF can't disagree.
   const categoryGroups = groupAdvisorRecords(records);
@@ -543,7 +550,14 @@ function ClientDetail({
 
       {categoryGroups.map((catGroup) => (
         <section key={catGroup.category} className="mb-4 rounded-2xl border border-border bg-card p-4">
-          <h3 className="mb-2 text-sm font-bold">{catGroup.categoryTitle}</h3>
+          <div className="mb-2 flex items-baseline justify-between">
+            <h3 className="text-sm font-bold">{catGroup.categoryTitle}</h3>
+            {hiddenCounts[catGroup.category as keyof typeof hiddenCounts] > 0 && (
+              <p className="text-[10px] text-muted-foreground">
+                + {hiddenCounts[catGroup.category as keyof typeof hiddenCounts]} not shared
+              </p>
+            )}
+          </div>
           {catGroup.subgroups.map((sub) => (
             <div key={sub.name} className="mb-3 last:mb-0">
               <div className="mb-1.5 flex items-center justify-between">
@@ -610,6 +624,22 @@ function ClientDetail({
           ))}
         </section>
       ))}
+
+      {/* Covers the edge case where every item in a category is hidden —
+          categoryGroups only includes categories with at least one VISIBLE
+          record, so without this, a fully-hidden category would show
+          nothing at all, indistinguishable from "no data exists" rather
+          than "data exists but isn't shared." */}
+      {(["insurance", "investments"] as const)
+        .filter((cat) => !categoryGroups.some((g) => g.category === cat) && hiddenCounts[cat] > 0)
+        .map((cat) => (
+          <section key={cat} className="mb-4 rounded-2xl border border-border bg-card p-4">
+            <h3 className="text-sm font-bold">{cat === "investments" ? "Investments" : "Insurance"}</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {hiddenCounts[cat]} item{hiddenCounts[cat] === 1 ? "" : "s"} not shared
+            </p>
+          </section>
+        ))}
     </div>
   );
 }
