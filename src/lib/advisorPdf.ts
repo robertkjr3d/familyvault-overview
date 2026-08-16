@@ -73,6 +73,10 @@ export type AdvisorPdfData = {
   // caller rather than hardcoded here a second time, so the badge count on
   // the dashboard and this PDF can never silently drift apart.
   upcomingHorizonDays: number;
+  // "N items not shared" disclosure — an FA reading this PDF shouldn't
+  // assume it's the complete picture if it isn't. Optional so this type
+  // still works for any caller that predates this feature.
+  hiddenCounts?: { insurance: number; investments: number };
 };
 
 // Mirrors src/lib/format.ts's fmtMoney exactly (SGD keeps "$", every other
@@ -574,6 +578,17 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
       font: fontBold,
       color: colorPrimary,
     });
+    const hiddenForThisCategory = data.hiddenCounts?.[catGroup.category as "insurance" | "investments"] ?? 0;
+    if (hiddenForThisCategory > 0) {
+      const disclosureText = `+ ${hiddenForThisCategory} not shared`;
+      page.drawText(disclosureText, {
+        x: width - margin - font.widthOfTextAtSize(disclosureText, 9),
+        y: y + 1,
+        size: 9,
+        font,
+        color: colorMuted,
+      });
+    }
     y -= 20;
 
     for (const sub of catGroup.subgroups) {
@@ -691,6 +706,33 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
       y -= 10;
     }
     y -= 10;
+  }
+
+  // Same edge case as the on-screen list: a category with hidden items but
+  // zero VISIBLE ones never appears in categoryGroups at all, so without
+  // this it would look identical to "no data exists" rather than "data
+  // exists but isn't shared."
+  const shownCategories = new Set(categoryGroups.map((g) => g.category));
+  for (const cat of ["insurance", "investments"] as const) {
+    const hiddenCount = data.hiddenCounts?.[cat] ?? 0;
+    if (shownCategories.has(cat) || hiddenCount === 0) continue;
+    ensureSpace(50);
+    page.drawText(cat === "investments" ? "Investments" : "Insurance", {
+      x: margin,
+      y,
+      size: 13,
+      font: fontBold,
+      color: colorPrimary,
+    });
+    y -= 18;
+    page.drawText(`${hiddenCount} item${hiddenCount === 1 ? "" : "s"} not shared`, {
+      x: margin,
+      y,
+      size: 9,
+      font,
+      color: colorMuted,
+    });
+    y -= 24;
   }
 
   // --- Provenance footer ---
