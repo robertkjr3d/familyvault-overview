@@ -137,6 +137,9 @@ export const recordConfigs: Record<string, RecordConfig> = {
       // 🎯 Action
       { key: "action", label: "Action", type: "text", placeholder: "e.g. Renew before Mar 2027", section: "🎯 Action" },
       { key: "external_url", label: "Policy website / portal link", type: "text", placeholder: "https://...", section: "🎯 Action" },
+
+      // 🔒 Sharing
+      { key: "hidden_from_advisors", label: "Hide from advisers", type: "boolean", placeholder: "Keep this policy out of any adviser's view, even if you've shared this member and category", default: false, section: "🔒 Sharing" },
     ],
   },
 
@@ -165,6 +168,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
       { key: "payout_end_date", label: "Payout end date", type: "date", showIf: (v) => v.group_name === "ILP (Investment-Linked Policy)" || v.group_name === "Endowment" },
       { key: "strategy", label: "Strategy / notes", type: "textarea" },
       { key: "external_url", label: "Platform website / portal link", type: "text", placeholder: "https://..." },
+      { key: "hidden_from_advisors", label: "Hide from advisers", type: "boolean", placeholder: "Keep this holding out of any adviser's view, even if you've shared this member and category", default: false },
     ],
   },
 
