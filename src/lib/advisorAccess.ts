@@ -751,7 +751,9 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
     // gap gets closed: a COUNT only (head: true means no row data is even
     // transferred, just the count in the response headers — the cheapest
     // form this query could take), never which items or their content.
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // Reuses the supabaseAdmin already imported above for the dismissal
+    // lookup — a second import of the same binding in this scope is what
+    // broke the build last round.
     const [{ count: hiddenInsuranceCount }, { count: hiddenInvestmentsCount }] = await Promise.all([
       supabaseAdmin
         .from("insurance_policies" as any)
