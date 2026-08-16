@@ -408,7 +408,8 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
 
   // --- Net worth focal point: donut, not a bar ---
   if (data.netWorth?.hasData) {
-    page.drawText("NET WORTH (COMBINED TOTAL)", { x: margin, y, size: 9, font, color: colorMuted });
+    const netWorthHeader = data.memberName ? `${data.memberName.toUpperCase()}'S NET WORTH` : "NET WORTH";
+    page.drawText(netWorthHeader, { x: margin, y, size: 9, font, color: colorMuted });
     y -= 20;
 
     const donutSize = 130;
