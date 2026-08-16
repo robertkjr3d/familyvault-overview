@@ -398,17 +398,19 @@ function ClientDetail({
   // as soon as it's ready, and a failure here shouldn't blank the records
   // list that loaded fine.
   //
-  // Net worth is intentionally still household-level, not member-level —
-  // savings/properties/loans feed this number and have their own
-  // joint-ownership semantics that per-member scoping doesn't cover yet.
-  // Shown once per household regardless of which member card is open.
+  // Now member-scoped, both in RLS (advisor_networth_select on all six
+  // contributing tables switched to the 3-arg has_advisor_access) and here
+  // — five of six categories are single-owner (verified in recordConfigs.ts,
+  // not assumed), and the one exception, savings, gets the exact same
+  // plain member_id equality the household's own scopeByMember() uses, not
+  // special joint-ownership handling.
   const {
     data: networth,
     isLoading: networthLoading,
     error: networthError,
   } = useQuery({
-    queryKey: ["advisor-networth", householdId],
-    queryFn: () => getAdvisorNetworthSummary({ data: { householdId } }),
+    queryKey: ["advisor-networth", householdId, memberId],
+    queryFn: () => getAdvisorNetworthSummary({ data: { householdId, memberId } }),
     enabled: canViewNetworthSummary,
   });
 
@@ -488,12 +490,14 @@ function ClientDetail({
             </p>
           )}
           {!networthLoading && networth && !networth.hasData && (
-            <p className="text-sm text-muted-foreground">No net worth data shared yet.</p>
+            <p className="text-sm text-muted-foreground">
+              No net worth data attributed to {memberName} specifically.
+            </p>
           )}
           {!networthLoading && networth?.hasData && (
             <>
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Household net worth (combined total — not {memberName}'s individually)
+                {memberName}'s net worth
               </p>
               <NetWorthDonut
                 breakdown={networth.breakdown}
