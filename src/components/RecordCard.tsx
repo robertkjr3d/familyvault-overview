@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ChevronDown, Copy, Pencil, Trash2, Bell, NotebookPen, RotateCw, Paperclip, ExternalLink } from "lucide-react";
+import { ChevronDown, Copy, Pencil, Trash2, Bell, NotebookPen, MessageSquare, RotateCw, Paperclip, ExternalLink } from "lucide-react";
 import { StatusToggle, type Status } from "./StatusToggle";
 import { MemberTag } from "./MemberTag";
 import { cn } from "@/lib/utils";
@@ -29,6 +29,10 @@ type Props = {
   highlight?: boolean;
   persistKey?: string;
   hasNotes?: boolean;
+  /** True when an adviser has left a note on this record — shown as its own
+   * badge, distinct from hasNotes (the household's own notes), so the two
+   * never get visually confused with each other. */
+  hasAdvisorNote?: boolean;
   updatedAt?: string | null;
   createdAt?: string | null;
   /** Counts for the icon row below the status toggle. Pass undefined/0 to hide an icon entirely. */
@@ -38,6 +42,7 @@ type Props = {
   /** Called when the Notes/Reminder/Update/Documents icon is tapped. The card expands itself;
    * the parent is responsible for opening the right inner CollapsibleSection and scrolling to it. */
   onNotesClick?: () => void;
+  onAdvisorNoteClick?: () => void;
   onReminderClick?: () => void;
   onHistoryClick?: () => void;
   onDocumentsClick?: () => void;
@@ -90,9 +95,9 @@ function CardIconButton({
 
 export function RecordCard({
   title, subtitle, memberId, secondaryMemberId, status, onStatusChange, action, externalUrl, tags, isGiro, rightMeta, children,
-  onEdit, onDelete, onDuplicate, defaultOpen = false, highlight, persistKey, hasNotes, updatedAt, createdAt,
+  onEdit, onDelete, onDuplicate, defaultOpen = false, highlight, persistKey, hasNotes, hasAdvisorNote, updatedAt, createdAt,
   reminderCount, historyCount, documentsCount,
-  onNotesClick, onReminderClick, onHistoryClick, onDocumentsClick,
+  onNotesClick, onAdvisorNoteClick, onReminderClick, onHistoryClick, onDocumentsClick,
   open: openProp, onOpenChange,
 }: Props) {
   const { canEdit } = useCurrentRole();
@@ -119,7 +124,7 @@ export function RecordCard({
     callback?.();
   }
 
-  const hasAnyIcon = hasNotes || (reminderCount ?? 0) > 0 || (historyCount ?? 0) > 0 || (documentsCount ?? 0) > 0;
+  const hasAnyIcon = hasNotes || hasAdvisorNote || (reminderCount ?? 0) > 0 || (historyCount ?? 0) > 0 || (documentsCount ?? 0) > 0;
 
   return (
     <article
@@ -230,6 +235,11 @@ export function RecordCard({
               {hasNotes && (
                 <CardIconButton onClick={() => handleIconClick(onNotesClick)} active={!!hasNotes} label="View notes">
                   <NotebookPen className="h-3.5 w-3.5" />
+                </CardIconButton>
+              )}
+              {hasAdvisorNote && (
+                <CardIconButton onClick={() => handleIconClick(onAdvisorNoteClick)} active={!!hasAdvisorNote} label="Adviser's note">
+                  <MessageSquare className="h-3.5 w-3.5" />
                 </CardIconButton>
               )}
               {(reminderCount ?? 0) > 0 && (
