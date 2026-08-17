@@ -39,7 +39,8 @@ export const recordConfigs: Record<string, RecordConfig> = {
       // 📍 Property Details
       { key: "name", label: "Property name", type: "text", required: true, placeholder: "e.g. London Flat", section: "📍 Property Details" },
       { key: "address", label: "Address", type: "text", section: "📍 Property Details" },
-      { key: "member_id", label: "Owner", type: "member", section: "📍 Property Details" },
+      { key: "member_id", label: "Primary owner", type: "member", section: "📍 Property Details" },
+      { key: "joint_member_id", label: "Joint owner (optional)", type: "member", section: "📍 Property Details" },
       { key: "purpose", label: "Purpose", type: "select", options: PROPERTY_PURPOSE, default: "capital_growth", section: "📍 Property Details" },
       { key: "currency", label: "Currency", type: "select", options: CURRENCIES, default: "SGD", section: "📍 Property Details" },
 
