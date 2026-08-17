@@ -25,7 +25,20 @@ export function computeRootViewMode(params: {
   // advisor access elsewhere) can explicitly ask to see the advisor view —
   // additive only: nobody who doesn't ask for this is ever affected, and it
   // still requires genuinely having advisor clients, not just asking.
-  if (memberships > 0 && params.wantsAdvisorView && advisorClients > 0) return "advisor-only";
+  //
+  // REAL BUG (found Aug 17, 2026): memberships usually resolves before the
+  // advisor-clients query does. While advisorClientsLoading is still true,
+  // advisorClientsCount is null -> advisorClients defaults to 0 below, so the
+  // check above used to fail and fall through to "family" for a dual-role
+  // user who clicked into the advisor view — flashing the home page for a
+  // beat before the advisor-clients query resolved and flipped it over to
+  // advisor-only. Fix: while genuinely still loading that count, stay in
+  // "loading" instead of guessing "family".
+  if (memberships > 0 && params.wantsAdvisorView) {
+    if (params.advisorClientsLoading) return "loading";
+    if (advisorClients > 0) return "advisor-only";
+    // Asked for the advisor view but genuinely has none — fall through below.
+  }
 
   if (memberships > 0) return "family";
 
