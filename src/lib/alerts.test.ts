@@ -282,3 +282,47 @@ describe("buildUpcomingItems — per-category day thresholds", () => {
     expect(items.some((i) => i.recordId === "s1")).toBe(true);
   });
 });
+
+describe("timezone independence (regression, Aug 17 2026)", () => {
+  // REAL PRODUCTION BUG: dates were built with a local Date constructor but
+  // serialized via .toISOString().slice(0, 10) — a UTC round-trip. The
+  // household dashboard runs client-side (the user's own timezone, e.g.
+  // Asia/Singapore); the advisor dashboard runs the identical function
+  // server-side on Cloudflare Workers (UTC). For the same premium, the two
+  // produced different calendar-date strings, which silently broke
+  // dismissal-key matching between the household's own view and the FA's
+  // view of the exact same alert (confirmed via a real dismissed_dashboard_items
+  // row: household recorded 2026-07-16, FA dashboard showed 17 Jul 2026 for
+  // the same record). These tests snapshot the exact known-bad case and
+  // don't depend on the machine's actual TZ, so they stay meaningful in CI.
+  const REPORTED_BUG_START = "2025-07-17";
+  const REPORTED_BUG_TODAY = new Date(2026, 6, 18); // 18 Jul 2026, local
+
+  it("computeNextOccurrence for the reported real case lands on the 17th, not the 16th", () => {
+    // 2026-07-17 has already passed relative to "today" (18 Jul 2026), so the
+    // NEXT upcoming occurrence is a year later — the day-of-month is what
+    // this test is really checking, and the bug shifted it to the 16th.
+    const next = computeNextOccurrence(REPORTED_BUG_START, "annual", null, REPORTED_BUG_TODAY);
+    expect(next).toBe("2027-07-17");
+  });
+
+  it("computeRecurringAlerts' overdue occurrence for the reported real case is dated the 17th, not the 16th", () => {
+    const occurrences = computeRecurringAlerts(
+      REPORTED_BUG_START,
+      "annual",
+      null,
+      REPORTED_BUG_TODAY,
+      30,
+      false,
+    );
+    const overdue = occurrences.find((o) => o.overdue);
+    expect(overdue?.date).toBe("2026-07-17");
+  });
+
+  it("a date landing on the 1st of a month is not pushed back to the last day of the previous month", () => {
+    // The specific case a UTC round-trip breaks hardest: local midnight on the
+    // 1st converts to the previous day in any timezone behind UTC.
+    const next = computeNextOccurrence("2025-08-01", "monthly", null, new Date(2026, 6, 15));
+    expect(next).toBe("2026-08-01");
+  });
+});
