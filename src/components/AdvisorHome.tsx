@@ -491,13 +491,15 @@ function ClientDetail({
           )}
           {!networthLoading && networth && !networth.hasData && (
             <p className="text-sm text-muted-foreground">
-              No net worth data attributed to {memberName} specifically.
+              No net worth data shared for this household yet.
             </p>
           )}
           {!networthLoading && networth?.hasData && (
             <>
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {memberName}'s net worth
+                {networth.scope === "member"
+                  ? `${memberName}'s net worth`
+                  : `Household net worth (combined — nothing yet attributed to ${memberName} individually)`}
               </p>
               <NetWorthDonut
                 breakdown={networth.breakdown}
