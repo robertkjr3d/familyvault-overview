@@ -51,6 +51,12 @@ export type AdvisorPdfData = {
     totalLiabilities: number;
     netWorth: number;
     hasData: boolean;
+    // "member": genuinely this member's own total. "household-fallback":
+    // nothing was individually attributed to this member, so the combined
+    // household total is shown instead — must stay visually distinct from
+    // "member" so this PDF never implies a number belongs to one person
+    // when it doesn't.
+    scope?: "member" | "household" | "household-fallback";
     breakdown?: {
       property: number;
       investments: number;
@@ -408,8 +414,22 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
 
   // --- Net worth focal point: donut, not a bar ---
   if (data.netWorth?.hasData) {
-    const netWorthHeader = data.memberName ? `${data.memberName.toUpperCase()}'S NET WORTH` : "NET WORTH";
+    const isFallback = data.netWorth.scope === "household-fallback";
+    const netWorthHeader =
+      data.netWorth.scope === "member" && data.memberName
+        ? `${data.memberName.toUpperCase()}'S NET WORTH`
+        : "HOUSEHOLD NET WORTH (COMBINED)";
     page.drawText(netWorthHeader, { x: margin, y, size: 9, font, color: colorMuted });
+    if (isFallback && data.memberName) {
+      y -= 12;
+      page.drawText(`Nothing yet attributed to ${data.memberName} individually`, {
+        x: margin,
+        y,
+        size: 7.5,
+        font,
+        color: colorMuted,
+      });
+    }
     y -= 20;
 
     const donutSize = 130;
