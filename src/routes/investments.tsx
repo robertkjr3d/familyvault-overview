@@ -244,6 +244,7 @@ function InvestmentRow({
         onDuplicate={dup.open}
         onDelete={onDelete}
         hasNotes={!!inv.notes}
+        hasAdvisorNote={advisorNotes.length > 0}
         updatedAt={inv.updated_at}
         createdAt={inv.created_at}
         open={cardOpen}
@@ -252,6 +253,7 @@ function InvestmentRow({
         historyCount={historyCount}
         documentsCount={documentsCount}
         onNotesClick={() => openSection("notes")}
+        onAdvisorNoteClick={() => setCardOpen(true)}
         onReminderClick={() => openSection("reminders")}
         onHistoryClick={() => openSection("history")}
         onDocumentsClick={() => openSection("documents")}
