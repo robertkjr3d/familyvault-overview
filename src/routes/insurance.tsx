@@ -202,6 +202,7 @@ function InsuranceRow({
         onDelete={onDelete}
         onDuplicate={dup.open}
         hasNotes={!!p.notes}
+        hasAdvisorNote={advisorNotes.length > 0}
         updatedAt={p.updated_at}
         createdAt={p.created_at}
         open={cardOpen}
@@ -210,6 +211,7 @@ function InsuranceRow({
         historyCount={historyCount}
         documentsCount={documentsCount}
         onNotesClick={() => openSection("notes")}
+        onAdvisorNoteClick={() => setCardOpen(true)}
         onReminderClick={() => openSection("reminders")}
         onHistoryClick={() => openSection("history")}
         onDocumentsClick={() => openSection("documents")}
