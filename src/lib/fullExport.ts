@@ -68,6 +68,7 @@ const SHEET_OVERRIDES: Record<string, Record<string, number>> = {
   properties: {
     name: 20,
     member_id: 13,
+    joint_member_id: 18,
     purpose: 13,
     currency: 8,
     purchase_price: 12,
