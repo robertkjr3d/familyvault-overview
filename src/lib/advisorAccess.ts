@@ -541,7 +541,7 @@ export const getAdvisorNetworthSummary = createServerFn({ method: "POST" })
     }
 
     if (!data.memberId) {
-      return computeTotals(components);
+      return { ...computeTotals(components), scope: "household" as const };
     }
 
     // Per-member: plain equality on member_id, deliberately matching the
@@ -554,7 +554,19 @@ export const getAdvisorNetworthSummary = createServerFn({ method: "POST" })
     // feature (shown on every card), because net worth is a pure sum with
     // no itemized list to show an unattributed entry in.
     const memberComponents = components.filter((r) => r.member_id === data.memberId);
-    return computeTotals(memberComponents);
+    const memberTotals = computeTotals(memberComponents);
+    if (memberTotals.hasData) {
+      return { ...memberTotals, scope: "member" as const };
+    }
+
+    // Real gap found after shipping: most households don't tag every
+    // record to a specific person, so a strict per-member total can come
+    // back empty even when there's clearly real net worth data — showing
+    // a dead "no data" message when the FA is legitimately owed a number
+    // is worse than falling back to the combined total, as long as it's
+    // clearly labeled as combined rather than silently passed off as this
+    // member's own figure.
+    return { ...computeTotals(components), scope: "household-fallback" as const };
   });
 
 // FA-side alert horizon and staleness window — single source of truth for
