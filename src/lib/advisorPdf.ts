@@ -490,20 +490,76 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
     });
 
     // Legend to the right of the ring.
+    //
+    // REAL BUG (found Aug 17, 2026, from the user visually inspecting a
+    // generated PDF): the color swatch and its label text were drawn from
+    // two different y-coordinate conventions that don't mean the same
+    // thing in pdf-lib. drawRectangle's `y` is the box's BOTTOM edge; the
+    // box (8pt tall) spanned [legendY-7, legendY+1]. drawText's `y` is the
+    // text BASELINE — glyphs sit ABOVE that line, so a 9pt label's visible
+    // body spanned roughly [legendY, legendY+6.5]. Those two ranges barely
+    // overlap, so every swatch sat ~6pt below its own label. Fixed by
+    // treating `legendY` as the row's vertical CENTER and deriving both
+    // the box position and the text baseline from it, via one shared
+    // helper — so box and label can't drift apart again.
     const legendX = margin + donutSize + 24;
+    const legendRowHeight = 15;
+    const swatchSize = 8;
     let legendY = cy + rOuter - 6;
+
+    function drawLegendRow(
+      rowCenterY: number,
+      swatchColor: ReturnType<typeof rgb>,
+      label: string,
+      opts?: { bold?: boolean; textColor?: ReturnType<typeof rgb> },
+    ) {
+      const size = 9;
+      const rowFont = opts?.bold ? fontBold : font;
+      page.drawRectangle({
+        x: legendX,
+        y: rowCenterY - swatchSize / 2,
+        width: swatchSize,
+        height: swatchSize,
+        color: swatchColor,
+      });
+      page.drawText(label, {
+        x: legendX + 14,
+        // Baseline sits below the row's visual center by roughly half a
+        // Helvetica cap-height (~0.7em), so the glyph body — not the
+        // baseline — ends up centered on rowCenterY, matching the swatch.
+        y: rowCenterY - size * 0.35,
+        size,
+        font: rowFont,
+        color: opts?.textColor ?? rgb(0.15, 0.15, 0.18),
+      });
+    }
+
     for (const s of slices) {
       const [r, g, b] = NET_WORTH_CATEGORY_COLORS[s.key] ?? [0.5, 0.5, 0.5];
-      page.drawRectangle({ x: legendX, y: legendY - 7, width: 8, height: 8, color: rgb(r, g, b) });
       const pct = Math.round((s.value / totalAssets) * 100);
       const label = `${NET_WORTH_CATEGORY_LABELS[s.key] ?? s.key} — ${pct}%`;
-      page.drawText(label, { x: legendX + 14, y: legendY, size: 9, font, color: rgb(0.15, 0.15, 0.18) });
-      legendY -= 15;
+      drawLegendRow(legendY, rgb(r, g, b), label);
+      legendY -= legendRowHeight;
     }
+
+    // A totals pair — mirrors the on-screen donut's own summary line, and
+    // was previously missing here: only Liabilities showed, with no Assets
+    // figure alongside it, even though a categorized breakdown alone
+    // doesn't make the total obvious at a glance. Both rows use the same
+    // swatch+label alignment as the categories above for visual consistency.
+    legendY -= 6;
+    drawLegendRow(legendY, colorPrimary, `Total Assets: ${fmtMoneyForPdf(totalAssets, "SGD")}`, {
+      bold: true,
+      textColor: colorPrimary,
+    });
     if (data.netWorth.totalLiabilities > 0) {
-      legendY -= 4;
-      const liabText = `Liabilities: ${fmtMoneyForPdf(data.netWorth.totalLiabilities, "SGD")}`;
-      page.drawText(liabText, { x: legendX, y: legendY, size: 9, font: fontBold, color: colorLiability });
+      legendY -= legendRowHeight;
+      drawLegendRow(
+        legendY,
+        colorLiability,
+        `Liabilities: ${fmtMoneyForPdf(data.netWorth.totalLiabilities, "SGD")}`,
+        { bold: true, textColor: colorLiability },
+      );
     }
 
     y -= donutSize + 20;
