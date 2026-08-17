@@ -58,6 +58,34 @@ const FREQ_MONTHS: Record<string, number> = {
 };
 
 /**
+ * Formats a Date's LOCAL calendar date as YYYY-MM-DD.
+ *
+ * REAL PRODUCTION BUG (found Aug 17, 2026): every occurrence date in this file is
+ * built with `new Date(year, month, day)` — a local-timezone constructor — but was
+ * then serialized with `occurrence.toISOString().slice(0, 10)`, which converts
+ * through UTC. Those two agree only when the code happens to run in UTC. This
+ * function is called from the browser (household dashboard — runs in the user's
+ * own timezone, e.g. Asia/Singapore, UTC+8) AND from a Cloudflare Workers server
+ * function (the advisor dashboard — runs in UTC). For the exact same premium, SGT
+ * local midnight converts to the PREVIOUS UTC calendar day, while UTC local
+ * midnight doesn't shift at all — so the same occurrence produced two different
+ * date strings depending on which side computed it. Concretely reproduced:
+ * new Date(2026,6,17) → toISOString().slice(0,10) gives "2026-07-17" when the
+ * process runs in TZ=UTC but "2026-07-16" when it runs in TZ=Asia/Singapore.
+ * This silently broke dismissal-key matching between the household's own
+ * dashboard (client-computed date) and the FA dashboard (server-computed date)
+ * for the same alert. Fix: never round-trip through UTC for a date-only value —
+ * read back the same local y/m/d components the Date was built from, so the
+ * string is identical no matter which timezone the runtime executes in.
+ */
+function formatDateOnly(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/**
  * Given a recurring premium/payment's start date and frequency, find the next
  * occurrence on or after `today` — entirely derived, no manually-maintained
  * "next due date" field to go stale. Used for both Insurance premiums and
@@ -109,7 +137,7 @@ export function computeNextOccurrence(
 
   if (endDateStr && occurrence.getTime() > new Date(endDateStr).getTime()) return null;
 
-  return occurrence.toISOString().slice(0, 10);
+  return formatDateOnly(occurrence);
 }
 
 export type RecurringOccurrence = { date: string; overdue: boolean };
@@ -175,7 +203,7 @@ export function computeRecurringAlerts(
     if (occurrence.getTime() > horizonEnd.getTime()) break;
 
     if (occurrence.getTime() >= today.getTime()) {
-      results.push({ date: occurrence.toISOString().slice(0, 10), overdue: false });
+      results.push({ date: formatDateOnly(occurrence), overdue: false });
     } else if (!isGiro && monthsAdded > 0) {
       // monthsAdded > 0 excludes the very first occurrence (the record's own start_date)
       // from ever being flagged overdue — that date is when the policy/premium began,
@@ -190,7 +218,7 @@ export function computeRecurringAlerts(
   }
 
   if (mostRecentPast) {
-    results.unshift({ date: mostRecentPast.toISOString().slice(0, 10), overdue: true });
+    results.unshift({ date: formatDateOnly(mostRecentPast), overdue: true });
   }
 
   return results;
