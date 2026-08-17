@@ -246,6 +246,7 @@ function PropertyRow({
         title={p.name}
         subtitle={`${PROPERTY_PURPOSE_LABEL[p.purpose] ?? "Other"} · ${p.currency}`}
         memberId={p.member_id}
+        secondaryMemberId={p.joint_member_id ?? null}
         status={p.status}
         onStatusChange={onStatus}
         action={p.action_note}
