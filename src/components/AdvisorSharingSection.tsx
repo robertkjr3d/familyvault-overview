@@ -19,6 +19,8 @@ type AdvisorEntry = {
   canViewInsurance: boolean;
   canViewInvestments: boolean;
   canViewNetworthSummary: boolean;
+  canViewProperty: boolean;
+  canViewLoans: boolean;
   memberNames: string[];
   memberIds: string[];
   consentRenewedAt: string;
@@ -49,6 +51,8 @@ function AdvisorRow({
   const [draftInsurance, setDraftInsurance] = useState(advisor.canViewInsurance);
   const [draftInvestments, setDraftInvestments] = useState(advisor.canViewInvestments);
   const [draftNetworth, setDraftNetworth] = useState(advisor.canViewNetworthSummary);
+  const [draftProperty, setDraftProperty] = useState(advisor.canViewProperty);
+  const [draftLoans, setDraftLoans] = useState(advisor.canViewLoans);
   const [draftMemberIds, setDraftMemberIds] = useState<string[]>(advisor.memberIds);
 
   function toggleDraftMember(id: string) {
@@ -59,6 +63,8 @@ function AdvisorRow({
     setDraftInsurance(advisor.canViewInsurance);
     setDraftInvestments(advisor.canViewInvestments);
     setDraftNetworth(advisor.canViewNetworthSummary);
+    setDraftProperty(advisor.canViewProperty);
+    setDraftLoans(advisor.canViewLoans);
     setDraftMemberIds(advisor.memberIds);
   }
 
@@ -71,6 +77,8 @@ function AdvisorRow({
           canViewInsurance: draftInsurance,
           canViewInvestments: draftInvestments,
           canViewNetworthSummary: draftNetworth,
+          canViewProperty: draftProperty,
+          canViewLoans: draftLoans,
           memberIds: draftMemberIds,
         },
       }),
@@ -120,6 +128,18 @@ function AdvisorRow({
               onChange={(e) => setDraftInvestments(e.target.checked)}
             />
             Investments
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={draftProperty}
+              onChange={(e) => setDraftProperty(e.target.checked)}
+            />
+            Property
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={draftLoans} onChange={(e) => setDraftLoans(e.target.checked)} />
+            Loans
           </label>
           <label className="flex items-center gap-2">
             <input
@@ -176,6 +196,8 @@ function AdvisorRow({
           {[
             advisor.canViewInsurance && "Insurance",
             advisor.canViewInvestments && "Investments",
+            advisor.canViewProperty && "Property",
+            advisor.canViewLoans && "Loans",
             advisor.canViewNetworthSummary && "Net worth summary",
           ]
             .filter(Boolean)
@@ -229,6 +251,8 @@ export function AdvisorSharingSection() {
   const [email, setEmail] = useState("");
   const [canViewInsurance, setCanViewInsurance] = useState(true);
   const [canViewInvestments, setCanViewInvestments] = useState(true);
+  const [canViewProperty, setCanViewProperty] = useState(true);
+  const [canViewLoans, setCanViewLoans] = useState(true);
   const [canViewNetworthSummary, setCanViewNetworthSummary] = useState(true);
   // Deliberately starts empty, not "everyone" — sharing a member is an
   // opt-in action the household owner takes per person, not a default.
@@ -266,6 +290,8 @@ export function AdvisorSharingSection() {
           canViewInsurance,
           canViewInvestments,
           canViewNetworthSummary,
+          canViewProperty,
+          canViewLoans,
           memberIds,
         },
       }),
@@ -317,10 +343,11 @@ export function AdvisorSharingSection() {
         </a>
       )}
       <p className="mb-3 text-xs text-muted-foreground">
-        Share a limited view with an adviser you work with. Insurance and investments show real
-        entries; a net worth summary (if you choose to share it) shows one combined total only —
-        never itemized savings, property, or loan details. They never see your inventory or anything
-        else.
+        Share a limited view with an adviser you work with. Whichever categories you tick below —
+        insurance, investments, property, loans — show real, itemized entries for the members you
+        select. A net worth summary (if you choose to share it, separately) always shows one combined
+        total only, regardless of what else you share — itemized savings details are never shown to
+        an adviser, under any setting. They never see your inventory or anything else.
       </p>
 
       {isLoading && <p className="text-xs text-muted-foreground">Loading...</p>}
@@ -442,6 +469,22 @@ export function AdvisorSharingSection() {
               />
               Investments
             </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={canViewProperty}
+                onChange={(e) => setCanViewProperty(e.target.checked)}
+              />
+              Property
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={canViewLoans}
+                onChange={(e) => setCanViewLoans(e.target.checked)}
+              />
+              Loans
+            </label>
             <label className="flex items-start gap-2 text-sm">
               <input
                 type="checkbox"
@@ -452,8 +495,8 @@ export function AdvisorSharingSection() {
               <span>
                 Net worth summary
                 <span className="block text-xs text-muted-foreground">
-                  One combined total only — savings, property, and loan balances are never shown
-                  individually
+                  One combined total only, independent of whatever you share above — savings is
+                  never itemized under any setting
                 </span>
               </span>
             </label>

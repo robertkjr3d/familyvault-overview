@@ -17,6 +17,10 @@ import {
   NET_WORTH_CATEGORY_ORDER,
   NET_WORTH_CATEGORY_LABELS,
   NET_WORTH_CATEGORY_COLORS,
+  CATEGORY_ORDER,
+  CATEGORY_TITLES,
+  CATEGORY_COLUMN_LABEL,
+  CATEGORY_TOTAL_LABEL,
 } from "@/lib/advisorPdf";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -365,8 +369,13 @@ function NetWorthDonut({
             </div>
           );
         })}
+        {totalAssets > 0 && (
+          <p className="pt-1 text-xs font-semibold text-primary">
+            Total Assets: {fmtMoney(totalAssets, "SGD")}
+          </p>
+        )}
         {totalLiabilities > 0 && (
-          <p className="pt-1 text-xs font-semibold text-urgent">Liabilities: {fmtMoney(totalLiabilities, "SGD")}</p>
+          <p className="text-xs font-semibold text-urgent">Liabilities: {fmtMoney(totalLiabilities, "SGD")}</p>
         )}
       </div>
     </div>
@@ -448,7 +457,7 @@ function ClientDetail({
 
   const records = data?.records ?? [];
   const upcomingPremiums = data?.upcomingPremiums ?? [];
-  const hiddenCounts = data?.hiddenCounts ?? { insurance: 0, investments: 0 };
+  const hiddenCounts = data?.hiddenCounts ?? { insurance: 0, investments: 0, property: 0, loans: 0 };
   // Same shared function advisorPdf.ts uses — same order, same subgroups,
   // same subtotals, so this screen and the downloaded PDF can't disagree.
   const categoryGroups = groupAdvisorRecords(records);
@@ -571,7 +580,7 @@ function ClientDetail({
                   {sub.name}
                 </p>
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  {catGroup.category === "investments" ? "Value" : "Premium"}
+                  {CATEGORY_COLUMN_LABEL[catGroup.category] ?? "Premium"}
                 </p>
               </div>
               <div className="space-y-2">
@@ -596,7 +605,7 @@ function ClientDetail({
                           // Replaces the old inline "(sum assured)" text
                           // that used to clutter the amount itself — same
                           // fix as the PDF.
-                          catGroup.category !== "investments" && r.premium == null
+                          catGroup.category === "insurance" && r.premium == null
                             ? "Sum assured only"
                             : null,
                           r.end_date && `Ends ${fmtDate(r.end_date)}`,
@@ -617,10 +626,14 @@ function ClientDetail({
                 })}
               </div>
               {sub.subtotals.length > 0 && (
-                <div className="mt-1.5 space-y-0.5 text-right text-xs font-semibold text-muted-foreground">
+                <div
+                  className={`mt-1.5 space-y-0.5 text-right text-xs font-semibold ${
+                    catGroup.category === "loans" ? "text-urgent" : "text-muted-foreground"
+                  }`}
+                >
                   {sub.subtotals.map((st) => (
                     <p key={st.currency}>
-                      {catGroup.category === "investments" ? "Total value" : "Total sum assured"}:{" "}
+                      {CATEGORY_TOTAL_LABEL[catGroup.category] ?? "Total"}:{" "}
                       {fmtMoney(st.amount, st.currency)}
                     </p>
                   ))}
@@ -636,16 +649,16 @@ function ClientDetail({
           record, so without this, a fully-hidden category would show
           nothing at all, indistinguishable from "no data exists" rather
           than "data exists but isn't shared." */}
-      {(["insurance", "investments"] as const)
-        .filter((cat) => !categoryGroups.some((g) => g.category === cat) && hiddenCounts[cat] > 0)
-        .map((cat) => (
-          <section key={cat} className="mb-4 rounded-2xl border border-border bg-card p-4">
-            <h3 className="text-sm font-bold">{cat === "investments" ? "Investments" : "Insurance"}</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {hiddenCounts[cat]} item{hiddenCounts[cat] === 1 ? "" : "s"} not shared
-            </p>
-          </section>
-        ))}
+      {CATEGORY_ORDER.filter(
+        (cat) => !categoryGroups.some((g) => g.category === cat) && hiddenCounts[cat] > 0,
+      ).map((cat) => (
+        <section key={cat} className="mb-4 rounded-2xl border border-border bg-card p-4">
+          <h3 className="text-sm font-bold">{CATEGORY_TITLES[cat] ?? cat}</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {hiddenCounts[cat]} item{hiddenCounts[cat] === 1 ? "" : "s"} not shared
+          </p>
+        </section>
+      ))}
     </div>
   );
 }
