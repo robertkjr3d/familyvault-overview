@@ -92,7 +92,12 @@ export function AdvisorHome() {
                     <p className="truncate font-semibold">{c.memberName}</p>
                     <p className="truncate text-xs text-muted-foreground">
                       {c.householdName} ·{" "}
-                      {[c.canViewInsurance && "Insurance", c.canViewInvestments && "Investments"]
+                      {[
+                        c.canViewInsurance && "Insurance",
+                        c.canViewInvestments && "Investments",
+                        c.canViewProperty && "Property",
+                        c.canViewLoans && "Loans",
+                      ]
                         .filter(Boolean)
                         .join(", ") || "No categories shared"}
                     </p>
