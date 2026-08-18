@@ -27,6 +27,8 @@ const sendInvitePayloadSchema = z.object({
   canViewInsurance: z.boolean().default(true),
   canViewInvestments: z.boolean().default(true),
   canViewNetworthSummary: z.boolean().default(true),
+  canViewProperty: z.boolean().default(true),
+  canViewLoans: z.boolean().default(true),
   // Which household members this advisor may see. Required, not optional —
   // access is opt-in per member, never a default of "everyone."
   memberIds: z.array(z.string().uuid()).min(1, "Select at least one member to share."),
@@ -43,6 +45,8 @@ const updatePermissionsPayloadSchema = z.object({
   canViewInsurance: z.boolean(),
   canViewInvestments: z.boolean(),
   canViewNetworthSummary: z.boolean(),
+  canViewProperty: z.boolean(),
+  canViewLoans: z.boolean(),
   memberIds: z.array(z.string().uuid()).min(1, "Select at least one member to share."),
 });
 
@@ -169,6 +173,8 @@ export const sendAdvisorInvite = createServerFn({ method: "POST" })
       can_view_insurance: data.canViewInsurance,
       can_view_investments: data.canViewInvestments,
       can_view_networth_summary: data.canViewNetworthSummary,
+      can_view_property: data.canViewProperty,
+      can_view_loans: data.canViewLoans,
       member_ids: data.memberIds,
       invited_by_user_id: userId,
       token,
@@ -234,7 +240,7 @@ export const acceptPendingAdvisorInvitesForCurrentUser = createServerFn({ method
     const { data: invites, error: invitesError } = await supabaseAdmin
       .from("advisor_invites" as any)
       .select(
-        "id, household_id, can_view_insurance, can_view_investments, can_view_networth_summary, member_ids",
+        "id, household_id, can_view_insurance, can_view_investments, can_view_networth_summary, can_view_property, can_view_loans, member_ids",
       )
       .eq("invited_email", userEmail)
       .is("accepted_at", null)
@@ -260,6 +266,8 @@ export const acceptPendingAdvisorInvitesForCurrentUser = createServerFn({ method
             can_view_insurance: invite.can_view_insurance,
             can_view_investments: invite.can_view_investments,
             can_view_networth_summary: invite.can_view_networth_summary,
+            can_view_property: invite.can_view_property,
+            can_view_loans: invite.can_view_loans,
             status: "active",
             consent_renewed_at: new Date().toISOString(),
             revoked_at: null,
@@ -333,6 +341,8 @@ export const updateAdvisorPermissions = createServerFn({ method: "POST" })
         can_view_insurance: data.canViewInsurance,
         can_view_investments: data.canViewInvestments,
         can_view_networth_summary: data.canViewNetworthSummary,
+        can_view_property: data.canViewProperty,
+        can_view_loans: data.canViewLoans,
       })
       .eq("household_id", data.householdId)
       .eq("advisor_user_id", data.advisorUserId)
@@ -370,7 +380,7 @@ export const listAdvisorsForHousehold = createServerFn({ method: "POST" })
     const { data: linkRows, error: linksError } = await supabaseAdmin
       .from("advisor_household_links" as any)
       .select(
-        "id, advisor_user_id, can_view_insurance, can_view_investments, can_view_networth_summary, linked_at, consent_renewed_at",
+        "id, advisor_user_id, can_view_insurance, can_view_investments, can_view_networth_summary, can_view_property, can_view_loans, linked_at, consent_renewed_at",
       )
       .eq("household_id", data.householdId)
       .eq("status", "active");
@@ -423,6 +433,8 @@ export const listAdvisorsForHousehold = createServerFn({ method: "POST" })
       canViewInsurance: r.can_view_insurance,
       canViewInvestments: r.can_view_investments,
       canViewNetworthSummary: r.can_view_networth_summary,
+      canViewProperty: r.can_view_property,
+      canViewLoans: r.can_view_loans,
       memberNames: memberNamesByLink.get(r.id) ?? [],
       memberIds: memberIdsByLink.get(r.id) ?? [],
       linkedAt: r.linked_at,
@@ -785,7 +797,12 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
     // Reuses the supabaseAdmin already imported above for the dismissal
     // lookup — a second import of the same binding in this scope is what
     // broke the build last round.
-    const [{ count: hiddenInsuranceCount }, { count: hiddenInvestmentsCount }] = await Promise.all([
+    const [
+      { count: hiddenInsuranceCount },
+      { count: hiddenInvestmentsCount },
+      { count: hiddenPropertyCount },
+      { count: hiddenLoansCount },
+    ] = await Promise.all([
       supabaseAdmin
         .from("insurance_policies" as any)
         .select("id", { count: "exact", head: true })
@@ -798,6 +815,18 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
         .eq("household_id", data.householdId)
         .eq("hidden_from_advisors", true)
         .or(`member_id.eq.${data.memberId},member_id.is.null`),
+      supabaseAdmin
+        .from("properties" as any)
+        .select("id", { count: "exact", head: true })
+        .eq("household_id", data.householdId)
+        .eq("hidden_from_advisors", true)
+        .or(`member_id.eq.${data.memberId},member_id.is.null`),
+      supabaseAdmin
+        .from("loans" as any)
+        .select("id", { count: "exact", head: true })
+        .eq("household_id", data.householdId)
+        .eq("hidden_from_advisors", true)
+        .or(`member_id.eq.${data.memberId},member_id.is.null`),
     ]);
 
     return {
@@ -806,6 +835,8 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
       hiddenCounts: {
         insurance: hiddenInsuranceCount ?? 0,
         investments: hiddenInvestmentsCount ?? 0,
+        property: hiddenPropertyCount ?? 0,
+        loans: hiddenLoansCount ?? 0,
       },
     };
   });
@@ -929,7 +960,7 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
     const { data: links, error } = await supabaseAdmin
       .from("advisor_household_links" as any)
       .select(
-        "id, household_id, can_view_insurance, can_view_investments, can_view_networth_summary, households(name)",
+        "id, household_id, can_view_insurance, can_view_investments, can_view_networth_summary, can_view_property, can_view_loans, households(name)",
       )
       .eq("advisor_user_id", userId)
       .eq("status", "active");
@@ -981,24 +1012,40 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
     // by testing.
     const insuranceByHousehold = new Map<string, any[]>();
     const investmentsByHousehold = new Map<string, any[]>();
+    const propertyByHousehold = new Map<string, any[]>();
+    const loansByHousehold = new Map<string, any[]>();
     if (householdIds.length > 0) {
-      const [{ data: allInsurance, error: insError }, { data: allInvestments, error: invError }] =
-        await Promise.all([
-          supabaseAdmin
-            .from("insurance_policies" as any)
-            .select(
-              "id, household_id, name, premium, start_date, end_date, frequency, is_giro, member_id, updated_at, currency, hidden_from_advisors",
-            )
-            .in("household_id", householdIds),
-          supabaseAdmin
-            .from("investments" as any)
-            .select(
-              "id, household_id, name, group_name, premium_amount, premium_start_date, premium_end_date, premium_frequency, is_giro, member_id, updated_at, currency, hidden_from_advisors",
-            )
-            .in("household_id", householdIds),
-        ]);
+      const [
+        { data: allInsurance, error: insError },
+        { data: allInvestments, error: invError },
+        { data: allProperty, error: propError },
+        { data: allLoans, error: loanError },
+      ] = await Promise.all([
+        supabaseAdmin
+          .from("insurance_policies" as any)
+          .select(
+            "id, household_id, name, premium, start_date, end_date, frequency, is_giro, member_id, updated_at, currency, hidden_from_advisors",
+          )
+          .in("household_id", householdIds),
+        supabaseAdmin
+          .from("investments" as any)
+          .select(
+            "id, household_id, name, group_name, premium_amount, premium_start_date, premium_end_date, premium_frequency, is_giro, member_id, updated_at, currency, hidden_from_advisors",
+          )
+          .in("household_id", householdIds),
+        supabaseAdmin
+          .from("properties" as any)
+          .select("id, household_id, member_id, updated_at, hidden_from_advisors")
+          .in("household_id", householdIds),
+        supabaseAdmin
+          .from("loans" as any)
+          .select("id, household_id, member_id, updated_at, hidden_from_advisors")
+          .in("household_id", householdIds),
+      ]);
       if (insError) throw insError;
       if (invError) throw invError;
+      if (propError) throw propError;
+      if (loanError) throw loanError;
       for (const row of (allInsurance ?? []) as any[]) {
         const arr = insuranceByHousehold.get(row.household_id) ?? [];
         arr.push(row);
@@ -1008,6 +1055,16 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
         const arr = investmentsByHousehold.get(row.household_id) ?? [];
         arr.push(row);
         investmentsByHousehold.set(row.household_id, arr);
+      }
+      for (const row of (allProperty ?? []) as any[]) {
+        const arr = propertyByHousehold.get(row.household_id) ?? [];
+        arr.push(row);
+        propertyByHousehold.set(row.household_id, arr);
+      }
+      for (const row of (allLoans ?? []) as any[]) {
+        const arr = loansByHousehold.get(row.household_id) ?? [];
+        arr.push(row);
+        loansByHousehold.set(row.household_id, arr);
       }
     }
 
@@ -1068,6 +1125,10 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
           const investmentRows = l.can_view_investments
             ? (investmentsByHousehold.get(l.household_id) ?? [])
             : [];
+          const propertyRows = l.can_view_property
+            ? (propertyByHousehold.get(l.household_id) ?? [])
+            : [];
+          const loanRows = l.can_view_loans ? (loansByHousehold.get(l.household_id) ?? []) : [];
 
           const dismissedKeys = dismissedByHousehold.get(l.household_id) ?? new Set<string>();
 
@@ -1079,6 +1140,12 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
               const memberInvestmentsAll = investmentRows.filter(
                 (r: any) => r.member_id === memberId || r.member_id == null,
               );
+              const memberPropertyAll = propertyRows.filter(
+                (r: any) => r.member_id === memberId || r.member_id == null,
+              );
+              const memberLoansAll = loanRows.filter(
+                (r: any) => r.member_id === memberId || r.member_id == null,
+              );
               // Visible-only for every actual computation below — this is
               // the manual equivalent of what advisor_select's RLS check
               // does for every other read path, needed here specifically
@@ -1087,10 +1154,18 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
               const memberInvestments = memberInvestmentsAll.filter(
                 (r: any) => !r.hidden_from_advisors,
               );
+              const memberProperty = memberPropertyAll.filter((r: any) => !r.hidden_from_advisors);
+              const memberLoans = memberLoansAll.filter((r: any) => !r.hidden_from_advisors);
               const hiddenCount =
                 memberInsuranceAll.filter((r: any) => r.hidden_from_advisors).length +
-                memberInvestmentsAll.filter((r: any) => r.hidden_from_advisors).length;
+                memberInvestmentsAll.filter((r: any) => r.hidden_from_advisors).length +
+                memberPropertyAll.filter((r: any) => r.hidden_from_advisors).length +
+                memberLoansAll.filter((r: any) => r.hidden_from_advisors).length;
 
+              // Deliberately insurance/investments only — property has no
+              // recurring-premium concept in this app's model, and a loan
+              // "upcoming" alert (reprice date? payoff date?) is a separate
+              // design decision never scoped for this feature.
               const upcomingPremiums = await computeAdvisorUpcomingPremiums(
                 memberInsurance,
                 memberInvestments,
@@ -1098,7 +1173,7 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
                 dismissedKeys,
               );
 
-              const allRecords = [...memberInsurance, ...memberInvestments];
+              const allRecords = [...memberInsurance, ...memberInvestments, ...memberProperty, ...memberLoans];
               const staleCount = allRecords.filter(
                 (r: any) => r.updated_at && new Date(r.updated_at) < staleCutoff,
               ).length;
@@ -1111,6 +1186,8 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
                 canViewInsurance: l.can_view_insurance,
                 canViewInvestments: l.can_view_investments,
                 canViewNetworthSummary: l.can_view_networth_summary,
+                canViewProperty: l.can_view_property,
+                canViewLoans: l.can_view_loans,
                 upcomingCount: upcomingPremiums.length,
                 staleCount,
                 hiddenCount,

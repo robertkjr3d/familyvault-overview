@@ -82,7 +82,7 @@ export type AdvisorPdfData = {
   // "N items not shared" disclosure — an FA reading this PDF shouldn't
   // assume it's the complete picture if it isn't. Optional so this type
   // still works for any caller that predates this feature.
-  hiddenCounts?: { insurance: number; investments: number };
+  hiddenCounts?: { insurance: number; investments: number; property: number; loans: number };
 };
 
 // Mirrors src/lib/format.ts's fmtMoney exactly (SGD keeps "$", every other
@@ -157,11 +157,43 @@ const INVESTMENT_TYPE_ORDER = [
   "ILP (Investment-Linked Policy)", "Endowment", "Bonds", "REITs",
   "Cryptocurrency", "Cash / Money Market", "SRS", "CPF-OA Investment", "Other",
 ];
+// Matches the view's CASE-mapped labels for properties.purpose exactly
+// (see the migration) — "Other" (unrecognised/blank) sorts last via the
+// same orderIndex fallback every other category already uses.
+const PROPERTY_PURPOSE_ORDER = ["Capital Growth", "Rental Yield", "Own Home", "Other"];
+// Loans' purpose is free text (no fixed taxonomy exists in this app for
+// "kinds of loan"), so there's no canonical order to define — subgroups
+// fall back to the same orderIndex()-driven alphabetical sort every other
+// category already uses for an unrecognised value, applied to every value.
+const LOAN_PURPOSE_ORDER: string[] = [];
 
 function orderIndex(order: string[], name: string | null | undefined): number {
   const idx = order.indexOf(name ?? "");
   return idx === -1 ? order.length : idx; // unrecognised/blank sorts after every known type
 }
+
+// Single source for the two places a category-specific word choice matters:
+// the column header above each list ("Premium"/"Value"/"Balance") and the
+// subtotal line at the end of each subgroup ("Total sum assured"/"Total
+// value"/"Total balance"). Both AdvisorHome.tsx (on-screen) and this file's
+// own PDF renderer import these — previously each had its own hardcoded
+// `category === "investments" ? X : Y` ternary, which was a reasonable
+// shortcut when only two categories existed but would have silently
+// mislabeled property ("Total sum assured" makes no sense for a home) and
+// loans ("Total sum assured" is actively wrong for a debt) once those were
+// added, if left as a binary check.
+export const CATEGORY_COLUMN_LABEL: Record<string, string> = {
+  insurance: "Premium",
+  investments: "Value",
+  property: "Value",
+  loans: "Balance",
+};
+export const CATEGORY_TOTAL_LABEL: Record<string, string> = {
+  insurance: "Total sum assured",
+  investments: "Total value",
+  property: "Total value",
+  loans: "Total balance",
+};
 
 export type AdvisorRecordSubgroup = {
   name: string;
@@ -182,17 +214,29 @@ export type AdvisorCategoryGroup = {
 // both this file's PDF renderer and AdvisorHome.tsx's on-screen list, so
 // the two can never show a different grouping or a different subtotal for
 // the same data.
+export const CATEGORY_TITLES: Record<string, string> = {
+  insurance: "Insurance",
+  investments: "Investments",
+  property: "Property",
+  loans: "Loans",
+};
+export const CATEGORY_ORDER = ["insurance", "investments", "property", "loans"] as const;
+
 export function groupAdvisorRecords(records: AdvisorPdfRecord[]): AdvisorCategoryGroup[] {
-  const categoryTitles: Record<string, string> = { insurance: "Insurance", investments: "Investments" };
-  const categoryOrder = ["insurance", "investments"];
+  const subgroupOrderByCategory: Record<string, string[]> = {
+    insurance: INSURANCE_CATEGORY_ORDER,
+    investments: INVESTMENT_TYPE_ORDER,
+    property: PROPERTY_PURPOSE_ORDER,
+    loans: LOAN_PURPOSE_ORDER,
+  };
 
   const byCategory: Record<string, AdvisorPdfRecord[]> = {};
   for (const r of records) (byCategory[r.category] ??= []).push(r);
 
-  return categoryOrder
+  return CATEGORY_ORDER
     .filter((c) => (byCategory[c]?.length ?? 0) > 0)
     .map((category) => {
-      const order = category === "insurance" ? INSURANCE_CATEGORY_ORDER : INVESTMENT_TYPE_ORDER;
+      const order = subgroupOrderByCategory[category] ?? [];
       const bySubgroup: Record<string, AdvisorPdfRecord[]> = {};
       for (const r of byCategory[category]) {
         (bySubgroup[r.insurance_category ?? "Other"] ??= []).push(r);
@@ -221,7 +265,7 @@ export function groupAdvisorRecords(records: AdvisorPdfRecord[]): AdvisorCategor
         const subtotals = Object.entries(byCurrency).map(([currency, amount]) => ({ currency, amount }));
         return { name, items, subtotals };
       });
-      return { category, categoryTitle: categoryTitles[category] ?? category, subgroups };
+      return { category, categoryTitle: CATEGORY_TITLES[category] ?? category, subgroups };
     });
 }
 
@@ -655,7 +699,8 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
       font: fontBold,
       color: colorPrimary,
     });
-    const hiddenForThisCategory = data.hiddenCounts?.[catGroup.category as "insurance" | "investments"] ?? 0;
+    const hiddenForThisCategory =
+      data.hiddenCounts?.[catGroup.category as "insurance" | "investments" | "property" | "loans"] ?? 0;
     if (hiddenForThisCategory > 0) {
       const disclosureText = `+ ${hiddenForThisCategory} not shared`;
       page.drawText(disclosureText, {
@@ -670,7 +715,7 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
 
     for (const sub of catGroup.subgroups) {
       ensureSpace(100);
-      const columnLabel = catGroup.category === "investments" ? "VALUE" : "PREMIUM";
+      const columnLabel = (CATEGORY_COLUMN_LABEL[catGroup.category] ?? "Premium").toUpperCase();
       page.drawText(sub.name.toUpperCase(), {
         x: margin,
         y,
@@ -725,7 +770,7 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
         // this, not glued onto a dollar figure.
         const subLine = [
           r.member_id == null ? "Unassigned" : null,
-          r.category !== "investments" && r.premium == null ? "Sum assured only" : null,
+          r.category === "insurance" && r.premium == null ? "Sum assured only" : null,
           r.is_giro ? "GIRO" : null,
         ]
           .filter(Boolean)
@@ -767,7 +812,8 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
         }
       }
 
-      const totalLabel = catGroup.category === "investments" ? "Total value" : "Total sum assured";
+      const totalLabel = CATEGORY_TOTAL_LABEL[catGroup.category] ?? "Total";
+      const totalColor = catGroup.category === "loans" ? colorLiability : colorPrimary;
       for (const st of sub.subtotals) {
         ensureSpace(80);
         const line = `${totalLabel}: ${fmtMoneyForPdf(st.amount, st.currency)}`;
@@ -776,7 +822,7 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
           y,
           size: 9,
           font: fontBold,
-          color: colorPrimary,
+          color: totalColor,
         });
         y -= 14;
       }
@@ -790,11 +836,11 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
   // this it would look identical to "no data exists" rather than "data
   // exists but isn't shared."
   const shownCategories = new Set(categoryGroups.map((g) => g.category));
-  for (const cat of ["insurance", "investments"] as const) {
+  for (const cat of CATEGORY_ORDER) {
     const hiddenCount = data.hiddenCounts?.[cat] ?? 0;
     if (shownCategories.has(cat) || hiddenCount === 0) continue;
     ensureSpace(50);
-    page.drawText(cat === "investments" ? "Investments" : "Insurance", {
+    page.drawText(CATEGORY_TITLES[cat] ?? cat, {
       x: margin,
       y,
       size: 13,

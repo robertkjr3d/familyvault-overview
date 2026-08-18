@@ -73,6 +73,9 @@ export const recordConfigs: Record<string, RecordConfig> = {
       { key: "action_note", label: "Action", type: "text", placeholder: "e.g. Ask UOB for repricing rate May 2026", section: "🎯 Strategy & Action" },
       { key: "beneficiary", label: "Beneficiary / intended for", type: "text", placeholder: "e.g. Split equally between Aza and Leslie", section: "🎯 Strategy & Action" },
       { key: "external_url", label: "Listing / portal link", type: "text", placeholder: "https://...", section: "🎯 Strategy & Action" },
+
+      // 🔒 Sharing
+      { key: "hidden_from_advisors", label: "Hide from advisers", type: "boolean", placeholder: "Keep this property out of any adviser's view, even if you've shared this member and category", default: false, section: "🔒 Sharing" },
     ],
   },
 
@@ -97,6 +100,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
       { key: "loan_end_date", label: "Loan end date", type: "date" },
       { key: "action", label: "Action", type: "text", placeholder: "e.g. Ask UOB for repricing rate by May 2026" },
       { key: "external_url", label: "Bank portal link", type: "text", placeholder: "https://..." },
+      { key: "hidden_from_advisors", label: "Hide from advisers", type: "boolean", placeholder: "Keep this loan out of any adviser's view, even if you've shared this member and category", default: false },
     ],
   },
 
