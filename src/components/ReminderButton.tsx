@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Bell, X } from "lucide-react";
+import { Bell } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -66,19 +67,7 @@ export function ReminderButton({ entityType, entityId }: { entityType: string; e
           </div>
           <div className="space-y-1.5" data-tour="field-reminder-date">
             <Label className="text-xs">Date</Label>
-            <div className="relative flex items-center">
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-9 w-full pr-8" />
-              {date && (
-                <button
-                  type="button"
-                  onClick={() => setDate("")}
-                  className="absolute right-2 flex items-center justify-center text-muted-foreground hover:text-foreground"
-                  aria-label="Clear date"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
+            <DateInput value={date} onChange={setDate} className="h-9 w-full" />
           </div>
           <div className="flex gap-2 pt-2">
             <Button variant="outline" className="flex-1" onClick={() => setOpen(false)}>Cancel</Button>

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/MoneyInput";
@@ -246,7 +247,7 @@ function QuickAddProperty({ onSaved }: { onSaved: () => void }) {
         <Label className="text-xs">Note or reminder (optional)</Label>
         <Input value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="e.g. Renew lease" />
         {noteText.trim() && (
-          <Input type="date" value={noteDate} onChange={(e) => setNoteDate(e.target.value)} className="mt-1" />
+          <DateInput value={noteDate} onChange={setNoteDate} className="mt-1" showClear={false} />
         )}
       </div>
       <Button className="w-full" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save home"}</Button>
@@ -332,7 +333,7 @@ function QuickAddInsurance({ onSaved }: { onSaved: () => void }) {
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Next renews</Label>
-          <Input type="date" value={renewalDate} onChange={(e) => setRenewalDate(e.target.value)} />
+          <DateInput value={renewalDate} onChange={setRenewalDate} showClear={false} />
         </div>
       </div>
       <p className="rounded-lg bg-accent/50 px-2.5 py-2 text-[11px] text-accent-foreground">

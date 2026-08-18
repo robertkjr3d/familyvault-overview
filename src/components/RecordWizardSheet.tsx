@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DateInput } from "@/components/ui/date-input";
 import { useMembers } from "@/hooks/useMembers";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -438,7 +439,7 @@ function FieldInput({ f, value, onChange, members, properties, currency }: {
     return <Input inputMode="decimal" value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder={f.placeholder} autoFocus />;
   }
   if (f.type === "date") {
-    return <Input type="date" value={value ?? ""} onChange={(e) => onChange(e.target.value)} className="h-9 w-full" />;
+    return <DateInput value={value} onChange={onChange} className="h-9 w-full" showClear={false} />;
   }
   return <Input value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder={f.placeholder} autoFocus />;
 }
