@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { DateInput } from "@/components/ui/date-input";
 import { toast } from "sonner";
 import { fmtDate } from "@/lib/format";
 import { useAppStore } from "@/lib/store";
@@ -1570,14 +1571,7 @@ return (
 </div>
 <div className="space-y-1.5">
 <Label className="text-xs flex items-center gap-1">Warranty/Expiry date <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" /></Label>
-<div className="relative flex items-center">
-<Input type="date" value={warranty} onChange={(e) => setWarranty(e.target.value)} className="h-9 w-full pr-8" />
-{warranty && (
-<button type="button" onClick={() => setWarranty("")} className="absolute right-2 flex items-center justify-center text-muted-foreground hover:text-foreground" aria-label="Clear date">
-<X className="h-4 w-4" />
-</button>
-)}
-</div>
+<DateInput value={warranty} onChange={setWarranty} className="h-9 w-full" />
 </div>
 <div className="space-y-1.5">
 <Label className="text-xs">Action / notes</Label>
@@ -1734,14 +1728,7 @@ return (
 </div>
 <div className="space-y-1.5">
 <Label className="text-xs flex items-center gap-1">Warranty/Expiry date <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" /></Label>
-<div className="relative flex items-center">
-<Input type="date" value={warranty} onChange={(e) => setWarranty(e.target.value)} className="h-9 w-full pr-8" />
-{warranty && (
-<button type="button" onClick={() => setWarranty("")} className="absolute right-2 flex items-center justify-center text-muted-foreground hover:text-foreground" aria-label="Clear date">
-<X className="h-4 w-4" />
-</button>
-)}
-</div>
+<DateInput value={warranty} onChange={setWarranty} className="h-9 w-full" />
 </div>
 <div className="space-y-1.5">
 <Label className="text-xs">Action / notes</Label>

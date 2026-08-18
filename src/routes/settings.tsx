@@ -14,6 +14,7 @@ import { useFxRates } from "@/hooks/useFxRates";
 import { runFullExport, runFullBackupZip } from "@/lib/fullExport";
 import { createDemoHousehold } from "@/lib/householdInvites";
 import { useCurrentRole } from "@/lib/useCurrentRole";
+import { useDateInputBuffer } from "@/hooks/useDateInputBuffer";
 import { deleteAccount, HOUSEHOLD_BLOCKING_TABLES } from "@/lib/accountDeletion";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -67,6 +68,11 @@ function SettingsPage() {
 
   const [familyName, setFamilyName] = useState("");
   const [simDate, setSimDate] = useState("");
+  // Safari date-input fix (Aug 18, 2026) — see components/ui/date-input.tsx
+  // for the root-cause writeup. This raw <input> keeps its own custom
+  // styling (can't go through the shadcn <DateInput> without a visual
+  // regression) but reuses the same buffering hook underneath.
+  const simDateBuffer = useDateInputBuffer(simDate, setSimDate);
   const [monthlyIncome, setMonthlyIncome] = useState<string>("");
   const [monthlyExpenses, setMonthlyExpenses] = useState<string>("");
   const [retirementYear, setRetirementYear] = useState<string>("");
@@ -946,14 +952,14 @@ function SettingsPage() {
         <input
           type="date"
           className="w-full max-w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-          value={simDate}
-          onChange={(e) => setSimDate(e.target.value)}
+          value={simDateBuffer.local}
+          onChange={simDateBuffer.handleChange}
         />
         <div className="mt-3 flex gap-2">
           <button className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"
             onClick={() => { if (simDate) save.mutate({ simulated_date: simDate }); }}>Apply</button>
           <button className="rounded-lg border border-border px-3 py-2 text-xs font-semibold"
-            onClick={() => { setSimDate(""); save.mutate({ simulated_date: null }); }}>Clear</button>
+            onClick={() => { simDateBuffer.clear(); save.mutate({ simulated_date: null }); }}>Clear</button>
         </div>
       </section>
 
