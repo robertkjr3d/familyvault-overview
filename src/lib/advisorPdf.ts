@@ -591,10 +591,17 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
     // figure alongside it, even though a categorized breakdown alone
     // doesn't make the total obvious at a glance. Both rows use the same
     // swatch+label alignment as the categories above for visual consistency.
+    // Total Assets deliberately uses near-black, not colorPrimary — with
+    // property's own donut-slice color also being a dark blue (see
+    // NET_WORTH_CATEGORY_COLORS), a colorPrimary swatch here read as if it
+    // were another category slice rather than a grand total (real user
+    // report, Aug 18 2026). Liabilities keeps colorLiability since red
+    // doesn't collide with any category color and clearly signals "debt."
+    const colorTotalNeutral = rgb(0.15, 0.15, 0.18);
     legendY -= 6;
-    drawLegendRow(legendY, colorPrimary, `Total Assets: ${fmtMoneyForPdf(totalAssets, "SGD")}`, {
+    drawLegendRow(legendY, colorTotalNeutral, `Total Assets: ${fmtMoneyForPdf(totalAssets, "SGD")}`, {
       bold: true,
-      textColor: colorPrimary,
+      textColor: colorTotalNeutral,
     });
     if (data.netWorth.totalLiabilities > 0) {
       legendY -= legendRowHeight;
