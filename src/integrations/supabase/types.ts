@@ -453,6 +453,7 @@ export type Database = {
           beneficiary: string | null
           also_covers: string[]
           surrender_value: number | null
+          surrender_value_date: string | null
           external_url: string | null
         }
         Insert: {
@@ -487,6 +488,7 @@ export type Database = {
           beneficiary?: string | null
           also_covers?: string[]
           surrender_value?: number | null
+          surrender_value_date?: string | null
           external_url?: string | null
         }
         Update: {
@@ -521,6 +523,7 @@ export type Database = {
           beneficiary?: string | null
           also_covers?: string[]
           surrender_value?: number | null
+          surrender_value_date?: string | null
           external_url?: string | null
         }
         Relationships: [
