@@ -13,7 +13,15 @@ import { useAppStore } from "@/lib/store";
 import { addDays, format, parseISO } from "date-fns";
 import { buildUpcomingItems, computeNextOccurrence } from "@/lib/alerts";
 import type { UpcomingItem } from "@/lib/alerts";
-import { freqTimesPerYear, propertyTotalCosts, insuranceMonthly, investmentPremiumMonthly, insurancePayoutMonthly, investmentPayoutMonthly } from "@/lib/lifetimeChartMath";
+import {
+  freqTimesPerYear,
+  propertyTotalCosts,
+  insuranceMonthly,
+  investmentPremiumMonthly,
+  insurancePayoutMonthly,
+  investmentPayoutMonthly,
+  isSurrenderValueVested,
+} from "@/lib/lifetimeChartMath";
 import type { LineItem } from "@/lib/lifetimeChartMath";
 import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check, Info, Gem, Heart, Wallet, Package } from "lucide-react";
 import { useState, useRef, useEffect, lazy, Suspense, type ReactNode } from "react";
@@ -261,7 +269,15 @@ queryClient.invalidateQueries({ queryKey: ["app_settings", activeHouseholdId] })
 const propertyTotals = groupByCurrency(properties, (p: any) => p.current_value);
 const investmentTotals = groupByCurrency(investments, (i: any) => i.current_value);
 const otherAssetsTotals = groupByCurrency(otherAssets, (a: any) => a.estimated_value);
-const insuranceSurrenderTotals = groupByCurrency(insurance, (p: any) => p.surrender_value);
+// Only counts a policy's surrender value once it's actually vested/accessible
+// (isSurrenderValueVested — no date set behaves exactly as before, always
+// counted). A policy with e.g. a 3-year premium-paying period whose capital
+// only becomes guaranteed at the end of year 3 correctly contributes $0 here
+// until that date, instead of being counted as liquid net worth it doesn't
+// actually have access to yet.
+const insuranceSurrenderTotals = groupByCurrency(insurance, (p: any) =>
+  isSurrenderValueVested(p, today) ? p.surrender_value : 0,
+);
 const loanTotals = groupByCurrency(loans, (l: any) => l.balance);
 // Liquid savings and CPF are split from the full savings array so both
 // are independently FX-inclusive — this is also what the Emergency Fund

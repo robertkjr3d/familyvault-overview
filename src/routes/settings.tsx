@@ -6,11 +6,13 @@ import { toast } from "sonner";
 import { useMembers } from "@/hooks/useMembers";
 import { useAppStore } from "@/lib/store";
 import { Trash2 } from "lucide-react";
-import { fmtMoney, convertToSgd } from "@/lib/format";
+import { fmtMoney, fmtDate, convertToSgd } from "@/lib/format";
 import { isCpfAccountType } from "@/lib/options";
 import { recordConfigs } from "@/lib/recordConfigs";
 import { purgeDocumentsFor } from "@/lib/mutations";
 import { useFxRates } from "@/hooks/useFxRates";
+import { useToday } from "@/lib/today";
+import { isSurrenderValueVested } from "@/lib/lifetimeChartMath";
 import { runFullExport, runFullBackupZip } from "@/lib/fullExport";
 import { createDemoHousehold } from "@/lib/householdInvites";
 import { useCurrentRole } from "@/lib/useCurrentRole";
@@ -52,6 +54,13 @@ function SettingsPage() {
   const [generatingFullExport, setGeneratingFullExport] = useState(false);
   const [generatingFullBackup, setGeneratingFullBackup] = useState(false);
   const { data: fxRates } = useFxRates();
+  // Estate Summary doc generator (exportAssetSummaryDocx, defined below)
+  // reads this via closure — it's an async event handler, not a hook, so it
+  // can't call useToday() itself. Matches the household dashboard and
+  // Insurance page: respects Test Mode's simulated date (see line ~950's own
+  // "the whole app behaves as if today were the date you pick"), and is what
+  // lets isSurrenderValueVested agree on this exact policy everywhere.
+  const { today } = useToday();
 
   const { data: settings } = useQuery({
     queryKey: ["app_settings", activeHouseholdId],
@@ -345,6 +354,13 @@ function SettingsPage() {
         const sgd = convertToSgd(Number(amount), cur, fxRates);
         return sgd != null ? `${base} (≈ ${fmtMoney(sgd)})` : `${base} (rate unavailable)`;
       }
+      // Matches insurance.tsx's own treatment for a not-yet-vested policy, so
+      // this doc's itemized row never contradicts its own Total row above it.
+      function surrenderCell(p: any): string {
+        if (p.surrender_value == null) return "—";
+        if (isSurrenderValueVested(p, today)) return fmtMoneyFx(p.surrender_value, p.currency);
+        return `From ${fmtDate(p.surrender_value_date)}`;
+      }
 
       const children: any[] = [];
 
@@ -365,12 +381,16 @@ function SettingsPage() {
       // Net Worth Breakdown — including insurance SURRENDER value (the cash
       // value if cancelled today) as an asset, not sum assured (a payout/
       // coverage amount, not counted toward net worth anywhere in this app).
+      // isSurrenderValueVested keeps this doc consistent with the dashboard
+      // for a policy whose capital isn't guaranteed/accessible yet (see
+      // lib/lifetimeChartMath.ts) — a null surrender_value_date (every
+      // policy entered before this field existed) behaves exactly as before.
       const totalAssetsVal =
         properties.reduce((s: number, p: any) => s + toSgd(p.current_value, p.currency, `${ownerLabel(p.member_id)} — ${p.name ?? "Property"}`), 0) +
         investments.reduce((s: number, i: any) => s + toSgd(i.current_value, i.currency, `${ownerLabel(i.member_id)} — ${i.name ?? "Investment"}`), 0) +
         savings.reduce((s: number, a: any) => s + toSgd(a.balance, a.currency, `${ownerLabel(a.member_id)} — ${a.institution ?? "Savings"}`), 0) +
         otherAssets.reduce((s: number, a: any) => s + toSgd(a.estimated_value, a.currency, `${ownerLabel(a.member_id)} — ${a.name ?? "Other asset"}`), 0) +
-        insurance.reduce((s: number, p: any) => s + toSgd(p.surrender_value, p.currency, `${ownerLabel(p.member_id)} — ${p.name ?? "Insurance"} (surrender value)`), 0);
+        insurance.reduce((s: number, p: any) => s + (isSurrenderValueVested(p, today) ? toSgd(p.surrender_value, p.currency, `${ownerLabel(p.member_id)} — ${p.name ?? "Insurance"} (surrender value)`) : 0), 0);
       const totalLiabilitiesVal = loans.reduce((s: number, l: any) => s + toSgd(l.balance, l.currency, `${ownerLabel(l.member_id)} — ${l.bank ?? "Loan"}`), 0);
 
       children.push(new Paragraph({ text: "Household Summary", heading: HeadingLevel.HEADING_1 }));
@@ -402,7 +422,7 @@ function SettingsPage() {
           ownInv.reduce((s: number, i: any) => s + toSgd(i.current_value, i.currency, `${label} — ${i.name ?? "Investment"}`), 0) +
           ownSav.reduce((s: number, a: any) => s + toSgd(a.balance, a.currency, `${label} — ${a.institution ?? "Savings"}`), 0) +
           ownOther.reduce((s: number, a: any) => s + toSgd(a.estimated_value, a.currency, `${label} — ${a.name ?? "Other asset"}`), 0) +
-          ownIns.reduce((s: number, p: any) => s + toSgd(p.surrender_value, p.currency, `${label} — ${p.name ?? "Insurance"} (surrender value)`), 0);
+          ownIns.reduce((s: number, p: any) => s + (isSurrenderValueVested(p, today) ? toSgd(p.surrender_value, p.currency, `${label} — ${p.name ?? "Insurance"} (surrender value)`) : 0), 0);
         const ownLiabilitiesSgd = ownLoans.reduce((s: number, l: any) => s + toSgd(l.balance, l.currency, `${label} — ${l.bank ?? "Loan"}`), 0);
         children.push(makeTable(
           ["", "Amount (SGD)"],
@@ -499,8 +519,8 @@ function SettingsPage() {
           children.push(new Paragraph({ text: "Insurance Policies", heading: HeadingLevel.HEADING_2 }));
           children.push(makeTable(
             ["Policy", "Provider", "Sum assured", "Surrender value", "Beneficiary"],
-            ownIns.map((p: any) => [p.name ?? "—", p.provider || "—", fmtMoneyFx(p.sum_assured, p.currency), fmtMoneyFx(p.surrender_value, p.currency), p.beneficiary || "—"]),
-            ["Total", "", "", fmtMoney(ownIns.reduce((s: number, p: any) => s + toSgd(p.surrender_value, p.currency, `${label} — ${p.name ?? "Insurance"} (surrender value)`), 0)), ""],
+            ownIns.map((p: any) => [p.name ?? "—", p.provider || "—", fmtMoneyFx(p.sum_assured, p.currency), surrenderCell(p), p.beneficiary || "—"]),
+            ["Total", "", "", fmtMoney(ownIns.reduce((s: number, p: any) => s + (isSurrenderValueVested(p, today) ? toSgd(p.surrender_value, p.currency, `${label} — ${p.name ?? "Insurance"} (surrender value)`) : 0), 0)), ""],
           ));
           children.push(new Paragraph({ text: "" }));
           children.push(new Paragraph({

@@ -23,6 +23,8 @@ import { ReminderButton } from "@/components/ReminderButton";
 import { RemindersList } from "@/components/RemindersList";
 import { computeNextOccurrence } from "@/lib/alerts";
 import { useEntityCounts } from "@/lib/useEntityCounts";
+import { useToday } from "@/lib/today";
+import { isSurrenderValueVested } from "@/lib/lifetimeChartMath";
 import { useFxRates } from "@/hooks/useFxRates";
 import { getAdvisorNotesForHousehold } from "@/lib/advisorAccess";
 
@@ -175,6 +177,13 @@ function InsuranceRow({
   // not the manually-set next_due_date field, which no longer drives alerts.
   const nextDue = computeNextOccurrence(p.start_date, p.frequency, p.end_date, new Date());
 
+  // Test-Mode-aware (not the raw `new Date()` above — that's pre-existing,
+  // unrelated behavior for the "next due" alert). This one specifically must
+  // respect the simulated date, since it needs to agree with the dashboard's
+  // own net worth figure (routes/index.tsx), which already does.
+  const { today } = useToday();
+  const surrenderVested = isSurrenderValueVested(p, today);
+
   const [cardOpen, setCardOpen] = useState(false);
   const [section, setSection] = useState<"notes" | "reminders" | "history" | "documents" | null>(null);
 
@@ -222,7 +231,11 @@ function InsuranceRow({
             {p.surrender_value != null && (
               <div className="mt-1 text-settled">
                 <div className="text-[10px] text-muted-foreground">Surrender value</div>
-                <div className="font-semibold">{fmtMoney(p.surrender_value, p.currency)}</div>
+                {surrenderVested ? (
+                  <div className="font-semibold">{fmtMoney(p.surrender_value, p.currency)}</div>
+                ) : (
+                  <div className="font-semibold">From {fmtDate(p.surrender_value_date)}</div>
+                )}
               </div>
             )}
           </div>
@@ -242,7 +255,22 @@ function InsuranceRow({
         </Section>
         {(p.payout_amount || p.payout_start_date || p.payout_end_date || p.beneficiary || p.surrender_value != null) && (
           <Section title="Payout">
-            {p.surrender_value != null && <FieldRow label="Surrender value (current)" value={fmtMoney(p.surrender_value, p.currency)} />}
+            {p.surrender_value != null && (
+              <FieldRow
+                label="Surrender value (current)"
+                value={
+                  surrenderVested
+                    ? fmtMoney(p.surrender_value, p.currency)
+                    : `${fmtMoney(0, p.currency)} (not yet vested)`
+                }
+              />
+            )}
+            {p.surrender_value != null && p.surrender_value_date && (
+              <FieldRow
+                label="Surrender value effective from"
+                value={fmtDate(p.surrender_value_date)}
+              />
+            )}
             {p.payout_amount && <FieldRow label="Payout amount (est.)" value={fmtMoney(p.payout_amount, p.currency)} />}
             {p.payout_start_date && <FieldRow label="Payout start" value={fmtDate(p.payout_start_date)} />}
             {p.payout_frequency && <FieldRow label="Payout frequency" value={freqLabel(p.payout_frequency)} />}
