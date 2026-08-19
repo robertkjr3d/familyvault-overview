@@ -9,6 +9,7 @@ import {
   investmentPremiumMonthly,
   insurancePayoutMonthly,
   investmentPayoutMonthly,
+  isSurrenderValueVested,
   projectLifetimeChart,
   type LifetimeProjectionInput,
 } from "./lifetimeChartMath";
@@ -117,23 +118,33 @@ describe("insuranceAnnual", () => {
 
 describe("investmentPremiumAnnual", () => {
   it("annualises a monthly ILP premium correctly", () => {
-    expect(investmentPremiumAnnual({ premium_amount: 500, premium_frequency: "monthly" })).toBe(6000);
+    expect(investmentPremiumAnnual({ premium_amount: 500, premium_frequency: "monthly" })).toBe(
+      6000,
+    );
   });
 
   it("annualises a quarterly ILP premium correctly", () => {
-    expect(investmentPremiumAnnual({ premium_amount: 1500, premium_frequency: "quarterly" })).toBe(6000);
+    expect(investmentPremiumAnnual({ premium_amount: 1500, premium_frequency: "quarterly" })).toBe(
+      6000,
+    );
   });
 
   it("annualises a semi-annual ILP premium correctly", () => {
-    expect(investmentPremiumAnnual({ premium_amount: 3000, premium_frequency: "semi-annual" })).toBe(6000);
+    expect(
+      investmentPremiumAnnual({ premium_amount: 3000, premium_frequency: "semi-annual" }),
+    ).toBe(6000);
   });
 
   it("returns the premium_amount as-is for annual frequency", () => {
-    expect(investmentPremiumAnnual({ premium_amount: 6000, premium_frequency: "annual" })).toBe(6000);
+    expect(investmentPremiumAnnual({ premium_amount: 6000, premium_frequency: "annual" })).toBe(
+      6000,
+    );
   });
 
   it("returns 0 for one-off ILP (single premium)", () => {
-    expect(investmentPremiumAnnual({ premium_amount: 10000, premium_frequency: "one-off" })).toBe(0);
+    expect(investmentPremiumAnnual({ premium_amount: 10000, premium_frequency: "one-off" })).toBe(
+      0,
+    );
     expect(investmentPremiumAnnual({ premium_amount: 10000, premium_frequency: "single" })).toBe(0);
   });
 
@@ -191,6 +202,10 @@ const base: LifetimeProjectionInput = {
   monthlyIncome: 0,
   monthlyExpenses: 0,
   startYear: 2030,
+  // Jan 1 of startYear — internally consistent with this fixture's own
+  // startYear (2030), not the unrelated TODAY constant above (2026, used by
+  // other tests in this file for a different purpose).
+  today: new Date("2030-01-01T00:00:00Z"),
   horizonYears: 3,
   retirementYear: null,
   cpfStartYear: null,
@@ -393,14 +408,16 @@ describe("projectLifetimeChart", () => {
     const result = projectLifetimeChart({
       ...base,
       horizonYears: 4,
-      insurance: [{
-        id: "i1",
-        name: "Term",
-        premium: 3_000,
-        frequency: "annual",
-        start_date: "2031-01-01",
-        end_date: "2032-12-31",
-      }],
+      insurance: [
+        {
+          id: "i1",
+          name: "Term",
+          premium: 3_000,
+          frequency: "annual",
+          start_date: "2031-01-01",
+          end_date: "2032-12-31",
+        },
+      ],
     });
     // 2030: before start → no premium
     expect(result[0].annualOut).toBe(0);
@@ -414,12 +431,14 @@ describe("projectLifetimeChart", () => {
   it("includes a monthly insurance premium at its annualised value", () => {
     const result = projectLifetimeChart({
       ...base,
-      insurance: [{
-        id: "i1",
-        name: "Medisave",
-        premium: 200,         // $200/month
-        frequency: "monthly",
-      }],
+      insurance: [
+        {
+          id: "i1",
+          name: "Medisave",
+          premium: 200, // $200/month
+          frequency: "monthly",
+        },
+      ],
     });
     // $200/month * 12 = $2,400/year
     expect(result[0].annualOut).toBe(2_400);
@@ -431,36 +450,40 @@ describe("projectLifetimeChart", () => {
     const result = projectLifetimeChart({
       ...base,
       horizonYears: 4,
-      insurance: [{
-        id: "i1",
-        name: "Annuity",
-        payout_amount: 12_000,
-        payout_frequency: "annual",
-        payout_start_date: "2031-01-01",
-        payout_end_date: "2032-12-31",
-      }],
+      insurance: [
+        {
+          id: "i1",
+          name: "Annuity",
+          payout_amount: 12_000,
+          payout_frequency: "annual",
+          payout_start_date: "2031-01-01",
+          payout_end_date: "2032-12-31",
+        },
+      ],
     });
-    expect(result[0].annualIn).toBe(0);       // 2030: before payout
-    expect(result[1].annualIn).toBe(12_000);  // 2031: payout starts
-    expect(result[2].annualIn).toBe(12_000);  // 2032
-    expect(result[3].annualIn).toBe(0);       // 2033: after payout end
+    expect(result[0].annualIn).toBe(0); // 2030: before payout
+    expect(result[1].annualIn).toBe(12_000); // 2031: payout starts
+    expect(result[2].annualIn).toBe(12_000); // 2032
+    expect(result[3].annualIn).toBe(0); // 2033: after payout end
   });
 
   it("adds a one-off insurance payout only in the exact payout year", () => {
     const result = projectLifetimeChart({
       ...base,
       horizonYears: 3,
-      insurance: [{
-        id: "i1",
-        name: "Critical Illness",
-        payout_amount: 100_000,
-        payout_frequency: "one-off",
-        payout_start_date: "2031-06-01",
-      }],
+      insurance: [
+        {
+          id: "i1",
+          name: "Critical Illness",
+          payout_amount: 100_000,
+          payout_frequency: "one-off",
+          payout_start_date: "2031-06-01",
+        },
+      ],
     });
-    expect(result[0].annualIn).toBe(0);        // 2030: not yet
-    expect(result[1].annualIn).toBe(100_000);  // 2031: one-off fires
-    expect(result[2].annualIn).toBe(0);        // 2032: gone
+    expect(result[0].annualIn).toBe(0); // 2030: not yet
+    expect(result[1].annualIn).toBe(100_000); // 2031: one-off fires
+    expect(result[2].annualIn).toBe(0); // 2032: gone
   });
 
   // ── Investment growth ─────────────────────────────────────────────────────
@@ -469,8 +492,10 @@ describe("projectLifetimeChart", () => {
     const result = projectLifetimeChart({
       ...base,
       horizonYears: 2,
-      sgdInvestments: [{ id: "inv1", name: "Unit Trust", current_value: 100_000, group_name: "Unit Trusts" }],
-      investmentGrowthRate: 0.10,
+      sgdInvestments: [
+        { id: "inv1", name: "Unit Trust", current_value: 100_000, group_name: "Unit Trusts" },
+      ],
+      investmentGrowthRate: 0.1,
     });
     // Year 1: growth = 100_000 * 10% = 10_000
     expect(result[0].investGrowth).toBe(10_000);
@@ -481,13 +506,15 @@ describe("projectLifetimeChart", () => {
   it("does not apply investment growth to ILP/Endowment (handled via premium/payout instead)", () => {
     const result = projectLifetimeChart({
       ...base,
-      sgdInvestments: [{
-        id: "ilp1",
-        name: "AIA Elite",
-        current_value: 100_000,
-        group_name: "ILP (Investment-Linked Policy)",
-      }],
-      investmentGrowthRate: 0.10,
+      sgdInvestments: [
+        {
+          id: "ilp1",
+          name: "AIA Elite",
+          current_value: 100_000,
+          group_name: "ILP (Investment-Linked Policy)",
+        },
+      ],
+      investmentGrowthRate: 0.1,
     });
     // ILPs must NOT compound via investGrowth
     expect(result[0].investGrowth).toBe(0);
@@ -499,7 +526,7 @@ describe("projectLifetimeChart", () => {
     const result = projectLifetimeChart({
       ...base,
       sgdSavings: [{ id: "s1", institution: "DBS Multiplier", balance: 100_000, interest_rate: 3 }],
-      investmentGrowthRate: 0.10, // should be ignored for this account
+      investmentGrowthRate: 0.1, // should be ignored for this account
     });
     // 3% of 100_000 = 3_000
     expect(result[0].investGrowth).toBe(3_000);
@@ -511,7 +538,7 @@ describe("projectLifetimeChart", () => {
     const result = projectLifetimeChart({
       ...base,
       sgdSavings: [{ id: "s1", institution: "Emergency Fund", balance: 50_000, interest_rate: 0 }],
-      investmentGrowthRate: 0.10,
+      investmentGrowthRate: 0.1,
     });
     // 0% rate → no growth, regardless of investmentGrowthRate
     expect(result[0].investGrowth).toBe(0);
@@ -535,9 +562,9 @@ describe("projectLifetimeChart", () => {
       horizonYears: 3,
       plannedEvents: [{ year: 2031, type: "inflow", amount: 50_000, label: "Bonus" }],
     });
-    expect(result[0].annualIn).toBe(0);       // 2030
-    expect(result[1].annualIn).toBe(50_000);  // 2031
-    expect(result[2].annualIn).toBe(0);       // 2032
+    expect(result[0].annualIn).toBe(0); // 2030
+    expect(result[1].annualIn).toBe(50_000); // 2031
+    expect(result[2].annualIn).toBe(0); // 2032
   });
 
   it("deducts a planned outflow event from annualIn in the correct year", () => {
@@ -546,9 +573,9 @@ describe("projectLifetimeChart", () => {
       horizonYears: 3,
       plannedEvents: [{ year: 2032, type: "outflow", amount: 30_000, label: "Car" }],
     });
-    expect(result[0].annualOut).toBe(0);       // 2030
-    expect(result[1].annualOut).toBe(0);       // 2031
-    expect(result[2].annualOut).toBe(30_000);  // 2032
+    expect(result[0].annualOut).toBe(0); // 2030
+    expect(result[1].annualOut).toBe(0); // 2031
+    expect(result[2].annualOut).toBe(30_000); // 2032
   });
 
   it("marks a planned event year with an event label", () => {
@@ -613,14 +640,16 @@ describe("projectLifetimeChart", () => {
       properties: [{ id: "p1", name: "HDB", monthly_rent: 1_000, current_value: 500_000 }],
       propertyAppreciationRate: 0.03,
       sgdSavings: [{ id: "s1", institution: "DBS", balance: 200_000, interest_rate: 2 }],
-      insurance: [{
-        id: "ins1",
-        name: "Annuity",
-        payout_amount: 6_000,
-        payout_frequency: "annual",
-        payout_start_date: "2030-01-01",
-        payout_end_date: "2032-12-31",
-      }],
+      insurance: [
+        {
+          id: "ins1",
+          name: "Annuity",
+          payout_amount: 6_000,
+          payout_frequency: "annual",
+          payout_start_date: "2030-01-01",
+          payout_end_date: "2032-12-31",
+        },
+      ],
     };
     const result = projectLifetimeChart(input);
     result.forEach((d) => {
@@ -634,19 +663,23 @@ describe("projectLifetimeChart", () => {
       ...base,
       monthlyExpenses: 4_000,
       loans: [{ id: "l1", bank: "OCBC", monthly_payment: 1_500 }],
-      insurance: [{
-        id: "ins1",
-        name: "Term Life",
-        premium: 200,
-        frequency: "monthly",
-      }],
-      properties: [{
-        id: "p1",
-        name: "Condo",
-        cost_management: 150,
-        cost_maintenance: 100,
-        current_value: 800_000,
-      }],
+      insurance: [
+        {
+          id: "ins1",
+          name: "Term Life",
+          premium: 200,
+          frequency: "monthly",
+        },
+      ],
+      properties: [
+        {
+          id: "p1",
+          name: "Condo",
+          cost_management: 150,
+          cost_maintenance: 100,
+          current_value: 800_000,
+        },
+      ],
     };
     const result = projectLifetimeChart(input);
     result.forEach((d) => {
@@ -758,12 +791,20 @@ describe("insurancePayoutMonthly", () => {
   });
 
   it("returns monthly amount for a monthly payout", () => {
-    const ins = { payout_amount: 500, payout_frequency: "monthly", payout_start_date: "2025-01-01" };
+    const ins = {
+      payout_amount: 500,
+      payout_frequency: "monthly",
+      payout_start_date: "2025-01-01",
+    };
     expect(insurancePayoutMonthly(ins, TODAY)).toBe(500);
   });
 
   it("divides quarterly payout by 3", () => {
-    const ins = { payout_amount: 900, payout_frequency: "quarterly", payout_start_date: "2025-01-01" };
+    const ins = {
+      payout_amount: 900,
+      payout_frequency: "quarterly",
+      payout_start_date: "2025-01-01",
+    };
     expect(insurancePayoutMonthly(ins, TODAY)).toBeCloseTo(300, 1);
   });
 
@@ -779,12 +820,20 @@ describe("insurancePayoutMonthly", () => {
 
   it("counts a one-off payout only in its exact calendar month", () => {
     // June 2026 — same month as TODAY
-    const ins = { payout_amount: 50000, payout_frequency: "one-off", payout_start_date: "2026-06-15" };
+    const ins = {
+      payout_amount: 50000,
+      payout_frequency: "one-off",
+      payout_start_date: "2026-06-15",
+    };
     expect(insurancePayoutMonthly(ins, TODAY)).toBe(50000);
   });
 
   it("returns 0 for a one-off payout in a different month", () => {
-    const ins = { payout_amount: 50000, payout_frequency: "one-off", payout_start_date: "2026-05-01" };
+    const ins = {
+      payout_amount: 50000,
+      payout_frequency: "one-off",
+      payout_start_date: "2026-05-01",
+    };
     expect(insurancePayoutMonthly(ins, TODAY)).toBe(0);
   });
 
@@ -795,12 +844,16 @@ describe("insurancePayoutMonthly", () => {
   });
 
   it("returns 0 when payout_amount is 0 or missing", () => {
-    expect(insurancePayoutMonthly({ payout_amount: 0, payout_start_date: "2025-01-01" }, TODAY)).toBe(0);
+    expect(
+      insurancePayoutMonthly({ payout_amount: 0, payout_start_date: "2025-01-01" }, TODAY),
+    ).toBe(0);
     expect(insurancePayoutMonthly({ payout_start_date: "2025-01-01" }, TODAY)).toBe(0);
   });
 
   it("returns 0 when payout_start_date is missing", () => {
-    expect(insurancePayoutMonthly({ payout_amount: 5000, payout_frequency: "annual" }, TODAY)).toBe(0);
+    expect(insurancePayoutMonthly({ payout_amount: 5000, payout_frequency: "annual" }, TODAY)).toBe(
+      0,
+    );
   });
 });
 
@@ -834,17 +887,160 @@ describe("investmentPayoutMonthly", () => {
   });
 
   it("counts a one-off ILP payout only in the exact calendar month", () => {
-    const inv = { ...ACTIVE_ILP_PAYOUT, payout_frequency: "one-off", payout_start_date: "2026-06-10" };
+    const inv = {
+      ...ACTIVE_ILP_PAYOUT,
+      payout_frequency: "one-off",
+      payout_start_date: "2026-06-10",
+    };
     expect(investmentPayoutMonthly(inv, TODAY)).toBe(12000);
   });
 
   it("returns 0 for a one-off ILP payout in a different month", () => {
-    const inv = { ...ACTIVE_ILP_PAYOUT, payout_frequency: "one-off", payout_start_date: "2026-05-01" };
+    const inv = {
+      ...ACTIVE_ILP_PAYOUT,
+      payout_frequency: "one-off",
+      payout_start_date: "2026-05-01",
+    };
     expect(investmentPayoutMonthly(inv, TODAY)).toBe(0);
   });
 
   it("works for Endowment group_name", () => {
     const inv = { ...ACTIVE_ILP_PAYOUT, group_name: "Endowment" };
     expect(investmentPayoutMonthly(inv, TODAY)).toBe(1000);
+  });
+});
+
+// ─── isSurrenderValueVested ────────────────────────────────────────────────
+describe("isSurrenderValueVested", () => {
+  it("returns true when no surrender_value_date is set (original, always-counted behaviour)", () => {
+    expect(isSurrenderValueVested({ surrender_value: 300_000 }, TODAY)).toBe(true);
+  });
+
+  it("returns true when the date is in the past", () => {
+    expect(isSurrenderValueVested({ surrender_value_date: "2020-01-01" }, TODAY)).toBe(true);
+  });
+
+  it("returns true when the date is exactly today", () => {
+    expect(isSurrenderValueVested({ surrender_value_date: "2026-06-22" }, TODAY)).toBe(true);
+  });
+
+  it("returns false when the date is in the future", () => {
+    expect(isSurrenderValueVested({ surrender_value_date: "2030-01-01" }, TODAY)).toBe(false);
+  });
+});
+
+// ─── projectLifetimeChart — surrender value vesting ────────────────────────
+describe("projectLifetimeChart — surrender value vesting", () => {
+  it("with no surrender_value_date, the value stays flat every year (unchanged existing behaviour)", () => {
+    const input: LifetimeProjectionInput = {
+      ...base,
+      startingNetWorth: 300_000,
+      insurance: [{ id: "ins1", name: "Endowment", surrender_value: 300_000 }],
+    };
+    const result = projectLifetimeChart(input);
+    result.forEach((d) => expect(d.netWorth).toBe(300_000));
+    result.forEach((d) =>
+      expect(d.inflowItems.some((it) => it.label.includes("surrender value"))).toBe(false),
+    );
+  });
+
+  it("injects a one-time step-up in the exact year a future surrender_value_date falls, not before", () => {
+    // startYear 2030, vests 2031 — must NOT be in startingNetWorth (caller's job,
+    // simulated here by leaving it out), and must appear exactly once, in 2031.
+    const input: LifetimeProjectionInput = {
+      ...base,
+      startingNetWorth: 0,
+      horizonYears: 3,
+      insurance: [
+        {
+          id: "ins1",
+          name: "Endowment",
+          surrender_value: 300_000,
+          surrender_value_date: "2031-06-01",
+        },
+      ],
+    };
+    const result = projectLifetimeChart(input);
+    const y2030 = result.find((d) => d.year === 2030)!;
+    const y2031 = result.find((d) => d.year === 2031)!;
+    const y2032 = result.find((d) => d.year === 2032)!;
+    expect(y2030.netWorth).toBe(0);
+    expect(y2031.netWorth).toBe(300_000);
+    expect(y2032.netWorth).toBe(300_000); // stays flat after vesting, same as the no-date case
+    expect(y2031.inflowItems.some((it) => it.label.includes("surrender value available"))).toBe(
+      true,
+    );
+    expect(y2030.inflowItems.some((it) => it.label.includes("surrender value available"))).toBe(
+      false,
+    );
+  });
+
+  it("does not double-count when the policy vests later in the same calendar year as startYear (today mid-year, not yet vested)", () => {
+    // today = 2030-01-01 (from base), vests 2030-06-01 — later the same year.
+    // startingNetWorth must NOT include it yet (caller's job); the chart must
+    // inject it exactly once, in startYear itself, not lose it forever.
+    const input: LifetimeProjectionInput = {
+      ...base,
+      startingNetWorth: 0,
+      insurance: [
+        {
+          id: "ins1",
+          name: "Endowment",
+          surrender_value: 300_000,
+          surrender_value_date: "2030-06-01",
+        },
+      ],
+    };
+    const result = projectLifetimeChart(input);
+    const y2030 = result.find((d) => d.year === 2030)!;
+    expect(y2030.netWorth).toBe(300_000);
+    expect(y2030.inflowItems.some((it) => it.label.includes("surrender value available"))).toBe(
+      true,
+    );
+  });
+
+  it("does not double-count when the policy already vested earlier in the same calendar year as startYear", () => {
+    // today = 2030-01-01 per base's `today`, but override to mid-year so an
+    // earlier-this-year vest date is genuinely in the past relative to "today".
+    const input: LifetimeProjectionInput = {
+      ...base,
+      today: new Date("2030-06-15T00:00:00Z"),
+      // Simulates the caller (routes/index.tsx) already having included it,
+      // since isSurrenderValueVested(this policy, this today) is true.
+      startingNetWorth: 300_000,
+      insurance: [
+        {
+          id: "ins1",
+          name: "Endowment",
+          surrender_value: 300_000,
+          surrender_value_date: "2030-01-10",
+        },
+      ],
+    };
+    const result = projectLifetimeChart(input);
+    const y2030 = result.find((d) => d.year === 2030)!;
+    // Must stay at 300k, not 600k — the step-up must NOT fire a second time.
+    expect(y2030.netWorth).toBe(300_000);
+    expect(y2030.inflowItems.some((it) => it.label.includes("surrender value available"))).toBe(
+      false,
+    );
+  });
+
+  it("ignores a surrender_value_date outside the projection horizon without erroring", () => {
+    const input: LifetimeProjectionInput = {
+      ...base,
+      startingNetWorth: 0,
+      horizonYears: 3, // covers 2030-2032
+      insurance: [
+        {
+          id: "ins1",
+          name: "Endowment",
+          surrender_value: 300_000,
+          surrender_value_date: "2050-01-01",
+        },
+      ],
+    };
+    const result = projectLifetimeChart(input);
+    result.forEach((d) => expect(d.netWorth).toBe(0));
   });
 });

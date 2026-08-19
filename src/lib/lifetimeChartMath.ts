@@ -139,6 +139,25 @@ export function investmentPremiumMonthly(inv: any, today: Date): number {
  * Recurring payouts contribute every month between payout_start_date and
  * payout_end_date (or indefinitely if no end date).
  */
+/**
+ * Whether a policy's surrender value counts as accessible net worth "today".
+ * No date set (surrender_value_date null/undefined) is the original,
+ * always-counted behaviour — every policy entered before this field existed
+ * keeps working exactly as before. A date on or before today also counts as
+ * vested (fully accessible). A future date means the capital isn't
+ * guaranteed/accessible yet (e.g. a 3-year-pay policy whose cash value is $0
+ * until the 3rd year completes) — it should NOT count until that date passes.
+ *
+ * Shared verbatim by routes/index.tsx (today's exact net worth/KPI/breakdown
+ * figures) and projectLifetimeChart below (the step-up injection) so the two
+ * can never silently disagree about the same policy — see the Aug 19 2026
+ * surrender-value-date feature notes in memory for the full design writeup.
+ */
+export function isSurrenderValueVested(ins: any, today: Date): boolean {
+  if (!ins.surrender_value_date) return true;
+  return new Date(ins.surrender_value_date).getTime() <= today.getTime();
+}
+
 export function insurancePayoutMonthly(ins: any, today: Date): number {
   const amount = Number(ins.payout_amount) || 0;
   if (!amount || !ins.payout_start_date) return 0;
@@ -201,6 +220,18 @@ export type LifetimeProjectionInput = {
   monthlyIncome: number;
   monthlyExpenses: number;
   startYear: number;
+  // Deliberate, narrow exception to this file's "every 'today' comes in via
+  // startYear" rule (see the block comment above projectLifetimeChart): a
+  // policy's surrender-value vesting is a one-time, irreversible event whose
+  // exact timing relative to today decides whether it's already happened —
+  // year-only granularity can't tell "vests later this same year" apart from
+  // "already vested earlier this same year" and would either silently lose
+  // the money forever or double-count it. Everything else in this file (premium
+  // schedules, payout date ranges, etc.) stays year-only on purpose — those
+  // recur across many years, so a one-year rounding difference is a minor,
+  // self-correcting discrepancy, not a permanent silent loss like this one
+  // would be. See isSurrenderValueVested above for the shared comparison.
+  today: Date;
   horizonYears: number;
   retirementYear: number | null;
   cpfStartYear: number | null;
@@ -224,7 +255,7 @@ export type LifetimeProjectionInput = {
 export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint[] {
   const {
     properties, loans, insurance, sgdSavings, sgdInvestments, plannedEvents,
-    startingNetWorth, monthlyIncome, monthlyExpenses, startYear, horizonYears,
+    startingNetWorth, monthlyIncome, monthlyExpenses, startYear, today, horizonYears,
     retirementYear, cpfStartYear, cpfMonthlyPayout,
     investmentGrowthRate, propertyAppreciationRate, inflationRate,
   } = input;
@@ -367,6 +398,23 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
           annualIn += annualPayoutAmt;
           inflowItems.push({ label: `${ins.name ?? "Insurance"} payout`, amount: annualPayoutAmt, href: insHref, timesPerYear: 1 });
           events.push(`${ins.name ?? "Insurance"} payout +${fmt(annualPayoutAmt)}`);
+        }
+      }
+      // Surrender value vesting — startingNetWorth already correctly excludes
+      // an unvested policy's surrender value (isSurrenderValueVested, same
+      // check routes/index.tsx uses), so inject it here as a one-time step-up
+      // in the exact year it vests. wasVestedAtStart (not just a year compare)
+      // is what correctly distinguishes "vests later this same year" (fires
+      // once, here) from "already vested earlier this same year" (already
+      // counted in startingNetWorth — must NOT fire again).
+      if (ins.surrender_value && ins.surrender_value_date) {
+        const vestYear = new Date(ins.surrender_value_date).getFullYear();
+        const wasVestedAtStart = isSurrenderValueVested(ins, today);
+        if (vestYear === y && !wasVestedAtStart) {
+          const amt = Number(ins.surrender_value);
+          annualIn += amt;
+          inflowItems.push({ label: `${ins.name ?? "Insurance"} surrender value available`, amount: amt, href: insHref, timesPerYear: 1 });
+          events.push(`${ins.name ?? "Insurance"} surrender value available (+${fmt(amt)})`);
         }
       }
     }

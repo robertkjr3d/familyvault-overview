@@ -133,6 +133,18 @@ export const recordConfigs: Record<string, RecordConfig> = {
       // 💰 Payout
       { key: "sum_assured", label: "Sum assured", type: "number", money: true, section: "💰 Payout" },
       { key: "surrender_value", label: "Surrender value (current)", type: "number", money: true, placeholder: "Cash value if you cancel today — counts toward Net Worth", section: "💰 Payout" },
+      // Native date inputs don't render `placeholder` (see components/ui/date-input.tsx —
+      // DateInput never passes it through), so the label has to carry the full meaning on
+      // its own: leave blank if the surrender value is already accessible now; set a future
+      // date only if the capital becomes guaranteed/withdrawable later (e.g. once a fixed
+      // premium-paying period completes) — until then it won't count toward Net Worth.
+      {
+        key: "surrender_value_date",
+        label: "Surrender value effective from (leave blank if already accessible)",
+        type: "date",
+        showIf: (v) => v.surrender_value != null && v.surrender_value !== "",
+        section: "💰 Payout",
+      },
       { key: "payout_amount", label: "Payout amount (est.)", type: "number", money: true, section: "💰 Payout" },
       { key: "payout_start_date", label: "Payout start date", type: "date", section: "💰 Payout" },
       { key: "payout_frequency", label: "Payout frequency", type: "select", options: INSURANCE_FREQ, section: "💰 Payout" },

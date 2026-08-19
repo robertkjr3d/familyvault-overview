@@ -78,7 +78,7 @@ const FREQ_MONTHS: Record<string, number> = {
  * read back the same local y/m/d components the Date was built from, so the
  * string is identical no matter which timezone the runtime executes in.
  */
-function formatDateOnly(d: Date): string {
+export function formatDateOnly(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
