@@ -7,6 +7,7 @@ import {
   XAxis, YAxis, Tooltip, ReferenceLine, CartesianGrid,
 } from "recharts";
 import { useToday } from "@/lib/today";
+import { formatDateOnly } from "@/lib/alerts";
 import { YearDetailPanel } from "@/components/YearDetailPanel";
 import { type ChartPoint, fmt, projectLifetimeChart } from "@/lib/lifetimeChartMath";
 
@@ -36,6 +37,15 @@ export function LifetimeChart({
   const { today } = useToday();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const startYear = today.getFullYear();
+  // Stable string form of `today` for the useMemo dep below — `today` itself
+  // is a fresh Date object on most renders (useToday doesn't memoize the
+  // non-simulated new Date() case), so using it directly as a dependency
+  // would make this memo recompute every render instead of only when the
+  // calendar day (or the simulated date) actually changes. startYear alone
+  // isn't enough here — see the today: Date field's comment in
+  // lifetimeChartMath.ts for why surrender-value vesting specifically needs
+  // day precision, not just the year.
+  const todayISO = formatDateOnly(today);
 
   // Read settings — use != null so 0 is respected, not treated as falsy
   const retirementYear = appSettings?.retirement_year != null ? Number(appSettings.retirement_year) : null;
@@ -103,17 +113,23 @@ export function LifetimeChart({
   ].filter(Boolean) as string[];
   const hasForeignExcluded = excludedCategories.length > 0;
 
+  // `today` (raw Date) is deliberately used inside the callback via closure
+  // but excluded from the deps array below — todayISO (a stable primitive)
+  // is used as its proxy instead, since `today` gets a new object reference
+  // on most renders and would defeat the memoization. See the todayISO
+  // comment above for the full reasoning.
   const data = useMemo<ChartPoint[]>(() => projectLifetimeChart({
     properties: sgdProperties, loans: sgdLoans, insurance: sgdInsurance, sgdSavings, sgdInvestments, plannedEvents,
-    startingNetWorth, monthlyIncome, monthlyExpenses, startYear,
+    startingNetWorth, monthlyIncome, monthlyExpenses, startYear, today,
     horizonYears: clampedHorizon, retirementYear, cpfStartYear, cpfMonthlyPayout,
     investmentGrowthRate, propertyAppreciationRate, inflationRate,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [
     sgdProperties, sgdLoans, sgdInsurance, sgdSavings, sgdInvestments, plannedEvents,
     startingNetWorth, monthlyIncome, monthlyExpenses,
     retirementYear, cpfStartYear, cpfMonthlyPayout,
     investmentGrowthRate, propertyAppreciationRate, inflationRate,
-    clampedHorizon, startYear,
+    clampedHorizon, startYear, todayISO,
   ]);
 
   const shortfallYear = data.find((d) => d.netWorth < 0) ?? null;
