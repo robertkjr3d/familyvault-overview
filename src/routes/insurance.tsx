@@ -2,7 +2,11 @@ import { useState } from "react";
 import { Bell } from "lucide-react";
 import { AddRecordFab } from "@/components/AddRecordFab";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { differenceInDays, parseISO } from "date-fns";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppStore } from "@/lib/store";
 import { MemberFilterBar } from "@/components/MemberFilterBar";
@@ -32,6 +36,98 @@ export const Route = createFileRoute("/insurance")({
   component: InsurancePage,
   head: () => ({ meta: [{ title: "Insurance — FamilyHub SG" }] }),
 });
+
+// Same staleness math as investments.tsx's staleDays — kept as a separate
+// local copy (not extracted to a shared helper) to match that file's existing
+// pattern rather than introducing a new shared module for one function.
+function staleDays(lastUpdated: string | null | undefined) {
+  if (!lastUpdated) return null;
+  try {
+    return differenceInDays(new Date(), parseISO(lastUpdated));
+  } catch {
+    return null;
+  }
+}
+
+// Mirrors investments.tsx's UpdateValueInline exactly (same permission-safe
+// .select("id").maybeSingle() check per the RLS-silent-zero-rows gotcha), but
+// updates surrender_value + surrender_value_last_updated on insurance_policies
+// instead of current_value + last_updated on investments.
+function UpdateSurrenderValueInline({
+  id,
+  current,
+}: {
+  id: string;
+  current: number | null | undefined;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(current?.toString() ?? "");
+  const qc = useQueryClient();
+
+  async function save() {
+    const num = Number(val.replace(/,/g, ""));
+    if (isNaN(num)) {
+      toast.error("Enter a valid number");
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const { data, error } = await supabase
+      .from("insurance_policies")
+      .update({ surrender_value: num, surrender_value_last_updated: today } as any)
+      .eq("id", id)
+      .select("id")
+      .maybeSingle();
+    if (error) toast.error(error.message);
+    else if (!data) toast.error("Nothing was updated — you may not have permission to edit this.");
+    else {
+      toast.success("Surrender value updated");
+      qc.invalidateQueries({ queryKey: ["insurance"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      setEditing(false);
+    }
+  }
+
+  if (!editing) {
+    return (
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-7 px-2 text-xs"
+        onClick={(e) => {
+          e.stopPropagation();
+          setEditing(true);
+        }}
+      >
+        Update
+      </Button>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
+      <Input
+        type="text"
+        inputMode="decimal"
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        className="h-7 w-24 text-xs"
+        autoFocus
+      />
+      <Button type="button" size="sm" className="h-7 px-2 text-xs" onClick={save}>
+        Save
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="h-7 px-1.5 text-xs"
+        onClick={() => setEditing(false)}
+      >
+        ✕
+      </Button>
+    </div>
+  );
+}
 
 function InsurancePage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
@@ -84,8 +180,10 @@ function InsurancePage() {
   const categories = INSURANCE_CATEGORIES.filter((c) => presentCategories.has(c));
   // If the only policy in the selected category gets deleted (or filters change),
   // fall back to "All" rather than silently rendering a blank page.
-  const effectiveCategory = selectedCategory === "All" || categories.includes(selectedCategory) ? selectedCategory : "All";
-  const visibleCategories = effectiveCategory === "All" ? categories : categories.filter((c) => c === effectiveCategory);
+  const effectiveCategory =
+    selectedCategory === "All" || categories.includes(selectedCategory) ? selectedCategory : "All";
+  const visibleCategories =
+    effectiveCategory === "All" ? categories : categories.filter((c) => c === effectiveCategory);
 
   return (
     <div className="space-y-4">
@@ -98,14 +196,18 @@ function InsurancePage() {
       <MemberFilterBar table="insurance_policies" />
       <p className="text-[11px] text-muted-foreground">
         Looking for ILP or Endowment policies? Those are tracked under{" "}
-        <a href="/investments" className="font-semibold text-primary underline">Investments</a>.
+        <a href="/investments" className="font-semibold text-primary underline">
+          Investments
+        </a>
+        .
       </p>
 
       {categories.length > 1 && (
         <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
           {["All", ...categories].map((cat) => {
             const isSelected = effectiveCategory === cat;
-            const count = cat === "All" ? items.length : items.filter((i: any) => i.category === cat).length;
+            const count =
+              cat === "All" ? items.length : items.filter((i: any) => i.category === cat).length;
             return (
               <button
                 key={cat}
@@ -132,7 +234,9 @@ function InsurancePage() {
 
       {visibleCategories.map((cat) => (
         <section key={cat}>
-          <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">{cat}</h2>
+          <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            {cat}
+          </h2>
           <div className="space-y-3">
             {sortByStatus(items.filter((i: any) => i.category === cat)).map((p: any) => (
               <InsuranceRow
@@ -164,10 +268,20 @@ function AlertLabel({ text }: { text: string }) {
 }
 
 function InsuranceRow({
-  p, onStatus, onDelete, reminderCount, historyCount, documentsCount, advisorNotes,
+  p,
+  onStatus,
+  onDelete,
+  reminderCount,
+  historyCount,
+  documentsCount,
+  advisorNotes,
 }: {
-  p: any; onStatus: (s: any) => void; onDelete: () => void;
-  reminderCount: number; historyCount: number; documentsCount: number;
+  p: any;
+  onStatus: (s: any) => void;
+  onDelete: () => void;
+  reminderCount: number;
+  historyCount: number;
+  documentsCount: number;
   advisorNotes: any[];
 }) {
   const edit = useEditRecord("insurance_policies", p);
@@ -184,14 +298,23 @@ function InsuranceRow({
   const { today } = useToday();
   const surrenderVested = isSurrenderValueVested(p, today);
 
+  // Only meaningful once vested — pre-vesting the card shows "From <date>",
+  // not a live dollar figure, so there's nothing to flag as stale yet.
+  const surrenderStale = staleDays(p.surrender_value_last_updated);
+  const isSurrenderStale = surrenderVested && surrenderStale != null && surrenderStale >= 90;
+
   const [cardOpen, setCardOpen] = useState(false);
-  const [section, setSection] = useState<"notes" | "reminders" | "history" | "documents" | null>(null);
+  const [section, setSection] = useState<"notes" | "reminders" | "history" | "documents" | null>(
+    null,
+  );
 
   function openSection(target: "notes" | "reminders" | "history" | "documents") {
     setCardOpen(true);
     setSection(target);
     setTimeout(() => {
-      document.getElementById(`${target}-${p.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document
+        .getElementById(`${target}-${p.id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 60);
   }
 
@@ -227,12 +350,37 @@ function InsuranceRow({
         rightMeta={
           <div className="text-right text-xs">
             <div className="text-muted-foreground">Premium</div>
-            <div className="font-bold">{fmtMoney(p.premium, p.currency)}/{freqLabel(p.frequency)}</div>
+            <div className="font-bold">
+              {fmtMoney(p.premium, p.currency)}/{freqLabel(p.frequency)}
+            </div>
             {p.surrender_value != null && (
               <div className="mt-1 text-settled">
-                <div className="text-[10px] text-muted-foreground">Surrender value</div>
+                <div className="text-[10px] text-muted-foreground">
+                  Surrender value
+                  {isSurrenderStale && (
+                    <span className="ml-1 text-review" title={`Updated ${surrenderStale}d ago`}>
+                      ⚠
+                    </span>
+                  )}
+                </div>
                 {surrenderVested ? (
-                  <div className="font-semibold">{fmtMoney(p.surrender_value, p.currency)}</div>
+                  <>
+                    <div className="font-semibold">{fmtMoney(p.surrender_value, p.currency)}</div>
+                    <div className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
+                      {isSurrenderStale && (
+                        <span
+                          className="inline-block h-1.5 w-1.5 rounded-full"
+                          style={{ background: "hsl(38 95% 55%)" }}
+                          aria-label="Surrender value is stale"
+                        />
+                      )}
+                      <span>
+                        {p.surrender_value_last_updated
+                          ? `Updated: ${fmtDate(p.surrender_value_last_updated)}`
+                          : "Never updated"}
+                      </span>
+                    </div>
+                  </>
                 ) : (
                   <div className="font-semibold">From {fmtDate(p.surrender_value_date)}</div>
                 )}
@@ -250,10 +398,16 @@ function InsuranceRow({
           <FieldRow label={<AlertLabel text="End" />} value={fmtDate(p.end_date)} />
           <FieldRow
             label={<AlertLabel text="Next premium due" />}
-            value={nextDue ? <span className="font-semibold text-primary">{fmtDate(nextDue)}</span> : "—"}
+            value={
+              nextDue ? <span className="font-semibold text-primary">{fmtDate(nextDue)}</span> : "—"
+            }
           />
         </Section>
-        {(p.payout_amount || p.payout_start_date || p.payout_end_date || p.beneficiary || p.surrender_value != null) && (
+        {(p.payout_amount ||
+          p.payout_start_date ||
+          p.payout_end_date ||
+          p.beneficiary ||
+          p.surrender_value != null) && (
           <Section title="Payout">
             {p.surrender_value != null && (
               <FieldRow
@@ -271,10 +425,35 @@ function InsuranceRow({
                 value={fmtDate(p.surrender_value_date)}
               />
             )}
-            {p.payout_amount && <FieldRow label="Payout amount (est.)" value={fmtMoney(p.payout_amount, p.currency)} />}
-            {p.payout_start_date && <FieldRow label="Payout start" value={fmtDate(p.payout_start_date)} />}
-            {p.payout_frequency && <FieldRow label="Payout frequency" value={freqLabel(p.payout_frequency)} />}
-            {p.payout_end_date && <FieldRow label="Payout end" value={fmtDate(p.payout_end_date)} />}
+            {p.surrender_value != null && surrenderVested && (
+              <div className="mt-1 flex items-center justify-between gap-2 rounded-md border border-dashed border-border/60 px-3 py-2">
+                <div className="text-xs">
+                  {isSurrenderStale ? (
+                    <span className="font-medium" style={{ color: "hsl(38 95% 35%)" }}>
+                      ● Surrender value is {surrenderStale}d old — update it
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">Update surrender value</span>
+                  )}
+                </div>
+                <UpdateSurrenderValueInline id={p.id} current={p.surrender_value} />
+              </div>
+            )}
+            {p.payout_amount && (
+              <FieldRow
+                label="Payout amount (est.)"
+                value={fmtMoney(p.payout_amount, p.currency)}
+              />
+            )}
+            {p.payout_start_date && (
+              <FieldRow label="Payout start" value={fmtDate(p.payout_start_date)} />
+            )}
+            {p.payout_frequency && (
+              <FieldRow label="Payout frequency" value={freqLabel(p.payout_frequency)} />
+            )}
+            {p.payout_end_date && (
+              <FieldRow label="Payout end" value={fmtDate(p.payout_end_date)} />
+            )}
             {p.beneficiary && <FieldRow label="Beneficiary" value={p.beneficiary} />}
           </Section>
         )}
@@ -286,12 +465,7 @@ function InsuranceRow({
           open={section === "notes"}
           onOpenChange={(o) => setSection(o ? "notes" : null)}
         >
-          <NotesEditor
-            table="insurance_policies"
-            queryKey="insurance"
-            id={p.id}
-            value={p.notes}
-          />
+          <NotesEditor table="insurance_policies" queryKey="insurance" id={p.id} value={p.notes} />
         </CollapsibleSection>
 
         {advisorNotes.length > 0 && (
@@ -306,7 +480,9 @@ function InsuranceRow({
                 <div key={n.id} className="rounded-lg border border-primary/15 bg-primary/5 p-2.5">
                   <p className="text-[10px] font-semibold text-primary/80">{n.advisorName}</p>
                   <p className="whitespace-pre-wrap text-sm text-foreground">{n.note}</p>
-                  <p className="mt-1 text-[10px] text-muted-foreground">Updated {fmtDate(n.updatedAt)}</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    Updated {fmtDate(n.updatedAt)}
+                  </p>
                 </div>
               ))}
             </div>
