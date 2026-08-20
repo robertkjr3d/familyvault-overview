@@ -454,7 +454,9 @@ export type Database = {
           also_covers: string[]
           surrender_value: number | null
           surrender_value_date: string | null
+          surrender_value_last_updated: string | null
           external_url: string | null
+          hidden_from_advisors: boolean
         }
         Insert: {
           id?: string
@@ -489,7 +491,9 @@ export type Database = {
           also_covers?: string[]
           surrender_value?: number | null
           surrender_value_date?: string | null
+          surrender_value_last_updated?: string | null
           external_url?: string | null
+          hidden_from_advisors?: boolean
         }
         Update: {
           id?: string
@@ -524,7 +528,9 @@ export type Database = {
           also_covers?: string[]
           surrender_value?: number | null
           surrender_value_date?: string | null
+          surrender_value_last_updated?: string | null
           external_url?: string | null
+          hidden_from_advisors?: boolean
         }
         Relationships: [
           {
@@ -722,6 +728,7 @@ export type Database = {
           currency: string | null
           last_updated: string | null
           external_url: string | null
+          hidden_from_advisors: boolean
         }
         Insert: {
           id?: string
@@ -752,6 +759,7 @@ export type Database = {
           currency?: string | null
           last_updated?: string | null
           external_url?: string | null
+          hidden_from_advisors?: boolean
         }
         Update: {
           id?: string
@@ -782,6 +790,7 @@ export type Database = {
           currency?: string | null
           last_updated?: string | null
           external_url?: string | null
+          hidden_from_advisors?: boolean
         }
         Relationships: [
           {
@@ -878,6 +887,7 @@ export type Database = {
           loan_end_date: string | null
           external_url: string | null
           currency: string | null
+          hidden_from_advisors: boolean
         }
         Insert: {
           id?: string
@@ -904,6 +914,7 @@ export type Database = {
           loan_end_date?: string | null
           external_url?: string | null
           currency?: string | null
+          hidden_from_advisors?: boolean
         }
         Update: {
           id?: string
@@ -930,6 +941,7 @@ export type Database = {
           loan_end_date?: string | null
           external_url?: string | null
           currency?: string | null
+          hidden_from_advisors?: boolean
         }
         Relationships: [
           {
@@ -1149,6 +1161,7 @@ export type Database = {
           mortgage_end_date: string | null
           beneficiary: string | null
           external_url: string | null
+          hidden_from_advisors: boolean
         }
         Insert: {
           id?: string
@@ -1186,6 +1199,7 @@ export type Database = {
           mortgage_end_date?: string | null
           beneficiary?: string | null
           external_url?: string | null
+          hidden_from_advisors?: boolean
         }
         Update: {
           id?: string
@@ -1223,6 +1237,7 @@ export type Database = {
           mortgage_end_date?: string | null
           beneficiary?: string | null
           external_url?: string | null
+          hidden_from_advisors?: boolean
         }
         Relationships: [
           {
