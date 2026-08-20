@@ -10,6 +10,7 @@ import {
   STALE_AFTER_DAYS,
   ADVISOR_ALERT_HORIZON_DAYS,
 } from "@/lib/advisorAccess";
+import { PolicyChartToggle, PolicyChartCompareSection } from "@/components/PolicyChart";
 import {
   generateAndDownloadAdvisorPdf,
   groupAdvisorRecords,
@@ -49,8 +50,9 @@ export function AdvisorHome() {
 
   const clients = data?.clients ?? [];
   const selectedClient =
-    clients.find((c) => c.householdId === selected?.householdId && c.memberId === selected?.memberId) ??
-    null;
+    clients.find(
+      (c) => c.householdId === selected?.householdId && c.memberId === selected?.memberId,
+    ) ?? null;
 
   return (
     <div className="min-h-screen bg-background pb-16">
@@ -190,7 +192,9 @@ function RecordNote({
       }),
     onSuccess: () => {
       setEditing(false);
-      void queryClient.invalidateQueries({ queryKey: ["advisor-client-records", householdId, memberId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["advisor-client-records", householdId, memberId],
+      });
     },
     onError: (err: unknown) => {
       toast.error(err instanceof Error ? err.message : "Unable to save note.");
@@ -201,7 +205,9 @@ function RecordNote({
     mutationFn: () => deleteAdvisorNote({ data: { noteId: record.noteId } }),
     onSuccess: () => {
       setDraft("");
-      void queryClient.invalidateQueries({ queryKey: ["advisor-client-records", householdId, memberId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["advisor-client-records", householdId, memberId],
+      });
     },
     onError: (err: unknown) => {
       toast.error(err instanceof Error ? err.message : "Unable to remove note.");
@@ -353,7 +359,9 @@ function NetWorthDonut({
             })}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center px-2 text-center">
-          <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">Net Worth</p>
+          <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+            Net Worth
+          </p>
           <p className="text-sm font-bold leading-tight">{fmtMoney(netWorth, "SGD")}</p>
         </div>
       </div>
@@ -369,7 +377,9 @@ function NetWorthDonut({
                   backgroundColor: `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`,
                 }}
               />
-              <span className="truncate text-muted-foreground">{NET_WORTH_CATEGORY_LABELS[s.key] ?? s.key}</span>
+              <span className="truncate text-muted-foreground">
+                {NET_WORTH_CATEGORY_LABELS[s.key] ?? s.key}
+              </span>
               <span className="ml-auto shrink-0 font-medium text-foreground">{pct}%</span>
             </div>
           );
@@ -380,7 +390,9 @@ function NetWorthDonut({
           </p>
         )}
         {totalLiabilities > 0 && (
-          <p className="text-xs font-semibold text-urgent">Liabilities: {fmtMoney(totalLiabilities, "SGD")}</p>
+          <p className="text-xs font-semibold text-urgent">
+            Liabilities: {fmtMoney(totalLiabilities, "SGD")}
+          </p>
         )}
       </div>
     </div>
@@ -462,7 +474,12 @@ function ClientDetail({
 
   const records = data?.records ?? [];
   const upcomingPremiums = data?.upcomingPremiums ?? [];
-  const hiddenCounts = data?.hiddenCounts ?? { insurance: 0, investments: 0, property: 0, loans: 0 };
+  const hiddenCounts = data?.hiddenCounts ?? {
+    insurance: 0,
+    investments: 0,
+    property: 0,
+    loans: 0,
+  };
   // Same shared function advisorPdf.ts uses — same order, same subgroups,
   // same subtotals, so this screen and the downloaded PDF can't disagree.
   const categoryGroups = groupAdvisorRecords(records);
@@ -533,24 +550,33 @@ function ClientDetail({
           </h3>
           <div className="space-y-1.5">
             {upcomingPremiums.map((item) => (
-              <div key={`${item.recordId}-${item.date}`} className="flex items-center justify-between gap-3 text-sm">
+              <div
+                key={`${item.recordId}-${item.date}`}
+                className="flex items-center justify-between gap-3 text-sm"
+              >
                 <span className="flex min-w-0 items-center gap-1.5">
                   {item.overdue && (
                     <span className="shrink-0 rounded-full bg-urgent/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-urgent">
                       Overdue
                     </span>
                   )}
-                  <span className={`truncate ${item.overdue ? "font-medium text-urgent" : "text-foreground"}`}>
+                  <span
+                    className={`truncate ${item.overdue ? "font-medium text-urgent" : "text-foreground"}`}
+                  >
                     {item.label}
                   </span>
                 </span>
                 <span className="flex shrink-0 items-center gap-2">
                   {item.amount != null && (
-                    <span className={`text-xs font-semibold ${item.overdue ? "text-urgent" : "text-foreground"}`}>
+                    <span
+                      className={`text-xs font-semibold ${item.overdue ? "text-urgent" : "text-foreground"}`}
+                    >
                       {fmtMoney(item.amount, item.currency)}
                     </span>
                   )}
-                  <span className={`text-xs ${item.overdue ? "text-urgent" : "text-muted-foreground"}`}>
+                  <span
+                    className={`text-xs ${item.overdue ? "text-urgent" : "text-muted-foreground"}`}
+                  >
                     {fmtDate(item.date)}
                   </span>
                 </span>
@@ -568,8 +594,13 @@ function ClientDetail({
         </p>
       )}
 
+      <PolicyChartCompareSection householdId={householdId} memberId={memberId} />
+
       {categoryGroups.map((catGroup) => (
-        <section key={catGroup.category} className="mb-4 rounded-2xl border border-border bg-card p-4">
+        <section
+          key={catGroup.category}
+          className="mb-4 rounded-2xl border border-border bg-card p-4"
+        >
           <div className="mb-2 flex items-baseline justify-between">
             <h3 className="text-sm font-bold">{catGroup.categoryTitle}</h3>
             {hiddenCounts[catGroup.category as keyof typeof hiddenCounts] > 0 && (
@@ -595,7 +626,10 @@ function ClientDetail({
                     Date.now() - new Date(r.last_updated).getTime() >
                       STALE_AFTER_DAYS * 24 * 60 * 60 * 1000;
                   return (
-                    <div key={r.record_id} className="rounded-lg bg-background/50 px-3 py-2 text-sm">
+                    <div
+                      key={r.record_id}
+                      className="rounded-lg bg-background/50 px-3 py-2 text-sm"
+                    >
                       <div className="flex items-center justify-between gap-3">
                         <p className="min-w-0 flex-1 truncate font-medium">{r.record_name}</p>
                         <p className="shrink-0 font-semibold">{formatAdvisorAmount(r)}</p>
@@ -626,6 +660,13 @@ function ClientDetail({
                         {isStale ? " · please confirm this is still accurate" : ""}
                       </p>
                       <RecordNote record={r} householdId={householdId} memberId={memberId} />
+                      {catGroup.category === "insurance" && (
+                        <PolicyChartToggle
+                          insurancePolicyId={(r as any).record_id}
+                          householdId={householdId}
+                          memberId={memberId}
+                        />
+                      )}
                     </div>
                   );
                 })}
