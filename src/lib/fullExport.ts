@@ -109,6 +109,7 @@ const SHEET_OVERRIDES: Record<string, Record<string, number>> = {
     frequency: 16,
     payout_frequency: 15,
     beneficiary: 12,
+    surrender_value_last_updated: 10,
   },
   savings_accounts: {
     institution: 20,

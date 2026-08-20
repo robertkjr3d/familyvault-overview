@@ -62,11 +62,57 @@ const upsertNotePayloadSchema = z.object({
   memberId: z.string().uuid(),
   recordCategory: z.enum(["insurance", "investments"]),
   recordId: z.string().uuid(),
-  note: z.string().trim().min(1, "Note can't be empty.").max(2000, "Keep it under 2000 characters."),
+  note: z
+    .string()
+    .trim()
+    .min(1, "Note can't be empty.")
+    .max(2000, "Keep it under 2000 characters."),
 });
 
 const deleteNotePayloadSchema = z.object({
   noteId: z.string().uuid(),
+});
+
+// The flexible phase shape behind the FA policy-chart feature — one
+// element per pay-in or pay-out stretch. Deliberately NOT modeling
+// specific product types (term/whole-life/endowment/annuity/ILP) in the
+// schema — every one of those reduces to an ordered list of these, per
+// the research written up in areas/advisor-dashboard.md. endAge equal to
+// startAge represents a single lump-sum point (e.g. an endowment
+// maturity payout) rather than a recurring stretch.
+const chartPhaseSchema = z.object({
+  id: z.string(),
+  label: z.string().trim().min(1).max(60),
+  direction: z.enum(["in", "out"]),
+  startAge: z.number().int().min(0).max(120),
+  endAge: z.number().int().min(0).max(120),
+  amount: z.number().min(0),
+  frequency: z.enum(["monthly", "annual", "lump-sum"]),
+});
+
+const getChartPayloadSchema = z.object({
+  householdId: z.string().uuid(),
+  memberId: z.string().uuid(),
+  insurancePolicyId: z.string().uuid(),
+});
+
+const upsertChartPayloadSchema = z.object({
+  householdId: z.string().uuid(),
+  memberId: z.string().uuid(),
+  insurancePolicyId: z.string().uuid(),
+  title: z.string().trim().max(80).optional(),
+  phases: z
+    .array(chartPhaseSchema)
+    .max(20, "That's a lot of phases — split into a second chart if you need more."),
+});
+
+const deleteChartPayloadSchema = z.object({
+  chartId: z.string().uuid(),
+});
+
+const listChartsPayloadSchema = z.object({
+  householdId: z.string().uuid(),
+  memberId: z.string().uuid(),
 });
 
 const cancelInvitePayloadSchema = z.object({
@@ -283,7 +329,10 @@ export const acceptPendingAdvisorInvitesForCurrentUser = createServerFn({ method
       // re-inviting with a different member selection can't leave stale
       // grants behind from an earlier invite.
       const linkId = (linkRow as any).id;
-      await supabaseAdmin.from("advisor_link_members" as any).delete().eq("link_id", linkId);
+      await supabaseAdmin
+        .from("advisor_link_members" as any)
+        .delete()
+        .eq("link_id", linkId);
       const memberIds: string[] = invite.member_ids ?? [];
       if (memberIds.length > 0) {
         const { error: membersError } = await supabaseAdmin
@@ -355,7 +404,10 @@ export const updateAdvisorPermissions = createServerFn({ method: "POST" })
     // Full replace, same reasoning as the accept-invite path: whatever
     // member set is passed in becomes the complete grant, never additive.
     const linkId = (updated as any).id;
-    await supabaseAdmin.from("advisor_link_members" as any).delete().eq("link_id", linkId);
+    await supabaseAdmin
+      .from("advisor_link_members" as any)
+      .delete()
+      .eq("link_id", linkId);
     const { error: membersError } = await supabaseAdmin
       .from("advisor_link_members" as any)
       .insert(data.memberIds.map((memberId) => ({ link_id: linkId, member_id: memberId })));
@@ -506,7 +558,10 @@ export const getAdvisorNetworthSummary = createServerFn({ method: "POST" })
       const byType = (t: string) => rowsForScope.filter((r) => r.source_type === t);
       const savingsRows = byType("savings");
 
-      const propertyValue = totalWithFx(groupByCurrency(byType("property"), (r) => r.amount), fxRates);
+      const propertyValue = totalWithFx(
+        groupByCurrency(byType("property"), (r) => r.amount),
+        fxRates,
+      );
       const investmentsValue = totalWithFx(
         groupByCurrency(byType("investment"), (r) => r.amount),
         fxRates,
@@ -519,7 +574,10 @@ export const getAdvisorNetworthSummary = createServerFn({ method: "POST" })
         fxRates,
       );
       const cpfValue = totalWithFx(
-        groupByCurrency(savingsRows.filter((r) => isCpfAccountType(r.account_type)), (r) => r.amount),
+        groupByCurrency(
+          savingsRows.filter((r) => isCpfAccountType(r.account_type)),
+          (r) => r.amount,
+        ),
         fxRates,
       );
       const savingsValue = liquidSavingsValue + cpfValue;
@@ -532,8 +590,15 @@ export const getAdvisorNetworthSummary = createServerFn({ method: "POST" })
         fxRates,
       );
       const totalAssets =
-        propertyValue + investmentsValue + savingsValue + otherAssetsValue + insuranceSurrenderValue;
-      const totalLiabilities = totalWithFx(groupByCurrency(byType("loan"), (r) => r.amount), fxRates);
+        propertyValue +
+        investmentsValue +
+        savingsValue +
+        otherAssetsValue +
+        insuranceSurrenderValue;
+      const totalLiabilities = totalWithFx(
+        groupByCurrency(byType("loan"), (r) => r.amount),
+        fxRates,
+      );
       const netWorth = totalAssets - totalLiabilities;
 
       return {
@@ -681,7 +746,9 @@ async function computeAdvisorUpcomingPremiums(
   for (const r of investmentRows) currencyByRecordId.set(r.id, r.currency ?? null);
 
   return items
-    .filter((i) => i.sourceType === "insurance_next_due" || i.sourceType === "investment_premium_due")
+    .filter(
+      (i) => i.sourceType === "insurance_next_due" || i.sourceType === "investment_premium_due",
+    )
     .filter((i) => !dismissedKeys.has(`${i.sourceType}::${i.recordId}::${i.date}`))
     .map((i) => ({
       recordId: i.recordId,
@@ -751,7 +818,9 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
       await Promise.all([
         supabase
           .from("insurance_policies" as any)
-          .select("id, name, premium, start_date, end_date, frequency, is_giro, member_id, currency")
+          .select(
+            "id, name, premium, start_date, end_date, frequency, is_giro, member_id, currency",
+          )
           .eq("household_id", data.householdId)
           .or(`member_id.eq.${data.memberId},member_id.is.null`),
         supabase
@@ -777,7 +846,9 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
       .eq("household_id", data.householdId);
     if (dismissedError) throw dismissedError;
     const dismissedKeys = new Set(
-      (dismissedRows ?? []).map((d: any) => `${d.source_type}::${d.record_id}::${d.dismissed_date}`),
+      (dismissedRows ?? []).map(
+        (d: any) => `${d.source_type}::${d.record_id}::${d.dismissed_date}`,
+      ),
     );
 
     const upcomingPremiums = await computeAdvisorUpcomingPremiums(
@@ -893,6 +964,195 @@ export const deleteAdvisorNote = createServerFn({ method: "POST" })
       .eq("id", data.noteId);
     if (error) throw error;
     return { ok: true };
+  });
+
+// ============================================================
+// FA policy-chart tool (client-illustration feature). Mirrors the
+// upsertAdvisorNote/deleteAdvisorNote pattern exactly: runs on the FA's
+// own RLS-scoped session, resolves link_id first, and lets
+// advisor_policy_charts' own RLS (has_advisor_access + ownership, see
+// migration 20260819070000) be the real gate rather than a manual check
+// here. FA-only — nothing here is ever readable from the household side.
+// ============================================================
+
+// Loads (or reports absent) the FA's own chart for one policy, plus the
+// raw policy fields and the member's birth_year needed to seed sensible
+// default phases client-side on first open. members has no advisor-facing
+// RLS (confirmed empirically — see the member-name lookup below in
+// listClientHouseholdsForAdvisor), so this uses the same targeted
+// supabaseAdmin lookup precedent already established there — scoped to
+// exactly one row, only reachable after the has_advisor_access-gated
+// queries above it have already proven this advisor may see this member.
+export const getAdvisorPolicyChart = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(getChartPayloadSchema)
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: link, error: linkError } = await supabase
+      .from("advisor_household_links" as any)
+      .select("id")
+      .eq("household_id", data.householdId)
+      .eq("advisor_user_id", userId)
+      .eq("status", "active")
+      .maybeSingle();
+    if (linkError) throw linkError;
+    if (!link) throw new Error("No active link to this household.");
+
+    // Base-table query (not the summary view) for the specific raw fields
+    // needed to seed default phases — same reasoning as
+    // getClientRecordsForAdvisor's own insuranceRows query above, and
+    // gated the same way: the member-aware advisor_select policy on
+    // insurance_policies is what makes this safe to query directly.
+    const { data: policy, error: policyError } = await supabase
+      .from("insurance_policies" as any)
+      .select(
+        "id, name, currency, premium, frequency, start_date, end_date, payout_amount, payout_frequency, payout_start_date, payout_end_date, surrender_value, surrender_value_date",
+      )
+      .eq("id", data.insurancePolicyId)
+      .eq("household_id", data.householdId)
+      .maybeSingle();
+    if (policyError) throw policyError;
+    if (!policy) throw new Error("Policy not found or not shared with you.");
+
+    const { data: chart, error: chartError } = await supabase
+      .from("advisor_policy_charts" as any)
+      .select("id, title, phases, updated_at")
+      .eq("link_id", (link as any).id)
+      .eq("insurance_policy_id", data.insurancePolicyId)
+      .maybeSingle();
+    if (chartError) throw chartError;
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: memberRow, error: memberError } = await supabaseAdmin
+      .from("members" as any)
+      .select("birth_year")
+      .eq("id", data.memberId)
+      .maybeSingle();
+    if (memberError) throw memberError;
+
+    const chartResult: {
+      id: string;
+      title: string | null;
+      phases: any[];
+      updated_at: string;
+    } | null = chart
+      ? {
+          id: (chart as any).id,
+          title: (chart as any).title,
+          phases: (chart as any).phases,
+          updated_at: (chart as any).updated_at,
+        }
+      : null;
+
+    return {
+      policy: policy as any,
+      chart: chartResult,
+      memberBirthYear: (memberRow as any)?.birth_year ?? null,
+    };
+  });
+
+// Upsert on the (link_id, insurance_policy_id) unique constraint — one
+// current chart per advisor per policy, same shape as advisor_record_notes.
+export const upsertAdvisorPolicyChart = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(upsertChartPayloadSchema)
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: link, error: linkError } = await supabase
+      .from("advisor_household_links" as any)
+      .select("id")
+      .eq("household_id", data.householdId)
+      .eq("advisor_user_id", userId)
+      .eq("status", "active")
+      .maybeSingle();
+    if (linkError) throw linkError;
+    if (!link) throw new Error("No active link to this household.");
+
+    const { data: saved, error } = await supabase
+      .from("advisor_policy_charts" as any)
+      .upsert(
+        {
+          link_id: (link as any).id,
+          household_id: data.householdId,
+          member_id: data.memberId,
+          advisor_user_id: userId,
+          insurance_policy_id: data.insurancePolicyId,
+          title: data.title ?? null,
+          phases: data.phases,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "link_id,insurance_policy_id" },
+      )
+      .select("id")
+      .maybeSingle();
+    if (error) throw error;
+    // Same "zero rows changed ≠ success" rule the rest of this file
+    // follows — an upsert blocked by RLS's WITH CHECK doesn't error, it
+    // just returns nothing.
+    if (!saved) throw new Error("Nothing was saved — you may not have permission to edit this.");
+    return { ok: true, chartId: (saved as any).id };
+  });
+
+// Ownership-only (no access re-check) — same reasoning as deleteAdvisorNote.
+export const deleteAdvisorPolicyChart = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(deleteChartPayloadSchema)
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    const { error } = await supabase
+      .from("advisor_policy_charts" as any)
+      .delete()
+      .eq("id", data.chartId);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+// For the compare view — every chart this advisor has saved for this
+// client, with the policy's own name/currency attached so the compare UI
+// can label each color without a second round trip per chart.
+export const listAdvisorPolicyCharts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(listChartsPayloadSchema)
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: link, error: linkError } = await supabase
+      .from("advisor_household_links" as any)
+      .select("id")
+      .eq("household_id", data.householdId)
+      .eq("advisor_user_id", userId)
+      .eq("status", "active")
+      .maybeSingle();
+    if (linkError) throw linkError;
+    if (!link) throw new Error("No active link to this household.");
+
+    const { data: charts, error } = await supabase
+      .from("advisor_policy_charts" as any)
+      .select("id, title, phases, insurance_policy_id, updated_at")
+      .eq("link_id", (link as any).id);
+    if (error) throw error;
+
+    const policyIds = [...new Set((charts ?? []).map((c: any) => c.insurance_policy_id))];
+    let policyById = new Map<string, { name: string; currency: string | null }>();
+    if (policyIds.length > 0) {
+      const { data: policies, error: policiesError } = await supabase
+        .from("insurance_policies" as any)
+        .select("id, name, currency")
+        .in("id", policyIds);
+      if (policiesError) throw policiesError;
+      policyById = new Map(
+        (policies ?? []).map((p: any) => [p.id, { name: p.name, currency: p.currency }]),
+      );
+    }
+
+    return (charts ?? []).map((c: any) => ({
+      id: c.id,
+      title: c.title,
+      phases: c.phases,
+      insurancePolicyId: c.insurance_policy_id,
+      policyName: policyById.get(c.insurance_policy_id)?.name ?? "Policy",
+      currency: policyById.get(c.insurance_policy_id)?.currency ?? null,
+      updatedAt: c.updated_at,
+    }));
   });
 
 // Household-side: every FA note on this household's records, with the
@@ -1150,7 +1410,9 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
               // the manual equivalent of what advisor_select's RLS check
               // does for every other read path, needed here specifically
               // because this function runs as supabaseAdmin.
-              const memberInsurance = memberInsuranceAll.filter((r: any) => !r.hidden_from_advisors);
+              const memberInsurance = memberInsuranceAll.filter(
+                (r: any) => !r.hidden_from_advisors,
+              );
               const memberInvestments = memberInvestmentsAll.filter(
                 (r: any) => !r.hidden_from_advisors,
               );
@@ -1173,7 +1435,12 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
                 dismissedKeys,
               );
 
-              const allRecords = [...memberInsurance, ...memberInvestments, ...memberProperty, ...memberLoans];
+              const allRecords = [
+                ...memberInsurance,
+                ...memberInvestments,
+                ...memberProperty,
+                ...memberLoans,
+              ];
               const staleCount = allRecords.filter(
                 (r: any) => r.updated_at && new Date(r.updated_at) < staleCutoff,
               ).length;
