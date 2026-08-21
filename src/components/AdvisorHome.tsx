@@ -820,9 +820,19 @@ function ClientDetail({
                         effectiveStatus={effectiveStatus}
                       />
                       <RecordNote record={r} householdId={householdId} memberId={memberId} />
-                      {catGroup.category === "insurance" && (
+                      {(catGroup.category === "insurance" ||
+                        // ILP/Endowment investments get the same chart —
+                        // they're the same premium/payout phase shape as
+                        // insurance, just filed under investments'
+                        // group_name. Same two group_name values alerts.ts
+                        // already checks for "is this ILP-like" — reused
+                        // here rather than re-deciding the list.
+                        (catGroup.category === "investments" &&
+                          (r.insurance_category === "ILP (Investment-Linked Policy)" ||
+                            r.insurance_category === "Endowment"))) && (
                         <PolicyChartToggle
-                          insurancePolicyId={(r as any).record_id}
+                          recordId={(r as any).record_id}
+                          recordCategory={catGroup.category as "insurance" | "investments"}
                           householdId={householdId}
                           memberId={memberId}
                           charts={charts}
