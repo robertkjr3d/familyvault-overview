@@ -105,13 +105,15 @@ const chartPhaseSchema = z.object({
 const getChartPayloadSchema = z.object({
   householdId: z.string().uuid(),
   memberId: z.string().uuid(),
-  insurancePolicyId: z.string().uuid(),
+  recordCategory: z.enum(["insurance", "investments"]),
+  recordId: z.string().uuid(),
 });
 
 const upsertChartPayloadSchema = z.object({
   householdId: z.string().uuid(),
   memberId: z.string().uuid(),
-  insurancePolicyId: z.string().uuid(),
+  recordCategory: z.enum(["insurance", "investments"]),
+  recordId: z.string().uuid(),
   title: z.string().trim().max(80).optional(),
   phases: z
     .array(chartPhaseSchema)
@@ -1051,14 +1053,15 @@ export const deleteAdvisorNote = createServerFn({ method: "POST" })
 // here. FA-only — nothing here is ever readable from the household side.
 // ============================================================
 
-// Loads (or reports absent) the FA's own chart for one policy, plus the
-// raw policy fields and the member's birth_year needed to seed sensible
-// default phases client-side on first open. members has no advisor-facing
-// RLS (confirmed empirically — see the member-name lookup below in
-// listClientHouseholdsForAdvisor), so this uses the same targeted
-// supabaseAdmin lookup precedent already established there — scoped to
-// exactly one row, only reachable after the has_advisor_access-gated
-// queries above it have already proven this advisor may see this member.
+// Loads (or reports absent) the FA's own chart for one record, plus the
+// raw fields (from whichever base table matches recordCategory) and the
+// member's birth_year needed to seed sensible default phases client-side
+// on first open. members has no advisor-facing RLS (confirmed empirically
+// — see the member-name lookup below in listClientHouseholdsForAdvisor),
+// so this uses the same targeted supabaseAdmin lookup precedent already
+// established there — scoped to exactly one row, only reachable after the
+// has_advisor_access-gated queries above it have already proven this
+// advisor may see this member.
 export const getAdvisorPolicyChart = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(getChartPayloadSchema)
@@ -1077,24 +1080,65 @@ export const getAdvisorPolicyChart = createServerFn({ method: "POST" })
     // Base-table query (not the summary view) for the specific raw fields
     // needed to seed default phases — same reasoning as
     // getClientRecordsForAdvisor's own insuranceRows query above, and
-    // gated the same way: the member-aware advisor_select policy on
-    // insurance_policies is what makes this safe to query directly.
-    const { data: policy, error: policyError } = await supabase
-      .from("insurance_policies" as any)
-      .select(
-        "id, name, currency, premium, frequency, start_date, end_date, payout_amount, payout_frequency, payout_start_date, payout_end_date, surrender_value, surrender_value_date",
-      )
-      .eq("id", data.insurancePolicyId)
-      .eq("household_id", data.householdId)
-      .maybeSingle();
-    if (policyError) throw new Error(policyError.message ?? "Something went wrong on the server.");
-    if (!policy) throw new Error("Policy not found or not shared with you.");
+    // gated the same way: the member-aware advisor_select policy on each
+    // table is what makes this safe to query directly. investments'
+    // field names differ from insurance_policies' (premium_amount vs
+    // premium, no surrender_value equivalent at all) — normalized into
+    // the one common shape buildDefaultPhases expects right here, so
+    // that function itself never needs to know which table a chart came
+    // from.
+    let rawPolicy: any;
+    if (data.recordCategory === "insurance") {
+      const { data: row, error: rowError } = await supabase
+        .from("insurance_policies" as any)
+        .select(
+          "id, name, currency, premium, frequency, start_date, end_date, payout_amount, payout_frequency, payout_start_date, payout_end_date, surrender_value, surrender_value_date",
+        )
+        .eq("id", data.recordId)
+        .eq("household_id", data.householdId)
+        .maybeSingle();
+      if (rowError) throw new Error(rowError.message ?? "Something went wrong on the server.");
+      rawPolicy = row;
+    } else {
+      const { data: row, error: rowError } = await supabase
+        .from("investments" as any)
+        .select(
+          "id, name, currency, premium_amount, premium_frequency, premium_start_date, premium_end_date, payout_amount, payout_frequency, payout_start_date, payout_end_date",
+        )
+        .eq("id", data.recordId)
+        .eq("household_id", data.householdId)
+        .maybeSingle();
+      if (rowError) throw new Error(rowError.message ?? "Something went wrong on the server.");
+      // investments has no surrender_value/surrender_value_date concept
+      // at all — buildDefaultPhases' lump-sum fallback simply never
+      // fires for these, which is correct: an ILP/Endowment either has a
+      // recurring payout modeled or the FA builds the chart from scratch.
+      const invRow = row as any;
+      rawPolicy = invRow
+        ? {
+            id: invRow.id,
+            name: invRow.name,
+            currency: invRow.currency,
+            premium: invRow.premium_amount,
+            frequency: invRow.premium_frequency,
+            start_date: invRow.premium_start_date,
+            end_date: invRow.premium_end_date,
+            payout_amount: invRow.payout_amount,
+            payout_frequency: invRow.payout_frequency,
+            payout_start_date: invRow.payout_start_date,
+            payout_end_date: invRow.payout_end_date,
+            surrender_value: null,
+            surrender_value_date: null,
+          }
+        : null;
+    }
+    if (!rawPolicy) throw new Error("Record not found or not shared with you.");
 
     const { data: chart, error: chartError } = await supabase
       .from("advisor_policy_charts" as any)
       .select("id, title, phases, updated_at")
       .eq("link_id", (link as any).id)
-      .eq("insurance_policy_id", data.insurancePolicyId)
+      .eq("record_id", data.recordId)
       .maybeSingle();
     if (chartError) throw new Error(chartError.message ?? "Something went wrong on the server.");
 
@@ -1121,14 +1165,14 @@ export const getAdvisorPolicyChart = createServerFn({ method: "POST" })
       : null;
 
     return {
-      policy: policy as any,
+      policy: rawPolicy as any,
       chart: chartResult,
       memberBirthYear: (memberRow as any)?.birth_year ?? null,
     };
   });
 
-// Upsert on the (link_id, insurance_policy_id) unique constraint — one
-// current chart per advisor per policy, same shape as advisor_record_notes.
+// Upsert on the (link_id, record_id) unique constraint — one current
+// chart per advisor per record, same shape as advisor_record_notes.
 export const upsertAdvisorPolicyChart = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(upsertChartPayloadSchema)
@@ -1152,12 +1196,13 @@ export const upsertAdvisorPolicyChart = createServerFn({ method: "POST" })
           household_id: data.householdId,
           member_id: data.memberId,
           advisor_user_id: userId,
-          insurance_policy_id: data.insurancePolicyId,
+          record_id: data.recordId,
+          record_category: data.recordCategory,
           title: data.title ?? null,
           phases: data.phases,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "link_id,insurance_policy_id" },
+        { onConflict: "link_id,record_id" },
       )
       .select("id")
       .maybeSingle();
@@ -1184,8 +1229,11 @@ export const deleteAdvisorPolicyChart = createServerFn({ method: "POST" })
   });
 
 // For the compare view — every chart this advisor has saved for this
-// client, with the policy's own name/currency attached so the compare UI
-// can label each color without a second round trip per chart.
+// client, with the record's own name/currency attached so the compare UI
+// can label each color without a second round trip per chart. Charts can
+// now come from either insurance_policies or investments, so names/
+// currencies are fetched per-category and merged — never assume a chart
+// is an insurance policy.
 export const listAdvisorPolicyCharts = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(listChartsPayloadSchema)
@@ -1203,31 +1251,52 @@ export const listAdvisorPolicyCharts = createServerFn({ method: "POST" })
 
     const { data: charts, error } = await supabase
       .from("advisor_policy_charts" as any)
-      .select("id, title, phases, insurance_policy_id, updated_at")
+      .select("id, title, phases, record_id, record_category, updated_at")
       .eq("link_id", (link as any).id);
     if (error) throw new Error(error.message ?? "Something went wrong on the server.");
 
-    const policyIds = [...new Set((charts ?? []).map((c: any) => c.insurance_policy_id))];
-    let policyById = new Map<string, { name: string; currency: string | null }>();
-    if (policyIds.length > 0) {
-      const { data: policies, error: policiesError } = await supabase
+    const insuranceIds = [
+      ...new Set(
+        (charts ?? [])
+          .filter((c: any) => c.record_category === "insurance")
+          .map((c: any) => c.record_id),
+      ),
+    ];
+    const investmentIds = [
+      ...new Set(
+        (charts ?? [])
+          .filter((c: any) => c.record_category === "investments")
+          .map((c: any) => c.record_id),
+      ),
+    ];
+    const nameById = new Map<string, { name: string; currency: string | null }>();
+    if (insuranceIds.length > 0) {
+      const { data: rows, error: e1 } = await supabase
         .from("insurance_policies" as any)
         .select("id, name, currency")
-        .in("id", policyIds);
-      if (policiesError)
-        throw new Error(policiesError.message ?? "Something went wrong on the server.");
-      policyById = new Map(
-        (policies ?? []).map((p: any) => [p.id, { name: p.name, currency: p.currency }]),
-      );
+        .in("id", insuranceIds);
+      if (e1) throw new Error(e1.message ?? "Something went wrong on the server.");
+      for (const r of rows ?? [])
+        nameById.set((r as any).id, { name: (r as any).name, currency: (r as any).currency });
+    }
+    if (investmentIds.length > 0) {
+      const { data: rows, error: e2 } = await supabase
+        .from("investments" as any)
+        .select("id, name, currency")
+        .in("id", investmentIds);
+      if (e2) throw new Error(e2.message ?? "Something went wrong on the server.");
+      for (const r of rows ?? [])
+        nameById.set((r as any).id, { name: (r as any).name, currency: (r as any).currency });
     }
 
     return (charts ?? []).map((c: any) => ({
       id: c.id,
       title: c.title,
       phases: c.phases,
-      insurancePolicyId: c.insurance_policy_id,
-      policyName: policyById.get(c.insurance_policy_id)?.name ?? "Policy",
-      currency: policyById.get(c.insurance_policy_id)?.currency ?? null,
+      recordId: c.record_id,
+      recordCategory: c.record_category,
+      policyName: nameById.get(c.record_id)?.name ?? "Policy",
+      currency: nameById.get(c.record_id)?.currency ?? null,
       updatedAt: c.updated_at,
     }));
   });
