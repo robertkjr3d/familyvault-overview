@@ -350,9 +350,18 @@ function InsuranceRow({
         rightMeta={
           <div className="text-right text-xs">
             <div className="text-muted-foreground">Premium</div>
-            <div className="font-bold">
+            <div className="font-bold text-urgent">
               {fmtMoney(p.premium, p.currency)}/{freqLabel(p.frequency)}
             </div>
+            {p.payout_amount != null && (
+              <div className="mt-0.5 text-settled">
+                <div className="text-[10px] text-muted-foreground">Payout</div>
+                <div className="font-semibold">
+                  {fmtMoney(p.payout_amount, p.currency)}
+                  {p.payout_frequency ? `/${freqLabel(p.payout_frequency)}` : ""}
+                </div>
+              </div>
+            )}
             {p.surrender_value != null && (
               <div className="mt-1 text-settled">
                 <div className="text-[10px] text-muted-foreground">
