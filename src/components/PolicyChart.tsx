@@ -28,19 +28,43 @@ import { fmtMoney } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-// Distinct, stable palette — cycled by index, same policy always gets the
-// same color within one compare session (order is stable: insertion order
-// of the charts array from listAdvisorPolicyCharts).
-const CHART_COLORS = [
-  "#2563eb",
-  "#dc2626",
-  "#16a34a",
-  "#d97706",
-  "#9333ea",
-  "#0891b2",
-  "#db2777",
-  "#65a30d",
+export type AdvisorPolicyChartSummary = {
+  id: string;
+  title: string | null;
+  phases: ChartPhase[];
+  insurancePolicyId: string;
+  policyName: string;
+  currency: string | null;
+  updatedAt: string;
+};
+
+// Each policy in the compare view gets a {dark, light} pair from the same
+// hue — dark for "pay in", light for "pay out" — rather than one color at
+// two opacities. Opacity-only differentiation (the first version of this)
+// read as "the same color" on at least one real screen/browser, per
+// direct user feedback — distinct lightness values are unambiguous even
+// on a washed-out display, which opacity alone isn't.
+const CHART_COLOR_PAIRS: { dark: string; light: string }[] = [
+  { dark: "#1d4ed8", light: "#93c5fd" }, // blue
+  { dark: "#b91c1c", light: "#fca5a5" }, // red
+  { dark: "#15803d", light: "#86efac" }, // green
+  { dark: "#b45309", light: "#fcd34d" }, // amber
+  { dark: "#6d28d9", light: "#c4b5fd" }, // purple
+  { dark: "#0e7490", light: "#67e8f9" }, // cyan
+  { dark: "#be185d", light: "#f9a8d4" }, // pink
+  { dark: "#4d7c0f", light: "#bef264" }, // lime
 ];
+
+// Abbreviates large axis values (70000 -> "70k", 1250000 -> "1.25M") so the
+// y-axis never gets clipped for realistic premium/payout figures — the
+// bug this fixes was a 6-digit premium showing as "0000" because the
+// axis column wasn't wide enough for the full unabbreviated number.
+function tickAbbrev(v: number): string {
+  const abs = Math.abs(v);
+  if (abs >= 1_000_000) return `${(v / 1_000_000).toFixed(abs % 1_000_000 === 0 ? 0 : 2)}M`;
+  if (abs >= 1_000) return `${(v / 1_000).toFixed(abs % 1_000 === 0 ? 0 : 1)}k`;
+  return String(v);
+}
 
 function newPhaseId() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -48,21 +72,69 @@ function newPhaseId() {
     : `p${Date.now()}${Math.random()}`;
 }
 
+// A phase with an age outside 0-120 (almost always a bad upstream date
+// feeding buildDefaultPhases, not something the FA typed on purpose) gets
+// a plain-English message here instead of the raw zod validation array —
+// buildDefaultPhases already clamps its own output, so this only fires
+// for a phase the FA edited by hand into an out-of-range value.
+function validatePhases(phases: ChartPhase[]): string | null {
+  for (const p of phases) {
+    if (p.startAge < 0 || p.startAge > 120 || p.endAge < 0 || p.endAge > 120) {
+      return `"${p.label}" has an age outside 0-120 - check the start/end age.`;
+    }
+    if (p.endAge < p.startAge && p.frequency !== "lump-sum") {
+      return `"${p.label}"'s end age is before its start age.`;
+    }
+  }
+  return null;
+}
+
+// Shared by both AdvisorHome.tsx (for the per-record "(1) Displayed"
+// label) and PolicyChartCompareSection — one query, one place that knows
+// which charts exist for this client and which are currently toggled on
+// in the compare view. "Displayed" is deliberately local-only state (not
+// persisted) — it resets on page reload, same as the pre-existing
+// compare-view toggle behavior before this change.
+export function usePolicyCharts(householdId: string, memberId: string) {
+  const { data: charts } = useQuery({
+    queryKey: ["advisor-policy-charts", householdId, memberId],
+    queryFn: () => listAdvisorPolicyCharts({ data: { householdId, memberId } }),
+  });
+  const [displayedIds, setDisplayedIds] = useState<Set<string>>(new Set());
+  return {
+    charts: charts as AdvisorPolicyChartSummary[] | undefined,
+    displayedIds,
+    setDisplayedIds,
+  };
+}
+
 // ============================================================
-// Per-record phase editor — a "Chart" toggle button + inline panel,
-// same interaction shape as RecordNote in AdvisorHome.tsx (button when
-// collapsed, panel with Save/Cancel when open).
+// Per-record phase editor — a "Policy chart" toggle button + inline panel,
+// same interaction shape as RecordNote in AdvisorHome.tsx.
 // ============================================================
 export function PolicyChartToggle({
   insurancePolicyId,
   householdId,
   memberId,
+  charts,
+  displayedIds,
+  setDisplayedIds,
 }: {
   insurancePolicyId: string;
   householdId: string;
   memberId: string;
+  charts: AdvisorPolicyChartSummary[] | undefined;
+  displayedIds: Set<string>;
+  setDisplayedIds: (updater: (prev: Set<string>) => Set<string>) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const existing = charts?.find((c) => c.insurancePolicyId === insurancePolicyId);
+  const isDisplayed = existing ? displayedIds.has(existing.id) : false;
+
+  let label = "Policy chart";
+  if (!open && existing) label = `Policy chart (1)${isDisplayed ? " \u00b7 Displayed" : ""}`;
+  else if (open) label = "Hide chart";
+
   return (
     <div className="mt-2">
       <button
@@ -73,13 +145,14 @@ export function PolicyChartToggle({
           setOpen((v) => !v);
         }}
       >
-        {open ? "Hide chart" : "Policy chart"}
+        {label}
       </button>
       {open && (
         <PolicyChartEditor
           insurancePolicyId={insurancePolicyId}
           householdId={householdId}
           memberId={memberId}
+          setDisplayedIds={setDisplayedIds}
         />
       )}
     </div>
@@ -90,10 +163,12 @@ function PolicyChartEditor({
   insurancePolicyId,
   householdId,
   memberId,
+  setDisplayedIds,
 }: {
   insurancePolicyId: string;
   householdId: string;
   memberId: string;
+  setDisplayedIds: (updater: (prev: Set<string>) => Set<string>) => void;
 }) {
   const queryClient = useQueryClient();
   const [phases, setPhases] = useState<ChartPhase[] | null>(null); // null until seeded from the query below
@@ -116,7 +191,12 @@ function PolicyChartEditor({
       setPhases(saved.phases as ChartPhase[]);
       setTitle(saved.title ?? "");
     } else {
-      setPhases(buildDefaultPhases(data.policy as Parameters<typeof buildDefaultPhases>[0], data.memberBirthYear));
+      setPhases(
+        buildDefaultPhases(
+          data.policy as Parameters<typeof buildDefaultPhases>[0],
+          data.memberBirthYear,
+        ),
+      );
     }
     // Falls through to render with phases still null on THIS render pass;
     // the setState above triggers a re-render where phases is populated.
@@ -133,8 +213,12 @@ function PolicyChartEditor({
           phases: phases ?? [],
         },
       }),
-    onSuccess: () => {
-      toast.success("Chart saved");
+    onSuccess: (result) => {
+      toast.success("Chart saved and displayed");
+      // Saving a chart also shows it in the compare view immediately —
+      // an FA who just built a chart wants to show it right away, not
+      // hunt for a second toggle elsewhere on the page.
+      setDisplayedIds((prev) => new Set(prev).add(result.chartId));
       void queryClient.invalidateQueries({
         queryKey: ["advisor-policy-chart", householdId, memberId, insurancePolicyId],
       });
@@ -153,6 +237,14 @@ function PolicyChartEditor({
     },
     onSuccess: () => {
       toast.success("Chart removed");
+      if (data?.chart) {
+        const removedId = data.chart.id;
+        setDisplayedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(removedId);
+          return next;
+        });
+      }
       void queryClient.invalidateQueries({
         queryKey: ["advisor-policy-chart", householdId, memberId, insurancePolicyId],
       });
@@ -190,36 +282,43 @@ function PolicyChartEditor({
       },
     ]);
   }
+  function handleSave() {
+    const problem = validatePhases(phases ?? []);
+    if (problem) {
+      toast.error(problem);
+      return;
+    }
+    saveMutation.mutate();
+  }
 
   return (
     <div className="mt-2 space-y-3 rounded-lg border border-dashed border-border/60 p-3">
       {data?.memberBirthYear == null && (
         <p className="rounded-md bg-review/10 p-2 text-[10px] text-review-foreground">
           This member has no birth year on file, so ages below aren't tied to a real calendar year
-          yet — the chart still works, just treat the numbers as relative years, not confirmed ages.
+          yet - the chart still works, just treat the numbers as relative years, not confirmed ages.
         </p>
       )}
 
       {bars.length > 0 && (
-        <div className="h-40 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={bars} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-              <XAxis
-                dataKey="age"
-                tick={{ fontSize: 10 }}
-                label={{ value: "Age", position: "insideBottom", offset: -2, fontSize: 10 }}
-              />
-              <YAxis tick={{ fontSize: 10 }} width={50} />
-              <Tooltip
-                formatter={(v: number) => fmtMoney(v, undefined)}
-                labelFormatter={(age) => `Age ${age}`}
-              />
-              <Legend wrapperStyle={{ fontSize: 10 }} />
-              <Bar dataKey="in" name="Pay in" fill="#dc2626" />
-              <Bar dataKey="out" name="Pay out" fill="#16a34a" />
-            </BarChart>
-          </ResponsiveContainer>
+        <div>
+          <div className="h-40 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={bars} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis dataKey="age" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} width={44} tickFormatter={tickAbbrev} />
+                <Tooltip
+                  formatter={(v: number) => fmtMoney(v, undefined)}
+                  labelFormatter={(age) => `Age ${age}`}
+                />
+                <Legend verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: 10 }} />
+                <Bar dataKey="in" name="Pay in" fill="#b91c1c" />
+                <Bar dataKey="out" name="Pay out" fill="#15803d" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="text-center text-[9px] text-muted-foreground">Age</p>
         </div>
       )}
 
@@ -269,9 +368,9 @@ function PolicyChartEditor({
             size="sm"
             className="h-7 px-3 text-xs"
             disabled={saveMutation.isPending || (phases ?? []).length === 0}
-            onClick={() => saveMutation.mutate()}
+            onClick={handleSave}
           >
-            {saveMutation.isPending ? "Saving..." : "Save chart"}
+            {saveMutation.isPending ? "Saving..." : "Save & display chart"}
           </Button>
         </div>
       </div>
@@ -288,6 +387,35 @@ const FREQUENCIES: { value: ChartPhaseFrequency; label: string }[] = [
   { value: "monthly", label: "Per month" },
   { value: "lump-sum", label: "One-time" },
 ];
+
+// A plain integer text field (0-120) - deliberately NOT type="number".
+// Native number-input spin arrows overlap the field's own text on narrow
+// widths and clip the second digit of a 2-3 digit age, confirmed on a
+// real browser - text + inputMode sidesteps that entirely and matches
+// the numeric-input pattern insurance.tsx's UpdateSurrenderValueInline
+// already uses elsewhere in this app.
+function AgeField({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Input
+      type="text"
+      inputMode="numeric"
+      value={value}
+      disabled={disabled}
+      onChange={(e) =>
+        onChange(Math.max(0, Math.min(120, Number(e.target.value.replace(/[^0-9]/g, "")) || 0)))
+      }
+      className="h-6 w-12 text-center text-[11px]"
+    />
+  );
+}
 
 function PhaseRow({
   phase,
@@ -313,14 +441,14 @@ function PhaseRow({
           className="shrink-0 px-1 text-xs text-muted-foreground"
           aria-label="Remove phase"
         >
-          ✕
+          x
         </button>
       </div>
       <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
         <select
           value={phase.direction}
           onChange={(e) => onChange({ direction: e.target.value as ChartPhaseDirection })}
-          className="h-6 rounded border border-input bg-background px-1"
+          className="h-6 shrink-0 rounded border border-input bg-background px-1"
         >
           {DIRECTIONS.map((d) => (
             <option key={d.value} value={d.value}>
@@ -328,26 +456,22 @@ function PhaseRow({
             </option>
           ))}
         </select>
-        <span className="text-muted-foreground">age</span>
-        <Input
-          type="number"
-          value={phase.startAge}
-          onChange={(e) => onChange({ startAge: Number(e.target.value) || 0 })}
-          className="h-6 w-14 text-[11px]"
-        />
-        <span className="text-muted-foreground">to</span>
-        <Input
-          type="number"
+        <span className="shrink-0 text-muted-foreground">age</span>
+        <AgeField value={phase.startAge} onChange={(startAge) => onChange({ startAge })} />
+        <span className="shrink-0 text-muted-foreground">to</span>
+        <AgeField
           value={phase.endAge}
-          onChange={(e) => onChange({ endAge: Number(e.target.value) || 0 })}
-          className="h-6 w-14 text-[11px]"
+          onChange={(endAge) => onChange({ endAge })}
           disabled={phase.frequency === "lump-sum"}
         />
         <Input
-          type="number"
+          type="text"
+          inputMode="decimal"
           value={phase.amount}
-          onChange={(e) => onChange({ amount: Number(e.target.value) || 0 })}
-          className="h-6 w-20 text-[11px]"
+          onChange={(e) =>
+            onChange({ amount: Number(e.target.value.replace(/[^0-9.]/g, "")) || 0 })
+          }
+          className="h-6 w-24 text-[11px]"
           placeholder="Amount"
         />
         <select
@@ -358,7 +482,7 @@ function PhaseRow({
               frequency === "lump-sum" ? { frequency, endAge: phase.startAge } : { frequency },
             );
           }}
-          className="h-6 rounded border border-input bg-background px-1"
+          className="h-6 shrink-0 rounded border border-input bg-background px-1"
         >
           {FREQUENCIES.map((f) => (
             <option key={f.value} value={f.value}>
@@ -372,47 +496,33 @@ function PhaseRow({
 }
 
 // ============================================================
-// Compare view — every saved chart for this client, toggleable, one
-// color per policy. Renders nothing (not even a loading state) when the
-// advisor hasn't saved any chart yet for this client, so it never adds
-// visual noise to the common case of a client with no charts built.
+// Compare view - every saved chart for this client, toggleable, one
+// {dark, light} color pair per policy. Renders nothing when the advisor
+// hasn't saved any chart yet for this client.
 // ============================================================
 export function PolicyChartCompareSection({
-  householdId,
-  memberId,
+  charts,
+  displayedIds,
+  setDisplayedIds,
 }: {
-  householdId: string;
-  memberId: string;
+  charts: AdvisorPolicyChartSummary[] | undefined;
+  displayedIds: Set<string>;
+  setDisplayedIds: (updater: (prev: Set<string>) => Set<string>) => void;
 }) {
-  const { data: charts } = useQuery({
-    queryKey: ["advisor-policy-charts", householdId, memberId],
-    queryFn: () => listAdvisorPolicyCharts({ data: { householdId, memberId } }),
-  });
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-
-  // Default to showing the single chart if there's only one — matches
-  // the FA's usual case (show one policy to a client) without an extra
-  // tap; with multiple charts, default to showing just the first so a
-  // multi-policy household doesn't open on an overwhelming combined view.
-  const effectiveSelected = useMemo(() => {
-    if (selected.size > 0 || !charts) return selected;
-    return new Set(charts.slice(0, 1).map((c) => c.id));
-  }, [selected, charts]);
-
   if (!charts || charts.length === 0) return null;
 
   function toggle(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev.size > 0 ? prev : effectiveSelected);
+    setDisplayedIds((prev) => {
+      const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
   }
 
-  const activeCharts = charts.filter((c) => effectiveSelected.has(c.id));
+  const activeCharts = charts.filter((c) => displayedIds.has(c.id));
   const colorByChartId = new Map(
-    charts.map((c, i) => [c.id, CHART_COLORS[i % CHART_COLORS.length]]),
+    charts.map((c, i) => [c.id, CHART_COLOR_PAIRS[i % CHART_COLOR_PAIRS.length]]),
   );
 
   // Merge each active chart's expanded bars into one age-indexed dataset,
@@ -422,7 +532,7 @@ export function PolicyChartCompareSection({
   const ageSet = new Set<number>();
   const expandedByChart = new Map<string, Map<number, { in: number; out: number }>>();
   for (const c of activeCharts) {
-    const bars = expandPhasesToYearlyBars(c.phases as ChartPhase[]);
+    const bars = expandPhasesToYearlyBars(c.phases);
     const byAge = new Map(bars.map((b) => [b.age, { in: b.in, out: b.out }]));
     expandedByChart.set(c.id, byAge);
     for (const b of bars) ageSet.add(b.age);
@@ -443,59 +553,56 @@ export function PolicyChartCompareSection({
       <h3 className="mb-2 text-sm font-bold">Policy illustration</h3>
       <div className="mb-3 flex flex-wrap gap-2">
         {charts.map((c) => {
-          const isOn = effectiveSelected.has(c.id);
-          const color = colorByChartId.get(c.id)!;
+          const isOn = displayedIds.has(c.id);
+          const pair = colorByChartId.get(c.id)!;
           return (
             <button
               key={c.id}
               type="button"
               onClick={() => toggle(c.id)}
               className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-opacity"
-              style={{ borderColor: color, opacity: isOn ? 1 : 0.4 }}
+              style={{ borderColor: pair.dark, opacity: isOn ? 1 : 0.4 }}
             >
-              <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+              <span className="h-2 w-2 rounded-full" style={{ background: pair.dark }} />
               {c.title || c.policyName}
             </button>
           );
         })}
       </div>
       {merged.length > 0 ? (
-        <div className="h-56 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={merged} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-              <XAxis
-                dataKey="age"
-                tick={{ fontSize: 10 }}
-                label={{ value: "Age", position: "insideBottom", offset: -2, fontSize: 10 }}
-              />
-              <YAxis tick={{ fontSize: 10 }} width={50} />
-              <Tooltip
-                formatter={(v: number) => fmtMoney(v, undefined)}
-                labelFormatter={(age) => `Age ${age}`}
-              />
-              <Legend wrapperStyle={{ fontSize: 10 }} />
-              {activeCharts.map((c) => {
-                const color = colorByChartId.get(c.id)!;
-                return [
-                  <Bar
-                    key={`${c.id}_in`}
-                    dataKey={`${c.id}_in`}
-                    name={`${c.title || c.policyName} (in)`}
-                    fill={color}
-                    fillOpacity={0.9}
-                  />,
-                  <Bar
-                    key={`${c.id}_out`}
-                    dataKey={`${c.id}_out`}
-                    name={`${c.title || c.policyName} (out)`}
-                    fill={color}
-                    fillOpacity={0.45}
-                  />,
-                ];
-              })}
-            </BarChart>
-          </ResponsiveContainer>
+        <div>
+          <div className="h-56 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={merged} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis dataKey="age" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} width={44} tickFormatter={tickAbbrev} />
+                <Tooltip
+                  formatter={(v: number) => fmtMoney(v, undefined)}
+                  labelFormatter={(age) => `Age ${age}`}
+                />
+                <Legend verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: 10 }} />
+                {activeCharts.map((c) => {
+                  const pair = colorByChartId.get(c.id)!;
+                  return [
+                    <Bar
+                      key={`${c.id}_in`}
+                      dataKey={`${c.id}_in`}
+                      name={`${c.title || c.policyName} (in)`}
+                      fill={pair.dark}
+                    />,
+                    <Bar
+                      key={`${c.id}_out`}
+                      dataKey={`${c.id}_out`}
+                      name={`${c.title || c.policyName} (out)`}
+                      fill={pair.light}
+                    />,
+                  ];
+                })}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="text-center text-[9px] text-muted-foreground">Age</p>
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">Toggle a policy above to show its chart.</p>
