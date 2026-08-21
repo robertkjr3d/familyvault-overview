@@ -69,6 +69,18 @@ const upsertNotePayloadSchema = z.object({
     .max(2000, "Keep it under 2000 characters."),
 });
 
+// Separate from note upsert above so toggling status never requires (or
+// clobbers) a note — the two are independent facts about the same row.
+// null status is a valid value: it means "clear the override, go back to
+// the computed default" (see the migration's comment).
+const upsertStatusPayloadSchema = z.object({
+  householdId: z.string().uuid(),
+  memberId: z.string().uuid(),
+  recordCategory: z.string().min(1),
+  recordId: z.string().uuid(),
+  status: z.enum(["paid", "ongoing", "review"]).nullable(),
+});
+
 const deleteNotePayloadSchema = z.object({
   noteId: z.string().uuid(),
 });
@@ -792,7 +804,7 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
     // another advisor's notes on the same record.
     const { data: noteRows, error: notesError } = await supabase
       .from("advisor_record_notes" as any)
-      .select("id, record_id, note, updated_at")
+      .select("id, record_id, note, status, updated_at")
       .eq("household_id", data.householdId);
     if (notesError) throw notesError;
     const noteByRecordId = new Map((noteRows ?? []).map((n: any) => [n.record_id, n]));
@@ -803,6 +815,7 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
         note: noteRow?.note ?? null,
         noteId: noteRow?.id ?? null,
         noteUpdatedAt: noteRow?.updated_at ?? null,
+        status: noteRow?.status ?? null,
       };
     });
 
@@ -833,6 +846,24 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
       ]);
     if (insError) throw insError;
     if (invError) throw invError;
+
+    // Attaches each record's own inception date, reusing the base-table
+    // rows fetched above rather than a third query — insurance's is
+    // start_date, investments' is premium_start_date (the view's generic
+    // field naming doesn't carry either through, per the comment on that
+    // fetch above). Property/loans aren't fetched from base tables in this
+    // function at all, so they simply don't get a start_date here — the
+    // sort in groupAdvisorRecords() falls back to end_date ordering for
+    // those, same as before this change.
+    const startDateByRecordId = new Map<string, string | null>();
+    for (const r of insuranceRows ?? [])
+      startDateByRecordId.set((r as any).id, (r as any).start_date ?? null);
+    for (const r of investmentRows ?? [])
+      startDateByRecordId.set((r as any).id, (r as any).premium_start_date ?? null);
+    const recordsWithDates = recordsWithNotes.map((r: any) => ({
+      ...r,
+      start_date: startDateByRecordId.get(r.record_id) ?? null,
+    }));
 
     // dismissed_dashboard_items has no advisor-facing RLS policy — and it
     // shouldn't, the FA never sees these rows directly — so this needs
@@ -901,7 +932,7 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
     ]);
 
     return {
-      records: recordsWithNotes,
+      records: recordsWithDates,
       upcomingPremiums,
       hiddenCounts: {
         insurance: hiddenInsuranceCount ?? 0,
@@ -942,6 +973,44 @@ export const upsertAdvisorNote = createServerFn({ method: "POST" })
         record_category: data.recordCategory,
         record_id: data.recordId,
         note: data.note,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "link_id,record_id" },
+    );
+    if (error) throw error;
+    return { ok: true };
+  });
+
+// Independent of upsertAdvisorNote above — deliberately never sends `note`
+// in its payload, so a status-only upsert can never clobber an existing
+// note (Supabase's upsert only overwrites columns present in the payload
+// object; omitted columns are left untouched on conflict). status: null
+// clears any manual override and reverts the card to the computed
+// default (past end_date = Paid, else Ongoing — computed client-side).
+export const upsertAdvisorRecordStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(upsertStatusPayloadSchema)
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: link, error: linkError } = await supabase
+      .from("advisor_household_links" as any)
+      .select("id")
+      .eq("household_id", data.householdId)
+      .eq("advisor_user_id", userId)
+      .eq("status", "active")
+      .maybeSingle();
+    if (linkError) throw linkError;
+    if (!link) throw new Error("No active link to this household.");
+
+    const { error } = await supabase.from("advisor_record_notes" as any).upsert(
+      {
+        link_id: (link as any).id,
+        household_id: data.householdId,
+        member_id: data.memberId,
+        advisor_user_id: userId,
+        record_category: data.recordCategory,
+        record_id: data.recordId,
+        status: data.status,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "link_id,record_id" },
