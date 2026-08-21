@@ -13,6 +13,7 @@
 
 export type AdvisorPdfRecord = {
   category: string;
+  record_id: string;
   record_name: string;
   insurance_category?: string | null;
   premium?: number | null;
@@ -21,6 +22,7 @@ export type AdvisorPdfRecord = {
   currency?: string | null;
   member_name?: string | null;
   member_id?: string | null;
+  start_date?: string | null;
   end_date?: string | null;
   is_giro?: boolean | null;
   last_updated?: string | null;
@@ -149,13 +151,30 @@ const FREQ_LABEL: Record<string, string> = {
 // (Life, Critical Illness, Disability...), not by insurer brand — provider
 // name is still shown as a sub-line per item, just not the grouping key.
 const INSURANCE_CATEGORY_ORDER = [
-  "Life", "Health", "Critical Illness", "Disability", "Personal Accident",
-  "Car", "Home", "Travel", "Mortgage", "Other",
+  "Life",
+  "Health",
+  "Critical Illness",
+  "Disability",
+  "Personal Accident",
+  "Car",
+  "Home",
+  "Travel",
+  "Mortgage",
+  "Other",
 ];
 const INVESTMENT_TYPE_ORDER = [
-  "Unit Trust / Fund", "Exchange Traded Fund (ETF)", "Stocks / Shares",
-  "ILP (Investment-Linked Policy)", "Endowment", "Bonds", "REITs",
-  "Cryptocurrency", "Cash / Money Market", "SRS", "CPF-OA Investment", "Other",
+  "Unit Trust / Fund",
+  "Exchange Traded Fund (ETF)",
+  "Stocks / Shares",
+  "ILP (Investment-Linked Policy)",
+  "Endowment",
+  "Bonds",
+  "REITs",
+  "Cryptocurrency",
+  "Cash / Money Market",
+  "SRS",
+  "CPF-OA Investment",
+  "Other",
 ];
 // Matches the view's CASE-mapped labels for properties.purpose exactly
 // (see the migration) — "Other" (unrecognised/blank) sorts last via the
@@ -233,40 +252,54 @@ export function groupAdvisorRecords(records: AdvisorPdfRecord[]): AdvisorCategor
   const byCategory: Record<string, AdvisorPdfRecord[]> = {};
   for (const r of records) (byCategory[r.category] ??= []).push(r);
 
-  return CATEGORY_ORDER
-    .filter((c) => (byCategory[c]?.length ?? 0) > 0)
-    .map((category) => {
-      const order = subgroupOrderByCategory[category] ?? [];
-      const bySubgroup: Record<string, AdvisorPdfRecord[]> = {};
-      for (const r of byCategory[category]) {
-        (bySubgroup[r.insurance_category ?? "Other"] ??= []).push(r);
-      }
-      const subgroupNames = Object.keys(bySubgroup).sort(
-        (a, b) => orderIndex(order, a) - orderIndex(order, b) || a.localeCompare(b),
-      );
-      const subgroups = subgroupNames.map((name) => {
-        const items = [...bySubgroup[name]].sort((a, b) => {
-          if (!a.end_date && !b.end_date) return 0;
-          if (!a.end_date) return 1;
-          if (!b.end_date) return -1;
-          return new Date(a.end_date).getTime() - new Date(b.end_date).getTime();
-        });
-        // Subtotal is always sum_assured (coverage for insurance, current
-        // value for investments — see AdvisorPdfRecord/the view's aliasing)
-        // — never the premium. Premium is a recurring cost; sum_assured is
-        // "how much coverage/value exists in this category," which is the
-        // actual professional question a subtotal here should answer.
-        const byCurrency: Record<string, number> = {};
-        for (const r of items) {
-          if (r.sum_assured == null) continue;
-          const currency = r.currency || "SGD";
-          byCurrency[currency] = (byCurrency[currency] ?? 0) + r.sum_assured;
+  return CATEGORY_ORDER.filter((c) => (byCategory[c]?.length ?? 0) > 0).map((category) => {
+    const order = subgroupOrderByCategory[category] ?? [];
+    const bySubgroup: Record<string, AdvisorPdfRecord[]> = {};
+    for (const r of byCategory[category]) {
+      (bySubgroup[r.insurance_category ?? "Other"] ??= []).push(r);
+    }
+    const subgroupNames = Object.keys(bySubgroup).sort(
+      (a, b) => orderIndex(order, a) - orderIndex(order, b) || a.localeCompare(b),
+    );
+    const subgroups = subgroupNames.map((name) => {
+      // Most recently taken out first (by start_date, when known) — the
+      // policy/holding an FA and client most recently discussed is the
+      // one most likely to be top of mind. Falls back to end_date
+      // ordering (soonest-ending first) for whichever categories don't
+      // carry a start_date in this data path yet — property/loans, as
+      // of when this was written; don't assume that's still true
+      // without checking AdvisorPdfRecord's callers fresh.
+      const items = [...bySubgroup[name]].sort((a, b) => {
+        if (a.start_date || b.start_date) {
+          if (!a.start_date && !b.start_date) return 0;
+          if (!a.start_date) return 1;
+          if (!b.start_date) return -1;
+          return new Date(b.start_date).getTime() - new Date(a.start_date).getTime();
         }
-        const subtotals = Object.entries(byCurrency).map(([currency, amount]) => ({ currency, amount }));
-        return { name, items, subtotals };
+        if (!a.end_date && !b.end_date) return 0;
+        if (!a.end_date) return 1;
+        if (!b.end_date) return -1;
+        return new Date(a.end_date).getTime() - new Date(b.end_date).getTime();
       });
-      return { category, categoryTitle: CATEGORY_TITLES[category] ?? category, subgroups };
+      // Subtotal is always sum_assured (coverage for insurance, current
+      // value for investments — see AdvisorPdfRecord/the view's aliasing)
+      // — never the premium. Premium is a recurring cost; sum_assured is
+      // "how much coverage/value exists in this category," which is the
+      // actual professional question a subtotal here should answer.
+      const byCurrency: Record<string, number> = {};
+      for (const r of items) {
+        if (r.sum_assured == null) continue;
+        const currency = r.currency || "SGD";
+        byCurrency[currency] = (byCurrency[currency] ?? 0) + r.sum_assured;
+      }
+      const subtotals = Object.entries(byCurrency).map(([currency, amount]) => ({
+        currency,
+        amount,
+      }));
+      return { name, items, subtotals };
     });
+    return { category, categoryTitle: CATEGORY_TITLES[category] ?? category, subgroups };
+  });
 }
 
 // Exported so AdvisorHome.tsx's on-screen list uses the exact same amount
@@ -342,7 +375,8 @@ function wedgePath(
   endAngle: number,
 ): string {
   const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
-  const p = (r: number, a: number) => `${(cx + r * Math.cos(a)).toFixed(2)} ${(-(cy + r * Math.sin(a))).toFixed(2)}`;
+  const p = (r: number, a: number) =>
+    `${(cx + r * Math.cos(a)).toFixed(2)} ${(-(cy + r * Math.sin(a))).toFixed(2)}`;
   return [
     `M ${p(rOuter, startAngle)}`,
     `A ${rOuter} ${rOuter} 0 ${largeArc} 0 ${p(rOuter, endAngle)}`,
@@ -599,10 +633,15 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
     // doesn't collide with any category color and clearly signals "debt."
     const colorTotalNeutral = rgb(0.15, 0.15, 0.18);
     legendY -= 6;
-    drawLegendRow(legendY, colorTotalNeutral, `Total Assets: ${fmtMoneyForPdf(totalAssets, "SGD")}`, {
-      bold: true,
-      textColor: colorTotalNeutral,
-    });
+    drawLegendRow(
+      legendY,
+      colorTotalNeutral,
+      `Total Assets: ${fmtMoneyForPdf(totalAssets, "SGD")}`,
+      {
+        bold: true,
+        textColor: colorTotalNeutral,
+      },
+    );
     if (data.netWorth.totalLiabilities > 0) {
       legendY -= legendRowHeight;
       drawLegendRow(
@@ -662,7 +701,12 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
       const amountStr = item.amount != null ? fmtMoneyForPdf(item.amount, item.currency) : null;
       const amountWidth = amountStr ? font.widthOfTextAtSize(amountStr, 10) : 0;
       const textMaxWidth = width - margin - 10 - itemX - (amountStr ? amountWidth + 10 : 0);
-      const labelText = truncateToWidth(`${item.label} — ${fmtDateForPdf(item.date)}`, textMaxWidth, font, 10);
+      const labelText = truncateToWidth(
+        `${item.label} — ${fmtDateForPdf(item.date)}`,
+        textMaxWidth,
+        font,
+        10,
+      );
       // Only genuinely overdue items get red — everything else in this box
       // is upcoming, not urgent, and was previously drawn in the same red
       // as both the header AND overdue items, so nothing stood out from
@@ -707,7 +751,9 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
       color: colorPrimary,
     });
     const hiddenForThisCategory =
-      data.hiddenCounts?.[catGroup.category as "insurance" | "investments" | "property" | "loans"] ?? 0;
+      data.hiddenCounts?.[
+        catGroup.category as "insurance" | "investments" | "property" | "loans"
+      ] ?? 0;
     if (hiddenForThisCategory > 0) {
       const disclosureText = `+ ${hiddenForThisCategory} not shared`;
       page.drawText(disclosureText, {
@@ -809,10 +855,22 @@ export async function buildAdvisorPdfBytes(pdfLib: any, data: AdvisorPdfData): P
             color: rgb(0.95, 0.96, 0.98),
           });
           let noteY = y - 12;
-          page.drawText("ADVISER'S NOTE", { x: margin + 8, y: noteY, size: 7, font: fontBold, color: colorPrimary });
+          page.drawText("ADVISER'S NOTE", {
+            x: margin + 8,
+            y: noteY,
+            size: 7,
+            font: fontBold,
+            color: colorPrimary,
+          });
           noteY -= 13;
           for (const line of shown) {
-            page.drawText(line, { x: margin + 8, y: noteY, size: 9, font, color: rgb(0.15, 0.15, 0.18) });
+            page.drawText(line, {
+              x: margin + 8,
+              y: noteY,
+              size: 9,
+              font,
+              color: rgb(0.15, 0.15, 0.18),
+            });
             noteY -= 13;
           }
           y -= noteBoxHeight + 10;
