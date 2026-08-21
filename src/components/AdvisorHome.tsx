@@ -7,10 +7,15 @@ import {
   getAdvisorNetworthSummary,
   upsertAdvisorNote,
   deleteAdvisorNote,
+  upsertAdvisorRecordStatus,
   STALE_AFTER_DAYS,
   ADVISOR_ALERT_HORIZON_DAYS,
 } from "@/lib/advisorAccess";
-import { PolicyChartToggle, PolicyChartCompareSection } from "@/components/PolicyChart";
+import {
+  PolicyChartToggle,
+  PolicyChartCompareSection,
+  usePolicyCharts,
+} from "@/components/PolicyChart";
 import {
   generateAndDownloadAdvisorPdf,
   groupAdvisorRecords,
@@ -300,6 +305,81 @@ function RecordNote({
   );
 }
 
+// Same status semantics/colors the household side already uses for
+// settled/review — Paid=settled(green), Ongoing=review(amber),
+// Review=urgent(red). Paid/Ongoing are computed from end_date and need
+// no FA action; Review only ever comes from the FA explicitly clicking
+// it (see upsertAdvisorRecordStatus's comment) — there's no signal in
+// the data alone that a client has quietly stopped paying.
+const STATUS_OPTIONS: { value: "paid" | "ongoing" | "review"; label: string; className: string }[] =
+  [
+    { value: "paid", label: "Paid", className: "bg-settled/15 text-settled border-settled/40" },
+    {
+      value: "ongoing",
+      label: "Ongoing",
+      className: "bg-review/15 text-review-foreground border-review/40",
+    },
+    { value: "review", label: "Review", className: "bg-urgent/15 text-urgent border-urgent/40" },
+  ];
+
+function StatusToggle({
+  record,
+  householdId,
+  memberId,
+  category,
+  effectiveStatus,
+}: {
+  record: any;
+  householdId: string;
+  memberId: string;
+  category: string;
+  effectiveStatus: "paid" | "ongoing" | "review";
+}) {
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: (status: "paid" | "ongoing" | "review") =>
+      upsertAdvisorRecordStatus({
+        data: {
+          householdId,
+          memberId,
+          recordCategory: category,
+          recordId: record.record_id,
+          status,
+        },
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["advisor-client-records", householdId, memberId],
+      });
+    },
+    onError: (err: unknown) =>
+      toast.error(err instanceof Error ? err.message : "Unable to update status."),
+  });
+
+  return (
+    <div className="mt-1.5 flex gap-1">
+      {STATUS_OPTIONS.map((opt) => {
+        const isActive = effectiveStatus === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            disabled={mutation.isPending}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              if (!isActive) mutation.mutate(opt.value);
+            }}
+            className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold transition-opacity ${opt.className}`}
+            style={{ opacity: isActive ? 1 : 0.35 }}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // Same category order/colors as the PDF donut (advisorPdf.ts) — imported,
 // not re-declared, so a category is never a different color on screen than
 // in the exported PDF for the same household.
@@ -418,6 +498,8 @@ function ClientDetail({
     queryKey: ["advisor-client-records", householdId, memberId],
     queryFn: () => getClientRecordsForAdvisor({ data: { householdId, memberId } }),
   });
+
+  const { charts, displayedIds, setDisplayedIds } = usePolicyCharts(householdId, memberId);
 
   // Deliberately a separate query from the records above — on a slow
   // connection, one being slow must never block the other from showing up
@@ -594,7 +676,11 @@ function ClientDetail({
         </p>
       )}
 
-      <PolicyChartCompareSection householdId={householdId} memberId={memberId} />
+      <PolicyChartCompareSection
+        charts={charts}
+        displayedIds={displayedIds}
+        setDisplayedIds={setDisplayedIds}
+      />
 
       {categoryGroups.map((catGroup) => (
         <section
@@ -611,7 +697,7 @@ function ClientDetail({
           </div>
           {catGroup.subgroups.map((sub) => (
             <div key={sub.name} className="mb-3 last:mb-0">
-              <div className="mb-1.5 flex items-center justify-between">
+              <div className="mb-1.5 flex items-center justify-between px-3">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                   {sub.name}
                 </p>
@@ -625,6 +711,17 @@ function ClientDetail({
                     !!r.last_updated &&
                     Date.now() - new Date(r.last_updated).getTime() >
                       STALE_AFTER_DAYS * 24 * 60 * 60 * 1000;
+                  // "Paid"/"Ongoing" auto-computed from end_date — no
+                  // manual work needed for the common case where the
+                  // client is simply paying as scheduled. "Review" only
+                  // ever comes from an explicit FA override (there's no
+                  // signal in the data alone that a client has silently
+                  // stopped paying) — see the migration's comment on why
+                  // this is never itself computed.
+                  const computedStatus: "paid" | "ongoing" =
+                    r.end_date && new Date(r.end_date).getTime() < Date.now() ? "paid" : "ongoing";
+                  const effectiveStatus: "paid" | "ongoing" | "review" =
+                    (r as any).status ?? computedStatus;
                   return (
                     <div
                       key={r.record_id}
@@ -653,20 +750,32 @@ function ClientDetail({
                           .filter(Boolean)
                           .join(" · ") || "—"}
                       </p>
-                      <p
-                        className={`mt-1 text-[10px] ${isStale ? "font-medium text-review-foreground" : "text-muted-foreground"}`}
-                      >
-                        Updated {fmtDate(r.last_updated)}
-                        {isStale ? " · please confirm this is still accurate" : ""}
-                      </p>
+                      <StatusToggle
+                        record={r}
+                        householdId={householdId}
+                        memberId={memberId}
+                        category={r.category}
+                        effectiveStatus={effectiveStatus}
+                      />
                       <RecordNote record={r} householdId={householdId} memberId={memberId} />
                       {catGroup.category === "insurance" && (
                         <PolicyChartToggle
                           insurancePolicyId={(r as any).record_id}
                           householdId={householdId}
                           memberId={memberId}
+                          charts={charts}
+                          displayedIds={displayedIds}
+                          setDisplayedIds={setDisplayedIds}
                         />
                       )}
+                      <div className="mt-1.5 flex justify-end">
+                        <p
+                          className={`text-[10px] ${isStale ? "font-medium text-review-foreground" : "text-muted-foreground"}`}
+                        >
+                          Updated {fmtDate(r.last_updated)}
+                          {isStale ? " · please confirm this is still accurate" : ""}
+                        </p>
+                      </div>
                     </div>
                   );
                 })}
