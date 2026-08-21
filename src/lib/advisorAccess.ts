@@ -156,7 +156,7 @@ async function requireOwner(supabase: any, householdId: string, userId: string) 
     .eq("user_id", userId)
     .eq("role", "owner")
     .maybeSingle();
-  if (error) throw error;
+  if (error) throw new Error(error.message ?? "Something went wrong on the server.");
   if (!data) throw new Error("Only the household owner can manage advisor access.");
 }
 
@@ -167,7 +167,7 @@ async function requireMember(supabase: any, householdId: string, userId: string)
     .eq("household_id", householdId)
     .eq("user_id", userId)
     .maybeSingle();
-  if (error) throw error;
+  if (error) throw new Error(error.message ?? "Something went wrong on the server.");
   if (!data) throw new Error("You are not a member of this household.");
 }
 
@@ -183,7 +183,7 @@ export const sendAdvisorInvite = createServerFn({ method: "POST" })
       .select("name")
       .eq("id", data.householdId)
       .maybeSingle();
-    if (hhError) throw hhError;
+    if (hhError) throw new Error(hhError.message ?? "Something went wrong on the server.");
     const householdName = (householdRow as any)?.name ?? "a household";
 
     const invitedEmail = normalizeEmail(data.email);
@@ -237,7 +237,7 @@ export const sendAdvisorInvite = createServerFn({ method: "POST" })
       invited_by_user_id: userId,
       token,
     });
-    if (insertError) throw insertError;
+    if (insertError) throw new Error(insertError.message ?? "Something went wrong on the server.");
 
     const { error: otpError } = await supabaseAdmin.auth.signInWithOtp({
       email: invitedEmail,
@@ -252,7 +252,7 @@ export const sendAdvisorInvite = createServerFn({ method: "POST" })
         .from("advisor_invites" as any)
         .delete()
         .eq("token", token);
-      throw otpError;
+      throw new Error(otpError.message ?? "Something went wrong on the server.");
     }
 
     return { ok: true };
@@ -275,7 +275,7 @@ export const cancelPendingAdvisorInvite = createServerFn({ method: "POST" })
       .is("cancelled_at", null)
       .select("id")
       .maybeSingle();
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? "Something went wrong on the server.");
     // No matching pending invite — nothing to cancel. Surfaced as a real
     // error rather than a silent no-op "success", per the zero-rows rule.
     if (!updated) throw new Error("No pending invite found for that email.");
@@ -304,7 +304,8 @@ export const acceptPendingAdvisorInvitesForCurrentUser = createServerFn({ method
       .is("accepted_at", null)
       .is("cancelled_at", null)
       .gt("expires_at", new Date().toISOString());
-    if (invitesError) throw invitesError;
+    if (invitesError)
+      throw new Error(invitesError.message ?? "Something went wrong on the server.");
     if (!invites || invites.length === 0) return { acceptedHouseholdIds: [] as string[] };
 
     const acceptedHouseholdIds: string[] = [];
@@ -334,7 +335,7 @@ export const acceptPendingAdvisorInvitesForCurrentUser = createServerFn({ method
         )
         .select("id")
         .single();
-      if (linkError) throw linkError;
+      if (linkError) throw new Error(linkError.message ?? "Something went wrong on the server.");
 
       // Member grants are fully replaced on every accept, same "leave
       // exactly one clean state" philosophy as the link upsert above —
@@ -350,7 +351,8 @@ export const acceptPendingAdvisorInvitesForCurrentUser = createServerFn({ method
         const { error: membersError } = await supabaseAdmin
           .from("advisor_link_members" as any)
           .insert(memberIds.map((memberId) => ({ link_id: linkId, member_id: memberId })));
-        if (membersError) throw membersError;
+        if (membersError)
+          throw new Error(membersError.message ?? "Something went wrong on the server.");
       }
 
       await supabaseAdmin
@@ -380,7 +382,7 @@ export const revokeAdvisorAccess = createServerFn({ method: "POST" })
       .eq("status", "active")
       .select("id")
       .maybeSingle();
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? "Something went wrong on the server.");
     // Zero rows matched — either already revoked, or this advisor was never
     // linked here. Either way, silently returning "ok" would be exactly the
     // false-success bug already fixed once in this app (member removal).
@@ -410,7 +412,7 @@ export const updateAdvisorPermissions = createServerFn({ method: "POST" })
       .eq("status", "active")
       .select("id")
       .maybeSingle();
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? "Something went wrong on the server.");
     if (!updated) throw new Error("Active advisor link not found for that household.");
 
     // Full replace, same reasoning as the accept-invite path: whatever
@@ -423,7 +425,8 @@ export const updateAdvisorPermissions = createServerFn({ method: "POST" })
     const { error: membersError } = await supabaseAdmin
       .from("advisor_link_members" as any)
       .insert(data.memberIds.map((memberId) => ({ link_id: linkId, member_id: memberId })));
-    if (membersError) throw membersError;
+    if (membersError)
+      throw new Error(membersError.message ?? "Something went wrong on the server.");
 
     return { ok: true };
   });
@@ -448,7 +451,7 @@ export const listAdvisorsForHousehold = createServerFn({ method: "POST" })
       )
       .eq("household_id", data.householdId)
       .eq("status", "active");
-    if (linksError) throw linksError;
+    if (linksError) throw new Error(linksError.message ?? "Something went wrong on the server.");
 
     const advisorIds = (linkRows ?? []).map((r: any) => r.advisor_user_id);
     // user_profiles is locked to self-only RLS on the client, but is exactly
@@ -461,7 +464,8 @@ export const listAdvisorsForHousehold = createServerFn({ method: "POST" })
         .from("user_profiles" as any)
         .select("user_id, email, display_name")
         .in("user_id", advisorIds);
-      if (profilesError) throw profilesError;
+      if (profilesError)
+        throw new Error(profilesError.message ?? "Something went wrong on the server.");
       for (const p of (profiles ?? []) as any[]) {
         profilesById.set(p.user_id, { email: p.email, display_name: p.display_name });
       }
@@ -479,7 +483,8 @@ export const listAdvisorsForHousehold = createServerFn({ method: "POST" })
         .from("advisor_link_members" as any)
         .select("link_id, member_id, members(name)")
         .in("link_id", linkIds);
-      if (linkMembersError) throw linkMembersError;
+      if (linkMembersError)
+        throw new Error(linkMembersError.message ?? "Something went wrong on the server.");
       for (const row of (linkMemberRows ?? []) as any[]) {
         const names = memberNamesByLink.get(row.link_id) ?? [];
         names.push(row.members?.name ?? "Member");
@@ -513,7 +518,8 @@ export const listAdvisorsForHousehold = createServerFn({ method: "POST" })
       .is("cancelled_at", null)
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: true });
-    if (pendingError) throw pendingError;
+    if (pendingError)
+      throw new Error(pendingError.message ?? "Something went wrong on the server.");
 
     const pending = ((pendingRows ?? []) as any[]).map((p) => ({
       email: p.invited_email,
@@ -545,7 +551,7 @@ export const getAdvisorNetworthSummary = createServerFn({ method: "POST" })
       .from("advisor_networth_components_view" as any)
       .select("*")
       .eq("household_id", data.householdId);
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? "Something went wrong on the server.");
     const components = (rows ?? []) as any[];
 
     // Not household-scoped, shared system-wide — same table, same plain
@@ -796,7 +802,7 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
       .or(`member_id.eq.${data.memberId},member_id.is.null`)
       .order("category", { ascending: true })
       .order("record_name", { ascending: true });
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? "Something went wrong on the server.");
 
     // The advisor's own notes on these records — RLS on advisor_record_notes
     // already restricts this to rows where advisor_user_id = auth.uid(),
@@ -806,7 +812,7 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
       .from("advisor_record_notes" as any)
       .select("id, record_id, note, status, updated_at")
       .eq("household_id", data.householdId);
-    if (notesError) throw notesError;
+    if (notesError) throw new Error(notesError.message ?? "Something went wrong on the server.");
     const noteByRecordId = new Map((noteRows ?? []).map((n: any) => [n.record_id, n]));
     const recordsWithNotes = (rows ?? []).map((r: any) => {
       const noteRow = noteByRecordId.get(r.record_id) as any;
@@ -844,8 +850,8 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
           .eq("household_id", data.householdId)
           .or(`member_id.eq.${data.memberId},member_id.is.null`),
       ]);
-    if (insError) throw insError;
-    if (invError) throw invError;
+    if (insError) throw new Error(insError.message ?? "Something went wrong on the server.");
+    if (invError) throw new Error(invError.message ?? "Something went wrong on the server.");
 
     // Attaches each record's own inception date, reusing the base-table
     // rows fetched above rather than a third query — insurance's is
@@ -875,7 +881,8 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
       .from("dismissed_dashboard_items" as any)
       .select("record_id, source_type, dismissed_date")
       .eq("household_id", data.householdId);
-    if (dismissedError) throw dismissedError;
+    if (dismissedError)
+      throw new Error(dismissedError.message ?? "Something went wrong on the server.");
     const dismissedKeys = new Set(
       (dismissedRows ?? []).map(
         (d: any) => `${d.source_type}::${d.record_id}::${d.dismissed_date}`,
@@ -961,7 +968,7 @@ export const upsertAdvisorNote = createServerFn({ method: "POST" })
       .eq("advisor_user_id", userId)
       .eq("status", "active")
       .maybeSingle();
-    if (linkError) throw linkError;
+    if (linkError) throw new Error(linkError.message ?? "Something went wrong on the server.");
     if (!link) throw new Error("No active link to this household.");
 
     const { error } = await supabase.from("advisor_record_notes" as any).upsert(
@@ -977,7 +984,7 @@ export const upsertAdvisorNote = createServerFn({ method: "POST" })
       },
       { onConflict: "link_id,record_id" },
     );
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? "Something went wrong on the server.");
     return { ok: true };
   });
 
@@ -999,7 +1006,7 @@ export const upsertAdvisorRecordStatus = createServerFn({ method: "POST" })
       .eq("advisor_user_id", userId)
       .eq("status", "active")
       .maybeSingle();
-    if (linkError) throw linkError;
+    if (linkError) throw new Error(linkError.message ?? "Something went wrong on the server.");
     if (!link) throw new Error("No active link to this household.");
 
     const { error } = await supabase.from("advisor_record_notes" as any).upsert(
@@ -1015,7 +1022,7 @@ export const upsertAdvisorRecordStatus = createServerFn({ method: "POST" })
       },
       { onConflict: "link_id,record_id" },
     );
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? "Something went wrong on the server.");
     return { ok: true };
   });
 
@@ -1031,7 +1038,7 @@ export const deleteAdvisorNote = createServerFn({ method: "POST" })
       .from("advisor_record_notes" as any)
       .delete()
       .eq("id", data.noteId);
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? "Something went wrong on the server.");
     return { ok: true };
   });
 
@@ -1064,7 +1071,7 @@ export const getAdvisorPolicyChart = createServerFn({ method: "POST" })
       .eq("advisor_user_id", userId)
       .eq("status", "active")
       .maybeSingle();
-    if (linkError) throw linkError;
+    if (linkError) throw new Error(linkError.message ?? "Something went wrong on the server.");
     if (!link) throw new Error("No active link to this household.");
 
     // Base-table query (not the summary view) for the specific raw fields
@@ -1080,7 +1087,7 @@ export const getAdvisorPolicyChart = createServerFn({ method: "POST" })
       .eq("id", data.insurancePolicyId)
       .eq("household_id", data.householdId)
       .maybeSingle();
-    if (policyError) throw policyError;
+    if (policyError) throw new Error(policyError.message ?? "Something went wrong on the server.");
     if (!policy) throw new Error("Policy not found or not shared with you.");
 
     const { data: chart, error: chartError } = await supabase
@@ -1089,7 +1096,7 @@ export const getAdvisorPolicyChart = createServerFn({ method: "POST" })
       .eq("link_id", (link as any).id)
       .eq("insurance_policy_id", data.insurancePolicyId)
       .maybeSingle();
-    if (chartError) throw chartError;
+    if (chartError) throw new Error(chartError.message ?? "Something went wrong on the server.");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: memberRow, error: memberError } = await supabaseAdmin
@@ -1097,7 +1104,7 @@ export const getAdvisorPolicyChart = createServerFn({ method: "POST" })
       .select("birth_year")
       .eq("id", data.memberId)
       .maybeSingle();
-    if (memberError) throw memberError;
+    if (memberError) throw new Error(memberError.message ?? "Something went wrong on the server.");
 
     const chartResult: {
       id: string;
@@ -1134,7 +1141,7 @@ export const upsertAdvisorPolicyChart = createServerFn({ method: "POST" })
       .eq("advisor_user_id", userId)
       .eq("status", "active")
       .maybeSingle();
-    if (linkError) throw linkError;
+    if (linkError) throw new Error(linkError.message ?? "Something went wrong on the server.");
     if (!link) throw new Error("No active link to this household.");
 
     const { data: saved, error } = await supabase
@@ -1154,7 +1161,7 @@ export const upsertAdvisorPolicyChart = createServerFn({ method: "POST" })
       )
       .select("id")
       .maybeSingle();
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? "Something went wrong on the server.");
     // Same "zero rows changed ≠ success" rule the rest of this file
     // follows — an upsert blocked by RLS's WITH CHECK doesn't error, it
     // just returns nothing.
@@ -1172,7 +1179,7 @@ export const deleteAdvisorPolicyChart = createServerFn({ method: "POST" })
       .from("advisor_policy_charts" as any)
       .delete()
       .eq("id", data.chartId);
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? "Something went wrong on the server.");
     return { ok: true };
   });
 
@@ -1191,14 +1198,14 @@ export const listAdvisorPolicyCharts = createServerFn({ method: "POST" })
       .eq("advisor_user_id", userId)
       .eq("status", "active")
       .maybeSingle();
-    if (linkError) throw linkError;
+    if (linkError) throw new Error(linkError.message ?? "Something went wrong on the server.");
     if (!link) throw new Error("No active link to this household.");
 
     const { data: charts, error } = await supabase
       .from("advisor_policy_charts" as any)
       .select("id, title, phases, insurance_policy_id, updated_at")
       .eq("link_id", (link as any).id);
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? "Something went wrong on the server.");
 
     const policyIds = [...new Set((charts ?? []).map((c: any) => c.insurance_policy_id))];
     let policyById = new Map<string, { name: string; currency: string | null }>();
@@ -1207,7 +1214,8 @@ export const listAdvisorPolicyCharts = createServerFn({ method: "POST" })
         .from("insurance_policies" as any)
         .select("id, name, currency")
         .in("id", policyIds);
-      if (policiesError) throw policiesError;
+      if (policiesError)
+        throw new Error(policiesError.message ?? "Something went wrong on the server.");
       policyById = new Map(
         (policies ?? []).map((p: any) => [p.id, { name: p.name, currency: p.currency }]),
       );
@@ -1245,7 +1253,7 @@ export const getAdvisorNotesForHousehold = createServerFn({ method: "POST" })
       .from("advisor_record_notes" as any)
       .select("id, record_id, record_category, note, advisor_user_id, updated_at")
       .eq("household_id", data.householdId);
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? "Something went wrong on the server.");
 
     const advisorIds = [...new Set((noteRows ?? []).map((n: any) => n.advisor_user_id))];
     const nameById = new Map<string, string>();
@@ -1261,7 +1269,8 @@ export const getAdvisorNotesForHousehold = createServerFn({ method: "POST" })
         .from("user_profiles" as any)
         .select("user_id, display_name, email")
         .in("user_id", advisorIds);
-      if (profilesError) throw profilesError;
+      if (profilesError)
+        throw new Error(profilesError.message ?? "Something went wrong on the server.");
       for (const p of (profiles ?? []) as any[]) {
         nameById.set(p.user_id, p.display_name || p.email || "Your adviser");
       }
@@ -1293,7 +1302,7 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
       )
       .eq("advisor_user_id", userId)
       .eq("status", "active");
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? "Something went wrong on the server.");
 
     const linkRows = (links ?? []) as any[];
     const linkIds = linkRows.map((l) => l.id);
@@ -1307,7 +1316,7 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
         .from("advisor_link_members" as any)
         .select("link_id, member_id")
         .in("link_id", linkIds);
-      if (lmError) throw lmError;
+      if (lmError) throw new Error(lmError.message ?? "Something went wrong on the server.");
       for (const row of (linkMembers ?? []) as any[]) {
         const arr = membersByLink.get(row.link_id) ?? [];
         arr.push(row.member_id);
@@ -1322,7 +1331,8 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
         .from("members" as any)
         .select("id, name")
         .in("id", allMemberIds);
-      if (memberError) throw memberError;
+      if (memberError)
+        throw new Error(memberError.message ?? "Something went wrong on the server.");
       for (const m of (memberRows ?? []) as any[]) memberNameById.set(m.id, m.name);
     }
 
@@ -1371,10 +1381,10 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
           .select("id, household_id, member_id, updated_at, hidden_from_advisors")
           .in("household_id", householdIds),
       ]);
-      if (insError) throw insError;
-      if (invError) throw invError;
-      if (propError) throw propError;
-      if (loanError) throw loanError;
+      if (insError) throw new Error(insError.message ?? "Something went wrong on the server.");
+      if (invError) throw new Error(invError.message ?? "Something went wrong on the server.");
+      if (propError) throw new Error(propError.message ?? "Something went wrong on the server.");
+      if (loanError) throw new Error(loanError.message ?? "Something went wrong on the server.");
       for (const row of (allInsurance ?? []) as any[]) {
         const arr = insuranceByHousehold.get(row.household_id) ?? [];
         arr.push(row);
@@ -1408,7 +1418,8 @@ export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
         .from("dismissed_dashboard_items" as any)
         .select("household_id, record_id, source_type, dismissed_date")
         .in("household_id", householdIds);
-      if (dismissedError) throw dismissedError;
+      if (dismissedError)
+        throw new Error(dismissedError.message ?? "Something went wrong on the server.");
       for (const d of (dismissedRows ?? []) as any[]) {
         const set = dismissedByHousehold.get(d.household_id) ?? new Set<string>();
         set.add(`${d.source_type}::${d.record_id}::${d.dismissed_date}`);
