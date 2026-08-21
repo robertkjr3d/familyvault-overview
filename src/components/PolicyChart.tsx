@@ -32,7 +32,8 @@ export type AdvisorPolicyChartSummary = {
   id: string;
   title: string | null;
   phases: ChartPhase[];
-  insurancePolicyId: string;
+  recordId: string;
+  recordCategory: "insurance" | "investments";
   policyName: string;
   currency: string | null;
   updatedAt: string;
@@ -113,14 +114,16 @@ export function usePolicyCharts(householdId: string, memberId: string) {
 // same interaction shape as RecordNote in AdvisorHome.tsx.
 // ============================================================
 export function PolicyChartToggle({
-  insurancePolicyId,
+  recordId,
+  recordCategory,
   householdId,
   memberId,
   charts,
   displayedIds,
   setDisplayedIds,
 }: {
-  insurancePolicyId: string;
+  recordId: string;
+  recordCategory: "insurance" | "investments";
   householdId: string;
   memberId: string;
   charts: AdvisorPolicyChartSummary[] | undefined;
@@ -128,7 +131,7 @@ export function PolicyChartToggle({
   setDisplayedIds: (updater: (prev: Set<string>) => Set<string>) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const existing = charts?.find((c) => c.insurancePolicyId === insurancePolicyId);
+  const existing = charts?.find((c) => c.recordId === recordId);
   const isDisplayed = existing ? displayedIds.has(existing.id) : false;
 
   let label = "Policy chart";
@@ -149,7 +152,8 @@ export function PolicyChartToggle({
       </button>
       {open && (
         <PolicyChartEditor
-          insurancePolicyId={insurancePolicyId}
+          recordId={recordId}
+          recordCategory={recordCategory}
           householdId={householdId}
           memberId={memberId}
           setDisplayedIds={setDisplayedIds}
@@ -160,12 +164,14 @@ export function PolicyChartToggle({
 }
 
 function PolicyChartEditor({
-  insurancePolicyId,
+  recordId,
+  recordCategory,
   householdId,
   memberId,
   setDisplayedIds,
 }: {
-  insurancePolicyId: string;
+  recordId: string;
+  recordCategory: "insurance" | "investments";
   householdId: string;
   memberId: string;
   setDisplayedIds: (updater: (prev: Set<string>) => Set<string>) => void;
@@ -175,8 +181,9 @@ function PolicyChartEditor({
   const [title, setTitle] = useState("");
 
   const { data, isLoading } = useQuery({
-    queryKey: ["advisor-policy-chart", householdId, memberId, insurancePolicyId],
-    queryFn: () => getAdvisorPolicyChart({ data: { householdId, memberId, insurancePolicyId } }),
+    queryKey: ["advisor-policy-chart", householdId, memberId, recordId],
+    queryFn: () =>
+      getAdvisorPolicyChart({ data: { householdId, memberId, recordCategory, recordId } }),
   });
 
   // Seed local editable state exactly once when the query resolves — from
@@ -208,7 +215,8 @@ function PolicyChartEditor({
         data: {
           householdId,
           memberId,
-          insurancePolicyId,
+          recordId,
+          recordCategory,
           title: title.trim() || undefined,
           phases: phases ?? [],
         },
@@ -220,7 +228,7 @@ function PolicyChartEditor({
       // hunt for a second toggle elsewhere on the page.
       setDisplayedIds((prev) => new Set(prev).add(result.chartId));
       void queryClient.invalidateQueries({
-        queryKey: ["advisor-policy-chart", householdId, memberId, insurancePolicyId],
+        queryKey: ["advisor-policy-chart", householdId, memberId, recordId],
       });
       void queryClient.invalidateQueries({
         queryKey: ["advisor-policy-charts", householdId, memberId],
@@ -246,7 +254,7 @@ function PolicyChartEditor({
         });
       }
       void queryClient.invalidateQueries({
-        queryKey: ["advisor-policy-chart", householdId, memberId, insurancePolicyId],
+        queryKey: ["advisor-policy-chart", householdId, memberId, recordId],
       });
       void queryClient.invalidateQueries({
         queryKey: ["advisor-policy-charts", householdId, memberId],
