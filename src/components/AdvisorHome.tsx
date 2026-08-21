@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { ChevronDown } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Toaster, toast } from "sonner";
 import {
@@ -305,24 +306,50 @@ function RecordNote({
   );
 }
 
-// Same status semantics/colors the household side already uses for
-// settled/review — Paid=settled(green), Ongoing=review(amber),
-// Review=urgent(red). Paid/Ongoing are computed from end_date and need
-// no FA action; Review only ever comes from the FA explicitly clicking
-// it (see upsertAdvisorRecordStatus's comment) — there's no signal in
-// the data alone that a client has quietly stopped paying.
-const STATUS_OPTIONS: { value: "paid" | "ongoing" | "review"; label: string; className: string }[] =
-  [
-    { value: "paid", label: "Paid", className: "bg-settled/15 text-settled border-settled/40" },
-    {
-      value: "ongoing",
-      label: "Ongoing",
-      className: "bg-review/15 text-review-foreground border-review/40",
-    },
-    { value: "review", label: "Review", className: "bg-urgent/15 text-urgent border-urgent/40" },
-  ];
+// Copies the household RecordCard's actual status pattern exactly (same
+// component name "StatusToggle" as household's — deliberately renamed here
+// to AdvisorStatusToggle to avoid two same-named-but-different components
+// in the codebase), not just its colors: a single pill button that opens a
+// dropdown of all 3 states (matching StatusToggle.tsx's dropdown, not the
+// earlier 3-buttons-in-a-row version this replaces), using the SAME
+// status-urgent/status-review/status-settled CSS classes and the same
+// urgent-tint/review-tint/settled-tint whole-card backgrounds — mapped
+// paid=settled(green), ongoing=review(amber), review=urgent(red). Paid/
+// Ongoing are computed from end_date and need no FA action; Review only
+// ever comes from the FA explicitly picking it (see
+// upsertAdvisorRecordStatus's comment) — there's no signal in the data
+// alone that a client has quietly stopped paying.
+const STATUS_CONFIG: Record<
+  "paid" | "ongoing" | "review",
+  { label: string; cls: string; dot: string; tint: string }
+> = {
+  paid: {
+    label: "Paid",
+    cls: "status-settled",
+    dot: "\ud83d\udfe2",
+    tint: "bg-settled-tint border-settled-border",
+  },
+  ongoing: {
+    label: "Ongoing",
+    cls: "status-review",
+    dot: "\ud83d\udfe1",
+    tint: "bg-review-tint border-review-border",
+  },
+  review: {
+    label: "Review",
+    cls: "status-urgent",
+    dot: "\ud83d\udd34",
+    tint: "bg-urgent-tint border-urgent-border",
+  },
+};
 
-function StatusToggle({
+// Exported so ClientDetail can tint the whole record card by the same
+// rule the toggle itself uses, without duplicating the color mapping.
+export function advisorStatusTint(status: "paid" | "ongoing" | "review"): string {
+  return STATUS_CONFIG[status].tint;
+}
+
+function AdvisorStatusToggle({
   record,
   householdId,
   memberId,
@@ -336,6 +363,19 @@ function StatusToggle({
   effectiveStatus: "paid" | "ongoing" | "review";
 }) {
   const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const c = STATUS_CONFIG[effectiveStatus];
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener("mousedown", handler);
+    return () => window.removeEventListener("mousedown", handler);
+  }, [open]);
+
   const mutation = useMutation({
     mutationFn: (status: "paid" | "ongoing" | "review") =>
       upsertAdvisorRecordStatus({
@@ -357,25 +397,47 @@ function StatusToggle({
   });
 
   return (
-    <div className="mt-1.5 flex gap-1">
-      {STATUS_OPTIONS.map((opt) => {
-        const isActive = effectiveStatus === opt.value;
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            disabled={mutation.isPending}
-            onPointerDown={(e) => {
-              e.preventDefault();
-              if (!isActive) mutation.mutate(opt.value);
-            }}
-            className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold transition-opacity ${opt.className}`}
-            style={{ opacity: isActive ? 1 : 0.35 }}
-          >
-            {opt.label}
-          </button>
-        );
-      })}
+    <div ref={ref} className="relative mt-1.5 inline-block border-t border-border/40 pt-1.5">
+      <button
+        type="button"
+        disabled={mutation.isPending}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${c.cls}`}
+      >
+        <span className="text-[8px]">{c.dot}</span>
+        {c.label}
+        <ChevronDown className="h-3 w-3 opacity-70" />
+      </button>
+      {open && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="absolute left-0 top-full z-20 mt-1 w-32 overflow-hidden rounded-lg border border-border bg-popover shadow-lg"
+        >
+          {(["paid", "ongoing", "review"] as const).map((s) => {
+            const cc = STATUS_CONFIG[s];
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpen(false);
+                  if (s !== effectiveStatus) mutation.mutate(s);
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold hover:bg-accent ${
+                  s === effectiveStatus ? "bg-accent/60" : ""
+                }`}
+              >
+                <span>{cc.dot}</span>
+                <span>{cc.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -725,7 +787,7 @@ function ClientDetail({
                   return (
                     <div
                       key={r.record_id}
-                      className="rounded-lg bg-background/50 px-3 py-2 text-sm"
+                      className={`rounded-lg border px-3 py-2 text-sm transition ${advisorStatusTint(effectiveStatus)}`}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <p className="min-w-0 flex-1 truncate font-medium">{r.record_name}</p>
@@ -750,7 +812,7 @@ function ClientDetail({
                           .filter(Boolean)
                           .join(" · ") || "—"}
                       </p>
-                      <StatusToggle
+                      <AdvisorStatusToggle
                         record={r}
                         householdId={householdId}
                         memberId={memberId}
