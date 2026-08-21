@@ -79,7 +79,15 @@ export function buildDefaultPhases(
     if (!dateStr) return null;
     const year = new Date(dateStr).getFullYear();
     if (Number.isNaN(year)) return null;
-    return year - birthYear;
+    const age = year - birthYear;
+    // Defensively clamp — a bad upstream date (e.g. a policy's end_date
+    // typo'd as a far-future year) must never silently produce an
+    // out-of-range default the chart schema then rejects at save time
+    // with a cryptic raw validation error. The FA can still edit the
+    // clamped value if 120 genuinely isn't right for their case.
+    if (age < 0) return 0;
+    if (age > 120) return 120;
+    return age;
   };
   const phases: ChartPhase[] = [];
 
