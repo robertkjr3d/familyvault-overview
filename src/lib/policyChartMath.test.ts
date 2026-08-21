@@ -249,4 +249,28 @@ describe("buildDefaultPhases", () => {
     expect(phases).toHaveLength(1);
     expect(phases[0].label).toBe("Payout");
   });
+
+  it("clamps a wildly out-of-range end_date to 120 instead of producing an unsaveable phase (the user's own reported case: a policy end_date typo'd as year 2189)", () => {
+    const phases = buildDefaultPhases(
+      {
+        ...basePolicy,
+        premium: 5000,
+        frequency: "annual",
+        start_date: "2024-01-01",
+        end_date: "2189-01-01",
+      },
+      1990,
+    );
+    expect(phases).toHaveLength(1);
+    expect(phases[0].endAge).toBe(120);
+    expect(phases[0].endAge).toBeLessThanOrEqual(120);
+  });
+
+  it("clamps a start_date before birth (bad data) to age 0 rather than a negative age", () => {
+    const phases = buildDefaultPhases(
+      { ...basePolicy, premium: 5000, frequency: "annual", start_date: "1985-01-01" },
+      1990,
+    );
+    expect(phases[0].startAge).toBe(0);
+  });
 });
