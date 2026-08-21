@@ -104,10 +104,21 @@ function AlertLabel({ text }: { text: string }) {
 }
 
 function LoanRow({
-  l, today, onStatus, onDelete, reminderCount, historyCount, documentsCount,
+  l,
+  today,
+  onStatus,
+  onDelete,
+  reminderCount,
+  historyCount,
+  documentsCount,
 }: {
-  l: any; today: Date; onStatus: (s: any) => void; onDelete: () => void;
-  reminderCount: number; historyCount: number; documentsCount: number;
+  l: any;
+  today: Date;
+  onStatus: (s: any) => void;
+  onDelete: () => void;
+  reminderCount: number;
+  historyCount: number;
+  documentsCount: number;
 }) {
   const edit = useEditRecord("loans", l);
   const dup = useDuplicateRecord("loans", l);
@@ -121,18 +132,25 @@ function LoanRow({
       : null;
   const rateParts = [l.rate ? `${l.rate}%` : null, l.rate_label || null].filter(Boolean);
   const rateSubtitle = rateParts.join(" · ");
-  const actionParts = [l.reprice_date ? `Reprice by ${fmtMonth(l.reprice_date)}` : null, l.action || null].filter(Boolean);
+  const actionParts = [
+    l.reprice_date ? `Reprice by ${fmtMonth(l.reprice_date)}` : null,
+    l.action || null,
+  ].filter(Boolean);
   const actionLabel = actionParts.join(" · ") || null;
   const displayedMonthlyPayment = l.monthly_payment || calcPmt;
 
   const [cardOpen, setCardOpen] = useState(false);
-  const [section, setSection] = useState<"notes" | "reminders" | "history" | "documents" | null>(null);
+  const [section, setSection] = useState<"notes" | "reminders" | "history" | "documents" | null>(
+    null,
+  );
 
   function openSection(target: "notes" | "reminders" | "history" | "documents") {
     setCardOpen(true);
     setSection(target);
     setTimeout(() => {
-      document.getElementById(`${target}-${l.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document
+        .getElementById(`${target}-${l.id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 60);
   }
 
@@ -164,7 +182,10 @@ function LoanRow({
         rightMeta={
           <div className="text-right text-xs">
             <div className="text-muted-foreground">Balance</div>
-            <div className="font-bold">{fmtMoney(l.balance, l.currency)} <span className="text-[10px] font-normal text-muted-foreground">(est.)</span></div>
+            <div className="font-bold text-urgent">
+              {fmtMoney(l.balance, l.currency)}{" "}
+              <span className="text-[10px] font-normal text-muted-foreground">(est.)</span>
+            </div>
             {displayedMonthlyPayment && (
               <div className="font-semibold text-urgent">
                 −{fmtMoney(displayedMonthlyPayment, l.currency)}/mo
@@ -180,14 +201,34 @@ function LoanRow({
           <FieldRow label="Term (years)" value={l.term_years ?? "—"} />
           <FieldRow label="Current rate" value={l.rate_label || fmtPct(l.rate)} />
           <FieldRow label={<AlertLabel text="Reprice date" />} value={fmtDate(l.reprice_date)} />
-          <FieldRow label="Loan end date" value={l.loan_end_date ? fmtDate(l.loan_end_date) : <span className="text-muted-foreground text-xs">Not set — chart assumes ongoing</span>} />
+          <FieldRow
+            label="Loan end date"
+            value={
+              l.loan_end_date ? (
+                fmtDate(l.loan_end_date)
+              ) : (
+                <span className="text-muted-foreground text-xs">
+                  Not set — chart assumes ongoing
+                </span>
+              )
+            }
+          />
           {l.action && <FieldRow label="Action" value={l.action} />}
           <FieldRow
             label="Est. monthly repayment"
-            value={calcPmt ? <span className="font-bold text-primary">{fmtMoney(calcPmt, l.currency)}</span> : "—"}
+            value={
+              calcPmt ? (
+                <span className="font-bold text-primary">{fmtMoney(calcPmt, l.currency)}</span>
+              ) : (
+                "—"
+              )
+            }
           />
           {calcBal != null && (
-            <FieldRow label="Est. balance today" value={<span className="text-muted-foreground">{fmtMoney(calcBal, l.currency)}</span>} />
+            <FieldRow
+              label="Est. balance today"
+              value={<span className="text-muted-foreground">{fmtMoney(calcBal, l.currency)}</span>}
+            />
           )}
         </Section>
 
