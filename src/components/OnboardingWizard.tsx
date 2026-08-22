@@ -11,6 +11,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/MoneyInput";
 import { compressImage } from "@/lib/imageCompression";
+import { validateInventoryPhoto } from "@/lib/uploadValidation";
 import { INSURANCE_CATEGORIES, INSURANCE_FREQ } from "@/lib/options";
 import { Home, Shield, Package, TrendingUp, Check, Camera, X, ChevronRight } from "lucide-react";
 
@@ -355,6 +356,14 @@ function QuickAddInventoryItem({ onSaved }: { onSaved: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   function pickPhoto(f: File | null) {
+    if (f) {
+      const validation = validateInventoryPhoto(f);
+      if (!validation.ok) {
+        toast.error(validation.message);
+        if (fileRef.current) fileRef.current.value = "";
+        return;
+      }
+    }
     setPhotoFile(f);
     setPreview(f ? URL.createObjectURL(f) : null);
   }
@@ -391,6 +400,12 @@ function QuickAddInventoryItem({ onSaved }: { onSaved: () => void }) {
       let photo_url: string | null = null;
       if (photoFile) {
         const compressed = await compressImage(photoFile);
+        // compressImage falls back to the original file untouched if it can't
+        // be decoded as an image — re-check in case that fallback left us
+        // over the limit, so we still fail with a plain message, not a raw
+        // Supabase error.
+        const recheck = validateInventoryPhoto(compressed);
+        if (!recheck.ok) throw new Error(recheck.message);
         const path = `${activeHouseholdId}/items/${Date.now()}-${compressed.name}`;
         const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
         if (upErr) throw upErr;
