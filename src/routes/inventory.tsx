@@ -19,6 +19,7 @@ import { fmtDate } from "@/lib/format";
 import { useAppStore } from "@/lib/store";
 import { compressImage } from "@/lib/imageCompression";
 import { validateInventoryPhoto } from "@/lib/uploadValidation";
+import { checkHouseholdQuota } from "@/lib/storageQuota";
 import { getDisplayUrl, getExportUrl } from "@/lib/storageUrls";
 import { SignedImg } from "@/components/SignedImg";
 import { useCurrentRole } from "@/lib/useCurrentRole";
@@ -28,7 +29,7 @@ component: InventoryPage,
 head: () => ({ meta: [{ title: "Inventory — FamilyHub SG" }] }),
 });
 
-type Folder = { id: string; name: string; parent_id: string | null; photo_url: string | null; sort_order: number };
+type Folder = { id: string; name: string; parent_id: string | null; photo_url: string | null; photo_size_bytes: number | null; sort_order: number };
 type Item = {
 id: string;
 folder_id: string;
@@ -37,6 +38,7 @@ category: string | null;
 action: string | null;
 warranty_date: string | null;
 photo_url: string | null;
+photo_size_bytes: number | null;
 };
 
 function InventoryPage() {
@@ -91,7 +93,7 @@ const { data } = await supabase
 .select("*")
 .eq("household_id", activeHouseholdId)
 .order("sort_order");
-return (data ?? []) as Folder[];
+return (data ?? []) as unknown as Folder[];
 },
 });
 
@@ -101,7 +103,7 @@ enabled: !!activeHouseholdId,
 queryFn: async () => {
 if (!activeHouseholdId) return [];
 const { data } = await supabase.from("inventory_items").select("*").eq("household_id", activeHouseholdId).order("name");
-return (data ?? []) as Item[];
+return (data ?? []) as unknown as Item[];
 },
 });
 
@@ -934,6 +936,7 @@ className="h-9 flex-1"
 function AddFolderSheet({ open, onClose, parentId }: { open: boolean; onClose: () => void; parentId: string | null }) {
 const qc = useQueryClient();
 const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
+const { storageTier, storageBytesUsed } = useCurrentRole();
 const [name, setName] = useState("");
 const [photoFile, setPhotoFile] = useState<File | null>(null);
 const [preview, setPreview] = useState<string | null>(null);
@@ -952,22 +955,30 @@ if (!activeHouseholdId) { toast.error("Select a household first."); return; }
 setSaving(true);
 try {
 let photo_url: string | null = null;
+let photo_size_bytes: number | null = null;
 if (photoFile) {
 const compressed = await compressImage(photoFile);
 const recheck = validateInventoryPhoto(compressed);
 if (!recheck.ok) throw new Error(recheck.message);
+const quota = checkHouseholdQuota({ tier: storageTier, bytesUsed: storageBytesUsed, incomingFileBytes: compressed.size });
+if (!quota.ok) throw new Error(quota.message);
 const path = `${activeHouseholdId}/folders/${Date.now()}-${compressed.name}`;
 const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
 if (upErr) throw upErr;
 photo_url = path;
+photo_size_bytes = compressed.size;
 }
 const { error } = await supabase.from("inventory_folders").insert({
 household_id: activeHouseholdId,
 name: name.trim(),
 photo_url,
+photo_size_bytes,
 parent_id: parentId,
-});
+} as any);
 if (error) throw error;
+if (photo_size_bytes) {
+await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: photo_size_bytes });
+}
 toast.success("Location added");
 qc.invalidateQueries({ queryKey: ["folders"] });
 reset(); onClose();
@@ -1043,7 +1054,7 @@ setPreview(URL.createObjectURL(f));
 /* ––––– Folder Detail ––––– */
 function FolderSheet({ folder, items, allItems, onClose, subfolders, onOpenSubfolder, parentFolder, topLevelFolders, itemMoveOptions }: { folder: Folder; items: Item[]; allItems: Item[]; onClose: () => void; subfolders: Folder[]; onOpenSubfolder: (f: Folder) => void; parentFolder?: Folder | null; topLevelFolders: Folder[]; itemMoveOptions: { id: string; label: string }[] }) {
 const qc = useQueryClient();
-const { canEdit } = useCurrentRole();
+const { canEdit, storageTier, storageBytesUsed } = useCurrentRole();
 const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
 const [adding, setAdding] = useState(false);
 const [editingItem, setEditingItem] = useState<Item | null>(null);
@@ -1084,6 +1095,11 @@ const subfolderItems = allItems.filter((it) => subfolderIds.includes(it.folder_i
 const totalItems = items.length + subfolderItems.length;
 if (!confirm(`Delete "${folder.name}" and everything inside — ${totalItems} item(s) and ${subfolderIds.length} subfolder(s)?`)) return;
 const itemIds = [...items.map((it) => it.id), ...subfolderItems.map((it) => it.id)];
+// Collect every photo this deletion is about to orphan (this folder's own
+// photo, its subfolders' photos, and every item's photo underneath) BEFORE
+// the rows are gone and we lose the paths/sizes needed to clean them up.
+const photoUrls = [folder.photo_url, ...subfolders.map((sf) => sf.photo_url), ...items.map((it) => it.photo_url), ...subfolderItems.map((it) => it.photo_url)].filter((p): p is string => !!p);
+const totalPhotoBytes = [folder, ...subfolders, ...items, ...subfolderItems].reduce((sum, x) => sum + (x.photo_size_bytes ?? 0), 0);
 await supabase.from("inventory_items").delete().eq("folder_id", folder.id);
 if (subfolderIds.length > 0) {
 await supabase.from("inventory_items").delete().in("folder_id", subfolderIds);
@@ -1092,6 +1108,12 @@ await supabase.from("inventory_folders").delete().in("id", subfolderIds);
 await supabase.from("inventory_folders").delete().eq("id", folder.id);
 if (itemIds.length > 0) {
 await supabase.from("reminders").delete().eq("entity_type", "inventory").in("entity_id", itemIds);
+}
+if (photoUrls.length > 0) {
+await supabase.storage.from("inventory-photos").remove(photoUrls);
+}
+if (totalPhotoBytes > 0) {
+await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: -totalPhotoBytes });
 }
 toast.success("Location deleted");
 qc.invalidateQueries({ queryKey: ["folders"] });
@@ -1109,30 +1131,56 @@ if (!preCheck.ok) { toast.error(preCheck.message); return; }
 const compressed = await compressImage(f);
 const recheck = validateInventoryPhoto(compressed);
 if (!recheck.ok) { toast.error(recheck.message); return; }
+const quota = checkHouseholdQuota({ tier: storageTier, bytesUsed: storageBytesUsed, incomingFileBytes: compressed.size });
+if (!quota.ok) { toast.error(quota.message); return; }
 const path = `${activeHouseholdId}/folders/${Date.now()}-${compressed.name}`;
 const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
 if (upErr) { toast.error(upErr.message); return; }
 const photo_url = path;
-const { data, error } = await supabase.from("inventory_folders").update({ photo_url }).eq("id", folder.id).select("id").maybeSingle();
+const oldPhotoUrl = folder.photo_url;
+const oldPhotoBytes = folder.photo_size_bytes ?? 0;
+const { data, error } = await supabase.from("inventory_folders").update({ photo_url, photo_size_bytes: compressed.size } as any).eq("id", folder.id).select("id").maybeSingle();
 if (error) { toast.error(error.message); return; }
 if (!data) { toast.error("Nothing was updated — you may not have permission to edit this."); return; }
+if (oldPhotoUrl) {
+await supabase.storage.from("inventory-photos").remove([oldPhotoUrl]);
+}
+const netDelta = compressed.size - oldPhotoBytes;
+if (netDelta !== 0) {
+await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: netDelta });
+}
 toast.success("Photo updated");
 qc.invalidateQueries({ queryKey: ["folders"] });
 }
 
 async function removeFolderPhoto() {
 if (!confirm("Remove this photo?")) return;
-const { data, error } = await supabase.from("inventory_folders").update({ photo_url: null }).eq("id", folder.id).select("id").maybeSingle();
+const oldPhotoUrl = folder.photo_url;
+const oldPhotoBytes = folder.photo_size_bytes ?? 0;
+const { data, error } = await supabase.from("inventory_folders").update({ photo_url: null, photo_size_bytes: null } as any).eq("id", folder.id).select("id").maybeSingle();
 if (error) { toast.error(error.message); return; }
 if (!data) { toast.error("Nothing was updated — you may not have permission to edit this."); return; }
+if (oldPhotoUrl) {
+await supabase.storage.from("inventory-photos").remove([oldPhotoUrl]);
+}
+if (oldPhotoBytes > 0) {
+await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: -oldPhotoBytes });
+}
 toast.success("Photo removed");
 qc.invalidateQueries({ queryKey: ["folders"] });
 }
 
 async function delItem(id: string) {
 if (!confirm("Delete this item?")) return;
+const target = allItems.find((it) => it.id === id) ?? items.find((it) => it.id === id);
 await supabase.from("inventory_items").delete().eq("id", id);
 await supabase.from("reminders").delete().eq("entity_type", "inventory").eq("entity_id", id);
+if (target?.photo_url) {
+await supabase.storage.from("inventory-photos").remove([target.photo_url]);
+}
+if (target?.photo_size_bytes) {
+await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: -target.photo_size_bytes });
+}
 qc.invalidateQueries({ queryKey: ["inventory_items"] });
 }
 
@@ -1530,6 +1578,7 @@ className="block w-full rounded-md border border-border px-3 py-2 text-left text
 function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => void }) {
 const qc = useQueryClient();
 const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
+const { storageTier, storageBytesUsed } = useCurrentRole();
 const [name, setName] = useState("");
 const [category, setCategory] = useState("");
 const [action, setAction] = useState("");
@@ -1544,14 +1593,18 @@ if (!activeHouseholdId) { toast.error("Select a household first."); return; }
 setSaving(true);
 try {
 let photo_url: string | null = null;
+let photo_size_bytes: number | null = null;
 if (photoFile) {
 const compressed = await compressImage(photoFile);
 const recheck = validateInventoryPhoto(compressed);
 if (!recheck.ok) throw new Error(recheck.message);
+const quota = checkHouseholdQuota({ tier: storageTier, bytesUsed: storageBytesUsed, incomingFileBytes: compressed.size });
+if (!quota.ok) throw new Error(quota.message);
 const path = `${activeHouseholdId}/items/${Date.now()}-${compressed.name}`;
 const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
 if (upErr) throw upErr;
 photo_url = path;
+photo_size_bytes = compressed.size;
 }
 const { error } = await supabase
 .from("inventory_items")
@@ -1562,8 +1615,12 @@ category: category.trim() || null,
 action: action.trim() || null,
 warranty_date: warranty || null,
 photo_url,
-});
+photo_size_bytes,
+} as any);
 if (error) throw error;
+if (photo_size_bytes) {
+await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: photo_size_bytes });
+}
 
   toast.success("Item added");
   qc.invalidateQueries({ queryKey: ["inventory_items"] });
@@ -1652,6 +1709,7 @@ className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-xl 
 function EditItemForm({ item, onDone }: { item: Item; onDone: () => void }) {
 const qc = useQueryClient();
 const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
+const { storageTier, storageBytesUsed } = useCurrentRole();
 const [name, setName] = useState(item.name);
 const [category, setCategory] = useState(item.category ?? "");
 const [action, setAction] = useState(item.action ?? "");
@@ -1683,9 +1741,17 @@ onDone();
 
 async function removePhoto() {
 if (!confirm("Remove this photo?")) return;
-const { data, error } = await supabase.from("inventory_items").update({ photo_url: null }).eq("id", item.id).select("id").maybeSingle();
+const oldPhotoUrl = item.photo_url;
+const oldPhotoBytes = item.photo_size_bytes ?? 0;
+const { data, error } = await supabase.from("inventory_items").update({ photo_url: null, photo_size_bytes: null } as any).eq("id", item.id).select("id").maybeSingle();
 if (error) { toast.error(error.message); return; }
 if (!data) { toast.error("Nothing was updated — you may not have permission to edit this."); return; }
+if (oldPhotoUrl) {
+await supabase.storage.from("inventory-photos").remove([oldPhotoUrl]);
+}
+if (oldPhotoBytes > 0) {
+await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: -oldPhotoBytes });
+}
 toast.success("Photo removed");
 qc.invalidateQueries({ queryKey: ["inventory_items"] });
 }
@@ -1697,13 +1763,24 @@ if (!preCheck.ok) { toast.error(preCheck.message); return; }
 const compressed = await compressImage(f);
 const recheck = validateInventoryPhoto(compressed);
 if (!recheck.ok) { toast.error(recheck.message); return; }
+const quota = checkHouseholdQuota({ tier: storageTier, bytesUsed: storageBytesUsed, incomingFileBytes: compressed.size });
+if (!quota.ok) { toast.error(quota.message); return; }
 const path = `${activeHouseholdId}/items/${Date.now()}-${compressed.name}`;
 const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
 if (upErr) { toast.error(upErr.message); return; }
 const photo_url = path;
-const { data, error } = await supabase.from("inventory_items").update({ photo_url }).eq("id", item.id).select("id").maybeSingle();
+const oldPhotoUrl = item.photo_url;
+const oldPhotoBytes = item.photo_size_bytes ?? 0;
+const { data, error } = await supabase.from("inventory_items").update({ photo_url, photo_size_bytes: compressed.size } as any).eq("id", item.id).select("id").maybeSingle();
 if (error) { toast.error(error.message); return; }
 if (!data) { toast.error("Nothing was updated — you may not have permission to edit this."); return; }
+if (oldPhotoUrl) {
+await supabase.storage.from("inventory-photos").remove([oldPhotoUrl]);
+}
+const netDelta = compressed.size - oldPhotoBytes;
+if (netDelta !== 0) {
+await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: netDelta });
+}
 toast.success("Photo added");
 qc.invalidateQueries({ queryKey: ["inventory_items"] });
 }
