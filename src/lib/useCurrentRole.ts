@@ -27,14 +27,14 @@ export function useCurrentRole() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("household_users" as any)
-        .select("household_id, role, has_seen_tour, households(id, name)")
+        .select("household_id, role, has_seen_tour, households(id, name, storage_tier, storage_bytes_used)")
         .eq("user_id", user!.id);
       if (error) throw error;
       return (data ?? []) as unknown as Array<{
         household_id: string;
         role: Role;
         has_seen_tour: boolean;
-        households: { id: string; name: string } | null;
+        households: { id: string; name: string; storage_tier: string | null; storage_bytes_used: number | null } | null;
       }>;
     },
   });
@@ -54,7 +54,20 @@ export function useCurrentRole() {
   // screen before the real value arrives.
   const hasSeenTour: boolean | undefined = selectedMembership ? selectedMembership.has_seen_tour : undefined;
 
+  const storageTier: string | null = selectedMembership?.households?.storage_tier ?? "free";
+  const storageBytesUsed: number = selectedMembership?.households?.storage_bytes_used ?? 0;
+
   const canEdit = role === "owner" || role === "member";
 
-  return { role, canEdit, isViewer: role === "viewer", isLoading, householdId, householdName, hasSeenTour };
+  return {
+    role,
+    canEdit,
+    isViewer: role === "viewer",
+    isLoading,
+    householdId,
+    householdName,
+    hasSeenTour,
+    storageTier,
+    storageBytesUsed,
+  };
 }

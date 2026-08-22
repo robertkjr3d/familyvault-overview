@@ -27,7 +27,7 @@ export const INVENTORY_PHOTO_ALLOWED_MIME = [
   "image/webp",
 ] as const;
 
-function humanSize(bytes: number): string {
+export function humanSize(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
   if (bytes >= 1024) return `${Math.round(bytes / 1024)}KB`;
   return `${bytes} bytes`;
