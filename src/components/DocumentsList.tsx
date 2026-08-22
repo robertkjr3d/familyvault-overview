@@ -9,6 +9,7 @@ import { format } from "date-fns";
 import { useAppStore } from "@/lib/store";
 import { getDisplayUrl } from "@/lib/storageUrls";
 import { useCurrentRole } from "@/lib/useCurrentRole";
+import { validateVaultDoc } from "@/lib/uploadValidation";
 
 export function DocumentsList({ entityType, entityId }: { entityType: string; entityId: string }) {
   const { canEdit } = useCurrentRole();
@@ -59,6 +60,12 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
     if (!file) return;
     if (!activeHouseholdId) {
       toast.error("Select a household first.");
+      return;
+    }
+    const validation = validateVaultDoc(file);
+    if (!validation.ok) {
+      toast.error(validation.message);
+      if (fileRef.current) fileRef.current.value = "";
       return;
     }
     setUploading(true);
@@ -220,10 +227,20 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
           <p className="text-[11px] text-muted-foreground">
             Links to uploaded files aren't password-protected — anyone with the exact link can open it. Avoid sharing it outside people you trust with this document.
           </p>
+          {mode === "upload" && (
+            <p className="text-[11px] text-muted-foreground">Max 10MB · JPEG, PNG, WebP or PDF</p>
+          )}
 
           {mode === "upload" && (
             <>
-              <input ref={fileRef} type="file" onChange={onFile} className="hidden" id={`up-${entityId}`} />
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                onChange={onFile}
+                className="hidden"
+                id={`up-${entityId}`}
+              />
               <Button asChild size="sm" variant="outline" disabled={uploading} className="w-full">
                 <label htmlFor={`up-${entityId}`} className="cursor-pointer">
                   <Upload className="mr-1 h-3.5 w-3.5" />
