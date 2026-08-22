@@ -10,9 +10,10 @@ import { useAppStore } from "@/lib/store";
 import { getDisplayUrl } from "@/lib/storageUrls";
 import { useCurrentRole } from "@/lib/useCurrentRole";
 import { validateVaultDoc } from "@/lib/uploadValidation";
+import { checkHouseholdQuota } from "@/lib/storageQuota";
 
 export function DocumentsList({ entityType, entityId }: { entityType: string; entityId: string }) {
-  const { canEdit } = useCurrentRole();
+  const { canEdit, storageTier, storageBytesUsed } = useCurrentRole();
   const qc = useQueryClient();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const [uploading, setUploading] = useState(false);
@@ -68,6 +69,12 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
       if (fileRef.current) fileRef.current.value = "";
       return;
     }
+    const quota = checkHouseholdQuota({ tier: storageTier, bytesUsed: storageBytesUsed, incomingFileBytes: file.size });
+    if (!quota.ok) {
+      toast.error(quota.message);
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
     setUploading(true);
     try {
       const path = `${activeHouseholdId}/${entityType}/${entityId}/${Date.now()}-${file.name}`;
@@ -79,8 +86,13 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
         path,
         bucket: "vault-docs",
         label: file.name,
-      });
+        size_bytes: file.size,
+      } as any);
       if (insErr) throw insErr;
+      await (supabase.rpc as any)("increment_household_storage", {
+        p_household_id: activeHouseholdId,
+        p_delta: file.size,
+      });
       if (fileRef.current) fileRef.current.value = "";
       qc.invalidateQueries({ queryKey: ["docs", entityType, entityId] });
       toast.success("Document uploaded");
@@ -160,6 +172,10 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
     if (!data) { toast.error("Nothing was deleted — you may not have permission to remove this."); return; }
     if (doc.bucket !== "external") {
       await supabase.storage.from("vault-docs").remove([doc.path]);
+      await (supabase.rpc as any)("increment_household_storage", {
+        p_household_id: activeHouseholdId,
+        p_delta: -(doc.size_bytes ?? 0),
+      });
     }
     toast.success("Document removed");
     qc.invalidateQueries({ queryKey: ["docs", entityType, entityId] });

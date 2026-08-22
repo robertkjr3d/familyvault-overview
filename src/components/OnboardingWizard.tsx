@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/MoneyInput";
 import { compressImage } from "@/lib/imageCompression";
 import { validateInventoryPhoto } from "@/lib/uploadValidation";
+import { checkHouseholdQuota } from "@/lib/storageQuota";
+import { useCurrentRole } from "@/lib/useCurrentRole";
 import { INSURANCE_CATEGORIES, INSURANCE_FREQ } from "@/lib/options";
 import { Home, Shield, Package, TrendingUp, Check, Camera, X, ChevronRight } from "lucide-react";
 
@@ -348,6 +350,7 @@ function QuickAddInsurance({ onSaved }: { onSaved: () => void }) {
 /* ---------- Step 3: Inventory ---------- */
 function QuickAddInventoryItem({ onSaved }: { onSaved: () => void }) {
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
+  const { storageTier, storageBytesUsed } = useCurrentRole();
   const qc = useQueryClient();
   const [name, setName] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -398,6 +401,7 @@ function QuickAddInventoryItem({ onSaved }: { onSaved: () => void }) {
       }
 
       let photo_url: string | null = null;
+      let photo_size_bytes: number | null = null;
       if (photoFile) {
         const compressed = await compressImage(photoFile);
         // compressImage falls back to the original file untouched if it can't
@@ -406,18 +410,28 @@ function QuickAddInventoryItem({ onSaved }: { onSaved: () => void }) {
         // Supabase error.
         const recheck = validateInventoryPhoto(compressed);
         if (!recheck.ok) throw new Error(recheck.message);
+        const quota = checkHouseholdQuota({ tier: storageTier, bytesUsed: storageBytesUsed, incomingFileBytes: compressed.size });
+        if (!quota.ok) throw new Error(quota.message);
         const path = `${activeHouseholdId}/items/${Date.now()}-${compressed.name}`;
         const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
         if (upErr) throw upErr;
         photo_url = path;
+        photo_size_bytes = compressed.size;
       }
 
       const { error } = await supabase.from("inventory_items").insert({
         folder_id: folderId,
         name: name.trim(),
         photo_url,
-      });
+        photo_size_bytes,
+      } as any);
       if (error) throw error;
+      if (photo_url) {
+        await (supabase.rpc as any)("increment_household_storage", {
+          p_household_id: activeHouseholdId,
+          p_delta: photo_size_bytes,
+        });
+      }
 
       toast.success("Item added — try searching for it on the Inventory tab");
       qc.invalidateQueries({ queryKey: ["dashboard"] });
