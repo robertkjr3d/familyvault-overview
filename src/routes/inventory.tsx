@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { fmtDate } from "@/lib/format";
 import { useAppStore } from "@/lib/store";
 import { compressImage } from "@/lib/imageCompression";
+import { validateInventoryPhoto } from "@/lib/uploadValidation";
 import { getDisplayUrl, getExportUrl } from "@/lib/storageUrls";
 import { SignedImg } from "@/components/SignedImg";
 import { useCurrentRole } from "@/lib/useCurrentRole";
@@ -953,6 +954,8 @@ try {
 let photo_url: string | null = null;
 if (photoFile) {
 const compressed = await compressImage(photoFile);
+const recheck = validateInventoryPhoto(compressed);
+if (!recheck.ok) throw new Error(recheck.message);
 const path = `${activeHouseholdId}/folders/${Date.now()}-${compressed.name}`;
 const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
 if (upErr) throw upErr;
@@ -1012,6 +1015,12 @@ className="hidden"
 onChange={(e) => {
 const f = e.target.files?.[0];
 if (!f) return;
+const validation = validateInventoryPhoto(f);
+if (!validation.ok) {
+toast.error(validation.message);
+if (fileRef.current) fileRef.current.value = "";
+return;
+}
 setPhotoFile(f);
 setPreview(URL.createObjectURL(f));
 }}
@@ -1095,7 +1104,11 @@ if (!activeHouseholdId) {
 toast.error("Select a household first.");
 return;
 }
+const preCheck = validateInventoryPhoto(f);
+if (!preCheck.ok) { toast.error(preCheck.message); return; }
 const compressed = await compressImage(f);
+const recheck = validateInventoryPhoto(compressed);
+if (!recheck.ok) { toast.error(recheck.message); return; }
 const path = `${activeHouseholdId}/folders/${Date.now()}-${compressed.name}`;
 const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
 if (upErr) { toast.error(upErr.message); return; }
@@ -1533,6 +1546,8 @@ try {
 let photo_url: string | null = null;
 if (photoFile) {
 const compressed = await compressImage(photoFile);
+const recheck = validateInventoryPhoto(compressed);
+if (!recheck.ok) throw new Error(recheck.message);
 const path = `${activeHouseholdId}/items/${Date.now()}-${compressed.name}`;
 const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
 if (upErr) throw upErr;
@@ -1580,7 +1595,24 @@ return (
 <div className="space-y-2">
 <Label className="text-xs">Photo (optional)</Label>
 <p className="text-[11px] text-muted-foreground">Photos are automatically compressed (~200KB) to keep the app fast and free.</p>
-<input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)} />
+<input
+ref={fileRef}
+type="file"
+accept="image/*"
+capture="environment"
+className="hidden"
+onChange={(e) => {
+const f = e.target.files?.[0];
+if (!f) { setPhotoFile(null); return; }
+const validation = validateInventoryPhoto(f);
+if (!validation.ok) {
+toast.error(validation.message);
+if (fileRef.current) fileRef.current.value = "";
+return;
+}
+setPhotoFile(f);
+}}
+/>
 {photoFile ? (
 <div className="relative inline-block">
 <img
@@ -1660,7 +1692,11 @@ qc.invalidateQueries({ queryKey: ["inventory_items"] });
 
 async function changeItemPhoto(f: File) {
 if (!activeHouseholdId) { toast.error("Select a household first."); return; }
+const preCheck = validateInventoryPhoto(f);
+if (!preCheck.ok) { toast.error(preCheck.message); return; }
 const compressed = await compressImage(f);
+const recheck = validateInventoryPhoto(compressed);
+if (!recheck.ok) { toast.error(recheck.message); return; }
 const path = `${activeHouseholdId}/items/${Date.now()}-${compressed.name}`;
 const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
 if (upErr) { toast.error(upErr.message); return; }
