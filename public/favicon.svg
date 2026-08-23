@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <rect x="0" y="0" width="64" height="64" rx="14" fill="#FBF8F0"/>
   <!-- Roof: inverted V -->
-  <path d="M9 30 L32 10 L55 30" fill="none" stroke="#2B2E3A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M9 26.75 L32 6.75 L55 26.75" fill="none" stroke="#2B2E3A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
   <!-- 3 status bars: urgent (red), review (yellow), settled (green) -->
-  <rect x="15" y="34" width="34" height="6.5" rx="3.25" fill="#DC3B24"/>
-  <rect x="15" y="44" width="34" height="6.5" rx="3.25" fill="#E0A430"/>
-  <rect x="15" y="54" width="34" height="6.5" rx="3.25" fill="#3FA66A"/>
+  <rect x="15" y="30.75" width="34" height="6.5" rx="3.25" fill="#DC3B24"/>
+  <rect x="15" y="40.75" width="34" height="6.5" rx="3.25" fill="#E0A430"/>
+  <rect x="15" y="50.75" width="34" height="6.5" rx="3.25" fill="#3FA66A"/>
 </svg>
