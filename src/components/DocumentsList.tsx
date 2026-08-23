@@ -89,10 +89,12 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
         size_bytes: file.size,
       } as any);
       if (insErr) throw insErr;
-      await (supabase.rpc as any)("increment_household_storage", {
+      const { error: rpcErr } = await (supabase.rpc as any)("increment_household_storage", {
         p_household_id: activeHouseholdId,
         p_delta: file.size,
       });
+      if (rpcErr) console.error("Failed to update storage usage counter:", rpcErr.message);
+      qc.invalidateQueries({ queryKey: ["household-memberships"] });
       if (fileRef.current) fileRef.current.value = "";
       qc.invalidateQueries({ queryKey: ["docs", entityType, entityId] });
       toast.success("Document uploaded");
@@ -172,10 +174,12 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
     if (!data) { toast.error("Nothing was deleted — you may not have permission to remove this."); return; }
     if (doc.bucket !== "external") {
       await supabase.storage.from("vault-docs").remove([doc.path]);
-      await (supabase.rpc as any)("increment_household_storage", {
+      const { error: rpcErr } = await (supabase.rpc as any)("increment_household_storage", {
         p_household_id: activeHouseholdId,
         p_delta: -(doc.size_bytes ?? 0),
       });
+      if (rpcErr) console.error("Failed to update storage usage counter:", rpcErr.message);
+      qc.invalidateQueries({ queryKey: ["household-memberships"] });
     }
     toast.success("Document removed");
     qc.invalidateQueries({ queryKey: ["docs", entityType, entityId] });
