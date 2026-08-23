@@ -224,10 +224,11 @@ function SettingsPage() {
   }
 
   async function clearDemo() {
+    if (!activeHouseholdId) { toast.error("Select a household first."); return; }
     if (!confirm("Are you sure? This cannot be undone.")) return;
     const tables = ["properties", "loans", "insurance_policies", "investments", "savings_accounts", "health_conditions"];
     for (const t of tables) {
-      const { error } = await supabase.from(t as any).delete().eq("is_demo", true);
+      const { error } = await supabase.from(t as any).delete().eq("is_demo", true).eq("household_id", activeHouseholdId);
       if (error) { toast.error(`Couldn't clear ${t}: ${error.message}`); return; }
     }
     qc.invalidateQueries();
@@ -791,7 +792,7 @@ function SettingsPage() {
       <section className="rounded-2xl border border-border bg-card p-4">
         <h2 className="mb-1 text-sm font-bold">Projection Assumptions</h2>
         <p className="mb-3 text-xs text-muted-foreground">
-          Used only for the Lifetime Net Worth chart. All rates are annual percentages.
+          Used only for the Lifetime Net Worth chart. All rates are annual percentages. These are one shared set of assumptions for the whole household (not tied to a specific member) — for a household with more than one income earner, treat them as a simplified, combined estimate rather than any one person's exact numbers.
         </p>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
