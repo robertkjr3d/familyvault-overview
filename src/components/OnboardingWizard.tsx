@@ -427,10 +427,12 @@ function QuickAddInventoryItem({ onSaved }: { onSaved: () => void }) {
       } as any);
       if (error) throw error;
       if (photo_url) {
-        await (supabase.rpc as any)("increment_household_storage", {
+        const { error: rpcErr } = await (supabase.rpc as any)("increment_household_storage", {
           p_household_id: activeHouseholdId,
           p_delta: photo_size_bytes,
         });
+        if (rpcErr) console.error("Failed to update storage usage counter:", rpcErr.message);
+        qc.invalidateQueries({ queryKey: ["household-memberships"] });
       }
 
       toast.success("Item added — try searching for it on the Inventory tab");
