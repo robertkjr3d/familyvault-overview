@@ -540,7 +540,7 @@ return (
   </section>
 
   {/* Travel Checklist */}
-  <ChecklistSection table="travel_checklist_items" queryKey="travel_checklist" title="Travel Checklist" items={travelChecklist} enableCategories />
+  <ChecklistSection table="travel_checklist_items" queryKey="travel_checklist" title="Travel Checklist" items={travelChecklist} enableCategories enableClearAll />
 
   {/* Go-Bag */}
   <ChecklistSection table="gobag_items" queryKey="gobag" title="Go-Bag Checklist" items={gobag} />
@@ -704,6 +704,7 @@ queryKey,
 title,
 items,
 enableCategories,
+enableClearAll,
 }: {
 table: string;
 queryKey: string;
@@ -711,6 +712,8 @@ title: string;
 items: any[];
 /** When true, items are grouped under bold category headings (e.g. Travel Checklist). Leave off for a flat list. */
 enableCategories?: boolean;
+/** When true, shows a "Clear all" button that un-checks every item (e.g. resetting a Travel Checklist after a trip). */
+enableClearAll?: boolean;
 }) {
 const qc = useQueryClient();
 const { canEdit } = useCurrentRole();
@@ -722,6 +725,7 @@ const [adding, setAdding] = useState(false);
 const [editingId, setEditingId] = useState("");
 const [editingLabel, setEditingLabel] = useState("");
 const [editingCategory, setEditingCategory] = useState("");
+const [clearing, setClearing] = useState(false);
 
 const [pendingId, setPendingId] = useState<string | null>(null);
 
@@ -772,6 +776,17 @@ else toast.success("Item removed");
 qc.invalidateQueries({ queryKey: [queryKey, activeHouseholdId] });
 }
 
+async function clearAll() {
+if (!activeHouseholdId) return;
+if (!confirm(`Un-check all ${items.length} item(s) in ${title}? This won't delete anything, just resets them back to unchecked.`)) return;
+setClearing(true);
+const { error } = await supabase.from(table as any).update({ checked: false }).eq("household_id", activeHouseholdId).eq("checked", true);
+setClearing(false);
+if (error) { toast.error(error.message); return; }
+toast.success("Checklist cleared");
+qc.invalidateQueries({ queryKey: [queryKey, activeHouseholdId] });
+}
+
 async function saveEdit(id: string, categoryOverride?: string) {
 if (!editingLabel.trim()) { setEditingId(""); return; }
 const payload: Record<string, unknown> = { label: editingLabel.trim() };
@@ -798,18 +813,30 @@ autoFocus
 value={editingLabel}
 onChange={(e) => setEditingLabel(e.target.value)}
 onKeyDown={(e) => {
-if (e.key === "Enter" && !enableCategories) saveEdit(g.id);
+if (e.key === "Enter") saveEdit(g.id);
 if (e.key === "Escape") { setEditingId(""); setEditingLabel(""); setEditingCategory(""); }
 }}
 onBlur={() => { if (!enableCategories) saveEdit(g.id); }}
 className="min-w-0 flex-1 rounded border border-input bg-background px-2 py-0.5 text-sm"
 />
 {enableCategories && (
+<div className="flex items-center gap-2">
 <CategoryPicker
 value={editingCategory}
 suggestions={categorySuggestions}
 onChange={(v) => { setEditingCategory(v); saveEdit(g.id, v); }}
 />
+<button
+type="button"
+onClick={() => saveEdit(g.id)}
+disabled={pendingId === g.id}
+className="shrink-0 rounded-md p-1 text-settled hover:bg-settled/10 disabled:opacity-60"
+aria-label="Save"
+title="Save"
+>
+<span className="text-sm">✓</span>
+</button>
+</div>
 )}
 </div>
 ) : (
@@ -884,6 +911,18 @@ className="flex w-full items-center justify-between px-4 py-3 text-left"
 </button>
 {open && (
 <div className="space-y-3 border-t border-border/40 px-4 py-3">
+{enableClearAll && canEdit && done > 0 && (
+<div className="flex justify-end">
+<button
+type="button"
+onClick={clearAll}
+disabled={clearing}
+className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-accent disabled:opacity-60"
+>
+Clear all
+</button>
+</div>
+)}
 {items.length === 0 ? (
 <p className="py-2 text-center text-xs text-muted-foreground">No items yet.</p>
 ) : enableCategories && groupedByCategory ? (
@@ -1680,7 +1719,6 @@ return (
 ref={fileRef}
 type="file"
 accept="image/*"
-capture="environment"
 className="hidden"
 onChange={(e) => {
 const f = e.target.files?.[0];
