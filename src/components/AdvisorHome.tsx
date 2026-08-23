@@ -397,7 +397,7 @@ function AdvisorStatusToggle({
   });
 
   return (
-    <div ref={ref} className="relative mt-1.5 inline-block border-t border-border/40 pt-1.5">
+    <div ref={ref} className="relative mt-1.5 block border-t border-border/40 pt-1.5">
       <button
         type="button"
         disabled={mutation.isPending}
