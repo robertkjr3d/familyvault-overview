@@ -977,7 +977,11 @@ parent_id: parentId,
 } as any);
 if (error) throw error;
 if (photo_size_bytes) {
-await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: photo_size_bytes });
+{
+const { error: rpcErr } = await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: photo_size_bytes });
+if (rpcErr) console.error("Failed to update storage usage counter:", rpcErr.message);
+qc.invalidateQueries({ queryKey: ["household-memberships"] });
+}
 }
 toast.success("Location added");
 qc.invalidateQueries({ queryKey: ["folders"] });
@@ -1113,7 +1117,11 @@ if (photoUrls.length > 0) {
 await supabase.storage.from("inventory-photos").remove(photoUrls);
 }
 if (totalPhotoBytes > 0) {
-await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: -totalPhotoBytes });
+{
+const { error: rpcErr } = await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: -totalPhotoBytes });
+if (rpcErr) console.error("Failed to update storage usage counter:", rpcErr.message);
+qc.invalidateQueries({ queryKey: ["household-memberships"] });
+}
 }
 toast.success("Location deleted");
 qc.invalidateQueries({ queryKey: ["folders"] });
@@ -1147,7 +1155,11 @@ await supabase.storage.from("inventory-photos").remove([oldPhotoUrl]);
 }
 const netDelta = compressed.size - oldPhotoBytes;
 if (netDelta !== 0) {
-await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: netDelta });
+{
+const { error: rpcErr } = await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: netDelta });
+if (rpcErr) console.error("Failed to update storage usage counter:", rpcErr.message);
+qc.invalidateQueries({ queryKey: ["household-memberships"] });
+}
 }
 toast.success("Photo updated");
 qc.invalidateQueries({ queryKey: ["folders"] });
@@ -1164,7 +1176,11 @@ if (oldPhotoUrl) {
 await supabase.storage.from("inventory-photos").remove([oldPhotoUrl]);
 }
 if (oldPhotoBytes > 0) {
-await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: -oldPhotoBytes });
+{
+const { error: rpcErr } = await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: -oldPhotoBytes });
+if (rpcErr) console.error("Failed to update storage usage counter:", rpcErr.message);
+qc.invalidateQueries({ queryKey: ["household-memberships"] });
+}
 }
 toast.success("Photo removed");
 qc.invalidateQueries({ queryKey: ["folders"] });
@@ -1179,7 +1195,11 @@ if (target?.photo_url) {
 await supabase.storage.from("inventory-photos").remove([target.photo_url]);
 }
 if (target?.photo_size_bytes) {
-await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: -target.photo_size_bytes });
+{
+const { error: rpcErr } = await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: -target.photo_size_bytes });
+if (rpcErr) console.error("Failed to update storage usage counter:", rpcErr.message);
+qc.invalidateQueries({ queryKey: ["household-memberships"] });
+}
 }
 qc.invalidateQueries({ queryKey: ["inventory_items"] });
 }
@@ -1619,7 +1639,11 @@ photo_size_bytes,
 } as any);
 if (error) throw error;
 if (photo_size_bytes) {
-await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: photo_size_bytes });
+{
+const { error: rpcErr } = await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: photo_size_bytes });
+if (rpcErr) console.error("Failed to update storage usage counter:", rpcErr.message);
+qc.invalidateQueries({ queryKey: ["household-memberships"] });
+}
 }
 
   toast.success("Item added");
@@ -1750,7 +1774,11 @@ if (oldPhotoUrl) {
 await supabase.storage.from("inventory-photos").remove([oldPhotoUrl]);
 }
 if (oldPhotoBytes > 0) {
-await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: -oldPhotoBytes });
+{
+const { error: rpcErr } = await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: -oldPhotoBytes });
+if (rpcErr) console.error("Failed to update storage usage counter:", rpcErr.message);
+qc.invalidateQueries({ queryKey: ["household-memberships"] });
+}
 }
 toast.success("Photo removed");
 qc.invalidateQueries({ queryKey: ["inventory_items"] });
@@ -1779,7 +1807,11 @@ await supabase.storage.from("inventory-photos").remove([oldPhotoUrl]);
 }
 const netDelta = compressed.size - oldPhotoBytes;
 if (netDelta !== 0) {
-await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: netDelta });
+{
+const { error: rpcErr } = await (supabase.rpc as any)("increment_household_storage", { p_household_id: activeHouseholdId, p_delta: netDelta });
+if (rpcErr) console.error("Failed to update storage usage counter:", rpcErr.message);
+qc.invalidateQueries({ queryKey: ["household-memberships"] });
+}
 }
 toast.success("Photo added");
 qc.invalidateQueries({ queryKey: ["inventory_items"] });
