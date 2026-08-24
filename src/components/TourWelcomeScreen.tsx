@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useCurrentRole } from "@/lib/useCurrentRole";
 import { useAppStore } from "@/lib/store";
@@ -10,14 +10,34 @@ import { markTourSeen } from "@/lib/tourSteps";
  * household, since this is tracked per person, not per household. Cancelling
  * marks it seen too (so it doesn't nag every login) — the tour is always
  * still reachable afterward from Settings, separately from this flag.
+ *
+ * Not offered to Viewers: the tour's whole flow is "add a real record",
+ * which a Viewer can't do (AddRecordFab hides itself for that role) — they'd
+ * just hit the tour's stuck-screen fallback. Their has_seen_tour flag is
+ * simply never set to true, which is harmless (nothing else reads it).
  */
 export function TourWelcomeScreen() {
-  const { hasSeenTour, isLoading } = useCurrentRole();
+  const { hasSeenTour, isLoading, isViewer } = useCurrentRole();
   const activeTour = useAppStore((s) => s.activeTour);
   const startTour = useAppStore((s) => s.startTour);
   const [dismissedThisSession, setDismissedThisSession] = useState(false);
 
-  if (isLoading || hasSeenTour === undefined || hasSeenTour || activeTour || dismissedThisSession) {
+  const show =
+    !isLoading && hasSeenTour === false && !isViewer && !activeTour && !dismissedThisSession;
+
+  // Lock background scroll while this full-screen modal is up, same as the
+  // GuidedTour overlay — restores on every unmount path (state changes to
+  // hide it, or the component unmounts entirely).
+  useEffect(() => {
+    if (!show) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [show]);
+
+  if (!show) {
     return null;
   }
 
@@ -28,8 +48,8 @@ export function TourWelcomeScreen() {
   }
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-card p-6 text-center shadow-2xl">
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4 animate-in fade-in-0 duration-200">
+      <div className="w-full max-w-sm rounded-2xl bg-card p-6 text-center shadow-2xl animate-in fade-in-0 zoom-in-95 duration-200">
         <div className="mb-3 text-4xl">👋</div>
         <h2 className="text-lg font-bold">Welcome to FamilyHub!</h2>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -42,7 +62,10 @@ export function TourWelcomeScreen() {
           >
             Take me on a tour
           </button>
-          <button onClick={cancel} className="rounded-full px-4 py-2.5 text-sm font-semibold text-muted-foreground">
+          <button
+            onClick={cancel}
+            className="rounded-full px-4 py-2.5 text-sm font-semibold text-muted-foreground"
+          >
             Cancel
           </button>
         </div>
