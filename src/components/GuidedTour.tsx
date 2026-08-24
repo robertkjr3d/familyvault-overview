@@ -1,6 +1,6 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "@tanstack/react-router";
-import { X, Pointer } from "lucide-react";
+import { X } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { useCurrentRole } from "@/lib/useCurrentRole";
 import { cn } from "@/lib/utils";
@@ -84,9 +84,18 @@ export function GuidedTour() {
   // the interval is a defensive fallback. Tracks the element itself (not
   // just its position) so a re-rendered replacement node — even one that
   // lands at the exact same screen position — is detected and re-bound.
+  //
+  // Deliberately does NOT reset `rect` to null at the start of every step
+  // (only `foundEl`) — it keeps showing the PREVIOUS step's spotlight,
+  // right where it already is, until the new target is actually found and
+  // measured, then updates in place. The CSS transition on the ring/dim
+  // (below) then glides smoothly from the old spot to the new one. An
+  // earlier version reset rect to null on every step change, which
+  // unmounted and remounted the spotlight each time (a real target, sure,
+  // but a jarring "pop out, pop back in" instead of a glide) and was the
+  // actual cause of the ring visibly "flying in" to each new spot.
   useEffect(() => {
     setFoundEl(null);
-    setRect(null);
     setStuck(false);
     if (!step) return;
     let cancelled = false;
@@ -94,18 +103,26 @@ export function GuidedTour() {
 
     function tryFind() {
       const el = document.querySelector<HTMLElement>(`[data-tour="${step!.target}"]`);
-      if (el && !cancelled && currentEl !== el) {
-        currentEl = el;
-        setFoundEl(el);
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        setTimeout(() => {
-          if (!cancelled) updateRect();
-        }, 350);
-      }
+      if (!el || cancelled || currentEl === el) return;
+      // Reject a match that exists in the DOM but isn't actually visible
+      // yet (display:none, not yet laid out, zero-size) — accepting it
+      // would collapse the whole spotlight down to a 0×0 rect at (0,0),
+      // which renders as a ring/pointer pinned to the top-left corner
+      // pointing at nothing. Keep polling instead; a genuinely-missing
+      // target still falls through to the stuck-screen safety net below.
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return;
+      currentEl = el;
+      setFoundEl(el);
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(() => {
+        if (!cancelled) updateRect();
+      }, 350);
     }
     function updateRect() {
       if (!currentEl) return;
       const r = currentEl.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return; // same zero-size guard, on every re-measure
       setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
     }
 
@@ -133,10 +150,11 @@ export function GuidedTour() {
   }, [activeTour, tourStep, location.pathname, step]);
 
   // Advancing the tour is also wired to a real click/tap on the actual
-  // spotlighted element — the whole point of this tour is that people
-  // interact with the real app, not a copy of it. Depending on foundEl
-  // itself (not on rect) means this always attaches to the CURRENT real
-  // node, even if a re-render swapped it for a new one at the same spot.
+  // spotlighted element, but ONLY for steps explicitly marked
+  // advanceOnClick — see the type's own comment in tourSteps.ts for why
+  // that's opt-in, not automatic. Depending on foundEl itself (not on
+  // rect) means this always attaches to the CURRENT real node, even if a
+  // re-render swapped it for a new one at the same spot.
   //
   // Deferred by one tick on purpose (confirmed race, not hypothetical):
   // this listener is attached directly on the target element, so on a
@@ -148,7 +166,7 @@ export function GuidedTour() {
   // The unmounted-guard covers the case where the user also hits Skip (or
   // the tour otherwise unmounts) inside that single deferred tick.
   useEffect(() => {
-    if (!foundEl) return;
+    if (!foundEl || !step?.advanceOnClick) return;
     let cancelled = false;
     const handler = () => {
       window.setTimeout(() => {
@@ -161,7 +179,7 @@ export function GuidedTour() {
       foundEl.removeEventListener("click", handler);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [foundEl]);
+  }, [foundEl, step?.advanceOnClick]);
 
   function advance() {
     if (tourStep >= steps.length - 1) {
@@ -229,9 +247,6 @@ export function GuidedTour() {
 }
 
 function Spotlight({ rect }: { rect: Rect | null }) {
-  const vw = typeof window !== "undefined" ? window.innerWidth : 400;
-  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-
   if (!rect) {
     // Nothing found yet (mid-navigation, waiting for a Sheet to open) —
     // dim the screen so it's clear something is happening, no hole yet.
@@ -243,8 +258,7 @@ function Spotlight({ rect }: { rect: Rect | null }) {
   const left = rect.left - PAD;
   const width = rect.width + PAD * 2;
   const height = rect.height + PAD * 2;
-  const bottom = top + height;
-  // Everything the tour draws — the dim, the ring, the pointer icon — is
+  // Everything the tour draws — the dim, the ring, the pulse — is
   // pointer-events-none, and so is this whole component's full-screen
   // parent wrapper (GuidedTour's return, above). That last part is the
   // actual fix: an earlier version made every element IN here inert but
@@ -261,9 +275,6 @@ function Spotlight({ rect }: { rect: Rect | null }) {
   // dimmed area away from the target now also reaches whatever's beneath
   // it, instead of being inertly blocked like before. Given the target
   // being tappable is the entire point of this tour, that trade is right.
-  const pointerSize = 36; // matches the original h-9 w-9 lucide icon size
-  const pointerTop = Math.min(Math.max(bottom - 6, 4), vh - pointerSize - 4);
-  const pointerLeft = Math.min(Math.max(left + 4, 4), vw - pointerSize - 4);
   return (
     <>
       <div
@@ -281,40 +292,23 @@ function Spotlight({ rect }: { rect: Rect | null }) {
         className="pointer-events-none absolute ring-4 ring-primary transition-all duration-300"
         style={{ top, left, width, height, borderRadius: CORNER_RADIUS }}
       />
-      <TourPointerIcon
-        style={{ top: pointerTop, left: pointerLeft, width: pointerSize, height: pointerSize }}
+      {/* "Look here" indicator — a second ring, same size and position,
+          that loops through a gentle expand-and-fade pulse. This is the
+          standard pattern for this exact job (Notion, Linear, and most
+          fintech onboarding all use some version of a pulsing highlight
+          rather than a literal hand-cursor icon) — chosen deliberately
+          after repeated attempts at a hand-drawn glyph came out wrong
+          (an icon's own internal detail lines showing through, an
+          asymmetric outline, and once, an unintentionally rude gesture).
+          A ring can't have any of those problems: it's the same shape as
+          the highlight it belongs to, always centered exactly on it, and
+          "pulsing" is one CSS animation on one element — nothing to draw,
+          nothing to get wrong. */}
+      <div
+        className="pointer-events-none absolute animate-tour-point ring-4 ring-primary transition-all duration-300"
+        style={{ top, left, width, height, borderRadius: CORNER_RADIUS }}
       />
     </>
-  );
-}
-
-// The exact icon and position this app used before any of today's changes —
-// confirmed by the user as pointing at the correct spot, so kept as-is
-// rather than risking another hand-drawn shape. Only the "grey line
-// across the finger" complaint is addressed: that's the icon's own
-// internal knuckle-crease paths rendering in the same dark stroke as the
-// outline. Fixed by layering two copies of the SAME well-tested Lucide
-// icon — a larger black copy behind (scaled up, so it peeks out as an
-// outline), a normal-size white one on top (stroke AND fill both white, so
-// the internal crease lines are white-on-white and disappear). No new
-// artwork authored — same icon, same shape, just recolored and doubled.
-function TourPointerIcon({ style }: { style?: CSSProperties }) {
-  return (
-    <div className="pointer-events-none absolute animate-tour-point" style={style}>
-      <Pointer
-        className="absolute inset-0"
-        style={{ transform: "scale(1.35)" }}
-        strokeWidth={2.5}
-        stroke="black"
-        fill="black"
-      />
-      <Pointer
-        className="absolute inset-0 drop-shadow-[0_2px_3px_rgba(0,0,0,0.35)]"
-        strokeWidth={2}
-        stroke="white"
-        fill="white"
-      />
-    </div>
   );
 }
 
