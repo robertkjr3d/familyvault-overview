@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "@tanstack/react-router";
-import { Pointer, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { useCurrentRole } from "@/lib/useCurrentRole";
 import { cn } from "@/lib/utils";
@@ -9,35 +9,12 @@ import { toast } from "sonner";
 
 const PAD = 8; // px gap between the spotlight hole and the highlighted element
 // Kept equal to the app's `rounded-xl` value (--radius-xl in styles.css,
-// currently 18px) on purpose — the spotlight hole and the ring drawn on top
-// of it must always use the exact same radius or they visibly mismatch. If
+// currently 18px) on purpose — the dimmed hole and the ring drawn on top of
+// it must always use the exact same radius or they visibly mismatch. If
 // --radius-xl ever changes, update this constant too.
 const CORNER_RADIUS = 18;
 
 type Rect = { top: number; left: number; width: number; height: number };
-
-// Builds a clip-path that dims the whole screen except a rounded-rect hole
-// at the target. Real cut-out, not just a dark visual — pointer events over
-// the hole pass straight through to the real element beneath (needed so
-// "click the real element to advance" keeps working); pointer events
-// anywhere else are captured by this element, same blocking behavior the
-// previous 4-rectangle overlay had.
-function spotlightClipPath(rect: Rect, vw: number, vh: number) {
-  const top = rect.top - PAD;
-  const left = rect.left - PAD;
-  const width = rect.width + PAD * 2;
-  const height = rect.height + PAD * 2;
-  const r = Math.max(0, Math.min(CORNER_RADIUS, width / 2, height / 2));
-  const right = left + width;
-  const bottom = top + height;
-  const hole =
-    `M${left + r},${top} H${right - r} A${r},${r} 0 0 1 ${right},${top + r} ` +
-    `V${bottom - r} A${r},${r} 0 0 1 ${right - r},${bottom} ` +
-    `H${left + r} A${r},${r} 0 0 1 ${left},${bottom - r} ` +
-    `V${top + r} A${r},${r} 0 0 1 ${left + r},${top} Z`;
-  const outer = `M0,0 H${vw} V${vh} H0 Z`;
-  return `path(evenodd, "${outer} ${hole}")`;
-}
 
 /**
  * Renders on top of the real app (mounted once near the root) and drives
@@ -252,9 +229,6 @@ export function GuidedTour() {
 }
 
 function Spotlight({ rect }: { rect: Rect | null }) {
-  const vw = typeof window !== "undefined" ? window.innerWidth : 400;
-  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-
   if (!rect) {
     // Nothing found yet (mid-navigation, waiting for a Sheet to open) —
     // dim the screen so it's clear something is happening, no hole yet.
@@ -264,33 +238,50 @@ function Spotlight({ rect }: { rect: Rect | null }) {
   const left = rect.left - PAD;
   const width = rect.width + PAD * 2;
   const height = rect.height + PAD * 2;
+  const bottom = top + height;
+  const right = left + width;
+  // Real, plain rectangles — the only spotlight-hole technique guaranteed
+  // to work for click-through on every real browser. An earlier version
+  // used a single element with a clip-path "hole" instead: visually
+  // identical, much less code, but on iOS Safari it silently blocked every
+  // tap on the real target underneath — clip-path's effect on hit-testing
+  // isn't reliable across browsers the way plain non-overlapping elements
+  // are. Confirmed on a real deployed build, not a hypothetical. Kept
+  // deliberately dumb: these 4 are fully transparent and do none of the
+  // visual work — the box-shadow div below draws the entire dim + rounded
+  // hole appearance on its own, correctly, in every browser.
   return (
     <>
-      {/* Dims everything except the target. This IS the hit-testable
-          click-blocker (default pointer-events), with a real cut-out via
-          clip-path — taps inside the hole pass through to the real element
-          beneath (needed for "tap the real thing to advance"); taps
-          anywhere else are captured here, same as before. */}
+      <div className="absolute" style={{ top: 0, left: 0, right: 0, height: Math.max(0, top) }} />
+      <div className="absolute" style={{ top: bottom, left: 0, right: 0, bottom: 0 }} />
+      <div className="absolute" style={{ top, left: 0, width: Math.max(0, left), height }} />
+      <div className="absolute" style={{ top, left: right, right: 0, height }} />
+      {/* Pure visual: pointer-events-none, so it can never affect clicking
+          either way. A box-shadow's spread naturally follows its own
+          element's border-radius, so this always renders a correctly
+          rounded dim hole with no path/geometry math needed. */}
       <div
-        className="absolute inset-0 bg-black/55 transition-[clip-path] duration-300 ease-out"
-        style={{ clipPath: spotlightClipPath(rect, vw, vh) }}
+        className="pointer-events-none absolute animate-in fade-in-0 zoom-in-95 duration-300 transition-all"
+        style={{
+          top,
+          left,
+          width,
+          height,
+          borderRadius: CORNER_RADIUS,
+          boxShadow: "0 0 0 9999px rgba(0,0,0,0.55)",
+        }}
       />
-      {/* Decorative ring + pointer only — pointer-events-none so they never
-          steal a tap meant for the real element underneath. Same
-          CORNER_RADIUS as the clip-path hole above, so the two always
-          match exactly instead of the ring looking rounded against a
-          sharp-cornered hole. */}
       <div
-        className="pointer-events-none absolute animate-in fade-in-0 zoom-in-95 ring-4 ring-primary transition-all duration-300"
+        className="pointer-events-none absolute ring-4 ring-primary transition-all duration-300"
         style={{ top, left, width, height, borderRadius: CORNER_RADIUS }}
       />
-      <Pointer
-        className="pointer-events-none absolute h-9 w-9 drop-shadow-[0_2px_4px_rgba(0,0,0,0.35)] animate-tour-point"
-        style={{ top: top + height - 6, left: left + 4, color: "white" }}
-        strokeWidth={1.75}
-        stroke="#1a1a1a"
-        fill="white"
-      />
+      <span
+        className="pointer-events-none absolute text-4xl leading-none drop-shadow-[0_2px_5px_rgba(0,0,0,0.45)] animate-tour-point"
+        style={{ top: bottom - 8, left: left + 2 }}
+        aria-hidden="true"
+      >
+        👆
+      </span>
     </>
   );
 }
