@@ -162,14 +162,14 @@ button:not(:disabled), a, [role="button"], [role="tab"], summary, label[for],
 .cursor-pointer { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
 
-/* Guided tour pointer (GuidedTour.tsx) — a small diagonal "tap" bob toward
-   the spotlighted element. Previously referenced as `animate-tour-point`
-   but never actually defined anywhere, so the pointer had no motion at all. */
+/* Guided tour pointer (GuidedTour.tsx) — a small upward "tap" bob, matching
+   the up-pointing 👆 the pointer actually is (previously animated
+   diagonally, which didn't match the icon's own pointing direction). */
 @keyframes tour-point {
-  0%, 100% { transform: translate(0, 0); }
-  50% { transform: translate(3px, 3px); }
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
 }
-.animate-tour-point { animation: tour-point 1.1s ease-in-out infinite; }
+.animate-tour-point { animation: tour-point 1s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
   .animate-tour-point { animation: none; }
 }
