@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { useNavigate, useLocation } from "@tanstack/react-router";
-import { X } from "lucide-react";
+import { X, Pointer } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { useCurrentRole } from "@/lib/useCurrentRole";
 import { cn } from "@/lib/utils";
@@ -211,7 +211,7 @@ export function GuidedTour() {
   }
 
   return (
-    <div className="fixed inset-0 z-[100]">
+    <div className="pointer-events-none fixed inset-0 z-[100]">
       <Spotlight rect={rect} />
       {rect && (
         <TourCard
@@ -245,23 +245,25 @@ function Spotlight({ rect }: { rect: Rect | null }) {
   const height = rect.height + PAD * 2;
   const bottom = top + height;
   // Everything the tour draws — the dim, the ring, the pointer icon — is
-  // pointer-events-none. Two earlier versions tried to actively BLOCK taps
-  // on the dimmed background (first with clip-path, then with 4 real
-  // rectangles) while still letting the real target underneath receive
-  // taps. Both broke real taps on the actual target on a real device —
-  // clip-path's hit-testing isn't reliable cross-browser, and even the
-  // "provably reliable" rectangle version still failed in practice. Rather
-  // than try a third clever technique, this drops the background-blocking
-  // entirely: every tour visual is inert, so a tap ALWAYS reaches the real
-  // page underneath, everywhere, with total certainty — no hit-testing
-  // technique involved at all, because there's nothing left that could get
-  // it wrong. Trade-off, stated plainly: tapping the dimmed area away from
-  // the target now also reaches whatever's beneath it, instead of being
-  // inertly blocked. Given the target being tappable is the entire point
-  // of this tour, that trade is the right one.
-  const pointerSize = 34;
-  const pointerTop = Math.min(Math.max(bottom - 10, 4), vh - pointerSize - 4);
-  const pointerLeft = Math.min(Math.max(left, 4), vw - pointerSize - 4);
+  // pointer-events-none, and so is this whole component's full-screen
+  // parent wrapper (GuidedTour's return, above). That last part is the
+  // actual fix: an earlier version made every element IN here inert but
+  // left the full-screen wrapper DIV that contains them at its default
+  // pointer-events (auto) — a parent element is its own independent
+  // hit-test target regardless of what its children are set to, so that
+  // forgotten wrapper alone was blocking every tap on the entire screen.
+  // This is ordinary, well-defined CSS box-model behavior, not a
+  // browser-specific quirk — unlike the two earlier click-blocking
+  // techniques this replaced (clip-path, then a 4-rectangle frame), both
+  // of which relied on hit-testing behavior that turned out not to be
+  // reliable in practice and were dropped for that reason. Trade-off,
+  // stated plainly: with no active blocking layer at all, tapping the
+  // dimmed area away from the target now also reaches whatever's beneath
+  // it, instead of being inertly blocked like before. Given the target
+  // being tappable is the entire point of this tour, that trade is right.
+  const pointerSize = 36; // matches the original h-9 w-9 lucide icon size
+  const pointerTop = Math.min(Math.max(bottom - 6, 4), vh - pointerSize - 4);
+  const pointerLeft = Math.min(Math.max(left + 4, 4), vw - pointerSize - 4);
   return (
     <>
       <div
@@ -280,32 +282,39 @@ function Spotlight({ rect }: { rect: Rect | null }) {
         style={{ top, left, width, height, borderRadius: CORNER_RADIUS }}
       />
       <TourPointerIcon
-        className="pointer-events-none absolute animate-tour-point drop-shadow-[0_2px_5px_rgba(0,0,0,0.45)]"
         style={{ top: pointerTop, left: pointerLeft, width: pointerSize, height: pointerSize }}
       />
     </>
   );
 }
 
-// A simple cartoon "tap here" glove, not a realistic hand — two white
-// rounded rects (a fist + one extended finger, pointing up) each drawn
-// twice: a larger black copy first, a smaller white copy on top, offset by
-// a fixed margin on all sides. That margin becomes the outline. Solid
-// fills merge seamlessly wherever the two rects overlap (no path math, no
-// seam), so this stays simple while still looking like an actual glove
-// rather than a bare geometric shape.
-function TourPointerIcon({ className, style }: { className?: string; style?: CSSProperties }) {
+// The exact icon and position this app used before any of today's changes —
+// confirmed by the user as pointing at the correct spot, so kept as-is
+// rather than risking another hand-drawn shape. Only the "grey line
+// across the finger" complaint is addressed: that's the icon's own
+// internal knuckle-crease paths rendering in the same dark stroke as the
+// outline. Fixed by layering two copies of the SAME well-tested Lucide
+// icon — a larger black copy behind (scaled up, so it peeks out as an
+// outline), a normal-size white one on top (stroke AND fill both white, so
+// the internal crease lines are white-on-white and disappear). No new
+// artwork authored — same icon, same shape, just recolored and doubled.
+function TourPointerIcon({ style }: { style?: CSSProperties }) {
   return (
-    <svg viewBox="0 0 24 24" className={className} style={style} aria-hidden="true">
-      <g fill="#1a1a1a">
-        <rect x="7.5" y="0.5" width="9" height="15" rx="4" />
-        <rect x="1.5" y="9.5" width="21" height="13" rx="6.5" />
-      </g>
-      <g fill="white">
-        <rect x="9" y="2" width="6" height="12" rx="2.5" />
-        <rect x="3" y="11" width="18" height="10" rx="5" />
-      </g>
-    </svg>
+    <div className="pointer-events-none absolute animate-tour-point" style={style}>
+      <Pointer
+        className="absolute inset-0"
+        style={{ transform: "scale(1.35)" }}
+        strokeWidth={2.5}
+        stroke="black"
+        fill="black"
+      />
+      <Pointer
+        className="absolute inset-0 drop-shadow-[0_2px_3px_rgba(0,0,0,0.35)]"
+        strokeWidth={2}
+        stroke="white"
+        fill="white"
+      />
+    </div>
   );
 }
 
