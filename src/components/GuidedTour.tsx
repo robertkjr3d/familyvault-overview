@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useNavigate, useLocation } from "@tanstack/react-router";
 import { X } from "lucide-react";
 import { useAppStore } from "@/lib/store";
@@ -229,37 +229,41 @@ export function GuidedTour() {
 }
 
 function Spotlight({ rect }: { rect: Rect | null }) {
+  const vw = typeof window !== "undefined" ? window.innerWidth : 400;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+
   if (!rect) {
     // Nothing found yet (mid-navigation, waiting for a Sheet to open) —
     // dim the screen so it's clear something is happening, no hole yet.
-    return <div className="absolute inset-0 bg-black/55 transition-opacity duration-300" />;
+    return (
+      <div className="pointer-events-none absolute inset-0 bg-black/55 transition-opacity duration-300" />
+    );
   }
   const top = rect.top - PAD;
   const left = rect.left - PAD;
   const width = rect.width + PAD * 2;
   const height = rect.height + PAD * 2;
   const bottom = top + height;
-  const right = left + width;
-  // Real, plain rectangles — the only spotlight-hole technique guaranteed
-  // to work for click-through on every real browser. An earlier version
-  // used a single element with a clip-path "hole" instead: visually
-  // identical, much less code, but on iOS Safari it silently blocked every
-  // tap on the real target underneath — clip-path's effect on hit-testing
-  // isn't reliable across browsers the way plain non-overlapping elements
-  // are. Confirmed on a real deployed build, not a hypothetical. Kept
-  // deliberately dumb: these 4 are fully transparent and do none of the
-  // visual work — the box-shadow div below draws the entire dim + rounded
-  // hole appearance on its own, correctly, in every browser.
+  // Everything the tour draws — the dim, the ring, the pointer icon — is
+  // pointer-events-none. Two earlier versions tried to actively BLOCK taps
+  // on the dimmed background (first with clip-path, then with 4 real
+  // rectangles) while still letting the real target underneath receive
+  // taps. Both broke real taps on the actual target on a real device —
+  // clip-path's hit-testing isn't reliable cross-browser, and even the
+  // "provably reliable" rectangle version still failed in practice. Rather
+  // than try a third clever technique, this drops the background-blocking
+  // entirely: every tour visual is inert, so a tap ALWAYS reaches the real
+  // page underneath, everywhere, with total certainty — no hit-testing
+  // technique involved at all, because there's nothing left that could get
+  // it wrong. Trade-off, stated plainly: tapping the dimmed area away from
+  // the target now also reaches whatever's beneath it, instead of being
+  // inertly blocked. Given the target being tappable is the entire point
+  // of this tour, that trade is the right one.
+  const pointerSize = 34;
+  const pointerTop = Math.min(Math.max(bottom - 10, 4), vh - pointerSize - 4);
+  const pointerLeft = Math.min(Math.max(left, 4), vw - pointerSize - 4);
   return (
     <>
-      <div className="absolute" style={{ top: 0, left: 0, right: 0, height: Math.max(0, top) }} />
-      <div className="absolute" style={{ top: bottom, left: 0, right: 0, bottom: 0 }} />
-      <div className="absolute" style={{ top, left: 0, width: Math.max(0, left), height }} />
-      <div className="absolute" style={{ top, left: right, right: 0, height }} />
-      {/* Pure visual: pointer-events-none, so it can never affect clicking
-          either way. A box-shadow's spread naturally follows its own
-          element's border-radius, so this always renders a correctly
-          rounded dim hole with no path/geometry math needed. */}
       <div
         className="pointer-events-none absolute animate-in fade-in-0 zoom-in-95 duration-300 transition-all"
         style={{
@@ -275,14 +279,33 @@ function Spotlight({ rect }: { rect: Rect | null }) {
         className="pointer-events-none absolute ring-4 ring-primary transition-all duration-300"
         style={{ top, left, width, height, borderRadius: CORNER_RADIUS }}
       />
-      <span
-        className="pointer-events-none absolute text-4xl leading-none drop-shadow-[0_2px_5px_rgba(0,0,0,0.45)] animate-tour-point"
-        style={{ top: bottom - 8, left: left + 2 }}
-        aria-hidden="true"
-      >
-        👆
-      </span>
+      <TourPointerIcon
+        className="pointer-events-none absolute animate-tour-point drop-shadow-[0_2px_5px_rgba(0,0,0,0.45)]"
+        style={{ top: pointerTop, left: pointerLeft, width: pointerSize, height: pointerSize }}
+      />
     </>
+  );
+}
+
+// A simple cartoon "tap here" glove, not a realistic hand — two white
+// rounded rects (a fist + one extended finger, pointing up) each drawn
+// twice: a larger black copy first, a smaller white copy on top, offset by
+// a fixed margin on all sides. That margin becomes the outline. Solid
+// fills merge seamlessly wherever the two rects overlap (no path math, no
+// seam), so this stays simple while still looking like an actual glove
+// rather than a bare geometric shape.
+function TourPointerIcon({ className, style }: { className?: string; style?: CSSProperties }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} style={style} aria-hidden="true">
+      <g fill="#1a1a1a">
+        <rect x="7.5" y="0.5" width="9" height="15" rx="4" />
+        <rect x="1.5" y="9.5" width="21" height="13" rx="6.5" />
+      </g>
+      <g fill="white">
+        <rect x="9" y="2" width="6" height="12" rx="2.5" />
+        <rect x="3" y="11" width="18" height="10" rx="5" />
+      </g>
+    </svg>
   );
 }
 
@@ -359,7 +382,7 @@ function TourCard({
 
   return (
     <div
-      className="absolute rounded-2xl bg-card p-4 shadow-2xl border border-border animate-in fade-in-0 zoom-in-95 duration-200"
+      className="pointer-events-none absolute rounded-2xl bg-card p-4 shadow-2xl border border-border animate-in fade-in-0 zoom-in-95 duration-200"
       style={{ width: CARD_W, left, top, bottom }}
     >
       <div className="mb-2.5 flex items-center gap-3">
@@ -384,7 +407,7 @@ function TourCard({
         <button
           onClick={onSkip}
           aria-label="Skip tour"
-          className="shrink-0 text-muted-foreground hover:text-foreground"
+          className="pointer-events-auto shrink-0 text-muted-foreground hover:text-foreground"
         >
           <X className="h-4 w-4" />
         </button>
@@ -394,7 +417,7 @@ function TourCard({
       <div className="mt-3 flex justify-end">
         <button
           onClick={onNext}
-          className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground"
+          className="pointer-events-auto rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground"
         >
           {index === total - 1 ? "Done" : "Next"}
         </button>
