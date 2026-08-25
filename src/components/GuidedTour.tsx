@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useNavigate, useLocation } from "@tanstack/react-router";
 import { X } from "lucide-react";
 import { useAppStore } from "@/lib/store";
@@ -153,10 +153,15 @@ export function GuidedTour() {
     window.addEventListener("scroll", onScrollResize, true);
     window.addEventListener("resize", onScrollResize);
     // Safety net: if this step's target genuinely never shows up, don't
-    // leave the person stuck under a dark overlay with no way out.
+    // leave the person stuck under a dark overlay with no way out. Kept
+    // short (3s, not longer) deliberately — if this fires, it's useful
+    // diagnostic information (confirms the target genuinely isn't being
+    // found at all, versus some other problem), and there's no reason to
+    // make someone wait longer than that to find out and get the recovery
+    // buttons.
     const stuckTimer = window.setTimeout(() => {
       if (!cancelled && !currentEl) setStuck(true);
-    }, 6000);
+    }, 3000);
 
     return () => {
       cancelled = true;
@@ -338,18 +343,32 @@ function Spotlight({ rect }: { rect: Rect | null }) {
         className="pointer-events-none absolute animate-in fade-in-0 zoom-in-95 duration-300 ring-4 ring-primary"
         style={{ top, left, width, height, borderRadius: CORNER_RADIUS }}
       />
-      {/* "Look here" pulse — grown via box-shadow spread (a fixed pixel
-          amount on every side), not a CSS transform:scale(). Scaling a
-          wide-but-short rect (e.g. the member-filter bar) by a percentage
-          grows it much more in absolute pixels sideways than vertically,
-          which is exactly the "radiates sideways but not top/bottom" look
-          — a scale is proportional to the box's own size, so a wide box
-          and a narrow box never expand by the same visual amount. A
-          box-shadow spread is a fixed pixel offset in every direction
-          regardless of the box's shape, so it always radiates evenly. */}
+      {/* "Look here" pulse — grown via per-axis CSS custom properties
+          (--tsx/--tsy), computed below from the target's own real width
+          and height so the growth is the same fixed pixel amount on every
+          side regardless of the box's shape (a wide-short bar and a
+          square button both grow by ~10px per side, not by the same
+          percentage — the earlier version scaled both axes by the same
+          percentage, which is exactly what made a wide box "radiate
+          sideways but not top/bottom": 18% of a wide box's width is a lot
+          more absolute pixels than 18% of its short height). Uses
+          transform + opacity specifically, not box-shadow — box-shadow
+          isn't GPU-accelerated, and animating it looks janky/flickery on
+          a real phone rather than a smooth pulse; transform and opacity
+          are the two properties browsers can always animate smoothly. */}
       <div
-        className="pointer-events-none absolute animate-tour-point text-primary"
-        style={{ top, left, width, height, borderRadius: CORNER_RADIUS }}
+        className="pointer-events-none absolute animate-tour-point bg-primary/40"
+        style={
+          {
+            top,
+            left,
+            width,
+            height,
+            borderRadius: CORNER_RADIUS,
+            "--tsx": (width + 20) / width,
+            "--tsy": (height + 20) / height,
+          } as CSSProperties
+        }
       />
     </>
   );
