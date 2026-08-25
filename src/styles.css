@@ -162,8 +162,24 @@ button:not(:disabled), a, [role="button"], [role="tab"], summary, label[for],
 .cursor-pointer { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
 
-/* Guided tour spotlight (GuidedTour.tsx) — highlighting now reuses the
-   dashboard's own ring-on-the-real-element pattern (see HIGHLIGHT_CLASSES
-   there) directly via Tailwind's ring-* utilities — no separate
-   keyframes needed here, unlike the floating overlay + pulse this
-   replaced. */
+/* Guided tour "look here" pulse (GuidedTour.tsx) — a filled block, the same
+   size and position as the main spotlight ring, that expands outward and
+   fades to nothing on a loop. Grows via per-element --tsx/--tsy custom
+   properties (set in GuidedTour.tsx from the target's real width/height)
+   rather than a fixed scale, so a wide short box and a small square one
+   both grow by the same fixed pixel amount instead of the same
+   percentage — a uniform percentage scale made a wide box radiate
+   sideways much more than vertically, since 18% of a large width is a
+   lot more absolute pixels than 18% of a small height. Animates
+   transform + opacity only, never box-shadow — box-shadow isn't
+   GPU-accelerated and visibly flickers rather than pulsing smoothly on a
+   real phone; transform and opacity are the two properties every browser
+   animates smoothly. */
+@keyframes tour-point {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(var(--tsx, 1.1), var(--tsy, 1.1)); opacity: 0; }
+}
+.animate-tour-point { animation: tour-point 1.6s ease-out infinite; will-change: transform, opacity; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-tour-point { animation: none; }
+}
