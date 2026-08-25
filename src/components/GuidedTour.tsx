@@ -62,6 +62,7 @@ export function GuidedTour() {
 
   const [rect, setRect] = useState<Rect | null>(null);
   const [foundEl, setFoundEl] = useState<HTMLElement | null>(null);
+  const [hasValue, setHasValue] = useState(false);
 
   // Navigate to this step's route if we're not already there. Generic and
   // safe to run on every step (not just the first) — if the user got here
@@ -85,17 +86,19 @@ export function GuidedTour() {
   // just its position) so a re-rendered replacement node — even one that
   // lands at the exact same screen position — is detected and re-bound.
   //
-  // Deliberately does NOT reset `rect` to null at the start of every step
-  // (only `foundEl`) — it keeps showing the PREVIOUS step's spotlight,
-  // right where it already is, until the new target is actually found and
-  // measured, then updates in place. The CSS transition on the ring/dim
-  // (below) then glides smoothly from the old spot to the new one. An
-  // earlier version reset rect to null on every step change, which
-  // unmounted and remounted the spotlight each time (a real target, sure,
-  // but a jarring "pop out, pop back in" instead of a glide) and was the
-  // actual cause of the ring visibly "flying in" to each new spot.
+  // Resets both rect and foundEl to null at the start of every step, on
+  // purpose: the ring/dim (Spotlight) and the text card both go away for
+  // the brief moment between steps, then pop back in together, freshly,
+  // once the new target is actually found and measured — the same "gone,
+  // then a clean fade-in at the right spot" behavior the card already had.
+  // An earlier version kept the previous step's rect on screen and glided
+  // the ring across to the new position instead — technically smoother,
+  // but it reads as the highlight visibly flying across the screen, which
+  // is worse, not better.
   useEffect(() => {
     setFoundEl(null);
+    setRect(null);
+    setHasValue(false);
     setStuck(false);
     if (!step) return;
     let cancelled = false;
@@ -107,29 +110,45 @@ export function GuidedTour() {
       // Reject a match that exists in the DOM but isn't actually visible
       // yet (display:none, not yet laid out, zero-size) — accepting it
       // would collapse the whole spotlight down to a 0×0 rect at (0,0),
-      // which renders as a ring/pointer pinned to the top-left corner
-      // pointing at nothing. Keep polling instead; a genuinely-missing
-      // target still falls through to the stuck-screen safety net below.
+      // which renders as a ring pinned to the top-left corner pointing at
+      // nothing. Keep polling instead; a genuinely-missing target still
+      // falls through to the stuck-screen safety net below.
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return;
       currentEl = el;
       setFoundEl(el);
       el.scrollIntoView({ behavior: "smooth", block: "center" });
-      setTimeout(() => {
-        if (!cancelled) updateRect();
-      }, 350);
     }
     function updateRect() {
       if (!currentEl) return;
       const r = currentEl.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return; // same zero-size guard, on every re-measure
       setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+      // For a field step, currentEl is the data-tour wrapper div (label +
+      // control together, so the whole field gets spotlighted, not just
+      // the input) — the real <input>/<select> with a .value lives inside
+      // it, not on the wrapper itself.
+      const control = currentEl.querySelector<
+        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+      >("input, select, textarea");
+      setHasValue(!!control && !!String(control.value ?? "").trim());
     }
 
     tryFind();
+    updateRect();
     const observer = new MutationObserver(tryFind);
     observer.observe(document.body, { childList: true, subtree: true });
-    const interval = window.setInterval(tryFind, 250);
+    // Re-measures on every tick, not just once after first finding the
+    // element — a scroll-into-view or a Sheet still mid-open-animation
+    // when first found can report a wrong, still-settling position; this
+    // makes any such mismatch self-correct within one tick (250ms) instead
+    // of staying wrong for the rest of the step. Also doubles as the
+    // live poll for hasValue, above, so Next can appear the moment a
+    // required field actually gets a value.
+    const interval = window.setInterval(() => {
+      tryFind();
+      updateRect();
+    }, 250);
     const onScrollResize = () => updateRect();
     window.addEventListener("scroll", onScrollResize, true);
     window.addEventListener("resize", onScrollResize);
@@ -230,7 +249,7 @@ export function GuidedTour() {
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[100]">
-      <Spotlight rect={rect} />
+      <Spotlight key={step.id} rect={rect} />
       {rect && (
         <TourCard
           key={step.id}
@@ -238,6 +257,7 @@ export function GuidedTour() {
           index={tourStep}
           total={steps.length}
           rect={rect}
+          hasValue={hasValue}
           onNext={advance}
           onSkip={skip}
         />
@@ -250,6 +270,7 @@ function Spotlight({ rect }: { rect: Rect | null }) {
   if (!rect) {
     // Nothing found yet (mid-navigation, waiting for a Sheet to open) —
     // dim the screen so it's clear something is happening, no hole yet.
+    // pointer-events-none here too: see the long comment below for why.
     return (
       <div className="pointer-events-none absolute inset-0 bg-black/55 transition-opacity duration-300" />
     );
@@ -258,27 +279,52 @@ function Spotlight({ rect }: { rect: Rect | null }) {
   const left = rect.left - PAD;
   const width = rect.width + PAD * 2;
   const height = rect.height + PAD * 2;
-  // Everything the tour draws — the dim, the ring, the pulse — is
-  // pointer-events-none, and so is this whole component's full-screen
-  // parent wrapper (GuidedTour's return, above). That last part is the
-  // actual fix: an earlier version made every element IN here inert but
-  // left the full-screen wrapper DIV that contains them at its default
-  // pointer-events (auto) — a parent element is its own independent
-  // hit-test target regardless of what its children are set to, so that
-  // forgotten wrapper alone was blocking every tap on the entire screen.
-  // This is ordinary, well-defined CSS box-model behavior, not a
-  // browser-specific quirk — unlike the two earlier click-blocking
-  // techniques this replaced (clip-path, then a 4-rectangle frame), both
-  // of which relied on hit-testing behavior that turned out not to be
-  // reliable in practice and were dropped for that reason. Trade-off,
-  // stated plainly: with no active blocking layer at all, tapping the
-  // dimmed area away from the target now also reaches whatever's beneath
-  // it, instead of being inertly blocked like before. Given the target
-  // being tappable is the entire point of this tour, that trade is right.
+  const bottom = top + height;
+  const right = left + width;
+  // Click-blocking is back to 4 real, invisible rectangles framing the
+  // hole — explicitly pointer-events-auto, which OVERRIDES the "none"
+  // they'd otherwise inherit from the full-screen parent wrapper (see
+  // GuidedTour's own return, above). This isn't a return to an earlier,
+  // supposedly-failed version of this same technique — it's that version
+  // COMBINED with the wrapper fix, which is the piece it was actually
+  // missing: without pointer-events-none on the wrapper, the wrapper's own
+  // box (spanning the full screen) was independently catching clicks over
+  // the hole too, regardless of what the 4 rectangles did — so the
+  // rectangle technique itself was likely never the problem. Removing
+  // background-blocking entirely (the version right before this one) traded
+  // that bug for a worse one: with NOTHING blocking the dimmed area, an
+  // errant tap near — but not exactly on — a field reached the real page
+  // underneath, and for any tap that landed outside an open Sheet's own
+  // content, the Sheet's own default "tap outside closes me" behavior
+  // fired and silently closed the whole form. Confirmed cause of "the
+  // whole form disappeared." These 4 rectangles are what stop that: they
+  // block every tap in the dimmed area precisely everywhere EXCEPT the
+  // hole itself, which nothing here covers, so the real target underneath
+  // stays tappable.
   return (
     <>
       <div
-        className="pointer-events-none absolute animate-in fade-in-0 zoom-in-95 duration-300 transition-all"
+        className="pointer-events-auto absolute"
+        style={{ top: 0, left: 0, right: 0, height: Math.max(0, top) }}
+      />
+      <div
+        className="pointer-events-auto absolute"
+        style={{ top: bottom, left: 0, right: 0, bottom: 0 }}
+      />
+      <div
+        className="pointer-events-auto absolute"
+        style={{ top, left: 0, width: Math.max(0, left), height }}
+      />
+      <div
+        className="pointer-events-auto absolute"
+        style={{ top, left: right, right: 0, height }}
+      />
+      {/* Pure visual, pointer-events-none — a box-shadow's spread grows
+          the dim by a fixed number of pixels evenly on every side,
+          correctly following the box's own border-radius, so it always
+          renders a clean rounded hole with no separate geometry needed. */}
+      <div
+        className="pointer-events-none absolute animate-in fade-in-0 zoom-in-95 duration-300"
         style={{
           top,
           left,
@@ -289,23 +335,20 @@ function Spotlight({ rect }: { rect: Rect | null }) {
         }}
       />
       <div
-        className="pointer-events-none absolute ring-4 ring-primary transition-all duration-300"
+        className="pointer-events-none absolute animate-in fade-in-0 zoom-in-95 duration-300 ring-4 ring-primary"
         style={{ top, left, width, height, borderRadius: CORNER_RADIUS }}
       />
-      {/* "Look here" indicator — a second ring, same size and position,
-          that loops through a gentle expand-and-fade pulse. This is the
-          standard pattern for this exact job (Notion, Linear, and most
-          fintech onboarding all use some version of a pulsing highlight
-          rather than a literal hand-cursor icon) — chosen deliberately
-          after repeated attempts at a hand-drawn glyph came out wrong
-          (an icon's own internal detail lines showing through, an
-          asymmetric outline, and once, an unintentionally rude gesture).
-          A ring can't have any of those problems: it's the same shape as
-          the highlight it belongs to, always centered exactly on it, and
-          "pulsing" is one CSS animation on one element — nothing to draw,
-          nothing to get wrong. */}
+      {/* "Look here" pulse — grown via box-shadow spread (a fixed pixel
+          amount on every side), not a CSS transform:scale(). Scaling a
+          wide-but-short rect (e.g. the member-filter bar) by a percentage
+          grows it much more in absolute pixels sideways than vertically,
+          which is exactly the "radiates sideways but not top/bottom" look
+          — a scale is proportional to the box's own size, so a wide box
+          and a narrow box never expand by the same visual amount. A
+          box-shadow spread is a fixed pixel offset in every direction
+          regardless of the box's shape, so it always radiates evenly. */}
       <div
-        className="pointer-events-none absolute animate-tour-point ring-4 ring-primary transition-all duration-300"
+        className="pointer-events-none absolute animate-tour-point text-primary"
         style={{ top, left, width, height, borderRadius: CORNER_RADIUS }}
       />
     </>
@@ -317,6 +360,7 @@ function TourCard({
   index,
   total,
   rect,
+  hasValue,
   onNext,
   onSkip,
 }: {
@@ -324,6 +368,7 @@ function TourCard({
   index: number;
   total: number;
   rect: Rect;
+  hasValue: boolean;
   onNext: () => void;
   onSkip: () => void;
 }) {
@@ -383,6 +428,18 @@ function TourCard({
     );
   }
 
+  // A step marked advanceOnClick is only ever completed by the real tap —
+  // showing Next as an alternative lets someone skip past it WITHOUT doing
+  // the real action, and the step right after often depends on that
+  // action having actually happened (e.g. skipping the "+" FAB step means
+  // no record exists, so every field step after it can never find its
+  // target). Confirmed cause of the tour breaking partway through, not a
+  // hypothetical. A requireValue step similarly stays without Next until
+  // the real field actually has something in it.
+  const waitingOnTap = !!step.advanceOnClick;
+  const waitingOnValue = !!step.requireValue && !hasValue;
+  const showNext = !waitingOnTap && !waitingOnValue;
+
   return (
     <div
       className="pointer-events-none absolute rounded-2xl bg-card p-4 shadow-2xl border border-border animate-in fade-in-0 zoom-in-95 duration-200"
@@ -417,13 +474,19 @@ function TourCard({
       </div>
       <h3 className="text-sm font-bold">{step.title}</h3>
       <p className="mt-1 text-sm text-muted-foreground">{step.body}</p>
-      <div className="mt-3 flex justify-end">
-        <button
-          onClick={onNext}
-          className="pointer-events-auto rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground"
-        >
-          {index === total - 1 ? "Done" : "Next"}
-        </button>
+      <div className="mt-3 flex min-h-[26px] items-center justify-end">
+        {showNext ? (
+          <button
+            onClick={onNext}
+            className="pointer-events-auto rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground"
+          >
+            {index === total - 1 ? "Done" : "Next"}
+          </button>
+        ) : (
+          <span className="text-xs text-muted-foreground">
+            {waitingOnTap ? "Tap the highlighted item to continue" : "Fill this in to continue"}
+          </span>
+        )}
       </div>
     </div>
   );
