@@ -162,25 +162,8 @@ button:not(:disabled), a, [role="button"], [role="tab"], summary, label[for],
 .cursor-pointer { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
 
-/* Guided tour "look here" pulse (GuidedTour.tsx) — a filled block, the same
-   size and position as the main spotlight ring, that expands outward and
-   fades to nothing on a loop. Replaces an earlier hand/cursor icon (three
-   different attempts, each with its own real problem — internal detail
-   lines still showing through, an uneven-looking outline, once even an
-   unintentionally rude gesture) with something that can't have any of
-   those problems: it's the same shape as the ring it sits on, always
-   perfectly centered, and there's no artwork to get wrong. Grows via
-   per-element --tsx/--tsy custom properties (set in GuidedTour.tsx from
-   the target's real width/height) rather than a fixed scale, so a wide
-   short box and a small square one both grow by the same fixed pixel
-   amount instead of the same percentage. Animates transform + opacity
-   only — not box-shadow, which isn't GPU-accelerated and animates with a
-   visible flicker rather than a smooth pulse on a real phone. */
-@keyframes tour-point {
-  0% { transform: scale(1); opacity: 0.5; }
-  100% { transform: scale(var(--tsx, 1.1), var(--tsy, 1.1)); opacity: 0; }
-}
-.animate-tour-point { animation: tour-point 1.6s ease-out infinite; will-change: transform, opacity; }
-@media (prefers-reduced-motion: reduce) {
-  .animate-tour-point { animation: none; }
-}
+/* Guided tour spotlight (GuidedTour.tsx) — highlighting now reuses the
+   dashboard's own ring-on-the-real-element pattern (see HIGHLIGHT_CLASSES
+   there) directly via Tailwind's ring-* utilities — no separate
+   keyframes needed here, unlike the floating overlay + pulse this
+   replaced. */
