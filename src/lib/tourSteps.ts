@@ -35,6 +35,14 @@ export type TourStep = {
    * with no popover, a form's Save/submit button).
    */
   advanceOnClick?: boolean;
+  /**
+   * For a field step: don't show the Next button until the real input
+   * already has a value. Set true for a required field (bank) or one the
+   * tour's whole point depends on (balance) — stated directly, not
+   * inferred: forcing Next to wait until there's something to advance
+   * past is a clearer signal than a highlight ring alone.
+   */
+  requireValue?: boolean;
 };
 
 // Shared by GuidedTour.tsx (on finish/skip) and TourWelcomeScreen.tsx (on
@@ -89,18 +97,21 @@ export const CORE_TOUR_STEPS: TourStep[] = [
     id: "bank-field",
     target: "field-bank",
     title: "Which bank?",
-    body: "Pick the bank this loan is with, then tap Next.",
+    body: "Pick the bank this loan is with.",
     placement: "bottom",
+    requireValue: true,
     // A dropdown — tapping it only OPENS the list, picking a bank is a
-    // separate later moment. Next-only.
+    // separate later moment. Next-only, and hidden until a bank is picked.
   },
   {
     id: "balance-field",
     target: "field-balance",
     title: "What's the current balance?",
-    body: "A rough estimate is fine for now — you can always refine it later. Type it in, then tap Next.",
+    body: "A rough estimate is fine for now — you can always refine it later.",
     placement: "bottom",
-    // Text field — tapping it only focuses it for typing. Next-only.
+    requireValue: true,
+    // Text field — tapping it only focuses it for typing. Next-only, and
+    // hidden until a number is actually typed in.
   },
   {
     id: "action-field",
