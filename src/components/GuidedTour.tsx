@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useNavigate, useLocation } from "@tanstack/react-router";
 import { X } from "lucide-react";
 import { useAppStore } from "@/lib/store";
@@ -9,18 +9,12 @@ import { toast } from "sonner";
 
 type Rect = { top: number; left: number; width: number; height: number };
 
-// Same classes this app's own dashboard already uses for "you clicked an
-// alert, here's the card it's about" (see routes/index.tsx's `highlight`
-// state and `scrollTo`) — reused verbatim rather than inventing a new
-// look, on direct request: a plain ring toggled on the real element via a
-// CSS transition, not a separately-drawn/positioned overlay shape.
-const HIGHLIGHT_CLASSES = [
-  "ring-2",
-  "ring-primary",
-  "ring-offset-2",
-  "ring-offset-background",
-  "transition-all",
-];
+const PAD = 8; // px gap between the spotlight hole and the highlighted element
+// Kept equal to the app's `rounded-xl` value (--radius-xl in styles.css,
+// currently 18px) on purpose — the dimmed hole and the ring drawn on top of
+// it must always use the exact same radius or they visibly mismatch. If
+// --radius-xl ever changes, update this constant too.
+const CORNER_RADIUS = 18;
 
 /**
  * Renders on top of the real app (mounted once near the root) and drives
@@ -28,22 +22,24 @@ const HIGHLIGHT_CLASSES = [
  * or mock anything. Each step names a data-tour="..." value; this engine
  * finds that real element wherever it currently lives in the DOM (which
  * may require navigating to a different route or opening a real Sheet
- * first), scrolls it into view, and rings it directly — the exact same
- * technique and classes as the dashboard's own alert→card highlight, not
- * a separate floating spotlight shape.
+ * first), scrolls it into view, and draws a spotlight around it: the rest
+ * of the screen dims and only the highlighted element stays tappable —
+ * everywhere else is genuinely blocked, not just visually dark, so a
+ * stray tap can't land on something behind the overlay by accident.
  *
- * An earlier version drew a full-screen dim + a separately-positioned
- * ring + a pulsing halo as an absolutely-positioned overlay on top of the
- * page. That overlay was the source of nearly every hard bug this
- * component had: getting click-through right for the real target *and*
- * blocking the rest of the screen turned out to be genuinely unreliable
- * across real devices (three different techniques, three different real
- * failures), the pulse animation was janky on a real phone, and the ring
- * had its own position state that could end up stale relative to the
- * current step. Ringing the real element directly has none of those
- * problems by construction: there's no separate shape to position or
- * keep in sync, and the target is never covered by anything, so it's
- * always exactly as clickable as it already was.
+ * That last part — blocking everywhere except the hole — was the source
+ * of nearly every hard bug this component had, across several rebuilds:
+ * a clip-path-based hole silently failed hit-testing on iOS Safari,
+ * dropping blocking altogether let a stray tap dismiss an open Sheet
+ * (Sheets close themselves on an outside tap by default), and a plain
+ * full-screen wrapper div left at its default pointer-events blocked the
+ * hole too, regardless of what was drawn inside it. The version here
+ * combines the two pieces that were each separately confirmed correct
+ * but never shipped together: the full-screen wrapper is explicitly
+ * pointer-events-none, and the four rectangles that frame the hole are
+ * explicitly pointer-events-auto, overriding that inherited "none" only
+ * where they actually are — never over the hole itself, which nothing
+ * here covers.
  */
 export function GuidedTour() {
   const activeTour = useAppStore((s) => s.activeTour);
@@ -93,18 +89,17 @@ export function GuidedTour() {
   if (!step) return null;
 
   // Keyed by tour + step index: forces a full unmount of the previous
-  // step's runner (running its cleanup — removing its highlight class and
-  // click listener — synchronously and completely) and a full fresh mount
-  // of the next one, on every step change, guaranteed by React itself.
-  // An earlier version reset several separate pieces of state (the found
-  // element, its measured position, whether it had a value) by hand
-  // inside an effect keyed on the step changing — logically equivalent in
-  // theory, but it showed a real bug in practice: sometimes the PREVIOUS
-  // step's highlight and position kept showing through the next one or
-  // two steps, self-correcting only on a full page refresh. A manual
-  // reset has to get every piece of related state right every time; a
-  // key change can't partially apply — React tears down the old instance
-  // completely before the new one exists at all.
+  // step's runner (running its cleanup completely — every listener,
+  // observer, and timer torn down) and a full fresh mount of the next
+  // one, on every step change, guaranteed by React itself. An earlier
+  // version reset several separate pieces of state (the found element,
+  // its measured position, whether it had a value) by hand inside an
+  // effect keyed on the step changing — logically equivalent in theory,
+  // but it showed a real bug in practice: sometimes the PREVIOUS step's
+  // highlight and position kept showing through the next one or two
+  // steps, self-correcting only on a full page refresh. A manual reset
+  // has to get every piece of related state right every time; a key
+  // change can't partially apply.
   return (
     <TourStepRunner
       key={`${activeTour}-${tourStep}`}
@@ -146,16 +141,15 @@ function TourStepRunner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Find the target element, ring it directly (see HIGHLIGHT_CLASSES),
-  // scroll it into view, wire up click-to-advance if this step allows it,
-  // and track the target's own rect (for the text card's position) and
-  // value (for a requireValue step). Polls rather than assuming the
-  // target exists yet, since it may only appear after the route above
-  // finishes rendering or a Sheet finishes opening — MutationObserver
-  // catches most cases instantly, the interval is a defensive fallback
-  // that also keeps re-measuring for the rest of the step, so a
-  // still-settling Sheet-open animation self-corrects within one tick
-  // instead of staying wrong.
+  // Find the target element, scroll it into view, wire up click-to-advance
+  // if this step allows it, and track the target's rect (for positioning
+  // the spotlight and the text card) and value (for a requireValue step).
+  // Polls rather than assuming the target exists yet, since it may only
+  // appear after the route above finishes rendering or a Sheet finishes
+  // opening — MutationObserver catches most cases instantly, the interval
+  // is a defensive fallback that also keeps re-measuring for the rest of
+  // the step, so a still-settling Sheet-open animation self-corrects
+  // within one tick instead of staying wrong.
   useEffect(() => {
     let cancelled = false;
     let currentEl: HTMLElement | null = null;
@@ -167,8 +161,9 @@ function TourStepRunner({
       if (r.width === 0 || r.height === 0) return; // hidden/mid-transition — keep whatever we last had
       setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
       // For a field step, currentEl is the data-tour wrapper div (label +
-      // control together, so the whole field gets ringed, not just the
-      // input) — the real <input>/<select> with a .value lives inside it.
+      // control together, so the whole field gets spotlighted, not just
+      // the input) — the real <input>/<select> with a .value lives inside
+      // it, not on the wrapper itself.
       const control = currentEl.querySelector<
         HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
       >("input, select, textarea");
@@ -179,13 +174,13 @@ function TourStepRunner({
       const el = document.querySelector<HTMLElement>(`[data-tour="${step.target}"]`);
       if (!el || cancelled || currentEl === el) return;
       // Reject a match that exists in the DOM but isn't actually visible
-      // yet (display:none, not yet laid out, zero-size) — keep polling;
-      // a genuinely-missing target still falls through to the stuck
-      // screen below.
+      // yet (display:none, not yet laid out, zero-size) — accepting it
+      // would collapse the whole spotlight down to a 0×0 rect at (0,0),
+      // pinned to the top-left corner. Keep polling; a genuinely-missing
+      // target still falls through to the stuck screen below.
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return;
       currentEl = el;
-      el.classList.add(...HIGHLIGHT_CLASSES);
       el.scrollIntoView({ behavior: "smooth", block: "center" });
       // Advancing the tour is also wired to a real click/tap on the
       // actual target, but ONLY for steps explicitly marked
@@ -239,10 +234,7 @@ function TourStepRunner({
       window.clearTimeout(stuckTimer);
       window.removeEventListener("scroll", onScrollResize, true);
       window.removeEventListener("resize", onScrollResize);
-      if (currentEl) {
-        currentEl.classList.remove(...HIGHLIGHT_CLASSES);
-        if (clickHandler) currentEl.removeEventListener("click", clickHandler);
-      }
+      if (currentEl && clickHandler) currentEl.removeEventListener("click", clickHandler);
     };
     // step, index and total don't change for the lifetime of this
     // component (it remounts fresh on every step via the key above), so
@@ -280,18 +272,109 @@ function TourStepRunner({
     );
   }
 
-  if (!rect) return null;
-
   return (
-    <TourCard
-      step={step}
-      index={index}
-      total={total}
-      rect={rect}
-      hasValue={hasValue}
-      onNext={onNext}
-      onSkip={onSkip}
-    />
+    <div className="pointer-events-none fixed inset-0 z-[100]">
+      <Spotlight rect={rect} />
+      {rect && (
+        <TourCard
+          step={step}
+          index={index}
+          total={total}
+          rect={rect}
+          hasValue={hasValue}
+          onNext={onNext}
+          onSkip={onSkip}
+        />
+      )}
+    </div>
+  );
+}
+
+function Spotlight({ rect }: { rect: Rect | null }) {
+  if (!rect) {
+    // Nothing found yet (mid-navigation, waiting for a Sheet to open) —
+    // dim the screen so it's clear something is happening, no hole yet.
+    // Blocking taps everywhere in this state is correct too: there's no
+    // real target to protect yet, so nothing should be reachable.
+    return (
+      <div className="pointer-events-auto absolute inset-0 bg-black/55 transition-opacity duration-300" />
+    );
+  }
+  const top = rect.top - PAD;
+  const left = rect.left - PAD;
+  const width = rect.width + PAD * 2;
+  const height = rect.height + PAD * 2;
+  const bottom = top + height;
+  const right = left + width;
+  return (
+    <>
+      {/* Click-blocking: 4 real, invisible rectangles framing the hole,
+          explicitly pointer-events-auto — overriding the "none" they'd
+          otherwise inherit from the full-screen parent wrapper. Nothing
+          here covers the hole itself, so the real target underneath it
+          stays exactly as tappable as it already was; everywhere else is
+          genuinely blocked, not just visually dark. */}
+      <div
+        className="pointer-events-auto absolute"
+        style={{ top: 0, left: 0, right: 0, height: Math.max(0, top) }}
+      />
+      <div
+        className="pointer-events-auto absolute"
+        style={{ top: bottom, left: 0, right: 0, bottom: 0 }}
+      />
+      <div
+        className="pointer-events-auto absolute"
+        style={{ top, left: 0, width: Math.max(0, left), height }}
+      />
+      <div
+        className="pointer-events-auto absolute"
+        style={{ top, left: right, right: 0, height }}
+      />
+      {/* Pure visual, pointer-events-none — a box-shadow's spread grows
+          the dim by a fixed number of pixels evenly on every side,
+          correctly following the box's own border-radius, so it always
+          renders a clean rounded hole with no separate geometry needed. */}
+      <div
+        className="pointer-events-none absolute animate-in fade-in-0 zoom-in-95 duration-200"
+        style={{
+          top,
+          left,
+          width,
+          height,
+          borderRadius: CORNER_RADIUS,
+          boxShadow: "0 0 0 9999px rgba(0,0,0,0.55)",
+        }}
+      />
+      <div
+        className="pointer-events-none absolute animate-in fade-in-0 zoom-in-95 duration-200 ring-4 ring-primary"
+        style={{ top, left, width, height, borderRadius: CORNER_RADIUS }}
+      />
+      {/* "Look here" pulse — grown via per-element --tsx/--tsy custom
+          properties computed from the target's own real width/height, so
+          the growth is the same fixed pixel amount on every side
+          regardless of the box's shape (a wide-short bar and a small
+          square button both grow by ~10px per side, not by the same
+          percentage — a uniform percentage scale is what made a wide box
+          radiate sideways much more than vertically). Animates transform
+          + opacity only, never box-shadow — box-shadow isn't
+          GPU-accelerated and visibly flickers rather than pulsing
+          smoothly on a real phone; transform and opacity are the two
+          properties every browser can animate smoothly. */}
+      <div
+        className="pointer-events-none absolute animate-tour-point bg-primary/35"
+        style={
+          {
+            top,
+            left,
+            width,
+            height,
+            borderRadius: CORNER_RADIUS,
+            "--tsx": (width + 20) / width,
+            "--tsy": (height + 20) / height,
+          } as CSSProperties
+        }
+      />
+    </>
   );
 }
 
@@ -314,7 +397,6 @@ function TourCard({
 }) {
   const CARD_W = 300;
   const MARGIN = 12;
-  const PAD = 8;
   const vw = typeof window !== "undefined" ? window.innerWidth : 400;
   const vh = typeof window !== "undefined" ? window.innerHeight : 800;
 
@@ -375,14 +457,17 @@ function TourCard({
   // action having actually happened (e.g. skipping the "+" FAB step means
   // no record exists, so every field step after it can never find its
   // target). A requireValue step similarly stays without Next until the
-  // real field actually has something in it.
+  // real field actually has something in it. No hint text for the
+  // advanceOnClick case — the pulsing spotlight already says "tap here"
+  // on its own; a redundant caption under it just adds clutter.
   const waitingOnTap = !!step.advanceOnClick;
   const waitingOnValue = !!step.requireValue && !hasValue;
   const showNext = !waitingOnTap && !waitingOnValue;
+  const showFooter = showNext || waitingOnValue;
 
   return (
     <div
-      className="pointer-events-none fixed z-[100] animate-in fade-in-0 zoom-in-95 duration-200 rounded-2xl bg-card p-4 shadow-2xl border border-border"
+      className="pointer-events-none absolute rounded-2xl bg-card p-4 shadow-2xl border border-border animate-in fade-in-0 zoom-in-95 duration-200 transition-[top,left,bottom]"
       style={{ width: CARD_W, left, top, bottom }}
     >
       <div className="mb-2.5 flex items-center gap-3">
@@ -414,20 +499,20 @@ function TourCard({
       </div>
       <h3 className="text-sm font-bold">{step.title}</h3>
       <p className="mt-1 text-sm text-muted-foreground">{step.body}</p>
-      <div className="mt-3 flex min-h-[26px] items-center justify-end">
-        {showNext ? (
-          <button
-            onClick={onNext}
-            className="pointer-events-auto rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground"
-          >
-            {index === total - 1 ? "Done" : "Next"}
-          </button>
-        ) : (
-          <span className="text-xs text-muted-foreground">
-            {waitingOnTap ? "Tap the highlighted item to continue" : "Fill this in to continue"}
-          </span>
-        )}
-      </div>
+      {showFooter && (
+        <div className="mt-3 flex justify-end">
+          {showNext ? (
+            <button
+              onClick={onNext}
+              className="pointer-events-auto rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground"
+            >
+              {index === total - 1 ? "Done" : "Next"}
+            </button>
+          ) : (
+            <span className="text-xs text-muted-foreground">Fill this in to continue</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
