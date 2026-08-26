@@ -162,24 +162,45 @@ button:not(:disabled), a, [role="button"], [role="tab"], summary, label[for],
 .cursor-pointer { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
 
-/* Guided tour "look here" pulse (GuidedTour.tsx) — a filled block, the same
-   size and position as the main spotlight ring, that expands outward and
-   fades to nothing on a loop. Grows via per-element --tsx/--tsy custom
-   properties (set in GuidedTour.tsx from the target's real width/height)
-   rather than a fixed scale, so a wide short box and a small square one
-   both grow by the same fixed pixel amount instead of the same
-   percentage — a uniform percentage scale made a wide box radiate
-   sideways much more than vertically, since 18% of a large width is a
-   lot more absolute pixels than 18% of a small height. Animates
-   transform + opacity only, never box-shadow — box-shadow isn't
-   GPU-accelerated and visibly flickers rather than pulsing smoothly on a
-   real phone; transform and opacity are the two properties every browser
-   animates smoothly. */
-@keyframes tour-point {
-  0% { transform: scale(1); opacity: 0.5; }
-  100% { transform: scale(var(--tsx, 1.1), var(--tsy, 1.1)); opacity: 0; }
+/* Guided tour (GuidedTour.tsx) — theming overrides for driver.js's own
+   popover, so it matches this app's actual design tokens (card/primary/
+   border/radius) instead of driver.js's generic default look. Targets
+   driver.js's own class names directly; nothing here affects layout or
+   behavior, which driver.js owns entirely. */
+.driver-popover {
+  background-color: var(--card);
+  color: var(--foreground);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  font-family: inherit;
+  max-width: 300px;
 }
-.animate-tour-point { animation: tour-point 1.6s ease-out infinite; will-change: transform, opacity; }
-@media (prefers-reduced-motion: reduce) {
-  .animate-tour-point { animation: none; }
+.driver-popover-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.driver-popover-description {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+.driver-popover-progress-text {
+  color: var(--muted-foreground);
+}
+.driver-popover-footer-btn {
+  border-radius: 9999px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  border: none;
+}
+.driver-popover-footer .driver-popover-next-btn,
+.driver-popover-footer .driver-popover-done-btn {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  padding: 0.375rem 1rem;
+}
+.driver-popover-arrow-side-left.driver-popover-arrow,
+.driver-popover-arrow-side-right.driver-popover-arrow,
+.driver-popover-arrow-side-top.driver-popover-arrow,
+.driver-popover-arrow-side-bottom.driver-popover-arrow {
+  border-color: var(--card);
 }
