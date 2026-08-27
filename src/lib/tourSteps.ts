@@ -44,6 +44,23 @@ export type TourStep = {
    */
   requireValue?: boolean;
   /**
+   * Milliseconds to wait, after this step is chosen but before the tour
+   * actually starts looking for its target, when arriving at it opens a
+   * Sheet or navigates to a new route. Confirmed real bug this fixes: the
+   * tour would find the target the instant it existed in the DOM, which
+   * for a Sheet still sliding into place or a page still rendering is
+   * BEFORE the layout has actually settled — so the spotlight would
+   * appear in the wrong spot and then visibly snap to the right one a
+   * moment later once driver.js re-measured. This makes the tour wait
+   * out that settle time BEFORE it looks at all, so what appears is
+   * already correct the first time, instead of appearing wrong and then
+   * jumping — the "video, not two things stacked on each other" feel.
+   * Only set this on a step that follows a real transition (a Sheet
+   * opening, a route change, a Sheet closing back to a list) — most
+   * steps stay on the same static page and don't need it.
+   */
+  settleDelay?: number;
+  /**
    * Highlight the real element but block real interaction with it — used
    * for a step whose real action (open a Sheet, open a dropdown) has no
    * downstream step depending on it having actually happened, so there's
@@ -113,6 +130,7 @@ export const CORE_TOUR_STEPS: TourStep[] = [
     body: "Pick the bank this loan is with.",
     placement: "bottom",
     requireValue: true,
+    settleDelay: 400, // follows add-entry opening the record Sheet
     // A dropdown — tapping it only OPENS the list, picking a bank is a
     // separate later moment. Next-only, and hidden until a bank is picked.
   },
@@ -145,9 +163,10 @@ export const CORE_TOUR_STEPS: TourStep[] = [
   {
     id: "saved",
     target: "record-card",
-    title: "Nice — you're set up! 🎉",
-    body: "Your loan is saved. This card is where everything about it lives from now on.",
+    title: "Nice — you're all set! 🎉",
+    body: "Your loan is saved. This card is where everything about it lives from now on. Insurance, property, and other sections work the same way — add one whenever you're ready.",
     placement: "bottom",
+    settleDelay: 500, // follows Save writing to the database and the list refetching
     // Nothing to tap — this is the last step, "Done" ends the tour.
   },
 ];
@@ -204,6 +223,7 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
     body: "A short label is enough, e.g. \"Reprice loan.\"",
     placement: "bottom",
     requireValue: true,
+    settleDelay: 400, // follows reminder-trigger opening the reminder Sheet
     // Confirmed: the real Save button's own validation silently rejects
     // an empty "what" (a toast, not a disabled button) — without gating
     // Next here, the tour could walk someone straight into that toast
@@ -238,9 +258,10 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
     id: "upcoming",
     route: "/",
     target: "upcoming-section",
-    title: "There it is",
-    body: "Your reminder shows up here, along with anything else coming due across your whole household.",
+    title: "There it is 🎉",
+    body: "Your reminder shows up here, along with anything else coming due across your whole household. That's the tour — explore Insurance, Property, and the rest whenever you're ready.",
     placement: "top",
+    settleDelay: 400, // follows the nav-home route change
     // Final step, nothing to tap — "Done" ends the tour.
   },
 ];
