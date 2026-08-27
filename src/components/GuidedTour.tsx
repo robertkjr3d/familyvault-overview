@@ -96,6 +96,19 @@ export function GuidedTour() {
           : undefined,
       },
       advanceOnClick: !!step.advanceOnClick,
+      disableActiveInteraction: !!step.disableInteraction,
+      // driver.js measures the target's position once when a step first
+      // highlights. If that target only just finished navigating to, or
+      // sits inside a Sheet still mid-open-animation, that first
+      // measurement can be taken before the layout has actually settled
+      // — confirmed cause of the stage/popover appearing cut off or far
+      // from the real element on some steps. refresh() re-measures and
+      // repositions everything; running it again ~400ms later (past any
+      // normal CSS transition) corrects that without needing to guess
+      // which specific steps are affected.
+      onHighlighted: (_element, _step, opts) => {
+        window.setTimeout(() => opts.driver.refresh(), 400);
+      },
     }));
 
     const driverObj: Driver = driver({
@@ -106,6 +119,13 @@ export function GuidedTour() {
       stageRadius: STAGE_RADIUS,
       smoothScroll: true,
       allowClose: true,
+      // driver.js's own default here is "close" — a stray tap anywhere on
+      // the dimmed background, not just the X button, silently ends the
+      // whole tour. Confirmed exactly this happening around the bank
+      // field, where an accidental tap near (not on) the target looked
+      // like the tour randomly quitting. A no-op keeps a background tap
+      // harmless instead: nothing happens, the tour just stays put.
+      overlayClickBehavior: () => {},
       // A target that genuinely never appears (something upstream didn't
       // set up the way the step expects) skips forward automatically
       // after waiting, rather than leaving the tour stuck with no way
@@ -128,6 +148,19 @@ export function GuidedTour() {
       // only after the route change has been kicked off.
       onNextClick: (_element, _step, opts) => {
         const idx = opts.index ?? 0;
+        // The core tour's first step deliberately lets the person tap
+        // either "All" or a specific member chip — that's the step's
+        // whole point. But if they land on a specific member, the loan
+        // this tour creates later can end up filtered OUT of view by the
+        // time the "saved" step looks for its card — confirmed cause of
+        // the tour appearing to break at Save for some people and not
+        // others. Reset to "All" the moment this step is left (not
+        // before it's shown, which wouldn't catch whatever gets tapped
+        // during it), so the rest of the tour always has an unfiltered
+        // view regardless of what was picked.
+        if (activeTour === "core" && idx === 0) {
+          useAppStore.getState().setMemberFilter("all");
+        }
         const nextTourStep = tourSteps[idx + 1];
         if (nextTourStep?.route && locationRef.current.pathname !== nextTourStep.route) {
           navigate({ to: nextTourStep.route });
