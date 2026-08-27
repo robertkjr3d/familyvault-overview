@@ -165,7 +165,18 @@ export function GuidedTour() {
         if (nextTourStep?.route && locationRef.current.pathname !== nextTourStep.route) {
           navigate({ to: nextTourStep.route });
         }
-        opts.driver.moveNext();
+        // See settleDelay's own comment in tourSteps.ts — waiting here,
+        // BEFORE driver.js starts looking for the next target, is what
+        // actually fixes the "appears wrong, then visibly snaps into
+        // place" look: driver.js's own first measurement only happens
+        // once moveNext() is called, so delaying that call means the
+        // Sheet/route transition has already finished by the time it
+        // measures, instead of needing a correction afterward.
+        if (nextTourStep?.settleDelay) {
+          window.setTimeout(() => opts.driver.moveNext(), nextTourStep.settleDelay);
+        } else {
+          opts.driver.moveNext();
+        }
       },
       onCloseClick: () => {
         const idx = driverObj.getActiveIndex() ?? 0;
@@ -182,7 +193,11 @@ export function GuidedTour() {
     if (first?.route && locationRef.current.pathname !== first.route) {
       navigate({ to: first.route });
     }
-    driverObj.drive();
+    if (first?.settleDelay) {
+      window.setTimeout(() => driverObj.drive(), first.settleDelay);
+    } else {
+      driverObj.drive();
+    }
 
     return () => {
       if (driverObj.isActive()) driverObj.destroy();
