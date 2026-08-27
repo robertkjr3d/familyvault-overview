@@ -4,11 +4,13 @@ import { RecordFormSheet } from "./RecordFormSheet";
 import { RecordWizardSheet } from "./RecordWizardSheet";
 import { recordConfigs } from "@/lib/recordConfigs";
 import { useCurrentRole } from "@/lib/useCurrentRole";
+import { useAppStore } from "@/lib/store";
 
 const WIZARD_CONFIGS = new Set(["properties", "insurance_policies"]);
 
 export function AddRecordFab({ configKey }: { configKey: keyof typeof recordConfigs }) {
   const { canEdit } = useCurrentRole();
+  const activeTour = useAppStore((s) => s.activeTour);
   const cfg = recordConfigs[configKey];
   const [formOpen, setFormOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -16,6 +18,14 @@ export function AddRecordFab({ configKey }: { configKey: keyof typeof recordConf
   const hasWizard = WIZARD_CONFIGS.has(configKey as string);
 
   if (!canEdit) return null;
+  // The "more tips" tour never uses this button, but its own fixed
+  // position can end up visually overlapping a card the tour is
+  // highlighting further down a longer list — confirmed to only show up
+  // once a household has more than a couple of entries. Hiding it here
+  // for that tour specifically removes the collision outright, rather
+  // than trying to reposition the highlight around wherever this happens
+  // to be for any given household's list length.
+  if (activeTour === "extras") return null;
 
   function onFabClick() {
     if (hasWizard) {
