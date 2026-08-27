@@ -43,6 +43,19 @@ export type TourStep = {
    * past is a clearer signal than a highlight ring alone.
    */
   requireValue?: boolean;
+  /**
+   * Highlight the real element but block real interaction with it — used
+   * for a step whose real action (open a Sheet, open a dropdown) has no
+   * downstream step depending on it having actually happened, so there's
+   * nothing to gain from letting it fire and real cost to letting it:
+   * confirmed directly — tapping "duplicate" during the tour created a
+   * genuine second entry and opened a Sheet over the tour, which is
+   * exactly the kind of real side effect a "just look at this" step
+   * shouldn't be able to trigger. Never set this on a step whose target
+   * needs to stay tappable for the tour to proceed (reminder-trigger,
+   * any field, add-entry, the two Save buttons).
+   */
+  disableInteraction?: boolean;
 };
 
 // Shared by GuidedTour.tsx (on finish/skip) and TourWelcomeScreen.tsx (on
@@ -145,17 +158,17 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
     route: "/loans",
     target: "status-toggle",
     title: "Track progress",
-    body: "Tap here to mark something as Needs Review or Settled, so it's easy to see what still needs attention. Then tap Next.",
+    body: "Tap here to mark something as Needs Review or Settled, so it's easy to see what still needs attention.",
     placement: "top",
-    // Opens a small options popover — tapping only opens it. Next-only.
+    disableInteraction: true, // opens a real options popover — nothing downstream needs it open
   },
   {
     id: "duplicate",
     target: "duplicate-icon",
     title: "Got a similar one?",
-    body: "Duplicate copies this entry's details into a new one — handy if you're adding several similar loans. Then tap Next.",
+    body: "Duplicate copies this entry's details into a new one — handy if you're adding several similar loans.",
     placement: "left",
-    // Opens a whole new entry Sheet — Next-only.
+    disableInteraction: true, // confirmed: tapping this for real creates a genuine second entry
   },
   {
     id: "expand",
@@ -179,23 +192,31 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
     title: "Set a reminder",
     body: "Tap here if you want an alert to come back to this later.",
     placement: "top",
-    // Opens a Sheet — Next-only.
+    // Real single-tap action that opens the Sheet the next two steps live
+    // in — same pattern as the FAB, not the same as duplicate/status-
+    // toggle above (those have nothing downstream depending on them).
+    advanceOnClick: true,
   },
   {
     id: "reminder-what",
     target: "field-reminder-what",
     title: "What's it about?",
-    body: "A short label is enough, e.g. \"Reprice loan.\" Then tap Next.",
+    body: "A short label is enough, e.g. \"Reprice loan.\"",
     placement: "bottom",
-    // Text field — Next-only.
+    requireValue: true,
+    // Confirmed: the real Save button's own validation silently rejects
+    // an empty "what" (a toast, not a disabled button) — without gating
+    // Next here, the tour could walk someone straight into that toast
+    // while itself moving on regardless. Text field — Next-only.
   },
   {
     id: "reminder-date",
     target: "field-reminder-date",
     title: "When?",
-    body: "Just put today's date for now if you're not sure — you can change it later. Then tap Next.",
+    body: "Just put today's date for now if you're not sure — you can change it later.",
     placement: "bottom",
-    // Date field, possibly its own picker UI — Next-only.
+    requireValue: true,
+    // Same reasoning as reminder-what — the real form requires this too.
   },
   {
     id: "reminder-save",
