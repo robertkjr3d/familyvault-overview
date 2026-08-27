@@ -198,9 +198,26 @@ button:disabled { cursor: not-allowed; }
   color: var(--primary-foreground);
   padding: 0.375rem 1rem;
 }
-.driver-popover-arrow-side-left.driver-popover-arrow,
-.driver-popover-arrow-side-right.driver-popover-arrow,
-.driver-popover-arrow-side-top.driver-popover-arrow,
-.driver-popover-arrow-side-bottom.driver-popover-arrow {
-  border-color: var(--card);
+/* driver.js's own default hover/focus state for every footer button is a
+   near-white grey (#f7f7f7) at the SAME CSS specificity as the rule
+   above, so on hover the primary button was reverting toward white
+   instead of staying on-brand — confirmed by reading driver.css. Restate
+   the same colors for hover/focus explicitly so they win. */
+.driver-popover-footer .driver-popover-next-btn:hover,
+.driver-popover-footer .driver-popover-next-btn:focus,
+.driver-popover-footer .driver-popover-done-btn:hover,
+.driver-popover-footer .driver-popover-done-btn:focus {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  opacity: 0.9;
+}
+/* The connecting arrow always points FROM the popover's own edge, not
+   from the actual highlighted element — so whenever the popover doesn't
+   sit right next to the target (a real, separate positioning question,
+   not fixed by styling the arrow itself), the arrow visibly points into
+   empty space and reads as a broken connector rather than a missing one.
+   Removing it removes that failure mode outright: the dimmed spotlight
+   already shows what's highlighted without needing a pointer line to it. */
+.driver-popover-arrow {
+  display: none;
 }
