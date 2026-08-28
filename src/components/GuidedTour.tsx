@@ -194,6 +194,21 @@ export function GuidedTour() {
         if (nextTourStep?.route && window.location.pathname !== nextTourStep.route) {
           navigate({ to: nextTourStep.route });
         }
+        // See scrollToTarget's own comment in tourSteps.ts for the
+        // confirmed root cause this fixes: allowScroll:false (below) locks
+        // <body> scroll entirely, which silently defeats driver.js's own
+        // internal scroll-into-view for a target that's off-screen. Lift
+        // the lock and scroll to the real element ourselves, BEFORE
+        // driver.js measures it — safe to leave scroll enabled from here
+        // on since this is only ever set on the tour's last step.
+        if (nextTourStep?.scrollToTarget) {
+          document.body.classList.remove("driver-no-scroll");
+          const el = document.querySelector(`[data-tour="${nextTourStep.target}"]`);
+          // "auto" (not "smooth") — deterministic and instant, since this
+          // app sets no CSS scroll-behavior anywhere (confirmed via grep);
+          // "auto" defers to that, so it resolves to a plain instant jump.
+          el?.scrollIntoView({ behavior: "auto", block: "center" });
+        }
         // See settleDelay's own comment in tourSteps.ts — waiting here,
         // BEFORE driver.js starts looking for the next target, is what
         // actually fixes the "appears wrong, then visibly snaps into
