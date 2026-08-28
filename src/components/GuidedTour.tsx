@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { useNavigate, useLocation } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { driver, type DriveStep, type Driver } from "driver.js";
 import "driver.js/dist/driver.css";
 import { useAppStore } from "@/lib/store";
@@ -34,11 +34,6 @@ export function GuidedTour() {
   const activeTour = useAppStore((s) => s.activeTour);
   const endTour = useAppStore((s) => s.endTour);
   const navigate = useNavigate();
-  const location = useLocation();
-  // Kept fresh across renders without re-running the effect below on every
-  // route change — only activeTour/isViewer should restart the tour engine.
-  const locationRef = useRef(location);
-  locationRef.current = location;
 
   // Defensive, in addition to the Settings/welcome-screen entry points not
   // offering the tour to Viewers: if a tour is somehow already active when
@@ -93,7 +88,21 @@ export function GuidedTour() {
               control?.addEventListener("input", update);
               control?.addEventListener("change", update);
             }
-          : undefined,
+          : step.requireChange
+            ? (popover, opts) => {
+                const target = opts.driver.getActiveElement();
+                if (!target) return;
+                const initialText = target.textContent;
+                popover.nextButton.style.display = "none";
+                const observer = new MutationObserver(() => {
+                  if (target.textContent !== initialText) {
+                    popover.nextButton.style.display = "";
+                    observer.disconnect();
+                  }
+                });
+                observer.observe(target, { childList: true, subtree: true, characterData: true });
+              }
+            : undefined,
       },
       advanceOnClick: !!step.advanceOnClick,
       disableActiveInteraction: !!step.disableInteraction,
@@ -119,6 +128,12 @@ export function GuidedTour() {
       stageRadius: STAGE_RADIUS,
       smoothScroll: true,
       allowClose: true,
+      // Defaults to true in driver.js — confirmed the actual cause of
+      // being able to scroll the real page while the tour was open, with
+      // the spotlight visibly lagging behind trying to keep up. The tour
+      // already covers everything with an overlay; there's nothing useful
+      // to scroll to underneath it anyway.
+      allowScroll: false,
       // driver.js's own default here is "close" — a stray tap anywhere on
       // the dimmed background, not just the X button, silently ends the
       // whole tour. Confirmed exactly this happening around the bank
@@ -162,7 +177,21 @@ export function GuidedTour() {
           useAppStore.getState().setMemberFilter("all");
         }
         const nextTourStep = tourSteps[idx + 1];
-        if (nextTourStep?.route && locationRef.current.pathname !== nextTourStep.route) {
+        // window.location, not React's own location state (which was here
+        // before): confirmed real bug — React's location hook lags one
+        // render behind an actual navigation (the browser's History API
+        // updates window.location synchronously; React's own re-render
+        // with the new value follows a moment later). That lag meant a
+        // step like member-confirm, whose route matched where the
+        // PREVIOUS step's own real tap (a nav link) already sent the
+        // page, saw a stale "still on the old route" reading here and
+        // fired a second, redundant navigate() call — racing the
+        // first one already in flight. That's what was landing the
+        // popover pinned in the corner over a dummy placeholder: the
+        // real target was never actually found, because the page was
+        // mid-collision between two navigations instead of settled on
+        // one.
+        if (nextTourStep?.route && window.location.pathname !== nextTourStep.route) {
           navigate({ to: nextTourStep.route });
         }
         // See settleDelay's own comment in tourSteps.ts — waiting here,
@@ -190,7 +219,7 @@ export function GuidedTour() {
     });
 
     const first = tourSteps[0];
-    if (first?.route && locationRef.current.pathname !== first.route) {
+    if (first?.route && window.location.pathname !== first.route) {
       navigate({ to: first.route });
     }
     if (first?.settleDelay) {
