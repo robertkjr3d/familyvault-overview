@@ -45,6 +45,35 @@ function SettingsPage() {
   const setShareOpen = useAppStore((s) => s.setShareOpen);
   const { role: currentRole, householdName } = useCurrentRole();
   const { user } = useAuthSession();
+  // Bug fix (Aug 28, 2026): the extras tour ("More Tips & Tricks") walks
+  // through an EXISTING loan record (status toggle, duplicate, reminders —
+  // see EXTRAS_TOUR_STEPS in tourSteps.ts, all of which target elements
+  // that only exist on an already-saved loan card). Confirmed by reading
+  // driver.js's own source: with no loan record, every one of those
+  // targets is genuinely missing from the DOM, and driver.js's own
+  // waitForElement (5000ms) + skipMissingElement logic then waits out the
+  // full 5 seconds per missing step — roughly 6 steps in a row — before
+  // silently skipping each one. With the tour's dimming overlay covering
+  // the whole screen and nothing visibly happening for ~30 seconds
+  // straight, that reads exactly like the app has crashed, even though no
+  // exception is actually thrown. Cheapest, lowest-risk fix: gate the
+  // button itself on a real loan existing, rather than reworking the
+  // entire extras tour to be meaningful with no data (its whole content
+  // depends on having a real record to demonstrate on anyway).
+  const { data: hasLoanForTour } = useQuery({
+    queryKey: ["has-loan-for-tour", activeHouseholdId],
+    enabled: !!activeHouseholdId,
+    queryFn: async () => {
+      if (!activeHouseholdId) return false;
+      const { data, error } = await supabase
+        .from("loans")
+        .select("id")
+        .eq("household_id", activeHouseholdId)
+        .limit(1);
+      if (error) throw error;
+      return (data?.length ?? 0) > 0;
+    },
+  });
   const [householdNameInput, setHouseholdNameInput] = useState("");
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [deleteConfirmEmail, setDeleteConfirmEmail] = useState("");
@@ -1031,11 +1060,18 @@ function SettingsPage() {
             </button>
             <button
               onClick={() => useAppStore.getState().startTour("extras")}
-              className="rounded-lg border border-border px-3 py-2 text-sm font-semibold"
+              disabled={!hasLoanForTour}
+              title={hasLoanForTour ? undefined : "Add a loan first (via \"Take the Tour\") — this walkthrough needs a real entry to show you around"}
+              className="rounded-lg border border-border px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
             >
               More Tips & Tricks
             </button>
           </div>
+          {!hasLoanForTour && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Add a loan entry first (the tour above walks you through it) — these tips are shown on a real entry.
+            </p>
+          )}
         </section>
       )}
 
