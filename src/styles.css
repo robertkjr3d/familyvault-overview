@@ -221,3 +221,23 @@ button:disabled { cursor: not-allowed; }
 .driver-popover-arrow {
   display: none;
 }
+/* Bug fix (Aug 28, 2026): a toast fired while the tour is active (e.g. the
+   "Reminder set" success toast) visually floated on top of / covered the
+   tour's highlighted spotlight. Root cause, confirmed by reading both
+   libraries' shipped CSS/JS directly (not guessed): sonner's toaster root
+   ([data-sonner-toaster]) has a hardcoded z-index of 999999999, while
+   driver.js's dimming overlay (the SVG layer that darkens everything except
+   the spotlighted hole) is set inline to only z-index:10000 — so any toast
+   painted above the overlay regardless of where the popover itself sits
+   (.driver-popover is separately set to an even higher 1000000000 and is
+   NOT affected by this). driver.js already adds a `driver-active` class to
+   <body> for the tour's own CSS (see .driver-active rules above) — reusing
+   that same, already-established hook here, scoped so it only applies
+   while a tour is actually running and never touches toast behavior at any
+   other time. !important is defensive: sonner sets this via its own
+   stylesheet rule, not an inline style, so ours already wins on
+   specificity, but pin it explicitly in case a future sonner version
+   changes how it's set. */
+body.driver-active [data-sonner-toaster] {
+  z-index: 5000 !important;
+}
