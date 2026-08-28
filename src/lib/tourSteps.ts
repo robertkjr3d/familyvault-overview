@@ -83,6 +83,29 @@ export type TourStep = {
    * any field, add-entry, the two Save buttons).
    */
   disableInteraction?: boolean;
+  /**
+   * Confirmed real bug this fixes (Aug 28, 2026 — traced through driver.js's
+   * actual source, not guessed): GuidedTour.tsx sets `allowScroll: false`
+   * globally (a real, separate earlier fix — without it the page could be
+   * scrolled under the tour with the spotlight visibly lagging). driver.js
+   * implements that by adding a `driver-no-scroll` class to <body>, which
+   * this app's own CSS framework resolves to `overflow: hidden`. driver.js
+   * DOES try to scroll a step's target into view internally on every step —
+   * but with <body> unable to scroll at all, that call is a silent no-op.
+   * For every OTHER step this was invisible, because each target already
+   * happened to sit inside the viewport already. This step's target
+   * ("upcoming-section", the last step of the extras tour) can legitimately
+   * sit far down a long dashboard — worse specifically when the "Due Today"
+   * banner is present, since it adds extra height above it — so the
+   * popover/spotlight ends up positioned against a target that's actually
+   * off-screen, which is what was misread as the tour "highlighting the
+   * bottom nav" instead. Set true ONLY on a step whose target may be
+   * off-screen; GuidedTour.tsx handles it by briefly allowing scroll,
+   * scrolling the real target into view itself, then proceeding — safe to
+   * do on this step specifically since it's the tour's last step, so
+   * there's no later step left for the earlier scroll-lag bug to recur on.
+   */
+  scrollToTarget?: boolean;
 };
 
 // Shared by GuidedTour.tsx (on finish/skip) and TourWelcomeScreen.tsx (on
@@ -123,6 +146,18 @@ export const CORE_TOUR_STEPS: TourStep[] = [
     title: "Quick check",
     body: "Make sure this is set to you (or whoever the loan belongs to) before adding it.",
     placement: "bottom",
+    settleDelay: 400, // Bug fix (Aug 28, 2026): reported as intermittently pinning to the
+    // screen's top-left corner — real device confirmed, "sometimes works, sometimes
+    // doesn't". Confirmed cause: this step follows the real nav tap into /loans (the
+    // previous step's advanceOnClick already fires the actual route change) but, unlike
+    // every OTHER step in this file that follows a route/Sheet transition, had no
+    // settleDelay — so driver.js could measure "member-filter" the instant it exists in
+    // the DOM, mid-transition, before layout has actually painted. A mid-transition
+    // element commonly measures as a zero-size rect at (0,0) — exactly a top-left-corner
+    // placement — which only shows up when the page happens to render slower than usual,
+    // matching the intermittent report exactly. See settleDelay's own doc comment above
+    // for why this class of fix works; this step was simply missed when that pattern was
+    // established elsewhere.
     // Purely informational — nothing to tap here, Next-only.
   },
   {
@@ -214,7 +249,17 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
     body: "Tap to open the Reminders section.",
     placement: "top",
     advanceOnClick: true, // plain expand/collapse toggle, no popover — instant
-    settleDelay: 350, // follows "expand" opening the card — its own expand animation needs to settle first
+    // Correction (Aug 28, 2026): the previous 350ms settleDelay here assumed
+    // "expand" animates open. Confirmed false by reading RecordCard.tsx —
+    // the card's body is a plain `{open && children && (...)}` conditional
+    // render, no CSS transition/animation at all, so there was nothing to
+    // wait for; the wait was pure dead time. Reported symptom on this step
+    // (a delay, then the popover visibly flies from the top of the screen
+    // into place) still needs a real-device retest after removing it —
+    // flagged honestly rather than assumed fixed, since the true cause may
+    // instead be driver.js's own onHighlighted refresh() (400ms later, in
+    // GuidedTour.tsx) correcting an initial measurement, which this change
+    // does not touch.
   },
   {
     id: "reminder-trigger",
@@ -275,6 +320,7 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
     body: "Your reminder shows up here, along with anything else coming due across your whole household. That's the tour — explore Insurance, Property, and the rest whenever you're ready.",
     placement: "top",
     settleDelay: 400, // follows the nav-home route change
+    scrollToTarget: true, // see this flag's own comment in the TourStep type above — this target can sit far down the page
     // Final step, nothing to tap — "Done" ends the tour.
   },
 ];
