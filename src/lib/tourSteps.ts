@@ -44,6 +44,16 @@ export type TourStep = {
    */
   requireValue?: boolean;
   /**
+   * Like requireValue, but for a step whose real action isn't a form
+   * field with a .value — it's a click-driven control (the status
+   * toggle's dropdown) that changes its own displayed text instead.
+   * Next stays hidden until the target's visible text actually changes
+   * from what it was when the step started. Don't combine with
+   * disableInteraction — this needs the element to genuinely stay
+   * clickable so the person can pick a real option.
+   */
+  requireChange?: boolean;
+  /**
    * Milliseconds to wait, after this step is chosen but before the tour
    * actually starts looking for its target, when arriving at it opens a
    * Sheet or navigates to a new route. Confirmed real bug this fixes: the
@@ -177,9 +187,9 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
     route: "/loans",
     target: "status-toggle",
     title: "Track progress",
-    body: "Tap here to mark something as Needs Review or Settled, so it's easy to see what still needs attention.",
+    body: "Tap here and pick a status, so it's easy to see what still needs attention.",
     placement: "top",
-    disableInteraction: true, // opens a real options popover — nothing downstream needs it open
+    requireChange: true, // genuinely tap through and pick one — see requireChange's own comment for why this needs a different check than requireValue
   },
   {
     id: "duplicate",
@@ -204,6 +214,7 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
     body: "Tap to open the Reminders section.",
     placement: "top",
     advanceOnClick: true, // plain expand/collapse toggle, no popover — instant
+    settleDelay: 350, // follows "expand" opening the card — its own expand animation needs to settle first
   },
   {
     id: "reminder-trigger",
@@ -215,6 +226,7 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
     // in — same pattern as the FAB, not the same as duplicate/status-
     // toggle above (those have nothing downstream depending on them).
     advanceOnClick: true,
+    settleDelay: 350, // follows "reminders-section" expanding — same reasoning
   },
   {
     id: "reminder-what",
@@ -253,6 +265,7 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
     body: "Tap Home to see everything in one place.",
     placement: "top",
     advanceOnClick: true, // nav tap, instant
+    settleDelay: 400, // follows reminder-save closing the Sheet back to the list
   },
   {
     id: "upcoming",
