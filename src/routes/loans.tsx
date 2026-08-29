@@ -74,7 +74,14 @@ function LoansPage() {
         ))}
       </div>
       {loans.length > 0 && (
-        <div className="rounded-2xl border border-urgent/40 bg-urgent-soft/20 p-4 text-sm">
+        <div className="mt-2 rounded-2xl border border-urgent/40 bg-urgent-soft/20 p-4 text-sm">
+          {/* mt-2 added (Aug 28, 2026): per real-device Safari testing, the
+              tour's Step 9 popover (which appears directly below the
+              just-saved loan card above) sat just slightly too close to
+              this box's top edge, clipping into it. driver.js has no
+              per-step spacing control (confirmed earlier — global only),
+              so the fix is a small amount of extra breathing room here on
+              the page itself, on top of the existing space-y-4 gap. */}
           <div className="flex justify-between">
             <span className="text-muted-foreground">
               Total owed{balanceTotals.foreign.length > 0 && <FxInfoNote fx={fxRates} />}
