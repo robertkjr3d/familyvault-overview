@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentRole } from "@/lib/useCurrentRole";
+import { useAppStore } from "@/lib/store";
 
 export function ReminderButton({ entityType, entityId }: { entityType: string; entityId: string }) {
   const { canEdit } = useCurrentRole();
@@ -32,7 +33,15 @@ export function ReminderButton({ entityType, entityId }: { entityType: string; e
     });
     setSaving(false);
     if (error) return toast.error(error.message);
-    toast.success("Reminder set");
+    // Suppressed during a guided tour on purpose (Aug 28, 2026): the tour is
+    // meant to feel like a clean, self-contained walkthrough — a real
+    // side-effect toast popping up mid-tour looked unpolished even after
+    // the earlier z-index fix (styles.css) kept it from visually covering
+    // the highlight; simplest fix is to just not show it here at all while
+    // a tour is running. getState() (not the reactive useAppStore(...)
+    // hook) because this only needs to be read once, inside a click
+    // handler, not on every render.
+    if (!useAppStore.getState().activeTour) toast.success("Reminder set");
     qc.invalidateQueries({ queryKey: ["dashboard"] });
     qc.invalidateQueries({ queryKey: ["reminders"] });
     qc.invalidateQueries({ queryKey: ["alert-count"] });
