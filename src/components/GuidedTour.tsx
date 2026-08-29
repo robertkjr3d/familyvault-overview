@@ -140,7 +140,19 @@ export function GuidedTour() {
       showProgress: true,
       progressText: "{{current}} of {{total}}",
       overlayOpacity: 0.55,
-      stagePadding: 8,
+      // Bug fix (Aug 28, 2026): 8px was bleeding into tightly-packed
+      // neighbors — confirmed as the shared cause of two separately
+      // reported bugs: Tour 2 Step 2's "duplicate" icon highlight
+      // showing a sliver of the adjacent pencil/edit icon to its left,
+      // and Step 9's highlight box (the actual spotlight, not the
+      // popover — that one already got its own separate mt-2 fix in
+      // loans.tsx) still catching part of "Total Owed" below the
+      // just-saved card. driver.js has no per-step override for this
+      // (confirmed earlier via its own type defs — global only), so a
+      // uniform reduction is the only real lever available; a few px
+      // less padding on every highlight in both tours is a safe,
+      // consistent tightening, not a special case for just these two.
+      stagePadding: 4,
       stageRadius: STAGE_RADIUS,
       smoothScroll: true,
       allowClose: true,
