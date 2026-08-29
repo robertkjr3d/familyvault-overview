@@ -249,17 +249,23 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
     body: "Tap to open the Reminders section.",
     placement: "top",
     advanceOnClick: true, // plain expand/collapse toggle, no popover — instant
-    // Correction (Aug 28, 2026): the previous 350ms settleDelay here assumed
-    // "expand" animates open. Confirmed false by reading RecordCard.tsx —
-    // the card's body is a plain `{open && children && (...)}` conditional
-    // render, no CSS transition/animation at all, so there was nothing to
-    // wait for; the wait was pure dead time. Reported symptom on this step
-    // (a delay, then the popover visibly flies from the top of the screen
-    // into place) still needs a real-device retest after removing it —
-    // flagged honestly rather than assumed fixed, since the true cause may
-    // instead be driver.js's own onHighlighted refresh() (400ms later, in
-    // GuidedTour.tsx) correcting an initial measurement, which this change
-    // does not touch.
+    settleDelay: 350,
+    // Correction #2 (Aug 28, 2026): a previous pass here removed this
+    // settleDelay, on the confirmed (and still correct) finding that expand
+    // has no CSS animation to wait for. But removing it didn't fix the
+    // reported glitch — because that wasn't the real mechanism. The real
+    // one: "expand-card"'s advanceOnClick click fires driver.js's
+    // onNextClick synchronously, in the SAME click event as this card's own
+    // React onClick that flips `open` to true. If driver.js tries to
+    // highlight "reminders-section" before React's state update has
+    // actually re-rendered, the element genuinely doesn't exist in the DOM
+    // yet — driver.js falls back to a default/top-of-screen position, then
+    // the separate onHighlighted refresh() (400ms later, above) corrects it
+    // once React has caught up — that's the "delay, then flies from top to
+    // middle" the user is seeing. This settleDelay isn't waiting on an
+    // animation; it's giving React's re-render a moment to land before
+    // driver.js measures at all, so it gets the right position on the
+    // FIRST try instead of needing the 400ms correction to be visible.
   },
   {
     id: "reminder-trigger",
