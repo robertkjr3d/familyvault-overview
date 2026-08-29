@@ -135,12 +135,12 @@
   --settled-foreground: oklch(0.99 0 0);
   --settled-soft: oklch(0.25 0.07 155);
 
-  --urgent-tint: oklch(0.24 0.06 25);
-  --urgent-border: oklch(0.35 0.10 25);
-  --review-tint: oklch(0.24 0.05 75);
-  --review-border: oklch(0.35 0.08 75);
-  --settled-tint: oklch(0.22 0.06 155);
-  --settled-border: oklch(0.33 0.09 155);
+  --urgent-tint: oklch(0.26 0.11 25);
+  --urgent-border: oklch(0.38 0.16 25);
+  --review-tint: oklch(0.27 0.10 75);
+  --review-border: oklch(0.38 0.15 75);
+  --settled-tint: oklch(0.25 0.11 155);
+  --settled-border: oklch(0.37 0.15 155);
 }
 
 @layer base {
