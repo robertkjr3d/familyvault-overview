@@ -4,6 +4,8 @@ import { useMembers } from "@/hooks/useMembers";
 import { useAppStore } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { useIsDark } from "@/hooks/useIsDark";
+import { readableMemberColor } from "@/lib/memberColor";
 
 export function MemberFilterBar({
   className,
@@ -119,18 +121,25 @@ export function MemberDot({
   className?: string;
   emoji?: string | null;
 }) {
+  // Bug fix (Aug 28, 2026): see memberColor.ts's own comment — a member's
+  // freely-chosen color had no theme adjustment before this, so it could
+  // read fine in light mode and be nearly illegible in dark mode (or vice
+  // versa). This is the one shared component behind every member tag/card
+  // in the app, so fixing it here covers all of them.
+  const isDark = useIsDark();
+  const c = readableMemberColor(color, isDark);
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
         className,
       )}
-      style={{ borderColor: color + "55", color, background: color + "15" }}
+      style={{ borderColor: c + "55", color: c, background: c + "15" }}
     >
       {emoji ? (
         <span className="text-xs leading-none">{emoji}</span>
       ) : (
-        <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+        <span className="h-1.5 w-1.5 rounded-full" style={{ background: c }} />
       )}
       {label}
     </span>
