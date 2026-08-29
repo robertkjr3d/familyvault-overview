@@ -220,10 +220,13 @@ export function RecordCard({
         )}
       </button>
 
-      <div className="flex w-full items-center justify-between gap-2 border-t border-border/40 px-4 py-2">
+      <div
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full cursor-pointer items-center justify-between gap-2 border-t border-border/40 px-4 py-2"
+      >
         <div className="flex items-center gap-1">
           <button
-            onClick={() => setOpen((v) => !v)}
+            onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
             className="flex items-center"
             aria-label="Toggle status"
             data-tour="status-toggle"
@@ -263,7 +266,7 @@ export function RecordCard({
             </div>
           )}
         </div>
-        <button onClick={() => setOpen((v) => !v)} className="flex items-center gap-2" aria-label="Toggle details" data-tour="expand-card">
+        <button onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} className="flex items-center gap-2" aria-label="Toggle details" data-tour="expand-card">
           {updatedAt && (() => {
             const updMs = new Date(updatedAt).getTime();
             const creMs = createdAt ? new Date(createdAt).getTime() : updMs;
