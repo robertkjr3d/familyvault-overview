@@ -52,7 +52,23 @@ export function GuidedTour() {
       finished = true;
       if (activeTour === "core") void markTourSeen();
       endTour();
-      if (skippedEarly) toast("You can take the tour anytime from Settings.");
+      if (skippedEarly) {
+        toast("You can take the tour anytime from Settings.");
+      } else if (activeTour === "core") {
+        // Requested (Aug 28, 2026): offer Tour 2 immediately on finishing
+        // Tour 1, instead of making the person find it in Settings
+        // themselves. Uses sonner's own action/cancel buttons (confirmed
+        // real fields on its toast() options, not a custom component) —
+        // "Later" just dismisses, "Yes" starts the extras tour directly.
+        toast("Want more tips & tricks?", {
+          duration: 10000,
+          cancel: { label: "Later", onClick: () => {} },
+          action: {
+            label: "Yes",
+            onClick: () => useAppStore.getState().startTour("extras"),
+          },
+        });
+      }
     }
 
     const driveSteps: DriveStep[] = tourSteps.map((step) => ({
@@ -197,17 +213,23 @@ export function GuidedTour() {
         // See scrollToTarget's own comment in tourSteps.ts for the
         // confirmed root cause this fixes: allowScroll:false (below) locks
         // <body> scroll entirely, which silently defeats driver.js's own
-        // internal scroll-into-view for a target that's off-screen. Lift
-        // the lock and scroll to the real element ourselves, BEFORE
-        // driver.js measures it — safe to leave scroll enabled from here
-        // on since this is only ever set on the tour's last step.
+        // internal scroll-into-view for a target that's off-screen.
+        // CSS overflow:hidden blocks scrolling even when done via JS, not
+        // just user drag/touch — so the lock has to come off for our own
+        // scrollIntoView call to actually move anything. Correction (Aug
+        // 28, 2026): an earlier version left it off afterward, reasoning
+        // "safe, no later step left to lag" — technically true, but it
+        // meant the page became genuinely user-draggable for the rest of
+        // this step, which is exactly the loose, unpolished feel
+        // allowScroll:false exists to prevent. Both calls are synchronous
+        // (scrollIntoView's "auto" behavior applies immediately, no
+        // animation to wait out), so re-locking right after leaves no real
+        // window for the user to grab and drag in between.
         if (nextTourStep?.scrollToTarget) {
           document.body.classList.remove("driver-no-scroll");
           const el = document.querySelector(`[data-tour="${nextTourStep.target}"]`);
-          // "auto" (not "smooth") — deterministic and instant, since this
-          // app sets no CSS scroll-behavior anywhere (confirmed via grep);
-          // "auto" defers to that, so it resolves to a plain instant jump.
           el?.scrollIntoView({ behavior: "auto", block: "center" });
+          document.body.classList.add("driver-no-scroll");
         }
         // See settleDelay's own comment in tourSteps.ts — waiting here,
         // BEFORE driver.js starts looking for the next target, is what
