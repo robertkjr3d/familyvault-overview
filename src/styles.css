@@ -125,22 +125,22 @@
   --input: oklch(1 0 0 / 14%);
   --ring: oklch(0.55 0.05 70);
 
-  --urgent: oklch(0.72 0.18 25);
+  --urgent: oklch(0.70 0.19 25);
   --urgent-foreground: oklch(0.99 0 0);
-  --urgent-soft: oklch(0.28 0.08 25);
-  --review: oklch(0.82 0.12 75);
+  --urgent-soft: oklch(0.30 0.12 25);
+  --review: oklch(0.80 0.15 85);
   --review-foreground: oklch(0.20 0.04 60);
-  --review-soft: oklch(0.28 0.06 75);
-  --settled: oklch(0.72 0.13 155);
+  --review-soft: oklch(0.32 0.11 85);
+  --settled: oklch(0.70 0.15 160);
   --settled-foreground: oklch(0.99 0 0);
-  --settled-soft: oklch(0.25 0.07 155);
+  --settled-soft: oklch(0.30 0.10 160);
 
-  --urgent-tint: oklch(0.26 0.11 25);
-  --urgent-border: oklch(0.38 0.16 25);
-  --review-tint: oklch(0.27 0.10 75);
-  --review-border: oklch(0.38 0.15 75);
-  --settled-tint: oklch(0.25 0.11 155);
-  --settled-border: oklch(0.37 0.15 155);
+  --urgent-tint: oklch(0.28 0.14 25);
+  --urgent-border: oklch(0.42 0.18 25);
+  --review-tint: oklch(0.30 0.13 85);
+  --review-border: oklch(0.44 0.16 85);
+  --settled-tint: oklch(0.27 0.12 160);
+  --settled-border: oklch(0.40 0.15 160);
 }
 
 @layer base {
