@@ -1432,7 +1432,7 @@ function EstatePlanningCard() {
             const row = rowByItemId.get(item.id);
             const isEditing = editingId === item.id;
             return (
-              <li key={item.id} className={`rounded-xl border p-3 ${item.urgent && !done ? "border-urgent/30 bg-urgent-soft/10" : "border-border/60 bg-background/50"}`}>
+              <li key={item.id} className={`rounded-xl border p-3 ${item.urgent && !done ? "border-urgent/30 bg-urgent-soft/20" : "border-border/60 bg-background/50"}`}>
                 <button
                   type="button"
                   onPointerDown={() => toggle(item.id)}
