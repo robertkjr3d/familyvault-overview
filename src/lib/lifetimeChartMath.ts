@@ -48,6 +48,24 @@ export function fmt(v: number): string {
   return `${sign}$${abs.toFixed(0)}`;
 }
 
+// Bug fix (Aug 29, 2026): LifetimeChart's cashflow Area used to share
+// netWorth's own Y-axis/domain — annual cashflow (tens of thousands) is
+// orders of magnitude smaller than lifetime net worth (hundreds of
+// thousands to millions), so on a shared scale it flattened to a
+// barely-visible sliver near zero. Fix: a second, independent axis scaled
+// to cashflow's own range. Extracted here (was inline in the component,
+// which has no test coverage of its own) specifically so this can't
+// silently regress back to a degenerate range — see the test file for the
+// exact failure modes this guards against (a flat $0-every-year series,
+// and an all-negative series, both of which would previously have
+// produced a zero-height or inverted domain).
+export function computeCashflowDomain(annualNetValues: number[]): { min: number; max: number } {
+  const flowMin = Math.min(...annualNetValues, 0);
+  const flowMax = Math.max(...annualNetValues, 0);
+  const flowPad = Math.max((flowMax - flowMin) * 0.15, 1);
+  return { min: flowMin - flowPad, max: flowMax + flowPad };
+}
+
 // Converts an insurance policy's premium to an annual figure based on its
 // frequency field. Moved here (was private to LifetimeChart.tsx) so it can
 // be unit tested directly and reused without duplication.
