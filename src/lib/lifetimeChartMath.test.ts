@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   freqTimesPerYear,
   fmt,
+  computeCashflowDomain,
   insuranceAnnual,
   investmentPremiumAnnual,
   propertyTotalCosts,
@@ -1042,5 +1043,30 @@ describe("projectLifetimeChart — surrender value vesting", () => {
     };
     const result = projectLifetimeChart(input);
     result.forEach((d) => expect(d.netWorth).toBe(0));
+  });
+});
+
+describe("computeCashflowDomain", () => {
+  it("gives a normal series real headroom above and below its actual range", () => {
+    const { min, max } = computeCashflowDomain([10_000, -5_000, 20_000]);
+    expect(min).toBeLessThan(-5_000);
+    expect(max).toBeGreaterThan(20_000);
+  });
+
+  it("never collapses to a zero-height domain for an all-zero series — this is exactly the bug being guarded against: a flat $0-every-year cashflow (e.g. no income data entered) would previously have produced min === max, an invisible/invalid chart axis", () => {
+    const { min, max } = computeCashflowDomain([0, 0, 0]);
+    expect(max).toBeGreaterThan(min);
+  });
+
+  it("keeps zero inside the domain for an all-negative series, so the zero-line reference still renders correctly on this axis", () => {
+    const { min, max } = computeCashflowDomain([-50_000, -80_000, -30_000]);
+    expect(min).toBeLessThanOrEqual(-80_000);
+    expect(max).toBeGreaterThanOrEqual(0);
+  });
+
+  it("keeps zero inside the domain for an all-positive series, symmetric to the all-negative case above", () => {
+    const { min, max } = computeCashflowDomain([50_000, 80_000, 30_000]);
+    expect(max).toBeGreaterThanOrEqual(80_000);
+    expect(min).toBeLessThanOrEqual(0);
   });
 });
