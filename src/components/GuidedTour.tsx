@@ -46,6 +46,17 @@ export function GuidedTour() {
 
     const tourSteps: TourStep[] = activeTour === "core" ? CORE_TOUR_STEPS : EXTRAS_TOUR_STEPS;
     let finished = false;
+    // Bug fix (Aug 28, 2026): confirmed by reading driver.js's own destroy
+    // sequence directly — it calls its internal resetState() BEFORE firing
+    // onDestroyed, so a fresh driverObj.getActiveIndex() call from INSIDE
+    // onDestroyed always reads back undefined (defaulted to 0 below), no
+    // matter which step the tour actually finished on. That silently made
+    // every natural completion look like "skippedEarly" — which is why the
+    // Tour 2 prompt never appeared, even though the code for it was
+    // correct and genuinely deployed. onNextClick's own opts.index is
+    // still reliable (driver.js hasn't reset anything yet when it fires),
+    // so track it here instead of trusting a post-destroy read.
+    let lastActiveIndex = 0;
 
     function finish(skippedEarly: boolean) {
       if (finished) return;
@@ -191,6 +202,7 @@ export function GuidedTour() {
       // only after the route change has been kicked off.
       onNextClick: (_element, _step, opts) => {
         const idx = opts.index ?? 0;
+        lastActiveIndex = idx;
         // The core tour's first step deliberately lets the person tap
         // either "All" or a specific member chip — that's the step's
         // whole point. But if they land on a specific member, the loan
@@ -222,26 +234,28 @@ export function GuidedTour() {
         if (nextTourStep?.route && window.location.pathname !== nextTourStep.route) {
           navigate({ to: nextTourStep.route });
         }
-        // See scrollToTarget's own comment in tourSteps.ts for the
-        // confirmed root cause this fixes: allowScroll:false (below) locks
-        // <body> scroll entirely, which silently defeats driver.js's own
-        // internal scroll-into-view for a target that's off-screen.
-        // CSS overflow:hidden blocks scrolling even when done via JS, not
-        // just user drag/touch — so the lock has to come off for our own
-        // scrollIntoView call to actually move anything. Correction (Aug
-        // 28, 2026): an earlier version left it off afterward, reasoning
-        // "safe, no later step left to lag" — technically true, but it
-        // meant the page became genuinely user-draggable for the rest of
-        // this step, which is exactly the loose, unpolished feel
-        // allowScroll:false exists to prevent. Both calls are synchronous
-        // (scrollIntoView's "auto" behavior applies immediately, no
-        // animation to wait out), so re-locking right after leaves no real
-        // window for the user to grab and drag in between.
-        if (nextTourStep?.scrollToTarget) {
-          document.body.classList.remove("driver-no-scroll");
-          const el = document.querySelector(`[data-tour="${nextTourStep.target}"]`);
-          el?.scrollIntoView({ behavior: "auto", block: "center" });
-          document.body.classList.add("driver-no-scroll");
+        // Correction (Aug 28, 2026): scrollToTarget used to run here,
+        // BEFORE the settleDelay wait below. That was fine for a step like
+        // "upcoming" whose target already exists on the page regardless of
+        // timing — but wrong for "reminders-section", confirmed as the
+        // REAL cause of that step's "flies from top to middle" glitch
+        // (two earlier attempts at this fixed the wrong thing — see that
+        // step's own comment in tourSteps.ts). Expanding the card can push
+        // reminders-section below the fold, exactly like the already-fixed
+        // Step 10 bug: allowScroll:false locks <body> scroll, silently
+        // defeating driver.js's own scroll-into-view for anything
+        // off-screen. But reminders-section ALSO doesn't exist in the DOM
+        // at all until React re-renders the expanded card — so scrolling
+        // to it here, before that render happens, would find nothing.
+        // Moved inside the settleDelay callback below, so it only runs
+        // once the real element is guaranteed to exist.
+        function scrollToTargetIfNeeded() {
+          if (nextTourStep?.scrollToTarget) {
+            document.body.classList.remove("driver-no-scroll");
+            const el = document.querySelector(`[data-tour="${nextTourStep.target}"]`);
+            el?.scrollIntoView({ behavior: "auto", block: "center" });
+            document.body.classList.add("driver-no-scroll");
+          }
         }
         // See settleDelay's own comment in tourSteps.ts — waiting here,
         // BEFORE driver.js starts looking for the next target, is what
@@ -251,8 +265,12 @@ export function GuidedTour() {
         // Sheet/route transition has already finished by the time it
         // measures, instead of needing a correction afterward.
         if (nextTourStep?.settleDelay) {
-          window.setTimeout(() => opts.driver.moveNext(), nextTourStep.settleDelay);
+          window.setTimeout(() => {
+            scrollToTargetIfNeeded();
+            opts.driver.moveNext();
+          }, nextTourStep.settleDelay);
         } else {
+          scrollToTargetIfNeeded();
           opts.driver.moveNext();
         }
       },
@@ -262,8 +280,7 @@ export function GuidedTour() {
         driverObj.destroy();
       },
       onDestroyed: () => {
-        const idx = driverObj.getActiveIndex() ?? 0;
-        finish(idx < tourSteps.length - 1);
+        finish(lastActiveIndex < tourSteps.length - 1);
       },
     });
 
