@@ -193,7 +193,18 @@ export function RecordFormSheet({
                   <div className="border-b border-border pb-1.5 pt-1 text-sm font-bold">{sec.title}</div>
                 )}
                 {visibleFields.map((f) => (
-                  <div key={f.key} className="space-y-1.5" data-tour={`field-${f.key}`}>
+                  <div key={f.key} className="space-y-1.5 p-1" data-tour={`field-${f.key}`}>
+                    {/* p-1 added (Aug 28, 2026): this div is the tour's
+                        actual highlight target for every form field step.
+                        It had no padding of its own, so the highlight's
+                        spotlight was hugging the label text and input
+                        control tightly and unevenly — confirmed real cause
+                        by reading driver.js's own source: it always uses a
+                        single fixed global corner radius for every
+                        highlight, with no per-element detection of the
+                        real control's own shape, so a mismatch here can't
+                        be fixed from the tour's side. A small even margin
+                        around the actual target is the right fix. */}
                     <Label htmlFor={f.key} className="text-xs">
                       <span className="flex items-center gap-1">
                         {f.label}
