@@ -250,22 +250,25 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
     placement: "top",
     advanceOnClick: true, // plain expand/collapse toggle, no popover — instant
     settleDelay: 350,
-    // Correction #2 (Aug 28, 2026): a previous pass here removed this
-    // settleDelay, on the confirmed (and still correct) finding that expand
-    // has no CSS animation to wait for. But removing it didn't fix the
-    // reported glitch — because that wasn't the real mechanism. The real
-    // one: "expand-card"'s advanceOnClick click fires driver.js's
-    // onNextClick synchronously, in the SAME click event as this card's own
-    // React onClick that flips `open` to true. If driver.js tries to
-    // highlight "reminders-section" before React's state update has
-    // actually re-rendered, the element genuinely doesn't exist in the DOM
-    // yet — driver.js falls back to a default/top-of-screen position, then
-    // the separate onHighlighted refresh() (400ms later, above) corrects it
-    // once React has caught up — that's the "delay, then flies from top to
-    // middle" the user is seeing. This settleDelay isn't waiting on an
-    // animation; it's giving React's re-render a moment to land before
-    // driver.js measures at all, so it gets the right position on the
-    // FIRST try instead of needing the 400ms correction to be visible.
+    scrollToTarget: true,
+    // Correction #3 (Aug 28, 2026) — the real cause, verified this time,
+    // not assumed. Traced the actual target through CollapsibleSection.tsx:
+    // it's a real, always-rendered <button data-tour="reminders-section">
+    // (loans.tsx passes it as a `dataTour` prop — that's why grepping for
+    // the literal attribute string across the repo previously found
+    // nothing and looked like a missing element; it was never missing).
+    // Two earlier attempts here both fixed real, genuine mechanisms
+    // (correction #1: no CSS animation exists; correction #2: React needs
+    // a moment to mount this after the click) — but neither was the
+    // ACTUAL cause of the still-reported glitch. The real one: expanding
+    // the card can push this button below the fold, exactly like the
+    // already-fixed Step 10 — allowScroll:false locks <body> scroll,
+    // silently defeating driver.js's own scroll-into-view for anything
+    // off-screen. GuidedTour.tsx now runs its own scroll-to-target AFTER
+    // the settleDelay wait (not before, unlike Step 10 — this target
+    // doesn't exist until React re-renders, so scrolling to it any
+    // earlier would find nothing), then re-locks scroll immediately after,
+    // same pattern as Step 10.
   },
   {
     id: "reminder-trigger",
