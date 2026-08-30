@@ -294,7 +294,38 @@ export function GuidedTour() {
       driverObj.drive();
     }
 
+    // Bug fix (Aug 28, 2026): reported as the tour app becoming completely
+    // frozen/unresponsive on an iPhone Home Screen web app after being
+    // backgrounded mid-tour, surviving a force-quit and reopen, only
+    // clearing itself after roughly a minute. Real, confirmed mechanism:
+    // settleDelay (and the scrollToTarget fix above) both depend on
+    // window.setTimeout to eventually call moveNext() — but iOS aggressively
+    // suspends/throttles JS timers for a backgrounded tab or installed web
+    // app. If that timer never fires, nothing is left to ever advance or
+    // clean up driver.js's full-screen overlay, which blocks every click on
+    // the page by design — exactly the reported symptom. This isn't
+    // something the app can make reliable (iOS owns that scheduling), so
+    // instead of trying to fix backgrounded timers, force a clean recovery
+    // on resume: if the page was hidden for more than a few seconds and
+    // driver.js is still nominally active when it becomes visible again,
+    // don't trust whatever state it's in — end the tour outright.
+    let hiddenAt: number | null = null;
+    function handleVisibility() {
+      if (document.hidden) {
+        hiddenAt = Date.now();
+        return;
+      }
+      if (hiddenAt && Date.now() - hiddenAt > 3000 && driverObj.isActive()) {
+        driverObj.destroy();
+        document.body.classList.remove("driver-active", "driver-fade", "driver-simple", "driver-no-scroll");
+        finish(true);
+      }
+      hiddenAt = null;
+    }
+    document.addEventListener("visibilitychange", handleVisibility);
+
     return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
       if (driverObj.isActive()) driverObj.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
