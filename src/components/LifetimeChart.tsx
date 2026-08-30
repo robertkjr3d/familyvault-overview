@@ -9,7 +9,7 @@ import {
 import { useToday } from "@/lib/today";
 import { formatDateOnly } from "@/lib/alerts";
 import { YearDetailPanel } from "@/components/YearDetailPanel";
-import { type ChartPoint, fmt, projectLifetimeChart } from "@/lib/lifetimeChartMath";
+import { type ChartPoint, fmt, projectLifetimeChart, computeCashflowDomain } from "@/lib/lifetimeChartMath";
 
 function joinWithAnd(items: string[]): string {
   if (items.length <= 1) return items[0] ?? "";
@@ -143,6 +143,14 @@ export function LifetimeChart({
   );
   const domainMin = Math.min(minNetWorth * 1.1, minNetWorth - 50000, 0);
   const domainMax = maxNetWorth * 1.05;
+  // Bug fix (Aug 29, 2026): the cashflow Area used to share netWorth's own
+  // Y-axis/domain — but annual cashflow (tens of thousands) is orders of
+  // magnitude smaller than lifetime net worth (hundreds of thousands to
+  // millions), so on a shared scale it flattened to a barely-visible
+  // sliver near the zero line. Real fix, not a guess: a second,
+  // independent Y-axis scaled to cashflow's own much smaller range —
+  // math lives in lifetimeChartMath.ts so it's covered by real tests.
+  const { min: flowDomainMin, max: flowDomainMax } = computeCashflowDomain(data.map((d) => d.annualNet));
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
@@ -244,11 +252,13 @@ export function LifetimeChart({
           <ComposedChart data={data} margin={{ top: 30, right: 16, bottom: 0, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
             <XAxis dataKey="year" tick={{ fontSize: 10 }} interval={4} />
-            <YAxis tick={{ fontSize: 10 }} tickFormatter={fmt} domain={[domainMin, domainMax]} width={56} />
+            <YAxis yAxisId="left" tick={{ fontSize: 10 }} tickFormatter={fmt} domain={[domainMin, domainMax]} width={56} />
+            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} tickFormatter={fmt} domain={[flowDomainMin, flowDomainMax]} width={48} />
             <Tooltip content={<CustomTooltip />} />
-            <ReferenceLine y={0} stroke="oklch(0.50 0.04 250 / 0.6)" strokeDasharray="4 4" />
+            <ReferenceLine yAxisId="left" y={0} stroke="oklch(0.50 0.04 250 / 0.6)" strokeDasharray="4 4" />
             {retirementYear !== null && (
               <ReferenceLine
+                yAxisId="left"
                 x={retirementYear}
                 stroke="oklch(0.62 0.10 195 / 0.7)"
                 strokeDasharray="4 4"
@@ -257,6 +267,7 @@ export function LifetimeChart({
             )}
             {shortfallYear !== null && (
               <ReferenceLine
+                yAxisId="left"
                 x={shortfallYear.year}
                 stroke="oklch(0.60 0.22 25 / 0.8)"
                 strokeWidth={2}
@@ -265,24 +276,39 @@ export function LifetimeChart({
             )}
             {eventYears
               .filter((d) => d.year !== retirementYear && d.year !== shortfallYear?.year)
-              .map((d) => {
-                const shortLabel = d.events[0]?.split(" ")[0] ?? "";
+              .map((d, i) => {
+                // Bug fix (Aug 29, 2026), two real issues here, not one:
+                // (1) every label sat at the exact same fixed height
+                // (dy: -18), so two events even a couple years apart on an
+                // 80-year timeline would render on top of each other,
+                // unreadable — staggered across 3 height tiers by index so
+                // adjacent events land at different heights instead.
+                // (2) only d.events[0] was ever shown — if two events
+                // genuinely landed on the same year, the second was
+                // silently dropped with no indication anything was hidden.
+                const label = d.events.length > 1
+                  ? `${d.events[0]?.split(" ")[0] ?? ""} +${d.events.length - 1}`
+                  : d.events[0]?.split(" ")[0] ?? "";
+                const tier = i % 3;
                 return (
                   <ReferenceLine
+                    yAxisId="left"
                     key={d.year}
                     x={d.year}
                     stroke="oklch(0.72 0.13 80 / 0.6)"
                     strokeDasharray="3 3"
-                    label={{ value: shortLabel, position: "insideTopLeft", fontSize: 8, fill: "oklch(0.72 0.13 80)", dy: -18 }}
+                    label={{ value: label, position: "insideTopLeft", fontSize: 8, fill: "oklch(0.72 0.13 80)", dy: -18 - tier * 12 }}
                   />
                 );
               })}
             <Area
+              yAxisId="right"
               type="monotone" dataKey="annualNet" name="Annual net"
-              stroke="oklch(0.62 0.13 155 / 0.4)" fill="oklch(0.62 0.13 155 / 0.06)"
-              strokeWidth={1} dot={false}
+              stroke="oklch(0.62 0.13 155 / 0.7)" fill="oklch(0.62 0.13 155 / 0.15)"
+              strokeWidth={1.5} dot={false}
             />
             <Line
+              yAxisId="left"
               type="monotone" dataKey="netWorth" name="Net worth"
               stroke="oklch(0.72 0.13 80)" strokeWidth={2.5}
               dot={false} activeDot={{ r: 4 }}
