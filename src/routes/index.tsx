@@ -50,6 +50,12 @@ import { useCurrentRole } from "@/lib/useCurrentRole";
 const LifetimeChart = lazy(() =>
 import("@/components/LifetimeChart").then((m) => ({ default: m.LifetimeChart }))
 );
+// Same reasoning as LifetimeChart above — this also pulls in recharts, so
+// it needs the same lazy-loading treatment or the whole point of deferring
+// recharts is defeated (Aug 29, 2026).
+const CashflowOverYearsChart = lazy(() =>
+import("@/components/CashflowOverYearsChart").then((m) => ({ default: m.CashflowOverYearsChart }))
+);
 
 export const Route = createFileRoute("/")({
 component: Dashboard,
@@ -815,15 +821,6 @@ return (
       <h2 className="text-sm font-bold">
         Monthly Cash Flow{cashFlowHasForeign && <FxInfoNote fx={fxRates} />}
       </h2>
-      {(inflowDetailItems.length > 0 || outflowDetailItems.length > 0) && (
-        <button
-          onClick={() => setCashFlowDetailOpen((v) => !v)}
-          className="flex items-center gap-1 text-xs font-semibold text-primary"
-        >
-          {cashFlowDetailOpen ? "Hide breakdown" : "Show breakdown"}
-          <ChevronDown className={`h-3.5 w-3.5 transition ${cashFlowDetailOpen ? "rotate-180" : ""}`} />
-        </button>
-      )}
     </div>
     <CashFlowBars
       inflow={monthlyIn}
@@ -877,6 +874,33 @@ return (
         </p>
       )}
     </div>
+    <Suspense fallback={<div className="mt-3 h-40 w-full animate-pulse rounded-xl bg-muted/40" />}>
+      <div className="mt-3">
+        <CashflowOverYearsChart
+          properties={properties}
+          loans={loans}
+          insurance={insurance}
+          savings={savings}
+          investments={investments}
+          members={members}
+          startingNetWorth={netWorth}
+          monthlyIncome={salaryIncome}
+          monthlyExpenses={baseExpenses}
+          appSettings={appSettings}
+        />
+      </div>
+    </Suspense>
+    {(inflowDetailItems.length > 0 || outflowDetailItems.length > 0) && (
+      <div className="mt-2 flex justify-end">
+        <button
+          onClick={() => setCashFlowDetailOpen((v) => !v)}
+          className="flex items-center gap-1 text-xs font-semibold text-primary"
+        >
+          {cashFlowDetailOpen ? "Hide breakdown" : "Show breakdown"}
+          <ChevronDown className={`h-3.5 w-3.5 transition ${cashFlowDetailOpen ? "rotate-180" : ""}`} />
+        </button>
+      </div>
+    )}
   </section>
 
   {/* ASSET ALLOCATION */}
