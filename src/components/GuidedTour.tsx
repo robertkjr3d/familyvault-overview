@@ -324,8 +324,32 @@ export function GuidedTour() {
     }
     document.addEventListener("visibilitychange", handleVisibility);
 
+    // Bug fix (Aug 28, 2026): reported as the highlight jumping to the
+    // wrong element, and separately the popover covering the field being
+    // typed into, both specifically when the on-screen keyboard opens on
+    // phone (Bank amount, the "action" field, and Tour 2's "what's it
+    // about" reminder field). Confirmed real cause by reading driver.js's
+    // own source: it only listens for window's resize event to know when
+    // to reposition. On iOS, opening the keyboard does NOT fire that —
+    // the layout viewport's dimensions don't change, only the separate
+    // visualViewport shrinks — so driver.js never finds out the keyboard
+    // opened, and its highlight/popover stay frozen at their pre-keyboard
+    // screen coordinates while the real page shifts to bring the focused
+    // field above the keyboard. That mismatch is exactly "highlights
+    // random stuff" and "popover now sits over the field." Fix: listen to
+    // visualViewport directly (the one API that DOES fire for this) and
+    // force driver.js to re-measure whenever it changes.
+    const vv = window.visualViewport;
+    function handleViewportChange() {
+      if (driverObj.isActive()) driverObj.refresh();
+    }
+    vv?.addEventListener("resize", handleViewportChange);
+    vv?.addEventListener("scroll", handleViewportChange);
+
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
+      vv?.removeEventListener("resize", handleViewportChange);
+      vv?.removeEventListener("scroll", handleViewportChange);
       if (driverObj.isActive()) driverObj.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
