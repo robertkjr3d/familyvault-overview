@@ -3,13 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppStore } from "@/lib/store";
 import {
-  ResponsiveContainer, ComposedChart, Area, Line,
+  ResponsiveContainer, ComposedChart, Line,
   XAxis, YAxis, Tooltip, ReferenceLine, CartesianGrid,
 } from "recharts";
 import { useToday } from "@/lib/today";
 import { formatDateOnly } from "@/lib/alerts";
 import { YearDetailPanel } from "@/components/YearDetailPanel";
-import { type ChartPoint, fmt, projectLifetimeChart, computeCashflowDomain } from "@/lib/lifetimeChartMath";
+import { type ChartPoint, fmt, projectLifetimeChart } from "@/lib/lifetimeChartMath";
 
 function joinWithAnd(items: string[]): string {
   if (items.length <= 1) return items[0] ?? "";
@@ -143,14 +143,6 @@ export function LifetimeChart({
   );
   const domainMin = Math.min(minNetWorth * 1.1, minNetWorth - 50000, 0);
   const domainMax = maxNetWorth * 1.05;
-  // Bug fix (Aug 29, 2026): the cashflow Area used to share netWorth's own
-  // Y-axis/domain — but annual cashflow (tens of thousands) is orders of
-  // magnitude smaller than lifetime net worth (hundreds of thousands to
-  // millions), so on a shared scale it flattened to a barely-visible
-  // sliver near the zero line. Real fix, not a guess: a second,
-  // independent Y-axis scaled to cashflow's own much smaller range —
-  // math lives in lifetimeChartMath.ts so it's covered by real tests.
-  const { min: flowDomainMin, max: flowDomainMax } = computeCashflowDomain(data.map((d) => d.annualNet));
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
@@ -251,14 +243,19 @@ export function LifetimeChart({
         <ResponsiveContainer>
           <ComposedChart data={data} margin={{ top: 30, right: 16, bottom: 0, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-            <XAxis dataKey="year" tick={{ fontSize: 10 }} interval={4} />
-            <YAxis yAxisId="left" tick={{ fontSize: 10 }} tickFormatter={fmt} domain={[domainMin, domainMax]} width={56} />
-            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} tickFormatter={fmt} domain={[flowDomainMin, flowDomainMax]} width={48} />
+            <XAxis dataKey="year" tick={{ fontSize: 10 }} interval={Math.max(4, Math.ceil(data.length / 8))} />
+            {/* interval scales with the projection length (Aug 29, 2026 fix) —
+                a fixed "4" looked fine on a short horizon but crowded badly on
+                phone for a long one (e.g. 80 years), since the skip-count
+                doesn't adapt to how many ticks that actually produces.
+                Scaling keeps roughly 8-9 labels total regardless of horizon
+                length, which is what actually determines legibility on a
+                narrow screen — not the raw skip-count. */}
+            <YAxis tick={{ fontSize: 10 }} tickFormatter={fmt} domain={[domainMin, domainMax]} width={56} />
             <Tooltip content={<CustomTooltip />} />
-            <ReferenceLine yAxisId="left" y={0} stroke="oklch(0.50 0.04 250 / 0.6)" strokeDasharray="4 4" />
+            <ReferenceLine y={0} stroke="oklch(0.50 0.04 250 / 0.6)" strokeDasharray="4 4" />
             {retirementYear !== null && (
               <ReferenceLine
-                yAxisId="left"
                 x={retirementYear}
                 stroke="oklch(0.62 0.10 195 / 0.7)"
                 strokeDasharray="4 4"
@@ -267,7 +264,6 @@ export function LifetimeChart({
             )}
             {shortfallYear !== null && (
               <ReferenceLine
-                yAxisId="left"
                 x={shortfallYear.year}
                 stroke="oklch(0.60 0.22 25 / 0.8)"
                 strokeWidth={2}
@@ -286,13 +282,15 @@ export function LifetimeChart({
                 // (2) only d.events[0] was ever shown — if two events
                 // genuinely landed on the same year, the second was
                 // silently dropped with no indication anything was hidden.
+                // Both confirmed fixed and kept — user confirmed working —
+                // even after reverting the separate Y-axis/cashflow change
+                // below, which was a different, unrelated part of this fix.
                 const label = d.events.length > 1
                   ? `${d.events[0]?.split(" ")[0] ?? ""} +${d.events.length - 1}`
                   : d.events[0]?.split(" ")[0] ?? "";
                 const tier = i % 3;
                 return (
                   <ReferenceLine
-                    yAxisId="left"
                     key={d.year}
                     x={d.year}
                     stroke="oklch(0.72 0.13 80 / 0.6)"
@@ -301,14 +299,7 @@ export function LifetimeChart({
                   />
                 );
               })}
-            <Area
-              yAxisId="right"
-              type="monotone" dataKey="annualNet" name="Annual net"
-              stroke="oklch(0.62 0.13 155 / 0.7)" fill="oklch(0.62 0.13 155 / 0.15)"
-              strokeWidth={1.5} dot={false}
-            />
             <Line
-              yAxisId="left"
               type="monotone" dataKey="netWorth" name="Net worth"
               stroke="oklch(0.72 0.13 80)" strokeWidth={2.5}
               dot={false} activeDot={{ r: 4 }}
