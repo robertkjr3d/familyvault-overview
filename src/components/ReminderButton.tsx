@@ -70,11 +70,18 @@ export function ReminderButton({ entityType, entityId }: { entityType: string; e
           <SheetTitle>Set Reminder</SheetTitle>
         </SheetHeader>
         <div className="mt-4 space-y-3 pb-6">
-          <div className="space-y-1.5" data-tour="field-reminder-what">
+          <div className="space-y-1.5 p-1" data-tour="field-reminder-what">
+            {/* p-1 added (Aug 30, 2026): same real cause as the form fields
+                in RecordFormSheet.tsx — this div is the tour's actual
+                highlight target, had no padding of its own, so the
+                highlight hugged the label/input unevenly and didn't match
+                the input's own rounded shape. This dialog has its own
+                separate field markup (not RecordFormSheet's), so the
+                earlier fix there never applied here. */}
             <Label className="text-xs">What</Label>
             <Input value={what} onChange={(e) => setWhat(e.target.value)} placeholder="e.g. Reprice loan" />
           </div>
-          <div className="space-y-1.5" data-tour="field-reminder-date">
+          <div className="space-y-1.5 p-1" data-tour="field-reminder-date">
             <Label className="text-xs">Date</Label>
             <DateInput value={date} onChange={setDate} className="h-9 w-full" />
           </div>
