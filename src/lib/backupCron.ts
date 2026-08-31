@@ -17,10 +17,13 @@ async function selectAllWithRetry(
   admin: any,
   table: string,
   attempts = 3,
+  filter?: { column: string; value: string },
 ): Promise<{ data: unknown[] | null; error: { message: string } | null }> {
   let lastError: { message: string } | null = null;
   for (let i = 0; i < attempts; i++) {
-    const { data, error } = await admin.from(table).select("*");
+    let query = admin.from(table).select("*");
+    if (filter) query = query.eq(filter.column, filter.value);
+    const { data, error } = await query;
     if (!error) return { data, error: null };
     lastError = error;
     if (i < attempts - 1) await new Promise((r) => setTimeout(r, 500 * (i + 1)));
@@ -141,5 +144,71 @@ export async function runDailyBackup(env: BackupEnv): Promise<void> {
     console.log(`[backup-cron] Wrote ${key} (${byteSize} bytes, ${BACKUP_TABLES.length} tables).`);
   } catch (error) {
     console.error("[backup-cron] Failed to write backup to R2.", error);
+  }
+}
+
+// Bug fix / feature (Aug 29, 2026): a safe way to verify the backup
+// mechanism actually works end-to-end, scoped to ONE household (a test
+// account), without touching the real daily backups/ path at all — writes
+// to a completely separate test-backups/ prefix so it can never collide
+// with or overwrite the real disaster-recovery file above.
+//
+// Every table's filter column below was verified against real evidence
+// this session, not assumed: households itself is keyed by its own `id`
+// (confirmed via its migration); every other table's household_id column
+// was confirmed via the live generated types.ts, except deleted_records,
+// which isn't in that generated file (created via a raw SQL statement, not
+// a checked-in migration — worth fixing separately) but is confirmed to
+// have household_id via an actual `.eq("household_id", householdId)` call
+// already live in settings.tsx's own recycle-bin-clearing code.
+export async function runTestBackupForHousehold(
+  env: BackupEnv,
+  householdId: string,
+): Promise<{ ok: boolean; key?: string; byteSize?: number; error?: string }> {
+  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, BACKUPS_BUCKET } = env;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return { ok: false, error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY." };
+  }
+  if (!BACKUPS_BUCKET) {
+    return { ok: false, error: "Missing BACKUPS_BUCKET binding." };
+  }
+  if (!householdId) {
+    return { ok: false, error: "No householdId given." };
+  }
+
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+  });
+
+  const snapshot: Record<string, unknown> = {};
+  for (const table of BACKUP_TABLES) {
+    const filterColumn = table === "households" ? "id" : "household_id";
+    // Correction on re-review: this used to call admin.from(table).select("*")
+    // directly, un-retried — a real gap against runDailyBackup's own
+    // established pattern just above, which exists specifically because of
+    // an observed real transient failure (PGRST303). Reusing the same
+    // selectAllWithRetry wrapper here instead of a weaker duplicate.
+    const { data, error } = await selectAllWithRetry(admin, table, 3, { column: filterColumn, value: householdId });
+    if (error) {
+      return { ok: false, error: `Failed reading "${table}": ${error.message}` };
+    }
+    snapshot[table] = data ?? [];
+  }
+
+  const payload = JSON.stringify({ generated_at: new Date().toISOString(), household_id: householdId, tables: snapshot });
+  const byteSize = new TextEncoder().encode(payload).length;
+  // Same sanity ceiling as runDailyBackup above, missed on the first pass —
+  // a single household should never come close to this, but there's no
+  // reason to skip a check that already exists and costs nothing to reuse.
+  if (byteSize > MAX_BACKUP_BYTES) {
+    return { ok: false, error: `Snapshot is ${byteSize} bytes — over the ${MAX_BACKUP_BYTES}-byte sanity ceiling. Not writing it.` };
+  }
+  const key = `test-backups/${householdId}-${Date.now()}.json`;
+
+  try {
+    await BACKUPS_BUCKET.put(key, payload);
+    return { ok: true, key, byteSize };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
