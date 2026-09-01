@@ -845,10 +845,10 @@ function SettingsPage() {
                 value={planningHorizonAge}
                 onChange={(e) => setPlanningHorizonAge(e.target.value)}
               />
-              <p className="mt-0.5 text-[10px] text-muted-foreground">Chart projects to this age</p>
+              <p className="mt-0.5 text-[10px] text-muted-foreground">Chart projects to this age, for your household's oldest member</p>
             </div>
           </div>
-          <div className="grid grid-cols-2 items-end gap-3">
+          <div className="grid grid-cols-2 items-start gap-3">
             <div>
               <label className="block text-xs font-medium text-muted-foreground">CPF payout age</label>
               <input
@@ -858,6 +858,7 @@ function SettingsPage() {
                 value={cpfPayoutAge}
                 onChange={(e) => setCpfPayoutAge(e.target.value)}
               />
+              <p className="mt-0.5 text-[10px] text-muted-foreground">Based on your household's oldest member</p>
             </div>
             <div>
               <label className="block text-xs font-medium text-muted-foreground">CPF payout (SGD/mth)</label>
@@ -870,7 +871,7 @@ function SettingsPage() {
               />
             </div>
           </div>
-          <div className="grid grid-cols-3 items-end gap-3">
+          <div className="grid grid-cols-3 items-start gap-3">
             <div>
               <label className="block text-xs font-medium text-muted-foreground">Investment growth (%)</label>
               <input
@@ -900,6 +901,7 @@ function SettingsPage() {
                 value={inflationRate}
                 onChange={(e) => setInflationRate(e.target.value)}
               />
+              <p className="mt-0.5 text-[10px] text-muted-foreground">Grows living expenses &amp; property running costs only — not loan repayments, insurance/ILP premiums, or planned events</p>
             </div>
           </div>
         </div>
