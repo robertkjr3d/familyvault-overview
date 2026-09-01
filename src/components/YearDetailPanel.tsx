@@ -62,9 +62,20 @@ export function YearDetailPanel({ data, retirementYear, shortfallYear, jumpTarge
   // Keep the selected year's tab visible in the horizontally-scrolling
   // strip — needed for the jump above (the target year may be far off
   // the visible edge) and harmless as a no-op when the tab was clicked
-  // directly (it's typically already in view).
+  // directly (it's typically already in view). Guarded to skip the
+  // initial mount: this effect also fires on first render (React runs
+  // effects after every render including the first), and because the
+  // tab strip only scrolls horizontally, `block: "nearest"` had no local
+  // vertical container to scroll — so the browser scrolled the WHOLE
+  // PAGE down instead, which is exactly the "Home auto-scrolls halfway
+  // down" bug. Only scroll on real changes after mount, never on load.
   const selectedTabRef = useRef<HTMLButtonElement | null>(null);
+  const hasMountedRef = useRef(false);
   useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
     selectedTabRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   }, [selectedYear]);
 
