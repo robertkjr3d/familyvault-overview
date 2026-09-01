@@ -145,20 +145,20 @@ export function LifetimeChart({
   const domainMin = Math.min(minNetWorth * 1.1, minNetWorth - 50000, 0);
   const domainMax = maxNetWorth * 1.05;
 
-  // Clicking a marked year's vertical line jumps the Year Detail panel to
-  // that year (Sep 1, 2026 addition). Uses the chart's own onClick +
-  // activeLabel (the same "nearest year" snapping recharts already uses
-  // for the hover tooltip) rather than an onClick on the thin dashed line
-  // itself — a 1px dashed stroke is a poor, unreliable click target,
+  // Clicking anywhere on the chart jumps the Year Detail panel to that year
+  // (Sep 1, 2026 addition, widened same day — recharts' hover cursor line
+  // shows on every year, not just marked ones, so restricting the click to
+  // marked years only worked on lines that also happened to have an event/
+  // retirement/shortfall marker). Uses the chart's own onClick + activeLabel
+  // (the same "nearest year" snapping recharts already uses for the hover
+  // tooltip) rather than an onClick on the thin dashed marker lines
+  // themselves — a 1px dashed stroke is a poor, unreliable click target,
   // especially on touch. `token` forces the effect in YearDetailPanel to
   // fire even when the same year is clicked twice in a row.
   const [jumpTarget, setJumpTarget] = useState<{ year: number; token: number } | null>(null);
-  const markedYears = new Set<number>(eventYears.map((d) => d.year));
-  if (retirementYear !== null) markedYears.add(retirementYear);
-  if (shortfallYear !== null) markedYears.add(shortfallYear.year);
   const handleChartClick = (e: any) => {
     const year = e?.activeLabel;
-    if (year == null || !markedYears.has(year)) return;
+    if (year == null) return;
     setJumpTarget({ year, token: Date.now() });
   };
 
