@@ -233,9 +233,9 @@ function Group({
                       <span className="truncate text-sm font-semibold">{src.title(row)}</span>
                       <MemberTag memberId={row.member_id} />
                     </div>
-                    {(row.action_note || row.action || row.strategy) && (
+                    {(row.action_note || row.action || row.strategy || row.note || row.actions?.length > 0) && (
                       <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                        {row.action_note || row.action || row.strategy}
+                        {row.action_note || row.action || row.strategy || row.note || row.actions?.join(", ")}
                       </p>
                     )}
                   </div>
