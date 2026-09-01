@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppStore } from "@/lib/store";
@@ -9,6 +9,7 @@ import {
 import { useToday } from "@/lib/today";
 import { formatDateOnly } from "@/lib/alerts";
 import { YearDetailPanel } from "@/components/YearDetailPanel";
+import { KeyEventsList } from "@/components/KeyEventsList";
 import { type ChartPoint, fmt, projectLifetimeChart } from "@/lib/lifetimeChartMath";
 
 function joinWithAnd(items: string[]): string {
@@ -144,6 +145,23 @@ export function LifetimeChart({
   const domainMin = Math.min(minNetWorth * 1.1, minNetWorth - 50000, 0);
   const domainMax = maxNetWorth * 1.05;
 
+  // Clicking a marked year's vertical line jumps the Year Detail panel to
+  // that year (Sep 1, 2026 addition). Uses the chart's own onClick +
+  // activeLabel (the same "nearest year" snapping recharts already uses
+  // for the hover tooltip) rather than an onClick on the thin dashed line
+  // itself — a 1px dashed stroke is a poor, unreliable click target,
+  // especially on touch. `token` forces the effect in YearDetailPanel to
+  // fire even when the same year is clicked twice in a row.
+  const [jumpTarget, setJumpTarget] = useState<{ year: number; token: number } | null>(null);
+  const markedYears = new Set<number>(eventYears.map((d) => d.year));
+  if (retirementYear !== null) markedYears.add(retirementYear);
+  if (shortfallYear !== null) markedYears.add(shortfallYear.year);
+  const handleChartClick = (e: any) => {
+    const year = e?.activeLabel;
+    if (year == null || !markedYears.has(year)) return;
+    setJumpTarget({ year, token: Date.now() });
+  };
+
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
     const point = data.find((d) => d.year === label) ?? null;
@@ -193,7 +211,7 @@ export function LifetimeChart({
           </div>
         )}
         {point?.events.map((e, idx) => (
-          <div key={idx} className="mt-1 rounded bg-primary/10 px-1.5 py-0.5 text-primary font-medium break-words">{e}</div>
+          <div key={idx} className="mt-1 rounded bg-primary/10 px-1.5 py-0.5 text-primary font-medium break-words">{e.label}</div>
         ))}
       </div>
     );
@@ -241,7 +259,7 @@ export function LifetimeChart({
       )}
       <div className="h-80 w-full">
         <ResponsiveContainer>
-          <ComposedChart data={data} margin={{ top: 30, right: 16, bottom: 0, left: 0 }}>
+          <ComposedChart data={data} margin={{ top: 30, right: 16, bottom: 0, left: 0 }} onClick={handleChartClick}>
             <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
             <XAxis dataKey="year" tick={{ fontSize: 10 }} interval={Math.max(4, Math.ceil(data.length / 8))} />
             {/* interval scales with the projection length (Aug 29, 2026 fix) —
@@ -272,33 +290,14 @@ export function LifetimeChart({
             )}
             {eventYears
               .filter((d) => d.year !== retirementYear && d.year !== shortfallYear?.year)
-              .map((d, i) => {
-                // Bug fix (Aug 29, 2026), two real issues here, not one:
-                // (1) every label sat at the exact same fixed height
-                // (dy: -18), so two events even a couple years apart on an
-                // 80-year timeline would render on top of each other,
-                // unreadable — staggered across 3 height tiers by index so
-                // adjacent events land at different heights instead.
-                // (2) only d.events[0] was ever shown — if two events
-                // genuinely landed on the same year, the second was
-                // silently dropped with no indication anything was hidden.
-                // Both confirmed fixed and kept — user confirmed working —
-                // even after reverting the separate Y-axis/cashflow change
-                // below, which was a different, unrelated part of this fix.
-                const label = d.events.length > 1
-                  ? `${d.events[0]?.split(" ")[0] ?? ""} +${d.events.length - 1}`
-                  : d.events[0]?.split(" ")[0] ?? "";
-                const tier = i % 3;
-                return (
-                  <ReferenceLine
-                    key={d.year}
-                    x={d.year}
-                    stroke="oklch(0.72 0.13 80 / 0.6)"
-                    strokeDasharray="3 3"
-                    label={{ value: label, position: "insideTopLeft", fontSize: 8, fill: "oklch(0.72 0.13 80)", dy: -18 - tier * 12 }}
-                  />
-                );
-              })}
+              .map((d) => (
+                <ReferenceLine
+                  key={d.year}
+                  x={d.year}
+                  stroke="oklch(0.72 0.13 80 / 0.6)"
+                  strokeDasharray="3 3"
+                />
+              ))}
             <Line
               type="monotone" dataKey="netWorth" name="Net worth"
               stroke="oklch(0.72 0.13 80)" strokeWidth={2.5}
@@ -307,21 +306,12 @@ export function LifetimeChart({
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      {eventYears.length > 0 && (
-        <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
-          {eventYears.map((d) =>
-            d.events.map((e, i) => (
-              <span key={`${d.year}-${i}`} className="text-[10px] text-muted-foreground">
-                <span className="font-semibold text-primary">{d.year}</span> — {e}
-              </span>
-            ))
-          )}
-        </div>
-      )}
+      <KeyEventsList eventYears={eventYears} />
       <YearDetailPanel
         data={data}
         retirementYear={retirementYear}
         shortfallYear={shortfallYear?.year ?? null}
+        jumpTarget={jumpTarget}
       />
       <p className="text-[10px] text-muted-foreground">
         Projection only · inflation-adjusted expenses · property &amp; investment growth modelled at assumed rates · foreign currency included at today's converted rate, not modelled to grow · not financial advice
