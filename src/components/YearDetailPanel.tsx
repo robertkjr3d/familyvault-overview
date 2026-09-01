@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fmt } from "@/lib/lifetimeChartMath";
 import type { ChartPoint, LineItem } from "@/lib/lifetimeChartMath";
 
@@ -6,6 +6,12 @@ type Props = {
   data: ChartPoint[];
   retirementYear: number | null;
   shortfallYear: number | null;
+  // Set by LifetimeChart when a marked year's line is clicked, to jump this
+  // panel to that year. `token` (not just `year`) is in the effect's deps
+  // below so clicking the same year twice in a row still re-triggers the
+  // scroll-into-view — a plain year-only dependency wouldn't change on a
+  // repeat click of the same year.
+  jumpTarget?: { year: number; token: number } | null;
 };
 
 function ItemRow({ it, color }: { it: LineItem; color: "settled" | "urgent" }) {
@@ -40,9 +46,27 @@ function ItemRow({ it, color }: { it: LineItem; color: "settled" | "urgent" }) {
   return inner;
 }
 
-export function YearDetailPanel({ data, retirementYear, shortfallYear }: Props) {
+export function YearDetailPanel({ data, retirementYear, shortfallYear, jumpTarget }: Props) {
   const [selectedYear, setSelectedYear] = useState<number>(data[0]?.year ?? new Date().getFullYear());
   const point = data.find((d) => d.year === selectedYear) ?? data[0] ?? null;
+
+  // Jump to the clicked year when the chart reports one (see jumpTarget's
+  // comment above for why `token` is the dep, not `year`).
+  useEffect(() => {
+    if (jumpTarget && data.some((d) => d.year === jumpTarget.year)) {
+      setSelectedYear(jumpTarget.year);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpTarget?.token]);
+
+  // Keep the selected year's tab visible in the horizontally-scrolling
+  // strip — needed for the jump above (the target year may be far off
+  // the visible edge) and harmless as a no-op when the tab was clicked
+  // directly (it's typically already in view).
+  const selectedTabRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    selectedTabRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [selectedYear]);
 
   if (!point) return null;
 
@@ -62,6 +86,7 @@ export function YearDetailPanel({ data, retirementYear, shortfallYear }: Props) 
             <button
               key={d.year}
               type="button"
+              ref={isSelected ? selectedTabRef : undefined}
               onClick={() => setSelectedYear(d.year)}
               className={`flex-shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
                 isSelected
@@ -140,11 +165,21 @@ export function YearDetailPanel({ data, retirementYear, shortfallYear }: Props) 
 
         {point.events.length > 0 && (
           <div className="mt-2 space-y-1 border-t border-border pt-2">
-            {point.events.map((e, i) => (
-              <div key={i} className="break-words rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
-                {e}
-              </div>
-            ))}
+            {point.events.map((e, i) =>
+              e.href ? (
+                <a
+                  key={i}
+                  href={e.href}
+                  className="block break-words rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary hover:bg-primary/20 transition-colors"
+                >
+                  {e.label}
+                </a>
+              ) : (
+                <div key={i} className="break-words rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+                  {e.label}
+                </div>
+              )
+            )}
           </div>
         )}
 
