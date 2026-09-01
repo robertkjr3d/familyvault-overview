@@ -15,6 +15,17 @@ export type LineItem = {
   timesPerYear?: number;
 };
 
+// A yearly event marker (e.g. "OCBC Loan paid off"). `href`, when present,
+// deep-links to the record that caused it (same "#record-<id>" convention
+// used by HashHighlight elsewhere) so it can be made clickable in the UI.
+// Settings-driven events (salary/CPF/retirement/planned events) link to
+// /settings with no hash, matching how their LineItem counterparts above
+// already link — there's no per-row anchor on that page yet.
+export type EventItem = {
+  label: string;
+  href?: string;
+};
+
 export type ChartPoint = {
   year: number;
   netWorth: number;
@@ -25,7 +36,7 @@ export type ChartPoint = {
   outflowItems: LineItem[];
   propAppreciation: number;
   investGrowth: number;
-  events: string[];
+  events: EventItem[];
 };
 
 // Maps a frequency string (e.g. insurance/ILP "frequency" or "payout_frequency"
@@ -313,7 +324,7 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
     let annualOut = 0;
     const inflowItems: LineItem[] = [];
     const outflowItems: LineItem[] = [];
-    const events: string[] = [];
+    const events: EventItem[] = [];
 
     // Salary — stops at retirement year
     const salaryActive = retirementYear === null || y < retirementYear;
@@ -328,7 +339,7 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
       const cpf = cpfMonthlyPayout * 12;
       annualIn += cpf;
       inflowItems.push({ label: "CPF LIFE payout", amount: cpf, href: "/settings", timesPerYear: 12 });
-      if (y === cpfStartYear) events.push(`CPF LIFE begins +${fmt(cpfMonthlyPayout * 12)}/yr`);
+      if (y === cpfStartYear) events.push({ label: `CPF LIFE begins +${fmt(cpfMonthlyPayout * 12)}/yr`, href: "/settings" });
     }
 
     // Base household expenses — inflate annually
@@ -344,13 +355,13 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
       // Rental income
       const rental = (Number(p.monthly_rent) || 0) * 12;
       annualIn += rental;
-      if (rental > 0) inflowItems.push({ label: `${p.name ?? "Property"} rental`, amount: rental, href: propHref, timesPerYear: 12 });
+      if (rental > 0) inflowItems.push({ label: `${p.name || "Property"} rental`, amount: rental, href: propHref, timesPerYear: 12 });
 
       // Costs — use itemised fields, fall back to monthly_costs
       const costs = propertyTotalCosts(p);
       const annualCosts = costs * 12 * Math.pow(1 + inflationRate, i);
       annualOut += annualCosts;
-      if (annualCosts > 0) outflowItems.push({ label: `${p.name ?? "Property"} costs`, amount: annualCosts, href: propHref, timesPerYear: 12 });
+      if (annualCosts > 0) outflowItems.push({ label: `${p.name || "Property"} costs`, amount: annualCosts, href: propHref, timesPerYear: 12 });
 
       // Mortgage — skip if linked loan covers it, stop at mortgage_end_date
       const isMortgagedViaLoan = mortgagedPropertyIds.has(p.id);
@@ -361,7 +372,7 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
         if (mortgageEndYear === null || y <= mortgageEndYear) {
           const mortgage = Number(p.monthly_payment) * 12;
           annualOut += mortgage;
-          outflowItems.push({ label: `${p.name ?? "Property"} mortgage`, amount: mortgage, href: propHref, timesPerYear: 12 });
+          outflowItems.push({ label: `${p.name || "Property"} mortgage`, amount: mortgage, href: propHref, timesPerYear: 12 });
         }
       }
 
@@ -380,10 +391,10 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
       if (loanEndYear === null || y <= loanEndYear) {
         const repayment = Number(l.monthly_payment) * 12;
         annualOut += repayment;
-        outflowItems.push({ label: `${l.bank ?? "Loan"} repayment`, amount: repayment, href: `/loans#record-${l.id}`, timesPerYear: 12 });
+        outflowItems.push({ label: `${l.bank || "Loan"} repayment`, amount: repayment, href: `/loans#record-${l.id}`, timesPerYear: 12 });
       }
       if (loanEndYear === y) {
-        events.push(`${l.bank ?? "Loan"} paid off`);
+        events.push({ label: `${l.bank || "Loan"} paid off`, href: `/loans#record-${l.id}` });
       }
     }
 
@@ -395,7 +406,7 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
       if (y >= insStart && y <= insEnd) {
         const premium = insuranceAnnual(ins);
         annualOut += premium;
-        if (premium > 0) outflowItems.push({ label: `${ins.name ?? "Insurance"} premium`, amount: premium, href: insHref, timesPerYear: freqTimesPerYear(ins.frequency) });
+        if (premium > 0) outflowItems.push({ label: `${ins.name || "Insurance"} premium`, amount: premium, href: insHref, timesPerYear: freqTimesPerYear(ins.frequency) });
       }
       if (ins.payout_amount && ins.payout_start_date) {
         const payoutStartYear = new Date(ins.payout_start_date).getFullYear();
@@ -410,12 +421,12 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
           : Number(ins.payout_amount);
         if (isRecurring && y >= payoutStartYear && y <= payoutEndYear) {
           annualIn += annualPayoutAmt;
-          inflowItems.push({ label: `${ins.name ?? "Insurance"} payout`, amount: annualPayoutAmt, href: insHref, timesPerYear: freqTimesPerYear(pFreq) });
-          if (y === payoutStartYear) events.push(`${ins.name ?? "Insurance"} payout begins +${fmt(annualPayoutAmt)}/yr`);
+          inflowItems.push({ label: `${ins.name || "Insurance"} payout`, amount: annualPayoutAmt, href: insHref, timesPerYear: freqTimesPerYear(pFreq) });
+          if (y === payoutStartYear) events.push({ label: `${ins.name || "Insurance"} payout begins +${fmt(annualPayoutAmt)}/yr`, href: insHref });
         } else if (!isRecurring && y === payoutStartYear) {
           annualIn += annualPayoutAmt;
-          inflowItems.push({ label: `${ins.name ?? "Insurance"} payout`, amount: annualPayoutAmt, href: insHref, timesPerYear: 1 });
-          events.push(`${ins.name ?? "Insurance"} payout +${fmt(annualPayoutAmt)}`);
+          inflowItems.push({ label: `${ins.name || "Insurance"} payout`, amount: annualPayoutAmt, href: insHref, timesPerYear: 1 });
+          events.push({ label: `${ins.name || "Insurance"} payout +${fmt(annualPayoutAmt)}`, href: insHref });
         }
       }
       // Surrender value vesting — startingNetWorth already correctly excludes
@@ -431,8 +442,8 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
         if (vestYear === y && !wasVestedAtStart) {
           const amt = Number(ins.surrender_value);
           annualIn += amt;
-          inflowItems.push({ label: `${ins.name ?? "Insurance"} surrender value available`, amount: amt, href: insHref, timesPerYear: 1 });
-          events.push(`${ins.name ?? "Insurance"} surrender value available (+${fmt(amt)})`);
+          inflowItems.push({ label: `${ins.name || "Insurance"} surrender value available`, amount: amt, href: insHref, timesPerYear: 1 });
+          events.push({ label: `${ins.name || "Insurance"} surrender value available (+${fmt(amt)})`, href: insHref });
         }
       }
     }
@@ -449,8 +460,8 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
         if (y >= premStartYear && y <= premEndYear) {
           const premium = investmentPremiumAnnual(inv);
           annualOut += premium;
-          if (premium > 0) outflowItems.push({ label: `${inv.name ?? "ILP"} premium`, amount: premium, href: invHref, timesPerYear: freqTimesPerYear(inv.premium_frequency) });
-          if (y === premEndYear) events.push(`${inv.name ?? "ILP"} premiums end`);
+          if (premium > 0) outflowItems.push({ label: `${inv.name || "ILP"} premium`, amount: premium, href: invHref, timesPerYear: freqTimesPerYear(inv.premium_frequency) });
+          if (y === premEndYear) events.push({ label: `${inv.name || "ILP"} premiums end`, href: invHref });
         }
       }
 
@@ -467,12 +478,12 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
           : Number(inv.payout_amount);
         if (isRecurring && y >= payoutStartYear && y <= payoutEndYear) {
           annualIn += annualPayoutAmt;
-          inflowItems.push({ label: `${inv.name ?? "ILP"} payout`, amount: annualPayoutAmt, href: invHref, timesPerYear: freqTimesPerYear(pFreq) });
-          if (y === payoutStartYear) events.push(`${inv.name ?? "ILP"} payout begins +${fmt(annualPayoutAmt)}/yr`);
+          inflowItems.push({ label: `${inv.name || "ILP"} payout`, amount: annualPayoutAmt, href: invHref, timesPerYear: freqTimesPerYear(pFreq) });
+          if (y === payoutStartYear) events.push({ label: `${inv.name || "ILP"} payout begins +${fmt(annualPayoutAmt)}/yr`, href: invHref });
         } else if (!isRecurring && y === payoutStartYear) {
           annualIn += annualPayoutAmt;
-          inflowItems.push({ label: `${inv.name ?? "ILP"} payout`, amount: annualPayoutAmt, href: invHref, timesPerYear: 1 });
-          events.push(`${inv.name ?? "ILP"} payout +${fmt(annualPayoutAmt)}`);
+          inflowItems.push({ label: `${inv.name || "ILP"} payout`, amount: annualPayoutAmt, href: invHref, timesPerYear: 1 });
+          events.push({ label: `${inv.name || "ILP"} payout +${fmt(annualPayoutAmt)}`, href: invHref });
         }
       }
     }
@@ -489,7 +500,7 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
       yearInvestGrowth += growth;
       if (growth > 0) {
         inflowItems.push({
-          label: `${inv.name ?? "Investment"} growth`,
+          label: `${inv.name || "Investment"} growth`,
           amount: growth,
           href: `/investments#record-${inv.id}`,
           timesPerYear: 1,
@@ -509,7 +520,7 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
       yearInvestGrowth += growth;
       if (growth > 0) {
         inflowItems.push({
-          label: `${s.institution ?? "Savings"} growth`,
+          label: `${s.institution || "Savings"} growth`,
           amount: growth,
           href: `/savings#record-${s.id}`,
           timesPerYear: 1,
@@ -525,7 +536,7 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
       const matYear = new Date(s.maturity_date).getFullYear();
       if (matYear === y && s.balance) {
         const bal = Number(s.balance);
-        events.push(`${s.institution ?? "FD"} matures (${fmt(bal)} becomes available)`);
+        events.push({ label: `${s.institution || "FD"} matures (${fmt(bal)} becomes available)`, href: `/savings#record-${s.id}` });
       }
     }
 
@@ -536,18 +547,18 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
         if (ev.type === "inflow") {
           annualIn += amt;
           inflowItems.push({ label: ev.label, amount: amt, timesPerYear: 1 });
-          events.push(`${ev.label} +${fmt(amt)}`);
+          events.push({ label: `${ev.label} +${fmt(amt)}`, href: "/settings" });
         } else {
           annualOut += amt;
           outflowItems.push({ label: ev.label, amount: amt, timesPerYear: 1 });
-          events.push(`${ev.label} −${fmt(amt)}`);
+          events.push({ label: `${ev.label} −${fmt(amt)}`, href: "/settings" });
         }
       }
     }
 
     // Retirement marker
     if (retirementYear !== null && y === retirementYear) {
-      events.push("Retirement — salary ends");
+      events.push({ label: "Retirement — salary ends", href: "/settings" });
     }
 
     // Investment growth feeds into annualIn so net worth maths stays consistent
