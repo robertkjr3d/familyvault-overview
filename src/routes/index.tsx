@@ -1379,8 +1379,8 @@ return (
 {dateInfo.prefix} <span className="font-bold text-primary">{dateInfo.date}</span>
 </p>
 )}
-{(row.action_note || row.action || row.strategy) && (
-  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{row.action_note || row.action || row.strategy}</p>
+{(row.action_note || row.action || row.strategy || row.note || row.actions?.length > 0) && (
+  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{row.action_note || row.action || row.strategy || row.note || row.actions?.join(", ")}</p>
 )}
 </div>
 <StatusBadge status={row.status} />
