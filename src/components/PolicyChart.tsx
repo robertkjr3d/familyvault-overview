@@ -589,7 +589,6 @@ export function PolicyChartCompareSection({
                   formatter={(v: number) => fmtMoney(v, undefined)}
                   labelFormatter={(age) => `Age ${age}`}
                 />
-                <Legend verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: 10 }} />
                 {activeCharts.map((c) => {
                   const pair = colorByChartId.get(c.id)!;
                   return [
@@ -611,6 +610,28 @@ export function PolicyChartCompareSection({
             </ResponsiveContainer>
           </div>
           <p className="text-center text-[9px] text-muted-foreground">Age</p>
+          {activeCharts.length > 1 && (
+            <div className="mt-2 grid grid-cols-2 gap-x-4 text-[10px]">
+              <div className="space-y-1">
+                <div className="text-[9px] font-semibold uppercase text-muted-foreground">Pay in</div>
+                {activeCharts.map((c) => (
+                  <div key={c.id} className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: colorByChartId.get(c.id)!.dark }} />
+                    <span className="truncate">{c.title || c.policyName}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-1 border-l border-border pl-4">
+                <div className="text-[9px] font-semibold uppercase text-muted-foreground">Pay out</div>
+                {activeCharts.map((c) => (
+                  <div key={c.id} className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: colorByChartId.get(c.id)!.light }} />
+                    <span className="truncate">{c.title || c.policyName}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">Toggle a policy above to show its chart.</p>
