@@ -295,7 +295,7 @@ describe("projectLifetimeChart", () => {
       retirementYear: 2031,
     });
     const retYear = result.find((d) => d.year === 2031)!;
-    expect(retYear.events.some((e) => e.includes("Retirement"))).toBe(true);
+    expect(retYear.events.some((e) => e.label.includes("Retirement"))).toBe(true);
   });
 
   // ── CPF ──────────────────────────────────────────────────────────────────
@@ -323,7 +323,7 @@ describe("projectLifetimeChart", () => {
       cpfMonthlyPayout: 2_000,
     });
     const cpfYear = result.find((d) => d.year === 2031)!;
-    expect(cpfYear.events.some((e) => e.includes("CPF LIFE begins"))).toBe(true);
+    expect(cpfYear.events.some((e) => e.label.includes("CPF LIFE begins"))).toBe(true);
   });
 
   // ── Inflation ─────────────────────────────────────────────────────────────
@@ -391,7 +391,7 @@ describe("projectLifetimeChart", () => {
       loans: [{ id: "l1", bank: "OCBC", monthly_payment: 1_000, loan_end_date: "2031-06-01" }],
     });
     const payoffYear = result.find((d) => d.year === 2031)!;
-    expect(payoffYear.events.some((e) => e.includes("paid off"))).toBe(true);
+    expect(payoffYear.events.some((e) => e.label.includes("paid off"))).toBe(true);
   });
 
   it("runs a loan indefinitely when loan_end_date is not set", () => {
@@ -584,7 +584,7 @@ describe("projectLifetimeChart", () => {
       ...base,
       plannedEvents: [{ year: 2030, type: "inflow", amount: 10_000, label: "Inheritance" }],
     });
-    expect(result[0].events.some((e) => e.includes("Inheritance"))).toBe(true);
+    expect(result[0].events.some((e) => e.label.includes("Inheritance"))).toBe(true);
   });
 
   // ── Net worth accumulation ────────────────────────────────────────────────
