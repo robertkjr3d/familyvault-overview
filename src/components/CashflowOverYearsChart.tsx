@@ -6,6 +6,7 @@ import { ResponsiveContainer, ComposedChart, Area, XAxis, YAxis, Tooltip, Refere
 import { useToday } from "@/lib/today";
 import { formatDateOnly } from "@/lib/alerts";
 import { type ChartPoint, fmt, projectLifetimeChart, computeCashflowDomain } from "@/lib/lifetimeChartMath";
+import { KeyEventsList } from "@/components/KeyEventsList";
 
 // Aug 29, 2026: moved out of LifetimeChart.tsx (the Lifetime Net Worth
 // card) into its own chart, in its own card (Monthly Cash Flow), per
@@ -105,39 +106,50 @@ export function CashflowOverYearsChart({
   ]);
 
   const { min: flowDomainMin, max: flowDomainMax } = computeCashflowDomain(data.map((d) => d.annualNet));
+  const eventYears = data.filter((d) => d.events.length > 0);
 
   const CashflowTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
     const an = payload.find((p: any) => p.dataKey === "annualNet");
     if (!an) return null;
+    const point = data.find((d) => d.year === label) ?? null;
     const color = an.value >= 0 ? "font-semibold text-settled" : "font-semibold text-urgent";
     return (
-      <div className="rounded-xl border border-border bg-card p-3 text-xs shadow-lg">
+      <div className="rounded-xl border border-border bg-card p-3 text-xs shadow-lg max-w-[220px]">
         <div className="mb-1 font-bold">{label}</div>
         <div className="flex justify-between gap-4">
           <span className="text-muted-foreground">Net cash flow</span>
           <span className={color}>{fmt(an.value)}</span>
         </div>
+        {point?.events.map((e, idx) => (
+          <div key={idx} className="mt-1 rounded bg-primary/10 px-1.5 py-0.5 text-primary font-medium break-words">{e.label}</div>
+        ))}
       </div>
     );
   };
 
   return (
-    <div className="h-40 w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.85 0.01 250 / 0.4)" vertical={false} />
-          <XAxis dataKey="year" tick={{ fontSize: 10 }} interval={Math.max(4, Math.ceil(data.length / 8))} />
-          <YAxis tick={{ fontSize: 9 }} tickFormatter={fmt} domain={[flowDomainMin, flowDomainMax]} width={48} />
-          <Tooltip content={<CashflowTooltip />} />
-          <ReferenceLine y={0} stroke="oklch(0.50 0.04 250 / 0.6)" strokeDasharray="4 4" />
-          <Area
-            type="monotone" dataKey="annualNet" name="Net cash flow"
-            stroke="oklch(0.62 0.13 155 / 0.8)" fill="oklch(0.62 0.13 155 / 0.2)"
-            strokeWidth={1.5} dot={false}
-          />
-        </ComposedChart>
-      </ResponsiveContainer>
+    <div>
+      <div className="h-40 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={data} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.85 0.01 250 / 0.4)" vertical={false} />
+            <XAxis dataKey="year" tick={{ fontSize: 10 }} interval={Math.max(4, Math.ceil(data.length / 8))} />
+            <YAxis tick={{ fontSize: 9 }} tickFormatter={fmt} domain={[flowDomainMin, flowDomainMax]} width={48} />
+            <Tooltip content={<CashflowTooltip />} />
+            <ReferenceLine y={0} stroke="oklch(0.50 0.04 250 / 0.6)" strokeDasharray="4 4" />
+            {eventYears.map((d) => (
+              <ReferenceLine key={d.year} x={d.year} stroke="oklch(0.72 0.13 80 / 0.5)" strokeDasharray="3 3" />
+            ))}
+            <Area
+              type="monotone" dataKey="annualNet" name="Net cash flow"
+              stroke="oklch(0.62 0.13 155 / 0.8)" fill="oklch(0.62 0.13 155 / 0.2)"
+              strokeWidth={1.5} dot={false}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      <KeyEventsList eventYears={eventYears} />
     </div>
   );
 }
