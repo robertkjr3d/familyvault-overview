@@ -70,11 +70,26 @@ export function fmt(v: number): string {
 // exact failure modes this guards against (a flat $0-every-year series,
 // and an all-negative series, both of which would previously have
 // produced a zero-height or inverted domain).
+// Rounds a padded domain endpoint outward to a "clean" number for axis
+// labels (e.g. -352,000 -> -400,000, not -352,000) using half a power of
+// ten as the step, so the step itself scales with the value's magnitude.
+// Always rounds AWAY from zero (floor for negatives, ceil for positives),
+// meaning it can only add headroom on top of whatever was passed in, never
+// remove it — so this can't reintroduce the zero-height domain bug that
+// the 15% padding above exists to prevent.
+function niceRoundOutward(value: number): number {
+  if (value === 0) return 0;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(Math.abs(value))));
+  const step = magnitude / 2;
+  const fn = value < 0 ? Math.floor : Math.ceil;
+  return fn(value / step) * step;
+}
+
 export function computeCashflowDomain(annualNetValues: number[]): { min: number; max: number } {
   const flowMin = Math.min(...annualNetValues, 0);
   const flowMax = Math.max(...annualNetValues, 0);
   const flowPad = Math.max((flowMax - flowMin) * 0.15, 1);
-  return { min: flowMin - flowPad, max: flowMax + flowPad };
+  return { min: niceRoundOutward(flowMin - flowPad), max: niceRoundOutward(flowMax + flowPad) };
 }
 
 // Converts an insurance policy's premium to an annual figure based on its
