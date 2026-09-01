@@ -839,30 +839,6 @@ return (
         { label: "Other expenses", value: baseExpenses },
       ]}
     />
-    {cashFlowDetailOpen && (
-      <div className="mt-3 space-y-3 border-t border-border/40 pt-3 text-xs">
-        {inflowDetailItems.length > 0 && (
-          <div>
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Money in — by record
-            </div>
-            {inflowDetailItems.map((it, i) => (
-              <CashFlowItemRow key={i} it={it} color="settled" />
-            ))}
-          </div>
-        )}
-        {outflowDetailItems.length > 0 && (
-          <div>
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Money out — by record
-            </div>
-            {outflowDetailItems.map((it, i) => (
-              <CashFlowItemRow key={i} it={it} color="urgent" />
-            ))}
-          </div>
-        )}
-      </div>
-    )}
     <div className="mt-3 text-center">
       <div className="text-xs text-muted-foreground">Net</div>
       <div className={`text-2xl font-bold ${netCashFlow >= 0 ? "text-settled" : "text-urgent"}`}>
@@ -890,6 +866,30 @@ return (
         />
       </div>
     </Suspense>
+    {cashFlowDetailOpen && (
+      <div className="mt-3 space-y-3 border-t border-border/40 pt-3 text-xs">
+        {inflowDetailItems.length > 0 && (
+          <div>
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Money in — by record
+            </div>
+            {inflowDetailItems.map((it, i) => (
+              <CashFlowItemRow key={i} it={it} color="settled" />
+            ))}
+          </div>
+        )}
+        {outflowDetailItems.length > 0 && (
+          <div>
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Money out — by record
+            </div>
+            {outflowDetailItems.map((it, i) => (
+              <CashFlowItemRow key={i} it={it} color="urgent" />
+            ))}
+          </div>
+        )}
+      </div>
+    )}
     {(inflowDetailItems.length > 0 || outflowDetailItems.length > 0) && (
       <div className="mt-2 flex justify-end">
         <button
