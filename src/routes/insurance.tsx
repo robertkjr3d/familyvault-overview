@@ -31,6 +31,7 @@ import { useToday } from "@/lib/today";
 import { isSurrenderValueVested } from "@/lib/lifetimeChartMath";
 import { useFxRates } from "@/hooks/useFxRates";
 import { getAdvisorNotesForHousehold } from "@/lib/advisorAccess";
+import { LastUpdatedLine } from "@/components/LastUpdatedLine";
 
 export const Route = createFileRoute("/insurance")({
   component: InsurancePage,
@@ -186,7 +187,7 @@ function InsurancePage() {
     effectiveCategory === "All" ? categories : categories.filter((c) => c === effectiveCategory);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-24">
       <h1 className="text-2xl font-bold tracking-tight">Insurance</h1>
       <p className="text-xs text-muted-foreground">
         {items.length} policies · {fmtMoney(totalAnnual)} / year total
@@ -383,11 +384,7 @@ function InsuranceRow({
                           aria-label="Surrender value is stale"
                         />
                       )}
-                      <span>
-                        {p.surrender_value_last_updated
-                          ? `Updated: ${fmtDate(p.surrender_value_last_updated)}`
-                          : "Never updated"}
-                      </span>
+                      <LastUpdatedLine date={p.surrender_value_last_updated} />
                     </div>
                   </>
                 ) : (
