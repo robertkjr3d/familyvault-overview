@@ -56,7 +56,7 @@ function LoansPage() {
   const balanceTotals = groupByCurrency(loans, (l: any) => l.balance);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-24">
       <h1 className="text-2xl font-bold tracking-tight">Loans</h1>
       <MemberFilterBar table="loans" />
       <div className="space-y-3">
