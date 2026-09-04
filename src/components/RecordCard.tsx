@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, Copy, Pencil, Trash2, Bell, NotebookPen, MessageSquare, RotateCw, Paperclip, ExternalLink } from "lucide-react";
 import { StatusToggle, type Status } from "./StatusToggle";
 import { MemberTag } from "./MemberTag";
@@ -106,10 +106,23 @@ export function RecordCard({
   const open = isControlled ? openProp : internalOpen;
   // Long free-text Action notes (e.g. detailed payment instructions) used to render at
   // full length on the collapsed card, letting a single record dominate the whole list.
-  // Clamped to 2 lines by default; only offered as a toggle when the note is actually
-  // long enough to need it, so short notes behave exactly as before.
+  // Clamped to 2 lines by default — but ONLY when the text actually overflows 2 lines
+  // at the current screen width. A character-count guess was tried first and was wrong:
+  // the same note can wrap to 1 line on a wide laptop screen and 3 lines on a phone, so
+  // whether "Show more" is needed depends on real layout, not string length.
+  const actionRef = useRef<HTMLSpanElement>(null);
   const [actionExpanded, setActionExpanded] = useState(false);
-  const actionIsLong = (action?.length ?? 0) > 90;
+  const [actionOverflows, setActionOverflows] = useState(false);
+  useLayoutEffect(() => {
+    if (actionExpanded) return; // already showing everything; nothing new to measure
+    const el = actionRef.current;
+    if (!el) return;
+    const check = () => setActionOverflows(el.scrollHeight > el.clientHeight + 1);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [action, actionExpanded]);
 
   function setOpen(updater: boolean | ((v: boolean) => boolean)) {
     const next = typeof updater === "function" ? updater(open) : updater;
@@ -214,14 +227,24 @@ export function RecordCard({
           {action && (
             <p className="text-sm text-foreground/90">
               <span className="font-medium text-primary">Action:</span>{" "}
-              <span className={cn(!actionExpanded && actionIsLong && "line-clamp-2")}>{action}</span>
-              {actionIsLong && (
+              <span ref={actionRef} className={cn(!actionExpanded && "line-clamp-2")}>{action}</span>
+              {actionOverflows && !actionExpanded && (
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); setActionExpanded((v) => !v); }}
-                  className="ml-1 font-medium text-primary underline decoration-dotted underline-offset-2"
+                  onClick={(e) => { e.stopPropagation(); setActionExpanded(true); }}
+                  aria-label="Show full action text"
+                  className="ml-0.5 text-muted-foreground underline decoration-dotted underline-offset-2"
                 >
-                  {actionExpanded ? "Show less" : "Show more"}
+                  …
+                </button>
+              )}
+              {actionOverflows && actionExpanded && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setActionExpanded(false); }}
+                  className="ml-1.5 text-xs font-medium text-primary underline decoration-dotted underline-offset-2"
+                >
+                  Show less
                 </button>
               )}
             </p>
@@ -230,9 +253,10 @@ export function RecordCard({
 
         {/* Right column — amounts. Was a fixed 88px, too narrow for a date string
             (caused "Updated: 02" / "Sep 2026" to split mid-value). Now grows to fit
-            its actual content, with a sensible minimum, instead of forcing a wrap. */}
+            its actual content, with a modest minimum — kept small on purpose since
+            every pixel here is width taken away from the Action text on the left. */}
         {rightMeta && (
-          <div className="flex min-w-[104px] shrink-0 flex-col items-end pr-3 pb-6 pt-14">
+          <div className="flex min-w-[92px] shrink-0 flex-col items-end pr-3 pb-6 pt-14">
             {rightMeta}
           </div>
         )}
