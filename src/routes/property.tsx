@@ -99,7 +99,7 @@ function PropertyPage() {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-24">
       <h1 className="text-2xl font-bold tracking-tight">Property</h1>
       <MemberFilterBar table="properties" />
 
