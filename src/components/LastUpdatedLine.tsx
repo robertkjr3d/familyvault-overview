@@ -13,8 +13,11 @@
  * previously hand-written separately on each tab ("Updated: X" on one,
  * "Last updated: X" on another) with no shared source of truth.
  *
- * `whitespace-nowrap` is applied so the date can never split mid-value the
- * way it used to when the right column was a fixed, too-narrow width.
+ * Kept deliberately short — "Updated: 26/07/26" rather than "Last updated:
+ * 26 Jul 2026" — because this line lives in the same narrow right-hand
+ * column as the Action text on the left; every character here is width the
+ * Action text doesn't get. `whitespace-nowrap` still applies so the date
+ * itself can never split mid-value.
  */
 export function LastUpdatedLine({
   date,
@@ -31,13 +34,13 @@ export function LastUpdatedLine({
     );
   }
   const dateStr = new Date(date).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
   });
   return (
     <span className="whitespace-nowrap text-[10px] text-muted-foreground">
-      Last updated: {dateStr}
+      Updated: {dateStr}
     </span>
   );
 }
