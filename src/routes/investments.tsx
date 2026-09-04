@@ -25,6 +25,7 @@ import { HistoryLog } from "@/components/HistoryLog";
 import { DocumentsList } from "@/components/DocumentsList";
 import { ReminderButton } from "@/components/ReminderButton";
 import { RemindersList } from "@/components/RemindersList";
+import { LastUpdatedLine } from "@/components/LastUpdatedLine";
 import { useEntityCounts } from "@/lib/useEntityCounts";
 import { useFxRates } from "@/hooks/useFxRates";
 import { getAdvisorNotesForHousehold } from "@/lib/advisorAccess";
@@ -122,7 +123,7 @@ function InvestmentsPage() {
   const totalValue = totalWithFx(valueTotals, fxRates);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-24">
       <h1 className="text-2xl font-bold tracking-tight">Investments</h1>
       <MemberFilterBar table="investments" />
       {items.length === 0 ? (
@@ -268,7 +269,7 @@ function InvestmentRow({
               {isStale && (
                 <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: "hsl(38 95% 55%)" }} aria-label="Value is stale" />
               )}
-              <span>{inv.last_updated ? `Updated: ${fmtDate(inv.last_updated)}` : "Never updated"}</span>
+              <LastUpdatedLine date={inv.last_updated} />
             </div>
             {premiumDisplay != null && (
               <div className="mt-1 font-semibold text-urgent">
