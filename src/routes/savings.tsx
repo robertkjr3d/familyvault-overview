@@ -27,6 +27,7 @@ import { HashHighlight } from "@/components/HashHighlight";
 import { useEntityCounts } from "@/lib/useEntityCounts";
 import { ForeignCurrencyTotals } from "@/components/ForeignCurrencyTotals";
 import { useFxRates } from "@/hooks/useFxRates";
+import { LastUpdatedLine } from "@/components/LastUpdatedLine";
 
 export const Route = createFileRoute("/savings")({
   component: SavingsPage,
@@ -119,7 +120,7 @@ function SavingsPage() {
   const cpfTotals = groupByCurrency(cpfItems, (i: any) => i.balance);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-24">
       <h1 className="text-2xl font-bold tracking-tight">Savings</h1>
       <MemberFilterBar table="savings_accounts" />
       {groups.map((g) => (
@@ -241,7 +242,7 @@ function SavingsRow({
               {isStale && (
                 <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: "hsl(38 95% 55%)" }} aria-label="Balance is stale" />
               )}
-              <span>{a.last_updated ? `Last updated: ${fmtDate(a.last_updated)}` : "Never updated"}</span>
+              <LastUpdatedLine date={a.last_updated} />
             </div>
             {a.interest_rate != null && <div className="text-muted-foreground">{fmtPct(a.interest_rate)}</div>}
           </div>
