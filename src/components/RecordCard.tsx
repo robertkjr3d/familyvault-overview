@@ -104,6 +104,12 @@ export function RecordCard({
   const [internalOpen, setInternalOpen] = useState(() => readPersisted(persistKey, defaultOpen));
   const isControlled = openProp !== undefined;
   const open = isControlled ? openProp : internalOpen;
+  // Long free-text Action notes (e.g. detailed payment instructions) used to render at
+  // full length on the collapsed card, letting a single record dominate the whole list.
+  // Clamped to 2 lines by default; only offered as a toggle when the note is actually
+  // long enough to need it, so short notes behave exactly as before.
+  const [actionExpanded, setActionExpanded] = useState(false);
+  const actionIsLong = (action?.length ?? 0) > 90;
 
   function setOpen(updater: boolean | ((v: boolean) => boolean)) {
     const next = typeof updater === "function" ? updater(open) : updater;
@@ -207,14 +213,26 @@ export function RecordCard({
           )}
           {action && (
             <p className="text-sm text-foreground/90">
-              <span className="font-medium text-primary">Action:</span> {action}
+              <span className="font-medium text-primary">Action:</span>{" "}
+              <span className={cn(!actionExpanded && actionIsLong && "line-clamp-2")}>{action}</span>
+              {actionIsLong && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setActionExpanded((v) => !v); }}
+                  className="ml-1 font-medium text-primary underline decoration-dotted underline-offset-2"
+                >
+                  {actionExpanded ? "Show less" : "Show more"}
+                </button>
+              )}
             </p>
           )}
         </div>
 
-        {/* Right column — amounts, in-flow so card height expands to fit */}
+        {/* Right column — amounts. Was a fixed 88px, too narrow for a date string
+            (caused "Updated: 02" / "Sep 2026" to split mid-value). Now grows to fit
+            its actual content, with a sensible minimum, instead of forcing a wrap. */}
         {rightMeta && (
-          <div className="flex w-[88px] shrink-0 flex-col items-end pr-3 pb-6 pt-14">
+          <div className="flex min-w-[104px] shrink-0 flex-col items-end pr-3 pb-6 pt-14">
             {rightMeta}
           </div>
         )}
