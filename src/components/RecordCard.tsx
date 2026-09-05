@@ -193,12 +193,15 @@ export function RecordCard({
         onClick={() => setOpen((v) => !v)}
         className="flex w-full cursor-pointer items-stretch gap-0 text-left"
       >
-        {/* Left column — text content. Only the title row needs to clear the icon
-            cluster (which is absolutely positioned over just the top-right corner) —
-            giving that same wide padding to the whole column was squeezing the
-            Action text unnecessarily on every line below it. */}
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5 pl-4 pr-3 pb-6 pt-4">
-          <div className="flex flex-wrap items-center gap-2 pr-20">
+        {/* Left column — text content. Title used to be squeezed narrow on every
+            wrapped line (pr-20) just to avoid the icon cluster on line 1 — which
+            wastes width on every line after the first, and is worse the longer the
+            title is. Instead, push the whole block down below the icon cluster's
+            actual height (icons end around y=34px) so title gets full width from
+            its very first line — costs a small fixed gap at the top of the card
+            instead of narrowing every line of text. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5 pl-4 pr-3 pb-6 pt-10">
+          <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-semibold leading-tight">{title}</h3>
             {isGiro && <span className="text-sm font-bold">[GIRO]</span>}
             <MemberTag memberId={memberId} />
@@ -230,7 +233,7 @@ export function RecordCard({
           {action && (
             <p className="text-sm text-foreground/90">
               <span className="font-medium text-primary">Action:</span>{" "}
-              <span ref={actionRef} className={cn(!actionExpanded && "line-clamp-2")}>{action}</span>
+              <span ref={actionRef} className={cn(!actionExpanded && "line-clamp-3")}>{action}</span>
               {actionOverflows && !actionExpanded && (
                 <button
                   type="button"
