@@ -193,9 +193,12 @@ export function RecordCard({
         onClick={() => setOpen((v) => !v)}
         className="flex w-full cursor-pointer items-stretch gap-0 text-left"
       >
-        {/* Left column — text content */}
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5 pl-4 pr-20 pb-6 pt-4">
-          <div className="flex flex-wrap items-center gap-2">
+        {/* Left column — text content. Only the title row needs to clear the icon
+            cluster (which is absolutely positioned over just the top-right corner) —
+            giving that same wide padding to the whole column was squeezing the
+            Action text unnecessarily on every line below it. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5 pl-4 pr-3 pb-6 pt-4">
+          <div className="flex flex-wrap items-center gap-2 pr-20">
             <h3 className="text-sm font-semibold leading-tight">{title}</h3>
             {isGiro && <span className="text-sm font-bold">[GIRO]</span>}
             <MemberTag memberId={memberId} />
@@ -233,7 +236,7 @@ export function RecordCard({
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setActionExpanded(true); }}
                   aria-label="Show full action text"
-                  className="ml-0.5 text-muted-foreground underline decoration-dotted underline-offset-2"
+                  className="ml-0.5 font-medium text-primary"
                 >
                   …
                 </button>
