@@ -106,20 +106,66 @@ export function RecordCard({
   const open = isControlled ? openProp : internalOpen;
   // Long free-text Action notes (e.g. detailed payment instructions) used to render at
   // full length on the collapsed card, letting a single record dominate the whole list.
-  // Clamped to 2 lines by default — but ONLY when the text actually overflows 2 lines
+  // Clamped to 3 lines by default — but ONLY when the text actually overflows 3 lines
   // at the current screen width. A character-count guess was tried first and was wrong:
   // the same note can wrap to 1 line on a wide laptop screen and 3 lines on a phone, so
   // whether "Show more" is needed depends on real layout, not string length.
+  //
+  // Sep 6 2026 v3: two earlier CSS-only approaches (line-clamp, then a fixed max-height)
+  // both broke in real screenshots — line-clamp silently swallowed the clickable "…"
+  // button, and a hard pixel cutoff sliced a word's last letter in half wherever the
+  // 3-line boundary happened to land mid-glyph. Neither approach knows where WORDS end,
+  // only where pixels end. Fixed properly this time: a hidden same-width measurer node
+  // (actionMeasureRef) binary-searches, word by word, for the most whole words that fit
+  // in 3 lines WITH "…" already included in the measurement — matching the Word-doc
+  // framing exactly (fit whole words up to the line; if the next one doesn't fit, it's
+  // just not there). The truncated text + the real clickable "…" button are then
+  // rendered as plain inline flow, no CSS clipping at all — so "…" always lands right
+  // after the last visible word, never floating off with empty space after a short line.
   const actionRef = useRef<HTMLParagraphElement>(null);
+  const actionMeasureRef = useRef<HTMLParagraphElement>(null);
   const [actionExpanded, setActionExpanded] = useState(false);
   const [actionOverflows, setActionOverflows] = useState(false);
+  const [truncatedAction, setTruncatedAction] = useState("");
   useLayoutEffect(() => {
-    if (actionExpanded) return; // already showing everything; nothing new to measure
+    if (actionExpanded || !action) {
+      setActionOverflows(false);
+      return;
+    }
     const el = actionRef.current;
-    if (!el) return;
-    const check = () => setActionOverflows(el.scrollHeight > el.clientHeight + 1);
-    check();
-    const ro = new ResizeObserver(check);
+    const measureEl = actionMeasureRef.current;
+    if (!el || !measureEl) return;
+
+    function recompute() {
+      if (!el || !measureEl || !action) return;
+      const lineHeight = parseFloat(window.getComputedStyle(el).lineHeight) || 20;
+      const maxHeightPx = lineHeight * 3 + 1; // +1px rounding tolerance
+      measureEl.style.width = `${el.clientWidth}px`;
+
+      // Does the full text already fit in 3 lines? Then there's nothing to truncate.
+      measureEl.textContent = `Action: ${action}`;
+      if (measureEl.scrollHeight <= maxHeightPx) {
+        setActionOverflows(false);
+        return;
+      }
+      setActionOverflows(true);
+
+      // Binary search over WHOLE WORDS (never characters) for the most that fit
+      // alongside "…" — guarantees no mid-word cut, ever, regardless of font/width.
+      const words = action.split(" ");
+      let lo = 0;
+      let hi = words.length;
+      while (lo < hi) {
+        const mid = Math.ceil((lo + hi) / 2);
+        measureEl.textContent = `Action: ${words.slice(0, mid).join(" ")}…`;
+        if (measureEl.scrollHeight <= maxHeightPx) lo = mid;
+        else hi = mid - 1;
+      }
+      setTruncatedAction(words.slice(0, lo).join(" "));
+    }
+
+    recompute();
+    const ro = new ResizeObserver(recompute);
     ro.observe(el);
     return () => ro.disconnect();
   }, [action, actionExpanded]);
@@ -241,48 +287,45 @@ export function RecordCard({
             </div>
           )}
           {action && (
-            /* Sep 5 2026 v2: line-clamp forces display:-webkit-box, and the browser
-               clips ANY content past 3 lines — including our own "…" button if it's
-               a child of the clamped element, silently replacing it with the
-               browser's own plain, unclickable ellipsis. That's exactly the click
-               regression from the last round. Fix: no line-clamp at all — a plain
-               max-height (3 lines @ text-sm's 1.25rem line-height = 3.75rem) with
-               overflow-hidden on the paragraph, and the "…" button rendered as a
-               SIBLING positioned on top of the last line (not a clipped child), so
-               it's always fully present in the DOM and always clickable. Its
-               background matches the card's own tint (tintBg) so it visually masks
-               the cut-off text behind it instead of overlapping illegibly. */
-            <div className="relative">
-              <p
-                ref={actionRef}
-                className={cn("text-sm text-foreground/90", !actionExpanded && "max-h-[3.75rem] overflow-hidden pr-4")}
-              >
-                <span className="font-medium text-primary">Action:</span> {action}
-                {actionOverflows && actionExpanded && (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setActionExpanded(false); }}
-                    className="ml-1.5 text-xs font-medium text-primary underline decoration-dotted underline-offset-2"
-                  >
-                    Show less
-                  </button>
-                )}
-              </p>
+            /* Sep 6 2026 v3: plain inline flow now, no CSS clipping (line-clamp and
+               max-height both broke real screenshots — see the big comment above by
+               the state hooks). truncatedAction is already the exact word-safe cut
+               computed there; "…" is a real button appended right after it in normal
+               text flow, so it always sits directly after the last visible word,
+               never floating off with a gap when the last line happens to be short. */
+            <p ref={actionRef} className="text-sm text-foreground/90">
+              <span className="font-medium text-primary">Action:</span>{" "}
+              {actionOverflows && !actionExpanded ? truncatedAction : action}
               {actionOverflows && !actionExpanded && (
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setActionExpanded(true); }}
                   aria-label="Show full action text"
-                  className={cn(
-                    "absolute bottom-0 right-0 pl-3 text-sm font-medium text-primary",
-                    tintBg[status].split(" ")[0],
-                  )}
+                  className="font-medium text-primary"
                 >
                   …
                 </button>
               )}
-            </div>
+              {actionOverflows && actionExpanded && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setActionExpanded(false); }}
+                  className="ml-1.5 text-xs font-medium text-primary underline decoration-dotted underline-offset-2"
+                >
+                  Show less
+                </button>
+              )}
+            </p>
           )}
+          {/* Hidden measurer for the word-safe truncation above — never painted or
+              interactive, exists purely so recompute() has a same-font, same-width
+              box to test candidate strings against via scrollHeight. */}
+          <p
+            ref={actionMeasureRef}
+            aria-hidden="true"
+            className="text-sm text-foreground/90"
+            style={{ position: "absolute", visibility: "hidden", pointerEvents: "none", zIndex: -1 }}
+          />
         </div>
 
         {/* Right column — amounts. Was a fixed 88px, too narrow for a date string
