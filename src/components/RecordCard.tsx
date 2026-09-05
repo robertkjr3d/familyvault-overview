@@ -110,7 +110,7 @@ export function RecordCard({
   // at the current screen width. A character-count guess was tried first and was wrong:
   // the same note can wrap to 1 line on a wide laptop screen and 3 lines on a phone, so
   // whether "Show more" is needed depends on real layout, not string length.
-  const actionRef = useRef<HTMLSpanElement>(null);
+  const actionRef = useRef<HTMLParagraphElement>(null);
   const [actionExpanded, setActionExpanded] = useState(false);
   const [actionOverflows, setActionOverflows] = useState(false);
   useLayoutEffect(() => {
@@ -154,12 +154,15 @@ export function RecordCard({
         highlight && "ring-2 ring-primary",
       )}
     >
-      {/* Icon cluster — top right, absolute */}
-      <div className="absolute right-2 top-2 z-10 flex gap-0.5">
+      {/* Icon cluster — top right, absolute. top-1.5 + p-0.5 (was top-2 + p-1) tightens
+          the cluster's own footprint from ~34px to ~28px tall, so the title block below
+          (pt-8, was pt-10) can start 8px higher overall without touching these icons —
+          see the pt-8 comment on the text column for the other half of this pairing. */}
+      <div className="absolute right-2 top-1.5 z-10 flex gap-0.5">
         {onEdit && canEdit && (
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-background/60 hover:text-foreground"
+            className="cursor-pointer rounded-md p-0.5 text-muted-foreground hover:bg-background/60 hover:text-foreground"
             aria-label="Edit"
             title="Edit"
           >
@@ -170,7 +173,7 @@ export function RecordCard({
           <button
             onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
             data-tour="duplicate-icon"
-            className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-background/60 hover:text-foreground"
+            className="cursor-pointer rounded-md p-0.5 text-muted-foreground hover:bg-background/60 hover:text-foreground"
             aria-label="Duplicate"
             title="Duplicate"
           >
@@ -180,7 +183,7 @@ export function RecordCard({
         {onDelete && canEdit && (
           <button
             onClick={(e) => { e.stopPropagation(); if (confirm("Delete this record?")) onDelete(); }}
-            className="cursor-pointer rounded-md p-1 text-urgent hover:bg-urgent/10"
+            className="cursor-pointer rounded-md p-0.5 text-urgent hover:bg-urgent/10"
             aria-label="Delete"
             title="Delete"
           >
@@ -197,10 +200,17 @@ export function RecordCard({
             wrapped line (pr-20) just to avoid the icon cluster on line 1 — which
             wastes width on every line after the first, and is worse the longer the
             title is. Instead, push the whole block down below the icon cluster's
-            actual height (icons end around y=34px) so title gets full width from
-            its very first line — costs a small fixed gap at the top of the card
-            instead of narrowing every line of text. */}
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5 pl-4 pr-3 pb-6 pt-10">
+            actual height so title gets full width from its very first line — costs
+            a small fixed gap at the top of the card instead of narrowing every line
+            of text. Sep 5 2026: pt-10 (40px) read as a full blank line above the
+            title on real devices, so tightened to pt-8 (32px) paired with a smaller
+            icon-cluster footprint above (top-1.5/p-0.5, now ends around y=28px) —
+            still a 4px safety buffer, just less wasted space. NEEDS a real-screenshot
+            check after deploy per this file's own verification rule; if the gap still
+            reads as too big, the next lever is shrinking icon tap targets further
+            (real trade-off — don't go below ~24px hit area) or switching to a
+            float-based wrap so short titles get zero forced gap at all. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5 pl-4 pr-3 pb-6 pt-8">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-semibold leading-tight">{title}</h3>
             {isGiro && <span className="text-sm font-bold">[GIRO]</span>}
@@ -231,9 +241,11 @@ export function RecordCard({
             </div>
           )}
           {action && (
-            <p className="text-sm text-foreground/90">
-              <span className="font-medium text-primary">Action:</span>{" "}
-              <span ref={actionRef} className={cn(!actionExpanded && "line-clamp-3")}>{action}</span>
+            <p
+              ref={actionRef}
+              className={cn("text-sm text-foreground/90", !actionExpanded && "line-clamp-3")}
+            >
+              <span className="font-medium text-primary">Action:</span> {action}
               {actionOverflows && !actionExpanded && (
                 <button
                   type="button"
