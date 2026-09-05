@@ -165,7 +165,6 @@ function LoanRow({
     <HashHighlight id={`record-${l.id}`}>
       <RecordCard
         title={`${l.bank} · ${l.purpose ?? ""}`}
-        subtitle={rateSubtitle}
         memberId={l.member_id}
         status={l.status}
         onStatusChange={onStatus}
@@ -197,6 +196,9 @@ function LoanRow({
               <div className="font-semibold text-urgent">
                 −{fmtMoney(displayedMonthlyPayment, l.currency)}/mo
               </div>
+            )}
+            {rateSubtitle && (
+              <div className="text-[10px] text-muted-foreground">{rateSubtitle}</div>
             )}
           </div>
         }
