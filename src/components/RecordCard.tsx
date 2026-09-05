@@ -154,15 +154,18 @@ export function RecordCard({
         highlight && "ring-2 ring-primary",
       )}
     >
-      {/* Icon cluster — top right, absolute. top-1.5 + p-0.5 (was top-2 + p-1) tightens
-          the cluster's own footprint from ~34px to ~28px tall, so the title block below
-          (pt-8, was pt-10) can start 8px higher overall without touching these icons —
-          see the pt-8 comment on the text column for the other half of this pairing. */}
-      <div className="absolute right-2 top-1.5 z-10 flex gap-0.5">
+      {/* Icon cluster — top right, absolute, sits OUTSIDE the toggle <button> below
+          (sibling, not child) so we never nest a <button> inside a <button>, which
+          is invalid HTML and can make the outer button's own click handling and
+          Safari/iOS rendering behave unpredictably. Kept at the original comfortable
+          tap-target size (p-1) — the shrink tried on Sep 5 traded away tap-target
+          size for a padding fix that's been replaced by the pr-24 approach below,
+          so there's no longer a reason to keep icons smaller than before. */}
+      <div className="absolute right-2 top-2 z-10 flex gap-0.5">
         {onEdit && canEdit && (
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            className="cursor-pointer rounded-md p-0.5 text-muted-foreground hover:bg-background/60 hover:text-foreground"
+            className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-background/60 hover:text-foreground"
             aria-label="Edit"
             title="Edit"
           >
@@ -173,7 +176,7 @@ export function RecordCard({
           <button
             onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
             data-tour="duplicate-icon"
-            className="cursor-pointer rounded-md p-0.5 text-muted-foreground hover:bg-background/60 hover:text-foreground"
+            className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-background/60 hover:text-foreground"
             aria-label="Duplicate"
             title="Duplicate"
           >
@@ -183,7 +186,7 @@ export function RecordCard({
         {onDelete && canEdit && (
           <button
             onClick={(e) => { e.stopPropagation(); if (confirm("Delete this record?")) onDelete(); }}
-            className="cursor-pointer rounded-md p-0.5 text-urgent hover:bg-urgent/10"
+            className="cursor-pointer rounded-md p-1 text-urgent hover:bg-urgent/10"
             aria-label="Delete"
             title="Delete"
           >
@@ -196,22 +199,19 @@ export function RecordCard({
         onClick={() => setOpen((v) => !v)}
         className="flex w-full cursor-pointer items-stretch gap-0 text-left"
       >
-        {/* Left column — text content. Title used to be squeezed narrow on every
-            wrapped line (pr-20) just to avoid the icon cluster on line 1 — which
-            wastes width on every line after the first, and is worse the longer the
-            title is. Instead, push the whole block down below the icon cluster's
-            actual height so title gets full width from its very first line — costs
-            a small fixed gap at the top of the card instead of narrowing every line
-            of text. Sep 5 2026: pt-10 (40px) read as a full blank line above the
-            title on real devices, so tightened to pt-8 (32px) paired with a smaller
-            icon-cluster footprint above (top-1.5/p-0.5, now ends around y=28px) —
-            still a 4px safety buffer, just less wasted space. NEEDS a real-screenshot
-            check after deploy per this file's own verification rule; if the gap still
-            reads as too big, the next lever is shrinking icon tap targets further
-            (real trade-off — don't go below ~24px hit area) or switching to a
-            float-based wrap so short titles get zero forced gap at all. */}
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5 pl-4 pr-3 pb-6 pt-8">
-          <div className="flex flex-wrap items-center gap-2">
+        {/* Left column — text content. Sep 5 2026 v2: title now sits in its OWN
+            row (pr-24 to clear the ~90px icon cluster: right-2 offset + 3 icons at
+            ~26px each + gaps), starting flush at the top of the card, level with
+            the icons — no vertical push, no top gap. Only the title/badges row is
+            narrowed; subtitle, tags, and Action text below all get the card's full
+            width since they're separate rows below the icon cluster's height. The
+            one real trade-off: if a title is long enough to wrap to a 2nd line,
+            that wrapped line is also narrowed (same row div) — accepted, since
+            titles here are consistently short ("Pruwealth", "OCBC 360", etc.) and
+            this is far cheaper than costing every card a fixed top gap regardless
+            of title length, which was the prior approach's actual problem. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5 pl-4 pr-3 pb-6 pt-3">
+          <div className="flex flex-wrap items-center gap-2 pr-24">
             <h3 className="text-sm font-semibold leading-tight">{title}</h3>
             {isGiro && <span className="text-sm font-bold">[GIRO]</span>}
             <MemberTag memberId={memberId} />
@@ -241,31 +241,47 @@ export function RecordCard({
             </div>
           )}
           {action && (
-            <p
-              ref={actionRef}
-              className={cn("text-sm text-foreground/90", !actionExpanded && "line-clamp-3")}
-            >
-              <span className="font-medium text-primary">Action:</span> {action}
+            /* Sep 5 2026 v2: line-clamp forces display:-webkit-box, and the browser
+               clips ANY content past 3 lines — including our own "…" button if it's
+               a child of the clamped element, silently replacing it with the
+               browser's own plain, unclickable ellipsis. That's exactly the click
+               regression from the last round. Fix: no line-clamp at all — a plain
+               max-height (3 lines @ text-sm's 1.25rem line-height = 3.75rem) with
+               overflow-hidden on the paragraph, and the "…" button rendered as a
+               SIBLING positioned on top of the last line (not a clipped child), so
+               it's always fully present in the DOM and always clickable. Its
+               background matches the card's own tint (tintBg) so it visually masks
+               the cut-off text behind it instead of overlapping illegibly. */
+            <div className="relative">
+              <p
+                ref={actionRef}
+                className={cn("text-sm text-foreground/90", !actionExpanded && "max-h-[3.75rem] overflow-hidden pr-4")}
+              >
+                <span className="font-medium text-primary">Action:</span> {action}
+                {actionOverflows && actionExpanded && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setActionExpanded(false); }}
+                    className="ml-1.5 text-xs font-medium text-primary underline decoration-dotted underline-offset-2"
+                  >
+                    Show less
+                  </button>
+                )}
+              </p>
               {actionOverflows && !actionExpanded && (
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setActionExpanded(true); }}
                   aria-label="Show full action text"
-                  className="ml-0.5 font-medium text-primary"
+                  className={cn(
+                    "absolute bottom-0 right-0 pl-3 text-sm font-medium text-primary",
+                    tintBg[status].split(" ")[0],
+                  )}
                 >
                   …
                 </button>
               )}
-              {actionOverflows && actionExpanded && (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); setActionExpanded(false); }}
-                  className="ml-1.5 text-xs font-medium text-primary underline decoration-dotted underline-offset-2"
-                >
-                  Show less
-                </button>
-              )}
-            </p>
+            </div>
           )}
         </div>
 
