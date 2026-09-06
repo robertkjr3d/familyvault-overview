@@ -11,6 +11,8 @@ import {
   insurancePayoutMonthly,
   investmentPayoutMonthly,
   isSurrenderValueVested,
+  creditCardAnnualFee,
+  creditCardMonthlyFee,
   projectLifetimeChart,
   type LifetimeProjectionInput,
 } from "./lifetimeChartMath";
@@ -80,6 +82,25 @@ describe("fmt", () => {
 });
 
 // ─── insuranceAnnual ─────────────────────────────────────────────────────────
+
+describe("creditCardAnnualFee / creditCardMonthlyFee", () => {
+  it("returns the annual fee as-is, no frequency logic needed", () => {
+    expect(creditCardAnnualFee({ annual_fee: 196.2 })).toBe(196.2);
+  });
+
+  it("returns 0 when there's no annual fee", () => {
+    expect(creditCardAnnualFee({ annual_fee: null })).toBe(0);
+    expect(creditCardAnnualFee({})).toBe(0);
+  });
+
+  it("divides the annual fee by 12 for the monthly figure", () => {
+    expect(creditCardMonthlyFee({ annual_fee: 120 })).toBe(10);
+  });
+
+  it("returns 0 monthly when there's no annual fee", () => {
+    expect(creditCardMonthlyFee({ annual_fee: null })).toBe(0);
+  });
+});
 
 describe("insuranceAnnual", () => {
   it("annualises a monthly premium correctly", () => {
@@ -392,6 +413,27 @@ describe("projectLifetimeChart", () => {
     });
     const payoffYear = result.find((d) => d.year === 2031)!;
     expect(payoffYear.events.some((e) => e.label.includes("paid off"))).toBe(true);
+  });
+
+  it("deducts a credit card's annual fee every year, inflated like other costs", () => {
+    const result = projectLifetimeChart({
+      ...base,
+      horizonYears: 2,
+      creditCards: [{ id: "c1", name: "Flex Visa", annual_fee: 200 }],
+    });
+    // annualOut is rounded in the final ChartPoint (same as every other category
+    // here) — using a whole number avoids that rounding masking a real bug.
+    expect(result[0].annualOut).toBe(200);
+    expect(result[0].outflowItems.some((it) => it.label.includes("annual fee"))).toBe(true);
+  });
+
+  it("ignores a credit card with no annual fee", () => {
+    const result = projectLifetimeChart({
+      ...base,
+      horizonYears: 1,
+      creditCards: [{ id: "c1", name: "Vicom", annual_fee: null }],
+    });
+    expect(result[0].annualOut).toBe(0);
   });
 
   it("runs a loan indefinitely when loan_end_date is not set", () => {
