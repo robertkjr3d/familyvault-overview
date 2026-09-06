@@ -23,7 +23,7 @@ import {
   isSurrenderValueVested,
 } from "@/lib/lifetimeChartMath";
 import type { LineItem } from "@/lib/lifetimeChartMath";
-import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check, Info, Gem, Heart, Wallet, Package } from "lucide-react";
+import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check, Info, Gem, Heart, Wallet, Package, CreditCard } from "lucide-react";
 import { useState, useRef, useEffect, lazy, Suspense, type ReactNode } from "react";
 import { fmtPct } from "@/lib/format";
 import { HashHighlight } from "@/components/HashHighlight";
@@ -40,6 +40,7 @@ import {
   useHealthConditions,
   useOtherAssets,
   useInventoryItems,
+  useCreditCards,
 } from "@/lib/householdRecordQueries";
 import { useCurrentRole } from "@/lib/useCurrentRole";
 
@@ -119,8 +120,9 @@ const { data: fxRates } = useFxRates();
 const healthQ = useHealthConditions(activeHouseholdId, gate);
 const otherAssetsQ = useOtherAssets(activeHouseholdId, gate);
 const inventoryQ = useInventoryItems(activeHouseholdId, gate);
+const creditCardsQ = useCreditCards(activeHouseholdId, gate);
 
-const tablesLoaded = [propertiesQ, loansQ, insuranceQ, investmentsQ, savingsQ, healthQ, otherAssetsQ, inventoryQ].every(
+const tablesLoaded = [propertiesQ, loansQ, insuranceQ, investmentsQ, savingsQ, healthQ, otherAssetsQ, inventoryQ, creditCardsQ].every(
   (q) => q.data !== undefined
 );
 
@@ -185,6 +187,7 @@ const savings = scopeByMember(savingsQ.data ?? []);
 const inventoryItems = inventoryQ.data ?? [];
 const otherAssets = scopeByMember(otherAssetsQ.data ?? []);
 const healthConditions = scopeByMember(healthQ.data ?? []);
+const creditCards = scopeByMember(creditCardsQ.data ?? []);
 
 // Foreign-currency records are no longer excluded from dashboard money
 // totals — see toSgdAmount() and the groupByCurrency()/totalWithFx() calls
@@ -217,6 +220,7 @@ const allInvestmentsUnfiltered = investmentsQ.data ?? [];
 const allSavingsUnfiltered = savingsQ.data ?? [];
 const allOtherAssetsUnfiltered = otherAssetsQ.data ?? [];
 const allHealthConditionsUnfiltered = healthQ.data ?? [];
+const allCreditCardsUnfiltered = creditCardsQ.data ?? [];
 
 // Household has zero records of any kind — used to gate the onboarding
 // wizard's auto-show so it only ever appears unprompted for a genuinely
@@ -230,7 +234,8 @@ insurance.length === 0 &&
 investments.length === 0 &&
 savings.length === 0 &&
 inventoryItems.length === 0 &&
-otherAssets.length === 0;
+otherAssets.length === 0 &&
+creditCards.length === 0;
 
 // Auto-show once per page load for a fresh, not-yet-dismissed household.
 useEffect(() => {
@@ -424,6 +429,7 @@ const allUpcoming = buildUpcomingItems(
   reminders: remindersData ?? [],
   otherAssets: allOtherAssetsUnfiltered,
   healthConditions: allHealthConditionsUnfiltered,
+  creditCards: allCreditCardsUnfiltered,
 },
 today,
 horizon90,
@@ -515,6 +521,7 @@ const all: Array<{ kind: string; row: any; href: string; icon: any }> = [
 ...healthConditions.map((r: any) => ({ kind: "Health", row: r, href: "/health", icon: Heart })),
 ...savings.map((r: any) => ({ kind: "Savings", row: r, href: "/savings", icon: Wallet })),
 ...inventoryItems.map((r: any) => ({ kind: "Item", row: r, href: "/inventory", icon: Package })),
+...creditCards.map((r: any) => ({ kind: "Card", row: r, href: "/cards", icon: CreditCard })),
 ];
 
 const urgent = all.filter((x) => x.row.status === "urgent");
