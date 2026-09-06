@@ -261,6 +261,7 @@ const FINANCIAL_TABLES: { configKey: keyof typeof recordConfigs; sheetName: stri
   { configKey: "investments", sheetName: "Investments" },
   { configKey: "savings_accounts", sheetName: "Savings & CPF" },
   { configKey: "other_assets", sheetName: "Other Assets" },
+  { configKey: "credit_cards", sheetName: "Credit Cards" },
   { configKey: "health_conditions", sheetName: "Health" },
   { configKey: "gobag_items", sheetName: "Go-Bag" },
   { configKey: "travel_checklist_items", sheetName: "Travel Checklist" },
@@ -282,6 +283,7 @@ export async function runFullExport(householdId: string, members: Member[]) {
     investmentsRes,
     savingsRes,
     otherAssetsRes,
+    creditCardsRes,
     healthRes,
     gobagRes,
     travelChecklistRes,
@@ -305,6 +307,7 @@ export async function runFullExport(householdId: string, members: Member[]) {
   sheets.push(buildRecordSheet("investments", "Investments", investmentsRes.data ?? [], ctx));
   sheets.push(buildRecordSheet("savings_accounts", "Savings & CPF", savingsRes.data ?? [], ctx));
   sheets.push(buildRecordSheet("other_assets", "Other Assets", otherAssetsRes.data ?? [], ctx));
+  sheets.push(buildRecordSheet("credit_cards", "Credit Cards", creditCardsRes.data ?? [], ctx));
   sheets.push(buildRecordSheet("health_conditions", "Health", healthRes.data ?? [], ctx));
   sheets.push(buildRecordSheet("gobag_items", "Go-Bag", gobagRes.data ?? [], ctx));
   sheets.push(buildRecordSheet("travel_checklist_items", "Travel Checklist", travelChecklistRes.data ?? [], ctx));
@@ -550,6 +553,7 @@ const DOCUMENT_ENTITY_TABLES: { entityType: string; table: string; sheetLabel: s
   { entityType: "investment", table: "investments", sheetLabel: "Investments" },
   { entityType: "savings", table: "savings_accounts", sheetLabel: "Savings & CPF" },
   { entityType: "other_asset", table: "other_assets", sheetLabel: "Other Assets" },
+  { entityType: "credit_card", table: "credit_cards", sheetLabel: "Credit Cards" },
   { entityType: "health", table: "health_conditions", sheetLabel: "Health" },
 ];
 
@@ -596,7 +600,7 @@ export async function runFullBackupZip(householdId: string, members: Member[]) {
   const tableQueries = FINANCIAL_TABLES.map((t) => filter(supabase.from(t.configKey as any).select("*")));
   const [
     propertiesRes, loansRes, insuranceRes, investmentsRes, savingsRes,
-    otherAssetsRes, healthRes, gobagRes, travelChecklistRes, foldersRes, inventoryRes,
+    otherAssetsRes, creditCardsRes, healthRes, gobagRes, travelChecklistRes, foldersRes, inventoryRes,
   ] = await Promise.all([
     ...tableQueries,
     filter(supabase.from("inventory_folders").select("*").order("sort_order")),
@@ -616,6 +620,7 @@ export async function runFullBackupZip(householdId: string, members: Member[]) {
   sheets.push(buildRecordSheet("investments", "Investments", investmentsRes.data ?? [], ctx));
   sheets.push(buildRecordSheet("savings_accounts", "Savings & CPF", savingsRes.data ?? [], ctx));
   sheets.push(buildRecordSheet("other_assets", "Other Assets", otherAssetsRes.data ?? [], ctx));
+  sheets.push(buildRecordSheet("credit_cards", "Credit Cards", creditCardsRes.data ?? [], ctx));
   sheets.push(buildRecordSheet("health_conditions", "Health", healthRes.data ?? [], ctx));
   sheets.push(buildRecordSheet("gobag_items", "Go-Bag", gobagRes.data ?? [], ctx));
   sheets.push(buildRecordSheet("travel_checklist_items", "Travel Checklist", travelChecklistRes.data ?? [], ctx));
