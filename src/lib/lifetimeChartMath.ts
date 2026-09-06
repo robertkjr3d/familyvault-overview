@@ -132,6 +132,16 @@ export function propertyTotalCosts(p: any): number {
   return itemised || (Number(p.monthly_costs) || 0);
 }
 
+// Credit card annual fee — much simpler than the insurance/investment premium
+// helpers above since there's no frequency field, just a flat yearly number.
+// Still given its own tiny function (not inlined at each call site) for the
+// same reason as propertyTotalCosts: one shared source of truth between the
+// 30-year projection and the dashboard's current-month figure below, so the
+// two can never quietly drift apart.
+export function creditCardAnnualFee(c: any): number {
+  return Number(c.annual_fee) || 0;
+}
+
 // ─── Current-month cash flow helpers ──────────────────────────────────────────
 // These mirror the annual projection helpers above but answer "what is the
 // monthly cash impact RIGHT NOW?" rather than "what is the annual figure for
@@ -155,6 +165,14 @@ export function insuranceMonthly(ins: any): number {
   if (freq === "half-yearly" || freq === "semi-annual") return premium / 6;
   if (freq === "annual" || freq === "yearly" || freq === "") return premium / 12;
   return premium / 12;
+}
+
+/**
+ * Monthly-equivalent of a credit card's annual fee — just the annual figure
+ * divided by 12, no frequency logic needed (see creditCardAnnualFee above).
+ */
+export function creditCardMonthlyFee(c: any): number {
+  return creditCardAnnualFee(c) / 12;
 }
 
 /**
@@ -260,6 +278,11 @@ export type LifetimeProjectionInput = {
   sgdSavings: any[];
   sgdInvestments: any[];
   plannedEvents: any[];
+  // Optional and defaults to [] when absent — added Sep 6 2026 for Cards'
+  // annual fee. Optional specifically so the 40 existing call sites in
+  // lifetimeChartMath.test.ts don't all need updating for a field most of
+  // them have no reason to care about.
+  creditCards?: any[];
   startingNetWorth: number;
   monthlyIncome: number;
   monthlyExpenses: number;
@@ -299,6 +322,7 @@ export type LifetimeProjectionInput = {
 export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint[] {
   const {
     properties, loans, insurance, sgdSavings, sgdInvestments, plannedEvents,
+    creditCards = [],
     startingNetWorth, monthlyIncome, monthlyExpenses, startYear, today, horizonYears,
     retirementYear, cpfStartYear, cpfMonthlyPayout,
     investmentGrowthRate, propertyAppreciationRate, inflationRate,
@@ -411,6 +435,16 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
       if (loanEndYear === y) {
         events.push({ label: `${l.bank || "Loan"} paid off`, href: `/loans#record-${l.id}` });
       }
+    }
+
+    // Credit card annual fees — inflated per year same as every other
+    // recurring cost above. Cards are SGD-only (confirmed with the user —
+    // no currency field on this table, unlike properties/loans/insurance),
+    // so no toSgdAmount conversion needed here, unlike those.
+    for (const c of creditCards) {
+      const fee = creditCardAnnualFee(c) * Math.pow(1 + inflationRate, i);
+      annualOut += fee;
+      if (fee > 0) outflowItems.push({ label: `${c.name || "Card"} annual fee`, amount: fee, href: `/cards#record-${c.id}`, timesPerYear: 1 });
     }
 
     // Insurance premiums and payouts
