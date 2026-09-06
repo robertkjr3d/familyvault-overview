@@ -1,3 +1,4 @@
+import { Bell } from "lucide-react";
 import { useState } from "react";
 import { AddRecordFab } from "@/components/AddRecordFab";
 import { createFileRoute } from "@tanstack/react-router";
@@ -103,6 +104,17 @@ function CardsPage() {
   );
 }
 
+// Same small helper as loans.tsx/property.tsx/investments.tsx (each file keeps its
+// own copy) — a bell next to a field's label showing it feeds a dashboard alert.
+function AlertLabel({ text }: { text: string }) {
+  return (
+    <span className="flex items-center gap-1">
+      {text}
+      <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" />
+    </span>
+  );
+}
+
 function CardRow({
   card, onStatus, onDelete, reminderCount, historyCount, documentsCount,
 }: {
@@ -164,7 +176,7 @@ function CardRow({
           {card.reward_type && <FieldRow label="Reward type" value={card.reward_type} />}
           {card.min_spend != null && <FieldRow label="Min. spend to qualify" value={fmtMoney(card.min_spend)} />}
           {card.annual_fee != null && <FieldRow label="Annual fee" value={fmtMoney(card.annual_fee)} />}
-          {card.points_expiry_date && <FieldRow label="Points/rewards expiry" value={fmtDate(card.points_expiry_date)} />}
+          {card.points_expiry_date && <FieldRow label={<AlertLabel text="Points/rewards expiry" />} value={fmtDate(card.points_expiry_date)} />}
           {card.action && <FieldRow label="Action" value={card.action} />}
         </Section>
 
