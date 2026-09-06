@@ -245,34 +245,44 @@ export function RecordCard({
         onClick={() => setOpen((v) => !v)}
         className="flex w-full cursor-pointer items-stretch gap-0 text-left"
       >
-        {/* Left column — text content. Sep 6 2026 v3: title used to share ONE row
-            with isGiro/MemberTag badges AND the pr-24 icon clearance — fine for a
-            single short badge, but a joint account (2 MemberTags) plus pr-24 plus
-            the right column's own width (rightMeta is shrink-0, takes whatever its
-            content needs from the SAME card width) compounded into a real squeeze,
-            confirmed against the actual code, not guessed from the screenshot alone:
-            title text was left with so little room it wrapped one word per line.
-            Badges now get their OWN row below the title, full width, no pr-24 —
-            they're not competing with the icon cluster vertically by the time that
-            row renders (title's own line height clears the icon's ~34px bottom
-            edge). Only the title itself (plus the small external-link icon) stays
-            in the pr-24 row now. */}
+        {/* Left column — text content. Sep 6 2026 v4: splitting badges onto their
+            own row (v3) wasn't enough — a plain padding-right on a block box
+            applies to the WHOLE box's height, so even a 3-4 line wrapped title
+            was narrowed on every single line, not just the first one where the
+            icons actually are (confirmed from the user's own screenshot: visible
+            empty space between the wrapped text and the icons on every line).
+            CSS can't give a text box a different available width per line —
+            except with a float, which is exactly the "avatar + text" technique
+            for this. A tiny invisible floated spacer (not the real icon buttons —
+            those stay absolutely-positioned siblings of the toggle button below,
+            so we're not nesting interactive buttons inside it) reserves space
+            only for the ~1 line height the icons actually occupy; the title
+            wraps around it for that line, then gets the FULL card width for
+            every line after. The clear-both div makes this block correctly
+            report its full height (floats don't count toward a container's
+            height on their own) so the badges row below doesn't overlap it.
+            Exact pixel values are my best measurement from the code, not a
+            live-rendered check — flag if it's still not quite right. */}
         <div className="flex min-w-0 flex-1 flex-col gap-1.5 pl-4 pr-3 pb-6 pt-3">
-          <div className="flex items-center gap-2 pr-24">
-            <h3 className="min-w-0 flex-1 text-sm font-semibold leading-tight">{title}</h3>
-            {externalUrl && (
-              <a
-                href={/^https?:\/\//i.test(externalUrl) ? externalUrl : `https://${externalUrl}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-primary hover:bg-primary/10"
-                aria-label="Open external link"
-                title={externalUrl}
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            )}
+          <div>
+            <div aria-hidden="true" className="float-right ml-2 h-6 w-20" />
+            <h3 className="text-sm font-semibold leading-tight">
+              {title}
+              {externalUrl && (
+                <a
+                  href={/^https?:\/\//i.test(externalUrl) ? externalUrl : `https://${externalUrl}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full align-middle text-primary hover:bg-primary/10"
+                  aria-label="Open external link"
+                  title={externalUrl}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              )}
+            </h3>
+            <div className="clear-both" />
           </div>
           {(isGiro || memberId || secondaryMemberId) && (
             <div className="flex flex-wrap items-center gap-2">
