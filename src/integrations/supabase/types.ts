@@ -1620,6 +1620,7 @@ export type Database = {
         | "inventory"
         | "other_asset"
         | "other_assets"
+        | "credit_card"
       property_purpose: "capital_growth" | "rental_yield" | "own_home" | "mixed"
       record_status: "urgent" | "review" | "settled"
     }
@@ -1759,6 +1760,7 @@ export const Constants = {
         "inventory",
         "other_asset",
         "other_assets",
+        "credit_card",
       ],
       property_purpose: ["capital_growth", "rental_yield", "own_home", "mixed"],
       record_status: ["urgent", "review", "settled"],
