@@ -21,6 +21,7 @@ import {
   insurancePayoutMonthly,
   investmentPayoutMonthly,
   isSurrenderValueVested,
+  creditCardMonthlyFee,
 } from "@/lib/lifetimeChartMath";
 import type { LineItem } from "@/lib/lifetimeChartMath";
 import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check, Info, Gem, Heart, Wallet, Package, CreditCard } from "lucide-react";
@@ -364,8 +365,9 @@ return s + costs + mortgage;
 const loanOut = loans.reduce((s: number, l: any) => s + toSgdAmount(l.monthly_payment, l.currency), 0);
 const insuranceOut = insurance.reduce((s: number, p: any) => s + toSgdAmount(insuranceMonthly(p), p.currency), 0);
 const investmentPremiumOut = investments.reduce((s: number, inv: any) => s + toSgdAmount(investmentPremiumMonthly(inv, today), inv.currency), 0);
+const creditCardFeeOut = creditCards.reduce((s: number, c: any) => s + creditCardMonthlyFee(c), 0);
 const baseExpenses = Number(appSettings?.monthly_expenses) || 0;
-const monthlyOut = propertyOut + loanOut + insuranceOut + investmentPremiumOut + baseExpenses;
+const monthlyOut = propertyOut + loanOut + insuranceOut + investmentPremiumOut + creditCardFeeOut + baseExpenses;
 const netCashFlow = monthlyIn - monthlyOut;
 const cashFlowHasForeign =
   properties.some((p: any) => p.currency && p.currency !== "SGD") ||
@@ -411,6 +413,9 @@ return items;
 ...investments
 .filter((inv: any) => toSgdAmount(investmentPremiumMonthly(inv, today), inv.currency) > 0)
 .map((inv: any) => ({ label: `${inv.name ?? "ILP"} premium`, amount: toSgdAmount(investmentPremiumMonthly(inv, today), inv.currency), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.premium_frequency) })),
+...creditCards
+.filter((c: any) => creditCardMonthlyFee(c) > 0)
+.map((c: any) => ({ label: `${c.name ?? "Card"} annual fee`, amount: creditCardMonthlyFee(c), href: `/cards#record-${c.id}`, timesPerYear: 1 })),
 ...(baseExpenses > 0 ? [{ label: "Other expenses (Settings)", amount: baseExpenses, href: "/settings" }] : []),
 ];
 
@@ -865,6 +870,7 @@ return (
           insurance={insurance}
           savings={savings}
           investments={investments}
+          creditCards={creditCards}
           members={members}
           startingNetWorth={netWorth}
           monthlyIncome={salaryIncome}
@@ -978,6 +984,7 @@ return (
         insurance={insurance}
         savings={savings}
         investments={investments}
+        creditCards={creditCards}
         members={members}
         startingNetWorth={netWorth}
         monthlyIncome={salaryIncome}
