@@ -245,23 +245,21 @@ export function RecordCard({
         onClick={() => setOpen((v) => !v)}
         className="flex w-full cursor-pointer items-stretch gap-0 text-left"
       >
-        {/* Left column — text content. Sep 5 2026 v2: title now sits in its OWN
-            row (pr-24 to clear the ~90px icon cluster: right-2 offset + 3 icons at
-            ~26px each + gaps), starting flush at the top of the card, level with
-            the icons — no vertical push, no top gap. Only the title/badges row is
-            narrowed; subtitle, tags, and Action text below all get the card's full
-            width since they're separate rows below the icon cluster's height. The
-            one real trade-off: if a title is long enough to wrap to a 2nd line,
-            that wrapped line is also narrowed (same row div) — accepted, since
-            titles here are consistently short ("Pruwealth", "OCBC 360", etc.) and
-            this is far cheaper than costing every card a fixed top gap regardless
-            of title length, which was the prior approach's actual problem. */}
+        {/* Left column — text content. Sep 6 2026 v3: title used to share ONE row
+            with isGiro/MemberTag badges AND the pr-24 icon clearance — fine for a
+            single short badge, but a joint account (2 MemberTags) plus pr-24 plus
+            the right column's own width (rightMeta is shrink-0, takes whatever its
+            content needs from the SAME card width) compounded into a real squeeze,
+            confirmed against the actual code, not guessed from the screenshot alone:
+            title text was left with so little room it wrapped one word per line.
+            Badges now get their OWN row below the title, full width, no pr-24 —
+            they're not competing with the icon cluster vertically by the time that
+            row renders (title's own line height clears the icon's ~34px bottom
+            edge). Only the title itself (plus the small external-link icon) stays
+            in the pr-24 row now. */}
         <div className="flex min-w-0 flex-1 flex-col gap-1.5 pl-4 pr-3 pb-6 pt-3">
-          <div className="flex flex-wrap items-center gap-2 pr-24">
-            <h3 className="text-sm font-semibold leading-tight">{title}</h3>
-            {isGiro && <span className="text-sm font-bold">[GIRO]</span>}
-            <MemberTag memberId={memberId} />
-            {secondaryMemberId && <MemberTag memberId={secondaryMemberId} />}
+          <div className="flex items-center gap-2 pr-24">
+            <h3 className="min-w-0 flex-1 text-sm font-semibold leading-tight">{title}</h3>
             {externalUrl && (
               <a
                 href={/^https?:\/\//i.test(externalUrl) ? externalUrl : `https://${externalUrl}`}
@@ -276,6 +274,13 @@ export function RecordCard({
               </a>
             )}
           </div>
+          {(isGiro || memberId || secondaryMemberId) && (
+            <div className="flex flex-wrap items-center gap-2">
+              {isGiro && <span className="text-sm font-bold">[GIRO]</span>}
+              <MemberTag memberId={memberId} />
+              {secondaryMemberId && <MemberTag memberId={secondaryMemberId} />}
+            </div>
+          )}
           {subtitle && <div className="text-xs text-muted-foreground">{subtitle}</div>}
           {tags && tags.length > 0 && (
             <div className="flex flex-wrap gap-1">
@@ -409,7 +414,7 @@ export function RecordCard({
   );
 }
 
-export function FieldRow({ label, value }: { label: string; value: ReactNode }) {
+export function FieldRow({ label, value }: { label: ReactNode; value: ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-3 border-b border-border/40 py-1.5 text-sm last:border-b-0">
       <span className="text-muted-foreground">{label}</span>
