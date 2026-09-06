@@ -211,7 +211,7 @@ function LoanRow({
           <FieldRow label="Current rate" value={l.rate_label || fmtPct(l.rate)} />
           <FieldRow label={<AlertLabel text="Reprice date" />} value={fmtDate(l.reprice_date)} />
           <FieldRow
-            label="Loan end date"
+            label={<AlertLabel text="Loan end date" />}
             value={
               l.loan_end_date ? (
                 fmtDate(l.loan_end_date)
