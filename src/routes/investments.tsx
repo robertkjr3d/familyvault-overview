@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Info } from "lucide-react";
+import { Info, Bell } from "lucide-react";
 import { AddRecordFab } from "@/components/AddRecordFab";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -301,7 +301,7 @@ function InvestmentRow({
           {isILPOrEndowment && inv.premium_amount && <FieldRow label="Premium amount" value={fmtMoney(inv.premium_amount, inv.currency)} />}
           {isILPOrEndowment && inv.premium_start_date && <FieldRow label="Premium start" value={fmtDate(inv.premium_start_date)} />}
           {isILPOrEndowment && inv.premium_frequency && <FieldRow label="Premium frequency" value={freqLabel(inv.premium_frequency)} />}
-          {isILPOrEndowment && inv.premium_end_date && <FieldRow label="Premium end" value={fmtDate(inv.premium_end_date)} />}
+          {isILPOrEndowment && inv.premium_end_date && <FieldRow label={<AlertLabel text="Premium end" />} value={fmtDate(inv.premium_end_date)} />}
           {isILPOrEndowment && inv.payout_amount && <FieldRow label="Payout amount (est.)" value={fmtMoney(inv.payout_amount, inv.currency)} />}
           {isILPOrEndowment && inv.payout_start_date && <FieldRow label="Payout start" value={fmtDate(inv.payout_start_date)} />}
           {isILPOrEndowment && inv.payout_frequency && <FieldRow label="Payout frequency" value={freqLabel(inv.payout_frequency)} />}
@@ -380,6 +380,17 @@ function InvestmentRow({
       {edit.element}
       {dup.element}
     </HashHighlight>
+  );
+}
+
+// Same small helper as loans.tsx/property.tsx (each file keeps its own copy —
+// not shared) — a bell next to a field's label to show it feeds a dashboard alert.
+function AlertLabel({ text }: { text: string }) {
+  return (
+    <span className="flex items-center gap-1">
+      {text}
+      <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" />
+    </span>
   );
 }
 
