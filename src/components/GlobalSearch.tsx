@@ -12,6 +12,7 @@ import {
   Wallet,
   Package,
   Users,
+  CreditCard,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppStore } from "@/lib/store";
@@ -55,6 +56,7 @@ const SOURCES = [
   },
   { table: "health_conditions", column: "name", href: "/health", kind: "Health", icon: HeartPulse },
   { table: "other_assets", column: "name", href: "/other-assets", kind: "Other Assets", icon: Gem },
+  { table: "credit_cards", column: "name", href: "/cards", kind: "Cards", icon: CreditCard },
   {
     table: "inventory_items",
     column: "name",

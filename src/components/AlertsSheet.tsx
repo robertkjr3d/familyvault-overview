@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Building2, Shield, Landmark, TrendingUp, Heart, ChevronRight, Gem, Wallet, Package } from "lucide-react";
+import { Building2, Shield, Landmark, TrendingUp, Heart, ChevronRight, Gem, Wallet, Package, CreditCard } from "lucide-react";
 import { MemberTag } from "./MemberTag";
 import { fmtDate, fmtMoney } from "@/lib/format";
 import { useAppStore } from "@/lib/store";
@@ -18,6 +18,7 @@ import {
   useHealthConditions,
   useOtherAssets,
   useInventoryItems,
+  useCreditCards,
 } from "@/lib/householdRecordQueries";
 
 const SOURCES = [
@@ -29,6 +30,7 @@ const SOURCES = [
   { table: "other_assets",       key: "other_assets",    href: "/other-assets", kind: "Asset",     icon: Gem,        title: (r: any) => r.name },
   { table: "savings_accounts",   key: "savings",         href: "/savings",      kind: "Savings",   icon: Wallet,     title: (r: any) => r.institution },
   { table: "inventory_items",    key: "inventory_items", href: "/inventory",    kind: "Item",      icon: Package,    title: (r: any) => r.name },
+  { table: "credit_cards",       key: "credit_cards",    href: "/cards",        kind: "Card",      icon: CreditCard, title: (r: any) => r.name },
 ] as const;
 
 const BELL_HORIZON_DAYS = 30;
@@ -50,8 +52,9 @@ export function AlertsSheet({ open, onOpenChange }: { open: boolean; onOpenChang
   const healthQ = useHealthConditions(activeHouseholdId, gate);
   const otherAssetsQ = useOtherAssets(activeHouseholdId, gate);
   const inventoryQ = useInventoryItems(activeHouseholdId, gate);
+  const creditCardsQ = useCreditCards(activeHouseholdId, gate);
 
-  const tableQueries = [propertiesQ, loansQ, insuranceQ, investmentsQ, savingsQ, healthQ, otherAssetsQ, inventoryQ];
+  const tableQueries = [propertiesQ, loansQ, insuranceQ, investmentsQ, savingsQ, healthQ, otherAssetsQ, inventoryQ, creditCardsQ];
   const tablesLoaded = tableQueries.every((q) => q.data !== undefined);
 
   // Reminders / dismissed-items / due-soon thresholds aren't part of the
@@ -78,6 +81,7 @@ export function AlertsSheet({ open, onOpenChange }: { open: boolean; onOpenChang
     health: healthQ.data ?? [],
     other_assets: otherAssetsQ.data ?? [],
     inventory_items: inventoryQ.data ?? [],
+    credit_cards: creditCardsQ.data ?? [],
   };
 
   const allStatus = tablesLoaded
@@ -105,6 +109,7 @@ export function AlertsSheet({ open, onOpenChange }: { open: boolean; onOpenChang
             reminders: extras.reminders,
             otherAssets: dataByKey.other_assets,
             healthConditions: dataByKey.health,
+            creditCards: dataByKey.credit_cards,
           },
           today,
           BELL_HORIZON_DAYS,
