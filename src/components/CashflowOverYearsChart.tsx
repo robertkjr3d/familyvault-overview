@@ -32,6 +32,7 @@ type Props = {
   insurance: any[];
   savings: any[];
   investments: any[];
+  creditCards: any[];
   members: any[];
   startingNetWorth: number;
   monthlyIncome: number;
@@ -40,7 +41,7 @@ type Props = {
 };
 
 export function CashflowOverYearsChart({
-  properties, loans, insurance, savings, investments, members,
+  properties, loans, insurance, savings, investments, creditCards, members,
   startingNetWorth, monthlyIncome, monthlyExpenses, appSettings,
 }: Props) {
   const { today } = useToday();
@@ -93,12 +94,13 @@ export function CashflowOverYearsChart({
 
   const data = useMemo<ChartPoint[]>(() => projectLifetimeChart({
     properties: sgdProperties, loans: sgdLoans, insurance: sgdInsurance, sgdSavings, sgdInvestments, plannedEvents,
+    creditCards,
     startingNetWorth, monthlyIncome, monthlyExpenses, startYear, today,
     horizonYears: clampedHorizon, retirementYear, cpfStartYear, cpfMonthlyPayout,
     investmentGrowthRate, propertyAppreciationRate, inflationRate,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [
-    sgdProperties, sgdLoans, sgdInsurance, sgdSavings, sgdInvestments, plannedEvents,
+    sgdProperties, sgdLoans, sgdInsurance, sgdSavings, sgdInvestments, plannedEvents, creditCards,
     startingNetWorth, monthlyIncome, monthlyExpenses,
     retirementYear, cpfStartYear, cpfMonthlyPayout,
     investmentGrowthRate, propertyAppreciationRate, inflationRate,
