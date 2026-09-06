@@ -17,7 +17,18 @@ import { X, Bell } from "lucide-react";
 import { addDays, parseISO } from "date-fns";
 import { useAppStore } from "@/lib/store";
 
-const ALERT_FIELDS = new Set(["next_due_date", "end_date", "fixed_rate_end", "reprice_date", "maturity_date"]);
+// Sep 6 2026: cross-checked this list against every date field buildUpcomingItems()
+// in alerts.ts actually reads (not assumed — grepped recordConfigs.ts for each field
+// key buildUpcomingItems uses). Found 3 real gaps beyond just adding Cards' own field:
+// loan_end_date and premium_end_date were already alert-triggering dates with no bell
+// shown on their form field, and "next_due_date" was a dead leftover — no recordConfigs
+// field anywhere still uses that key (insurance moved to start_date+frequency a while
+// back per this project's own history), so it never matched anything. Removed it rather
+// than leave a stale entry that looks like it's doing something.
+const ALERT_FIELDS = new Set([
+  "end_date", "fixed_rate_end", "reprice_date", "maturity_date",
+  "loan_end_date", "premium_end_date", "points_expiry_date",
+]);
 
 export function RecordFormSheet({
   configKey, open, onOpenChange, initial, recordId,
