@@ -1,5 +1,5 @@
 import { addDays, isBefore, parseISO } from "date-fns";
-import { Building2, Shield, Landmark, TrendingUp, PiggyBank, Bell, Package } from "lucide-react";
+import { Building2, Shield, Landmark, TrendingUp, PiggyBank, Bell, Package, CreditCard } from "lucide-react";
 
 export type UpcomingItem = {
   date: string;
@@ -33,6 +33,7 @@ export type AlertSourceData = {
   inventoryItems: any[];
   reminders: any[];
   otherAssets?: any[];
+  creditCards?: any[];
 };
 
 export function reminderHref(entityType: string | null | undefined): string {
@@ -46,6 +47,7 @@ export function reminderHref(entityType: string | null | undefined): string {
     case "inventory": return "/inventory";
     case "other_assets":
     case "other_asset": return "/other-assets";
+    case "credit_card": return "/cards";
     default: return "/";
   }
 }
@@ -349,6 +351,14 @@ export function buildUpcomingItems(
     }
   }
 
+  // Same shape as inventory's warranty_date above: a single stored expiry date,
+  // no recurring frequency logic needed (unlike insurance/investment premiums).
+  for (const c of data.creditCards ?? []) {
+    if (within(c.points_expiry_date)) {
+      items.push({ date: c.points_expiry_date, label: `${c.name} — points/rewards expire`, amount: null, member_id: c.member_id, href: "/cards", recordId: c.id, sourceType: "card_points_expiry", daysLeft: daysUntil(c.points_expiry_date), icon: CreditCard, kind: "Card" });
+    }
+  }
+
   // Map entity_type values to the already-loaded data arrays so we can look up
   // the entity's display name and member without an extra DB query.
   const entityLookup: Record<string, any[]> = {
@@ -360,6 +370,7 @@ export function buildUpcomingItems(
     inventory:  data.inventoryItems,
     other_asset: data.otherAssets ?? [],
     other_assets: data.otherAssets ?? [],
+    credit_card: data.creditCards ?? [],
   };
 
   for (const r of data.reminders) {

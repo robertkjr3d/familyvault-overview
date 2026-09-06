@@ -75,3 +75,6 @@ export const useOtherAssets = (householdId: HouseholdId, enabled = true, refetch
 
 export const useInventoryItems = (householdId: HouseholdId, enabled = true, refetchInterval?: number) =>
   useHouseholdTable("inventory_items", "inventory_items", householdId, enabled, refetchInterval);
+
+export const useCreditCards = (householdId: HouseholdId, enabled = true, refetchInterval?: number) =>
+  useHouseholdTable("credit_cards", "credit_cards", householdId, enabled, refetchInterval);

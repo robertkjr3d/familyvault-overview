@@ -40,7 +40,7 @@ export const HOUSEHOLD_BLOCKING_TABLES = [
 // (confirmed via the same introspection query) - deleting the household row
 // cleans these up automatically, no code needed:
 // dismissed_dashboard_items, estate_checklist, household_invites,
-// household_users, other_assets, travel_checklist_items
+// household_users, other_assets, travel_checklist_items, credit_cards
 
 const STORAGE_BUCKETS = ["vault-docs", "inventory-photos"] as const;
 

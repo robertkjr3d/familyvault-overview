@@ -1,6 +1,8 @@
 import {
   CURRENCIES,
   BANKS,
+  CARD_NETWORKS,
+  CARD_REWARD_TYPES,
   PROPERTY_PURPOSE,
   INSURANCE_FREQ,
   INSURANCE_CATEGORIES,
@@ -735,6 +737,110 @@ export const recordConfigs: Record<string, RecordConfig> = {
         label: "Action / notes",
         type: "text",
         placeholder: "e.g. Get revalued in 2027",
+      },
+    ],
+  },
+
+  // New Sep 6 2026 — deliberately kept to single-value fields only, matching every
+  // other tab's pattern here in recordConfigs.ts. The user's real example (3 links on
+  // one card, several reward-rate tiers on another) initially looked like it needed a
+  // repeatable-group field type this system doesn't have — but the user pointed out
+  // Documents (multiple labelled links per record, already built, see DocumentsList.tsx)
+  // and Notes already cover that, so this tab needs no new field type at all.
+  credit_cards: {
+    table: "credit_cards",
+    queryKey: "credit_cards",
+    label: "Credit Card",
+    fields: [
+      {
+        key: "name",
+        label: "Card nickname",
+        type: "text",
+        required: true,
+        placeholder: "e.g. Flex Visa Cashback",
+        section: "💳 Card Details",
+      },
+      {
+        key: "issuer",
+        label: "Bank / issuer",
+        type: "select",
+        options: BANKS,
+        section: "💳 Card Details",
+      },
+      {
+        key: "network",
+        label: "Network",
+        type: "select",
+        options: CARD_NETWORKS,
+        section: "💳 Card Details",
+      },
+      {
+        key: "last4",
+        label: "Last 4 digits",
+        type: "text",
+        placeholder: "e.g. 4952 — never the full card number",
+        section: "💳 Card Details",
+      },
+      { key: "member_id", label: "Owner", type: "member", section: "💳 Card Details" },
+      {
+        key: "card_status",
+        label: "Card status",
+        type: "select",
+        options: ["Active", "Cancelled"],
+        default: "Active",
+        section: "💳 Card Details",
+      },
+
+      {
+        key: "reward_type",
+        label: "Reward type",
+        type: "select",
+        options: CARD_REWARD_TYPES,
+        section: "🎁 Rewards",
+      },
+      {
+        key: "points_balance",
+        label: "Current points / miles balance",
+        type: "number",
+        section: "🎁 Rewards",
+      },
+      {
+        key: "points_expiry_date",
+        label: "Points / rewards expiry date",
+        type: "date",
+        placeholder: "Leave blank if points don't expire",
+        section: "🎁 Rewards",
+      },
+      {
+        key: "min_spend",
+        label: "Minimum spend to qualify",
+        type: "number",
+        money: true,
+        placeholder: "e.g. $600 — leave blank if none",
+        section: "🎁 Rewards",
+      },
+      {
+        key: "annual_fee",
+        label: "Annual fee",
+        type: "number",
+        money: true,
+        placeholder: "Leave blank if no annual fee",
+        section: "🎁 Rewards",
+      },
+
+      {
+        key: "action",
+        label: "Action",
+        type: "text",
+        placeholder: "e.g. Call to redeem before points expire",
+        section: "🎯 Action",
+      },
+      {
+        key: "external_url",
+        label: "Card website / login portal link",
+        type: "text",
+        placeholder: "https://... — add other links (rewards catalog, deals) under Documents below",
+        section: "🎯 Action",
       },
     ],
   },

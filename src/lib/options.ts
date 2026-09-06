@@ -14,6 +14,14 @@ export const BANKS = [
   "Maybank","Bank of China","CIMB","RHB","Other",
 ];
 
+export const CARD_NETWORKS = [
+  "Visa","Mastercard","Amex","UnionPay","Diners Club","Discover","Other",
+];
+
+export const CARD_REWARD_TYPES = [
+  "Cashback","Points","Miles","Rewards (other)","No rewards / everyday",
+];
+
 export const SAVINGS_ACCOUNT_TYPES = [
   "Savings Account",
   "Fixed Deposit (FD)",

@@ -64,6 +64,7 @@ const BACKUP_TABLES = [
   "investments",
   "savings_accounts",
   "other_assets",
+  "credit_cards",
   "health_conditions",
   "inventory_folders",
   "inventory_items",
