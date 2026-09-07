@@ -261,11 +261,25 @@ export function RecordCard({
             every line after. The clear-both div makes this block correctly
             report its full height (floats don't count toward a container's
             height on their own) so the badges row below doesn't overlap it.
-            Exact pixel values are my best measurement from the code, not a
-            live-rendered check — flag if it's still not quite right. */}
+            Sep 6 2026 v5: v4 alone still wasn't enough — real screenshots showed
+            it varied a LOT by tab (property's title wrapped one word too early;
+            loans' wrapped after a single word, far worse). Root cause: the right
+            "amounts" column (see its own comment below) had NO width cap, so it
+            silently grew to fit whatever it needed — loans' 3-line balance block
+            is wider than property's 1-line value, so it was stealing more space
+            from THIS column before the title ever got a chance. Capping that
+            column is the bigger fix; trimmed the float here too (w-20/ml-2 → w-16/
+            ml-1) since it had ~10px more margin than the icon cluster's actual
+            footprint needs. Both changes together, not either alone. Still my
+            best measurement from the code, not a live-rendered check — if a
+            title's last line is still noticeably short of the icons after this,
+            the fastest way to nail the exact number is Safari's own inspector on
+            the real device (long-press → Inspect, or connect to a Mac): drag the
+            float's width down in devtools until it looks right, and send me that
+            number directly instead of another screenshot-and-guess round. */}
         <div className="flex min-w-0 flex-1 flex-col gap-1.5 pl-4 pr-3 pb-6 pt-3">
           <div>
-            <div aria-hidden="true" className="float-right ml-2 h-6 w-20" />
+            <div aria-hidden="true" className="float-right ml-1 h-6 w-16" />
             <h3 className="text-sm font-semibold leading-tight">
               {title}
               {externalUrl && (
@@ -344,11 +358,17 @@ export function RecordCard({
         </div>
 
         {/* Right column — amounts. Was a fixed 88px, too narrow for a date string
-            (caused "Updated: 02" / "Sep 2026" to split mid-value). Now grows to fit
-            its actual content, with a modest minimum — kept small on purpose since
-            every pixel here is width taken away from the Action text on the left. */}
+            (caused "Updated: 02" / "Sep 2026" to split mid-value). Grows to fit its
+            content, but Sep 6 2026: had NO upper bound — shrink-0 meant it could
+            grow as wide as it wanted (e.g. loans' "$304,591 (est.)" balance line),
+            silently stealing width from the title on the left every time. That's
+            the real reason loans' titles wrapped far worse than property's: loans'
+            right column is wider (balance + monthly payment + rate, 3 lines) so it
+            was eating more of the card before the title ever got a chance. Capped
+            now — a genuinely long value here wraps onto its own line instead of
+            growing sideways forever, same trade Action text already makes. */}
         {rightMeta && (
-          <div className="flex min-w-[92px] shrink-0 flex-col items-end pr-3 pb-6 pt-14">
+          <div className="flex min-w-[92px] max-w-[124px] shrink-0 flex-col items-end pr-3 pb-6 pt-14">
             {rightMeta}
           </div>
         )}
