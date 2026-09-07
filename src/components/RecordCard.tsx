@@ -279,7 +279,7 @@ export function RecordCard({
             number directly instead of another screenshot-and-guess round. */}
         <div className="flex min-w-0 flex-1 flex-col gap-1.5 pl-4 pr-3 pb-6 pt-3">
           <div>
-            <div aria-hidden="true" className="float-right ml-1 h-6 w-16" />
+            <div aria-hidden="true" className="float-right ml-1 h-5 w-12" />
             <h3 className="text-sm font-semibold leading-tight">
               {title}
               {externalUrl && (
@@ -368,7 +368,7 @@ export function RecordCard({
             now — a genuinely long value here wraps onto its own line instead of
             growing sideways forever, same trade Action text already makes. */}
         {rightMeta && (
-          <div className="flex min-w-[92px] max-w-[124px] shrink-0 flex-col items-end pr-3 pb-6 pt-14">
+          <div className="flex min-w-[92px] max-w-[112px] shrink-0 flex-col items-end pr-3 pb-6 pt-14">
             {rightMeta}
           </div>
         )}
