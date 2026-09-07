@@ -145,3 +145,32 @@ export function MemberDot({
     </span>
   );
 }
+
+/**
+ * Small filled circle + first-letter initial, colored per member — used
+ * where a full MemberDot pill (emoji + name) would take too much room, e.g.
+ * next to each line in the dashboard's cash-flow breakdown when viewing the
+ * whole family combined ("All"). Not meant to replace MemberDot elsewhere;
+ * this is deliberately compact and unlabelled, so callers should only use
+ * it where the surrounding context makes clear a per-member breakdown is
+ * being shown, and should gate it on the "All" member-filter view — a
+ * single-member view has no need to keep repeating whose item it is.
+ */
+export function MemberInitialDot({ memberId }: { memberId: string | null | undefined }) {
+  const { data: members = [] } = useMembers();
+  const isDark = useIsDark();
+  if (!memberId) return null;
+  const m = members.find((x) => x.id === memberId);
+  if (!m) return null;
+  const c = readableMemberColor(m.color, isDark);
+  const letter = (m.short_name || m.name || "?").trim().charAt(0).toUpperCase();
+  return (
+    <span
+      className="mr-1.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none text-white"
+      style={{ background: c }}
+      title={m.short_name || m.name}
+    >
+      {letter}
+    </span>
+  );
+}

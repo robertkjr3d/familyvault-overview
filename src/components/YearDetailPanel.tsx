@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { fmt } from "@/lib/lifetimeChartMath";
+import { MemberInitialDot } from "@/components/MemberFilterBar";
 import type { ChartPoint, LineItem } from "@/lib/lifetimeChartMath";
 
 type Props = {
@@ -12,9 +13,13 @@ type Props = {
   // scroll-into-view — a plain year-only dependency wouldn't change on a
   // repeat click of the same year.
   jumpTarget?: { year: number; token: number } | null;
+  // Sep 6 2026: only true when viewing the whole family combined ("All" in
+  // the member filter) — a single-member view has no need to keep repeating
+  // whose item every line is.
+  showMember?: boolean;
 };
 
-function ItemRow({ it, color }: { it: LineItem; color: "settled" | "urgent" }) {
+function ItemRow({ it, color, showMember }: { it: LineItem; color: "settled" | "urgent"; showMember?: boolean }) {
   const sign = color === "settled" ? "+" : "−";
   const textClass = color === "settled" ? "font-medium text-settled" : "font-medium text-urgent";
   const times = it.timesPerYear ?? 1;
@@ -22,7 +27,8 @@ function ItemRow({ it, color }: { it: LineItem; color: "settled" | "urgent" }) {
   const periodLabel = times === 12 ? "/mo" : times === 4 ? "/qtr" : times === 2 ? "/half-yr" : "";
   const inner = (
     <div className="flex justify-between gap-2 py-0.5">
-      <span className="text-muted-foreground">
+      <span className="flex items-center text-muted-foreground">
+        {showMember && <MemberInitialDot memberId={it.member_id} />}
         {it.label}
         <span className="ml-1 text-[9px] font-normal text-muted-foreground/70">×{times}</span>
       </span>
@@ -46,7 +52,7 @@ function ItemRow({ it, color }: { it: LineItem; color: "settled" | "urgent" }) {
   return inner;
 }
 
-export function YearDetailPanel({ data, retirementYear, shortfallYear, jumpTarget }: Props) {
+export function YearDetailPanel({ data, retirementYear, shortfallYear, jumpTarget, showMember }: Props) {
   const [selectedYear, setSelectedYear] = useState<number>(data[0]?.year ?? new Date().getFullYear());
   const point = data.find((d) => d.year === selectedYear) ?? data[0] ?? null;
 
@@ -127,7 +133,7 @@ export function YearDetailPanel({ data, retirementYear, shortfallYear, jumpTarge
               Money in
             </div>
             {inflows.map((it, i) => (
-              <ItemRow key={i} it={it} color="settled" />
+              <ItemRow key={i} it={it} color="settled" showMember={showMember} />
             ))}
             <div className="mt-1 flex justify-between border-t border-border pt-1 font-bold">
               <span>Total in</span>
@@ -142,7 +148,7 @@ export function YearDetailPanel({ data, retirementYear, shortfallYear, jumpTarge
               Money out
             </div>
             {outflows.map((it, i) => (
-              <ItemRow key={i} it={it} color="urgent" />
+              <ItemRow key={i} it={it} color="urgent" showMember={showMember} />
             ))}
             <div className="mt-1 flex justify-between border-t border-border pt-1 font-bold">
               <span>Total out</span>

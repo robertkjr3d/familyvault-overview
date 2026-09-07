@@ -38,6 +38,7 @@ export function LifetimeChart({
 }: Props) {
   const { today } = useToday();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
+  const memberFilter = useAppStore((s) => s.memberFilter);
   const startYear = today.getFullYear();
   // Stable string form of `today` for the useMemo dep below — `today` itself
   // is a fresh Date object on most renders (useToday doesn't memoize the
@@ -314,6 +315,7 @@ export function LifetimeChart({
         retirementYear={retirementYear}
         shortfallYear={shortfallYear?.year ?? null}
         jumpTarget={jumpTarget}
+        showMember={memberFilter === "all"}
       />
       <p className="text-[10px] text-muted-foreground">
         Projection only · inflation-adjusted expenses · property &amp; investment growth modelled at assumed rates · foreign currency included at today's converted rate, not modelled to grow · not financial advice
