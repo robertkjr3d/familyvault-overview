@@ -5,6 +5,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { differenceInDays, parseISO } from "date-fns";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -394,23 +395,29 @@ function AlertLabel({ text }: { text: string }) {
   );
 }
 
+// Sep 6 2026: was the same hand-rolled `absolute left-0 top-5 w-56` bug as
+// FxInfoNote.tsx (see that file's comment for the full explanation) — same
+// fix, same shared Popover primitive, same reasoning. Overflowed off the
+// right edge of the screen on any field positioned toward the right.
 function InfoNote({ text }: { text: string }) {
-  const [open, setOpen] = useState(false);
   return (
-    <span className="relative inline-flex items-center">
-      <button
-        type="button"
-        onPointerDown={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-        className="ml-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
-        aria-label="More info"
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          className="ml-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+          aria-label="More info"
+        >
+          <Info className="h-3 w-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        collisionPadding={16}
+        className="w-56 max-w-[calc(100vw-2rem)] p-2 text-[11px] font-normal normal-case leading-snug text-muted-foreground"
       >
-        <Info className="h-3 w-3" />
-      </button>
-      {open && (
-        <span className="absolute left-0 top-5 z-10 w-56 rounded-lg border border-border bg-card p-2 text-[11px] font-normal normal-case leading-snug text-muted-foreground shadow-lg">
-          {text}
-        </span>
-      )}
-    </span>
+        {text}
+      </PopoverContent>
+    </Popover>
   );
 }

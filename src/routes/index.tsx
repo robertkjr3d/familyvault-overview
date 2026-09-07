@@ -6,7 +6,7 @@ import { fmtMoney, fmtDate, fmtMonth, groupByCurrency, totalWithFx, convertToSgd
 import { useFxRates } from "@/hooks/useFxRates";
 import { FxInfoNote } from "@/components/FxInfoNote";
 import { isCpfAccountType } from "@/lib/options";
-import { MemberFilterBar } from "@/components/MemberFilterBar";
+import { MemberFilterBar, MemberInitialDot } from "@/components/MemberFilterBar";
 import { MemberTag } from "@/components/MemberTag";
 import { StatusBadge } from "@/components/StatusToggle";
 import { useAppStore } from "@/lib/store";
@@ -385,13 +385,13 @@ const inflowDetailItems: LineItem[] = [
 ...(salaryIncome > 0 ? [{ label: "Salary / income", amount: salaryIncome, href: "/settings" }] : []),
 ...properties
 .filter((p: any) => toSgdAmount(p.monthly_rent, p.currency) > 0)
-.map((p: any) => ({ label: `${p.name ?? "Property"} rental`, amount: toSgdAmount(p.monthly_rent, p.currency), href: `/property#record-${p.id}` })),
+.map((p: any) => ({ label: `${p.name ?? "Property"} rental`, amount: toSgdAmount(p.monthly_rent, p.currency), href: `/property#record-${p.id}`, member_id: p.member_id })),
 ...insurance
 .filter((p: any) => toSgdAmount(insurancePayoutMonthly(p, today), p.currency) > 0)
-.map((p: any) => ({ label: `${p.name ?? "Insurance"} payout`, amount: toSgdAmount(insurancePayoutMonthly(p, today), p.currency), href: `/insurance#record-${p.id}`, timesPerYear: freqTimesPerYear(p.payout_frequency) })),
+.map((p: any) => ({ label: `${p.name ?? "Insurance"} payout`, amount: toSgdAmount(insurancePayoutMonthly(p, today), p.currency), href: `/insurance#record-${p.id}`, timesPerYear: freqTimesPerYear(p.payout_frequency), member_id: p.member_id })),
 ...investments
 .filter((inv: any) => toSgdAmount(investmentPayoutMonthly(inv, today), inv.currency) > 0)
-.map((inv: any) => ({ label: `${inv.name ?? "ILP"} payout`, amount: toSgdAmount(investmentPayoutMonthly(inv, today), inv.currency), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.payout_frequency) })),
+.map((inv: any) => ({ label: `${inv.name ?? "ILP"} payout`, amount: toSgdAmount(investmentPayoutMonthly(inv, today), inv.currency), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.payout_frequency), member_id: inv.member_id })),
 ];
 
 const outflowDetailItems: LineItem[] = [
@@ -399,23 +399,23 @@ const outflowDetailItems: LineItem[] = [
 const items: LineItem[] = [];
 const propHref = `/property#record-${p.id}`;
 const costs = toSgdAmount(propertyTotalCosts(p), p.currency);
-if (costs > 0) items.push({ label: `${p.name ?? "Property"} costs`, amount: costs, href: propHref });
+if (costs > 0) items.push({ label: `${p.name ?? "Property"} costs`, amount: costs, href: propHref, member_id: p.member_id });
 const mortgage = mortgagedPropertyIds.has(p.id) ? 0 : toSgdAmount(p.monthly_payment, p.currency);
-if (mortgage > 0) items.push({ label: `${p.name ?? "Property"} mortgage`, amount: mortgage, href: propHref });
+if (mortgage > 0) items.push({ label: `${p.name ?? "Property"} mortgage`, amount: mortgage, href: propHref, member_id: p.member_id });
 return items;
 }),
 ...loans
 .filter((l: any) => toSgdAmount(l.monthly_payment, l.currency) > 0)
-.map((l: any) => ({ label: `${l.bank ?? "Loan"} repayment`, amount: toSgdAmount(l.monthly_payment, l.currency), href: `/loans#record-${l.id}` })),
+.map((l: any) => ({ label: `${l.bank ?? "Loan"} repayment`, amount: toSgdAmount(l.monthly_payment, l.currency), href: `/loans#record-${l.id}`, member_id: l.member_id })),
 ...insurance
 .filter((p: any) => toSgdAmount(insuranceMonthly(p), p.currency) > 0)
-.map((p: any) => ({ label: `${p.name ?? "Insurance"} premium`, amount: toSgdAmount(insuranceMonthly(p), p.currency), href: `/insurance#record-${p.id}`, timesPerYear: freqTimesPerYear(p.frequency) })),
+.map((p: any) => ({ label: `${p.name ?? "Insurance"} premium`, amount: toSgdAmount(insuranceMonthly(p), p.currency), href: `/insurance#record-${p.id}`, timesPerYear: freqTimesPerYear(p.frequency), member_id: p.member_id })),
 ...investments
 .filter((inv: any) => toSgdAmount(investmentPremiumMonthly(inv, today), inv.currency) > 0)
-.map((inv: any) => ({ label: `${inv.name ?? "ILP"} premium`, amount: toSgdAmount(investmentPremiumMonthly(inv, today), inv.currency), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.premium_frequency) })),
+.map((inv: any) => ({ label: `${inv.name ?? "ILP"} premium`, amount: toSgdAmount(investmentPremiumMonthly(inv, today), inv.currency), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.premium_frequency), member_id: inv.member_id })),
 ...creditCards
 .filter((c: any) => creditCardMonthlyFee(c) > 0)
-.map((c: any) => ({ label: `${c.name ?? "Card"} annual fee`, amount: creditCardMonthlyFee(c), href: `/cards#record-${c.id}`, timesPerYear: 1 })),
+.map((c: any) => ({ label: `${c.name ?? "Card"} annual fee`, amount: creditCardMonthlyFee(c), href: `/cards#record-${c.id}`, timesPerYear: 1, member_id: c.member_id })),
 ...(baseExpenses > 0 ? [{ label: "Other expenses (Settings)", amount: baseExpenses, href: "/settings" }] : []),
 ];
 
@@ -884,23 +884,41 @@ return (
         {inflowDetailItems.length > 0 && (
           <div>
             <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Money in — by record
+              Money in
             </div>
             {inflowDetailItems.map((it, i) => (
-              <CashFlowItemRow key={i} it={it} color="settled" />
+              <CashFlowItemRow key={i} it={it} color="settled" showMember={memberFilter === "all"} />
             ))}
           </div>
         )}
         {outflowDetailItems.length > 0 && (
           <div>
             <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Money out — by record
+              Money out
             </div>
             {outflowDetailItems.map((it, i) => (
-              <CashFlowItemRow key={i} it={it} color="urgent" />
+              <CashFlowItemRow key={i} it={it} color="urgent" showMember={memberFilter === "all"} />
             ))}
           </div>
         )}
+        {/* Sep 6 2026: matches Net Worth Breakdown's own pattern of ending an
+            itemized list with a bold total — same double-border treatment. */}
+        <div className="border-t-2 border-double border-foreground/40 pt-2 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-muted-foreground">Total In</span>
+            <span className="font-semibold text-settled">+{fmtMoney(monthlyIn)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-muted-foreground">Total Out</span>
+            <span className="font-semibold text-urgent">−{fmtMoney(monthlyOut)}</span>
+          </div>
+          <div className="mt-1 flex items-center justify-between border-t border-border/40 pt-1">
+            <span className="text-base font-bold">Net Cash Flow</span>
+            <span className={`text-lg font-bold ${monthlyIn - monthlyOut >= 0 ? "text-settled" : "text-urgent"}`}>
+              {monthlyIn - monthlyOut >= 0 ? "+" : "−"}{fmtMoney(Math.abs(monthlyIn - monthlyOut))}
+            </span>
+          </div>
+        </div>
       </div>
     )}
     {(inflowDetailItems.length > 0 || outflowDetailItems.length > 0) && (
@@ -1031,7 +1049,7 @@ return (
 );
 }
 
-function CashFlowItemRow({ it, color }: { it: LineItem; color: "settled" | "urgent" }) {
+function CashFlowItemRow({ it, color, showMember }: { it: LineItem; color: "settled" | "urgent"; showMember?: boolean }) {
 const sign = color === "settled" ? "+" : "−";
 const textClass = color === "settled" ? "font-medium text-settled" : "font-medium text-urgent";
 // it.amount is already the monthly figure. If the source record's actual
@@ -1041,7 +1059,10 @@ const textClass = color === "settled" ? "font-medium text-settled" : "font-mediu
 const showAnnualConversion = it.timesPerYear !== undefined && it.timesPerYear !== 12;
 const inner = (
 <div className="flex justify-between gap-2 py-0.5">
-<span className="text-muted-foreground">{it.label}</span>
+<span className="flex items-center text-muted-foreground">
+{showMember && <MemberInitialDot memberId={it.member_id} />}
+{it.label}
+</span>
 <span className="text-right">
 <span className={textClass}>{sign}{fmtMoney(it.amount)}</span>
 {showAnnualConversion && (
