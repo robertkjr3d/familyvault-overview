@@ -5,7 +5,7 @@ import { useAppStore } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useIsDark } from "@/hooks/useIsDark";
-import { readableMemberColor } from "@/lib/memberColor";
+import { readableMemberColor, readableTextOn } from "@/lib/memberColor";
 
 export function MemberFilterBar({
   className,
@@ -163,11 +163,12 @@ export function MemberInitialDot({ memberId }: { memberId: string | null | undef
   const m = members.find((x) => x.id === memberId);
   if (!m) return null;
   const c = readableMemberColor(m.color, isDark);
+  const textColor = readableTextOn(c);
   const letter = (m.short_name || m.name || "?").trim().charAt(0).toUpperCase();
   return (
     <span
-      className="mr-1.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none text-white"
-      style={{ background: c }}
+      className="mr-1.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none"
+      style={{ background: c, color: textColor }}
       title={m.short_name || m.name}
     >
       {letter}
