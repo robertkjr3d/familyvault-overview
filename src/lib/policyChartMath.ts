@@ -84,9 +84,9 @@ export function buildDefaultPhases(
     // typo'd as a far-future year) must never silently produce an
     // out-of-range default the chart schema then rejects at save time
     // with a cryptic raw validation error. The FA can still edit the
-    // clamped value if 120 genuinely isn't right for their case.
+    // clamped value if 100 genuinely isn't right for their case.
     if (age < 0) return 0;
-    if (age > 120) return 120;
+    if (age > 100) return 100;
     return age;
   };
   const phases: ChartPhase[] = [];
