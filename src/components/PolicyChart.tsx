@@ -73,15 +73,15 @@ function newPhaseId() {
     : `p${Date.now()}${Math.random()}`;
 }
 
-// A phase with an age outside 0-120 (almost always a bad upstream date
+// A phase with an age outside 0-100 (almost always a bad upstream date
 // feeding buildDefaultPhases, not something the FA typed on purpose) gets
 // a plain-English message here instead of the raw zod validation array —
 // buildDefaultPhases already clamps its own output, so this only fires
 // for a phase the FA edited by hand into an out-of-range value.
 function validatePhases(phases: ChartPhase[]): string | null {
   for (const p of phases) {
-    if (p.startAge < 0 || p.startAge > 120 || p.endAge < 0 || p.endAge > 120) {
-      return `"${p.label}" has an age outside 0-120 - check the start/end age.`;
+    if (p.startAge < 0 || p.startAge > 100 || p.endAge < 0 || p.endAge > 100) {
+      return `"${p.label}" has an age outside 0-100 - check the start/end age.`;
     }
     if (p.endAge < p.startAge && p.frequency !== "lump-sum") {
       return `"${p.label}"'s end age is before its start age.`;
@@ -396,7 +396,7 @@ const FREQUENCIES: { value: ChartPhaseFrequency; label: string }[] = [
   { value: "lump-sum", label: "One-time" },
 ];
 
-// A plain integer text field (0-120) - deliberately NOT type="number".
+// A plain integer text field (0-100) - deliberately NOT type="number".
 // Native number-input spin arrows overlap the field's own text on narrow
 // widths and clip the second digit of a 2-3 digit age, confirmed on a
 // real browser - text + inputMode sidesteps that entirely and matches
@@ -418,7 +418,7 @@ function AgeField({
       value={value}
       disabled={disabled}
       onChange={(e) =>
-        onChange(Math.max(0, Math.min(120, Number(e.target.value.replace(/[^0-9]/g, "")) || 0)))
+        onChange(Math.max(0, Math.min(100, Number(e.target.value.replace(/[^0-9]/g, "")) || 0)))
       }
       className="h-6 w-12 text-center text-[11px]"
     />
