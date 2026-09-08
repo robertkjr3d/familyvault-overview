@@ -29,6 +29,11 @@ export type LineItem = {
 export type EventItem = {
   label: string;
   href?: string;
+  // Sep 6 2026: whose event this is, for the "All" view's member badge next
+  // to each year's events (KeyEventsList.tsx) — same convention as LineItem's
+  // member_id. Absent for household-level events (CPF LIFE, retirement,
+  // planned one-off events) which have no single owner.
+  member_id?: string | null;
 };
 
 export type ChartPoint = {
@@ -438,7 +443,7 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
         outflowItems.push({ label: `${l.bank || "Loan"} repayment`, amount: repayment, href: `/loans#record-${l.id}`, timesPerYear: 12, member_id: l.member_id });
       }
       if (loanEndYear === y) {
-        events.push({ label: `${l.bank || "Loan"} paid off`, href: `/loans#record-${l.id}` });
+        events.push({ label: `${l.bank || "Loan"} paid off`, href: `/loans#record-${l.id}`, member_id: l.member_id });
       }
     }
 
@@ -476,11 +481,11 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
         if (isRecurring && y >= payoutStartYear && y <= payoutEndYear) {
           annualIn += annualPayoutAmt;
           inflowItems.push({ label: `${ins.name || "Insurance"} payout`, amount: annualPayoutAmt, href: insHref, timesPerYear: freqTimesPerYear(pFreq), member_id: ins.member_id });
-          if (y === payoutStartYear) events.push({ label: `${ins.name || "Insurance"} payout begins +${fmt(annualPayoutAmt)}/yr`, href: insHref });
+          if (y === payoutStartYear) events.push({ label: `${ins.name || "Insurance"} payout begins +${fmt(annualPayoutAmt)}/yr`, href: insHref, member_id: ins.member_id });
         } else if (!isRecurring && y === payoutStartYear) {
           annualIn += annualPayoutAmt;
           inflowItems.push({ label: `${ins.name || "Insurance"} payout`, amount: annualPayoutAmt, href: insHref, timesPerYear: 1, member_id: ins.member_id });
-          events.push({ label: `${ins.name || "Insurance"} payout +${fmt(annualPayoutAmt)}`, href: insHref });
+          events.push({ label: `${ins.name || "Insurance"} payout +${fmt(annualPayoutAmt)}`, href: insHref, member_id: ins.member_id });
         }
       }
       // Surrender value vesting — startingNetWorth already correctly excludes
@@ -497,7 +502,7 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
           const amt = Number(ins.surrender_value);
           annualIn += amt;
           inflowItems.push({ label: `${ins.name || "Insurance"} surrender value available`, amount: amt, href: insHref, timesPerYear: 1, member_id: ins.member_id });
-          events.push({ label: `${ins.name || "Insurance"} surrender value available (+${fmt(amt)})`, href: insHref });
+          events.push({ label: `${ins.name || "Insurance"} surrender value available (+${fmt(amt)})`, href: insHref, member_id: ins.member_id });
         }
       }
     }
@@ -515,7 +520,7 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
           const premium = investmentPremiumAnnual(inv);
           annualOut += premium;
           if (premium > 0) outflowItems.push({ label: `${inv.name || "ILP"} premium`, amount: premium, href: invHref, timesPerYear: freqTimesPerYear(inv.premium_frequency), member_id: inv.member_id });
-          if (y === premEndYear) events.push({ label: `${inv.name || "ILP"} premiums end`, href: invHref });
+          if (y === premEndYear) events.push({ label: `${inv.name || "ILP"} premiums end`, href: invHref, member_id: inv.member_id });
         }
       }
 
@@ -533,11 +538,11 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
         if (isRecurring && y >= payoutStartYear && y <= payoutEndYear) {
           annualIn += annualPayoutAmt;
           inflowItems.push({ label: `${inv.name || "ILP"} payout`, amount: annualPayoutAmt, href: invHref, timesPerYear: freqTimesPerYear(pFreq), member_id: inv.member_id });
-          if (y === payoutStartYear) events.push({ label: `${inv.name || "ILP"} payout begins +${fmt(annualPayoutAmt)}/yr`, href: invHref });
+          if (y === payoutStartYear) events.push({ label: `${inv.name || "ILP"} payout begins +${fmt(annualPayoutAmt)}/yr`, href: invHref, member_id: inv.member_id });
         } else if (!isRecurring && y === payoutStartYear) {
           annualIn += annualPayoutAmt;
           inflowItems.push({ label: `${inv.name || "ILP"} payout`, amount: annualPayoutAmt, href: invHref, timesPerYear: 1, member_id: inv.member_id });
-          events.push({ label: `${inv.name || "ILP"} payout +${fmt(annualPayoutAmt)}`, href: invHref });
+          events.push({ label: `${inv.name || "ILP"} payout +${fmt(annualPayoutAmt)}`, href: invHref, member_id: inv.member_id });
         }
       }
     }
@@ -590,7 +595,7 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
       const matYear = new Date(s.maturity_date).getFullYear();
       if (matYear === y && s.balance) {
         const bal = Number(s.balance);
-        events.push({ label: `${s.institution || "FD"} matures (${fmt(bal)} becomes available)`, href: `/savings#record-${s.id}` });
+        events.push({ label: `${s.institution || "FD"} matures (${fmt(bal)} becomes available)`, href: `/savings#record-${s.id}`, member_id: s.member_id });
       }
     }
 
