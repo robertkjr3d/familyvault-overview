@@ -264,7 +264,7 @@ export function LifetimeChart({
         <ResponsiveContainer>
           <ComposedChart data={data} margin={{ top: 30, right: 16, bottom: 0, left: 0 }} onClick={handleChartClick}>
             <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-            <XAxis dataKey="year" tick={{ fontSize: 10 }} interval={Math.max(4, Math.ceil(data.length / 8))} />
+            <XAxis dataKey="year" tick={{ fontSize: 10, fill: "var(--color-chart-axis)" }} interval={Math.max(4, Math.ceil(data.length / 8))} />
             {/* interval scales with the projection length (Aug 29, 2026 fix) —
                 a fixed "4" looked fine on a short horizon but crowded badly on
                 phone for a long one (e.g. 80 years), since the skip-count
@@ -272,7 +272,7 @@ export function LifetimeChart({
                 Scaling keeps roughly 8-9 labels total regardless of horizon
                 length, which is what actually determines legibility on a
                 narrow screen — not the raw skip-count. */}
-            <YAxis tick={{ fontSize: 10 }} tickFormatter={fmt} domain={[domainMin, domainMax]} width={56} />
+            <YAxis tick={{ fontSize: 10, fill: "var(--color-chart-axis)" }} tickFormatter={fmt} domain={[domainMin, domainMax]} width={56} />
             <Tooltip content={<CustomTooltip />} />
             <ReferenceLine y={0} stroke="oklch(0.50 0.04 250 / 0.6)" strokeDasharray="4 4" />
             {retirementYear !== null && (
