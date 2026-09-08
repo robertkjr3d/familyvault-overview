@@ -1082,7 +1082,7 @@ setPreview(URL.createObjectURL(f));
 </div>
 <div className="space-y-1.5">
 <Label htmlFor="loc-name" className="text-xs">Name this location</Label>
-<Input id="loc-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Aza's Room" />
+<Input id="loc-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Master Bedroom" />
 </div>
 <div className="flex gap-2 pt-2">
 <Button variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
