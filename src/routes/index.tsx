@@ -392,7 +392,9 @@ const inflowDetailItems: LineItem[] = [
 ...investments
 .filter((inv: any) => toSgdAmount(investmentPayoutMonthly(inv, today), inv.currency) > 0)
 .map((inv: any) => ({ label: `${inv.name ?? "ILP"} payout`, amount: toSgdAmount(investmentPayoutMonthly(inv, today), inv.currency), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.payout_frequency), member_id: inv.member_id })),
-];
+// Biggest first — same convention YearDetailPanel already uses for its own
+// money in/out lists, applied here too for consistency.
+].sort((a, b) => b.amount - a.amount);
 
 const outflowDetailItems: LineItem[] = [
 ...properties.flatMap((p: any) => {
@@ -417,7 +419,7 @@ return items;
 .filter((c: any) => creditCardMonthlyFee(c) > 0)
 .map((c: any) => ({ label: `${c.name ?? "Card"} annual fee`, amount: creditCardMonthlyFee(c), href: `/cards#record-${c.id}`, timesPerYear: 1, member_id: c.member_id })),
 ...(baseExpenses > 0 ? [{ label: "Other expenses (Settings)", amount: baseExpenses, href: "/settings" }] : []),
-];
+].sort((a, b) => b.amount - a.amount);
 
 const showSettingsNudge = salaryIncome === 0 && baseExpenses === 0;
 
