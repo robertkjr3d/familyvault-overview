@@ -155,7 +155,14 @@
 }
 
 .status-urgent  { background: var(--urgent-soft); color: var(--urgent); }
-.status-review  { background: var(--review-soft); color: oklch(0.45 0.12 70); }
+/* Sep 6 2026: was a hardcoded literal oklch(0.45 0.12 70) — tuned for light
+   mode's much lighter --review-soft background, but never updated for dark
+   mode's darker one, unlike its two siblings above/below which both
+   correctly reference their theme-aware variable. That's exactly why this
+   was "review" specifically and not urgent/settled: this was the one place
+   still using a fixed value instead of var(--review), which already has a
+   correct, much brighter dark-mode value defined right below in .dark. */
+.status-review  { background: var(--review-soft); color: var(--review); }
 .status-settled { background: var(--settled-soft); color: var(--settled); }
 
 button:not(:disabled), a, [role="button"], [role="tab"], summary, label[for],
