@@ -46,6 +46,7 @@ export function CashflowOverYearsChart({
 }: Props) {
   const { today } = useToday();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
+  const memberFilter = useAppStore((s) => s.memberFilter);
   const startYear = today.getFullYear();
   const todayISO = formatDateOnly(today);
 
@@ -151,7 +152,7 @@ export function CashflowOverYearsChart({
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      <KeyEventsList eventYears={eventYears} />
+      <KeyEventsList eventYears={eventYears} showMember={memberFilter === "all"} />
     </div>
   );
 }
