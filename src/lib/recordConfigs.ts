@@ -654,7 +654,12 @@ export const recordConfigs: Record<string, RecordConfig> = {
         showIf: (v) => isCpfAccountType(v.account_type),
       },
       { key: "last_updated", label: "Balance as of", type: "date" },
-      { key: "note", label: "Notes", type: "textarea" },
+      {
+        key: "action",
+        label: "Action",
+        type: "text",
+        placeholder: "e.g. Renew FD in Dec — add more notes after saving",
+      },
     ],
   },
 
