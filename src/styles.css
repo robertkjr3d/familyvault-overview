@@ -52,6 +52,11 @@
   --color-review-border: var(--review-border);
   --color-settled-tint: var(--settled-tint);
   --color-settled-border: var(--settled-border);
+
+  /* Chart axis tick text — recharts has no theme awareness of its own and
+     defaults to a hardcoded gray, so this needs an explicit variable to
+     brighten correctly in dark mode (see .dark block below). */
+  --color-chart-axis: var(--chart-axis);
 }
 
 :root {
@@ -98,6 +103,11 @@
   --settled-tint: #f0fff4;
   --settled-border: #b9e6c4;
 
+  /* Recharts' own default tick-text gray — kept as-is for light mode since
+     that default already reads fine on a white background; only dark mode
+     needs an explicit override below. */
+  --chart-axis: #666666;
+
   /* Members */
   --aza: oklch(0.72 0.13 80);
   --leslie: oklch(0.62 0.10 195);
@@ -137,10 +147,24 @@
 
   --urgent-tint: oklch(0.28 0.14 25);
   --urgent-border: oklch(0.42 0.18 25);
-  --review-tint: oklch(0.30 0.13 85);
-  --review-border: oklch(0.44 0.16 85);
+  /* Sep 6 2026: bumped noticeably brighter — a yellow hue (85) at low
+     lightness reads perceptually as brown/olive, not "dark yellow", unlike
+     red or green which stay recognizable at the same low lightness (that's
+     exactly why only review looked wrong and urgent/settled next to it
+     didn't, even though all three used a similarly low lightness value).
+     Raised lightness AND chroma together, not just one — lightness alone
+     without more saturation would just produce a washed-out beige. */
+  --review-tint: oklch(0.40 0.16 85);
+  --review-border: oklch(0.55 0.18 85);
   --settled-tint: oklch(0.27 0.12 160);
   --settled-border: oklch(0.40 0.15 160);
+
+  /* Sep 6 2026: recharts' hardcoded default gray (#666, see :root above) is
+     far too dark/faint against this app's near-black dark-mode background —
+     confirmed by the user directly, not guessed. Bumped noticeably brighter,
+     close to (but a step below) the main --foreground text so axis labels
+     stay clearly secondary rather than competing with real content. */
+  --chart-axis: oklch(0.82 0.01 70);
 }
 
 @layer base {
