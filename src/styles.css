@@ -36,6 +36,7 @@
   --color-review: var(--review);
   --color-review-foreground: var(--review-foreground);
   --color-review-soft: var(--review-soft);
+  --color-review-status-text: var(--review-status-text);
   --color-settled: var(--settled);
   --color-settled-foreground: var(--settled-foreground);
   --color-settled-soft: var(--settled-soft);
@@ -91,6 +92,17 @@
   --review: oklch(0.78 0.15 75);
   --review-foreground: oklch(0.25 0.05 60);
   --review-soft: oklch(0.96 0.06 80);
+  /* Sep 6 2026: dedicated to the status-pill TEXT specifically — --review
+     itself (0.78 lightness) turned out to be tuned for a different purpose
+     (a solid fill paired with --review-foreground's dark text), not for use
+     as standalone text on the pale --review-soft background the way its
+     urgent/settled siblings' own text colors are (both of those sit around
+     0.60-0.62 lightness — moderate, genuinely readable as text; --review's
+     0.78 is close to --review-soft's own 0.96, so text and background were
+     nearly the same brightness — that's the literal cause of "too pale").
+     This value matches this app's ORIGINAL pre-Sep-6 hardcoded color
+     exactly, restored per the user's own direct comparison against it. */
+  --review-status-text: oklch(0.45 0.12 70);
   --settled: oklch(0.62 0.13 155);
   --settled-foreground: oklch(0.99 0 0);
   --settled-soft: oklch(0.95 0.05 155);
@@ -141,6 +153,11 @@
   --review: oklch(0.80 0.15 85);
   --review-foreground: oklch(0.20 0.04 60);
   --review-soft: oklch(0.32 0.11 85);
+  /* This is the value that already fixed the original dark-mode "review"
+     text complaint (was --review itself before Sep 6, now its own
+     dedicated variable — see the light-mode block above for the full
+     explanation of why --review alone isn't right for this specific use). */
+  --review-status-text: oklch(0.80 0.15 85);
   --settled: oklch(0.70 0.15 160);
   --settled-foreground: oklch(0.99 0 0);
   --settled-soft: oklch(0.30 0.10 160);
@@ -179,14 +196,22 @@
 }
 
 .status-urgent  { background: var(--urgent-soft); color: var(--urgent); }
-/* Sep 6 2026: was a hardcoded literal oklch(0.45 0.12 70) — tuned for light
-   mode's much lighter --review-soft background, but never updated for dark
-   mode's darker one, unlike its two siblings above/below which both
-   correctly reference their theme-aware variable. That's exactly why this
-   was "review" specifically and not urgent/settled: this was the one place
-   still using a fixed value instead of var(--review), which already has a
-   correct, much brighter dark-mode value defined right below in .dark. */
-.status-review  { background: var(--review-soft); color: var(--review); }
+/* Sep 6 2026, two rounds: originally a hardcoded literal tuned for light
+   mode only (fixed round 1, made theme-aware). That first fix used
+   var(--review) directly, assuming it was structured like its urgent/
+   settled siblings here — it wasn't: --review is tuned bright (0.78/0.80
+   lightness) for a different job (a solid fill paired with
+   --review-foreground's dark text), not for standalone text on the pale
+   --review-soft background the way --urgent/--settled's OWN values are.
+   That mismatch is what made light mode "too pale" after round 1 — nearly
+   the same brightness as the background it sat on. Round 2: a dedicated
+   --review-status-text variable instead, reverted to this app's original
+   pre-Sep-6 light-mode value exactly (confirmed by the user as the one
+   that looked right), keeping the brighter dark-mode value round 1 already
+   got right. Lesson: matching a sibling rule's STRUCTURE isn't the same as
+   confirming the VALUE means the same thing — check the number, not just
+   the pattern, before assuming parity. */
+.status-review  { background: var(--review-soft); color: var(--review-status-text); }
 .status-settled { background: var(--settled-soft); color: var(--settled); }
 
 button:not(:disabled), a, [role="button"], [role="tab"], summary, label[for],
