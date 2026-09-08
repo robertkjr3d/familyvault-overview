@@ -314,8 +314,8 @@ function PolicyChartEditor({
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={bars} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                <XAxis dataKey="age" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} width={44} tickFormatter={tickAbbrev} />
+                <XAxis dataKey="age" tick={{ fontSize: 10, fill: "var(--color-chart-axis)" }} />
+                <YAxis tick={{ fontSize: 10, fill: "var(--color-chart-axis)" }} width={44} tickFormatter={tickAbbrev} />
                 <Tooltip
                   formatter={(v: number) => fmtMoney(v, undefined)}
                   labelFormatter={(age) => `Age ${age}`}
@@ -583,8 +583,8 @@ export function PolicyChartCompareSection({
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={merged} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                <XAxis dataKey="age" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} width={44} tickFormatter={tickAbbrev} />
+                <XAxis dataKey="age" tick={{ fontSize: 10, fill: "var(--color-chart-axis)" }} />
+                <YAxis tick={{ fontSize: 10, fill: "var(--color-chart-axis)" }} width={44} tickFormatter={tickAbbrev} />
                 <Tooltip
                   formatter={(v: number) => fmtMoney(v, undefined)}
                   labelFormatter={(age) => `Age ${age}`}
