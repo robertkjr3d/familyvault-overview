@@ -218,7 +218,7 @@ function SavingsRow({
         secondaryMemberId={a.joint_member_id ?? null}
         status={a.status}
         onStatusChange={onStatus}
-        action={a.note}
+        action={a.action}
         onEdit={edit.open}
         onDelete={onDelete}
         onDuplicate={dup.open}
