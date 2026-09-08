@@ -1,4 +1,5 @@
 import type { ChartPoint } from "@/lib/lifetimeChartMath";
+import { MemberInitialDot } from "@/components/MemberFilterBar";
 
 // Shared "key events" list rendered below both LifetimeChart and
 // CashflowOverYearsChart. One column on phone (each event its own row),
@@ -9,7 +10,7 @@ import type { ChartPoint } from "@/lib/lifetimeChartMath";
 // after the first regardless of grid column, which would draw a stray
 // line down the left column too. `md:odd:border-r` only borders the
 // left-column item, giving one clean vertical divider.
-export function KeyEventsList({ eventYears }: { eventYears: ChartPoint[] }) {
+export function KeyEventsList({ eventYears, showMember }: { eventYears: ChartPoint[]; showMember?: boolean }) {
   if (eventYears.length === 0) return null;
 
   return (
@@ -19,7 +20,9 @@ export function KeyEventsList({ eventYears }: { eventYears: ChartPoint[] }) {
           const key = `${d.year}-${i}`;
           const content = (
             <>
-              <span className="font-semibold text-primary">{d.year}</span> — {e.label}
+              <span className="font-semibold text-primary">{d.year}</span> —{" "}
+              {showMember && <MemberInitialDot memberId={e.member_id} />}
+              {e.label}
             </>
           );
           const className = `rounded px-1 py-0.5 transition-colors md:odd:border-r md:odd:border-border md:odd:pr-3 ${
