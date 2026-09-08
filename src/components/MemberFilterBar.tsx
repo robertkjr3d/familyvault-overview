@@ -5,7 +5,7 @@ import { useAppStore } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useIsDark } from "@/hooks/useIsDark";
-import { readableMemberColor, readableTextOn } from "@/lib/memberColor";
+import { readableMemberColor } from "@/lib/memberColor";
 
 export function MemberFilterBar({
   className,
@@ -163,7 +163,13 @@ export function MemberInitialDot({ memberId }: { memberId: string | null | undef
   const m = members.find((x) => x.id === memberId);
   if (!m) return null;
   const c = readableMemberColor(m.color, isDark);
-  const textColor = readableTextOn(c);
+  // Sep 6 2026 v2: was computing per-color WCAG contrast (readableTextOn),
+  // which is more "theoretically correct" but the user's own eyes on the
+  // real rendered app said otherwise — every dark-mode color read better
+  // with black text, every light-mode color read better with white, full
+  // stop, no exceptions needed. Simplified to match what was actually
+  // observed rather than what the contrast math technically prefers.
+  const textColor = isDark ? "#000000" : "#ffffff";
   const letter = (m.short_name || m.name || "?").trim().charAt(0).toUpperCase();
   return (
     <span
