@@ -563,6 +563,7 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
           amount: growth,
           href: `/investments#record-${inv.id}`,
           timesPerYear: 1,
+          member_id: inv.member_id,
         });
       }
     }
@@ -583,6 +584,7 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
           amount: growth,
           href: `/savings#record-${s.id}`,
           timesPerYear: 1,
+          member_id: s.member_id,
         });
       }
     }
