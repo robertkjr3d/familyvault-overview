@@ -309,7 +309,7 @@ export function LifetimeChart({
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      <KeyEventsList eventYears={eventYears} />
+      <KeyEventsList eventYears={eventYears} showMember={memberFilter === "all"} />
       <YearDetailPanel
         data={data}
         retirementYear={retirementYear}
