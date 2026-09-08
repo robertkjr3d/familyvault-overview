@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readableMemberColor } from "./memberColor";
+import { readableMemberColor, readableTextOn } from "./memberColor";
 
 describe("readableMemberColor", () => {
   it("brightens a dark color for dark mode", () => {
@@ -28,5 +28,27 @@ describe("readableMemberColor", () => {
 
   it("passes through non-hex input unchanged rather than guessing", () => {
     expect(readableMemberColor("not-a-color", true)).toBe("not-a-color");
+  });
+});
+
+describe("readableTextOn", () => {
+  it("picks black text on bright yellow — the exact case reported unreadable with white", () => {
+    expect(readableTextOn("#ffff00")).toBe("#000000");
+  });
+
+  it("picks black text on pure red — verified independently: black scores 5.25:1 contrast here vs white's 4.00:1, so black is actually the more correct pick even though it reads counterintuitively", () => {
+    expect(readableTextOn("#ff0000")).toBe("#000000");
+  });
+
+  it("picks white text on a dark background", () => {
+    expect(readableTextOn("#1a1a3d")).toBe("#ffffff");
+  });
+
+  it("picks black text on a light background", () => {
+    expect(readableTextOn("#fdf6e3")).toBe("#000000");
+  });
+
+  it("falls back to white for non-hex input rather than guessing", () => {
+    expect(readableTextOn("not-a-color")).toBe("#ffffff");
   });
 });
