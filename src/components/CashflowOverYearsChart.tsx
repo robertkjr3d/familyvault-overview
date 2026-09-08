@@ -137,8 +137,8 @@ export function CashflowOverYearsChart({
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={data} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.85 0.01 250 / 0.4)" vertical={false} />
-            <XAxis dataKey="year" tick={{ fontSize: 10 }} interval={Math.max(4, Math.ceil(data.length / 8))} />
-            <YAxis tick={{ fontSize: 9 }} tickFormatter={fmt} domain={[flowDomainMin, flowDomainMax]} width={48} />
+            <XAxis dataKey="year" tick={{ fontSize: 10, fill: "var(--color-chart-axis)" }} interval={Math.max(4, Math.ceil(data.length / 8))} />
+            <YAxis tick={{ fontSize: 9, fill: "var(--color-chart-axis)" }} tickFormatter={fmt} domain={[flowDomainMin, flowDomainMax]} width={48} />
             <Tooltip content={<CashflowTooltip />} />
             <ReferenceLine y={0} stroke="oklch(0.50 0.04 250 / 0.6)" strokeDasharray="4 4" />
             {eventYears.map((d) => (
