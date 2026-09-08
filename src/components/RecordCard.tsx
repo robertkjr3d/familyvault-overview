@@ -390,8 +390,9 @@ export function RecordCard({
           {hasAnyIcon && (
             <div className="flex items-center gap-1 text-[11px]">
               {hasNotes && (
-                <CardIconButton onClick={() => handleIconClick(onNotesClick)} active={!!hasNotes} label="View notes">
+                <CardIconButton onClick={() => handleIconClick(onNotesClick)} active={!!hasNotes} label="1 note">
                   <NotebookPen className="h-3.5 w-3.5" />
+                  <span>1</span>
                 </CardIconButton>
               )}
               {hasAdvisorNote && (
