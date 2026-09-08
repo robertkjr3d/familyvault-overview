@@ -96,8 +96,8 @@ const chartPhaseSchema = z.object({
   id: z.string(),
   label: z.string().trim().min(1).max(60),
   direction: z.enum(["in", "out"]),
-  startAge: z.number().int().min(0).max(120),
-  endAge: z.number().int().min(0).max(120),
+  startAge: z.number().int().min(0).max(100),
+  endAge: z.number().int().min(0).max(100),
   amount: z.number().min(0),
   frequency: z.enum(["monthly", "annual", "lump-sum"]),
 });
