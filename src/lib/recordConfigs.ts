@@ -236,7 +236,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
         key: "beneficiary",
         label: "Beneficiary / intended for",
         type: "text",
-        placeholder: "e.g. Split equally between Aza and Leslie",
+        placeholder: "e.g. Split equally between spouse and children",
         section: "🎯 Strategy & Action",
       },
       {
@@ -455,7 +455,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
         key: "beneficiary",
         label: "Beneficiary",
         type: "text",
-        placeholder: "e.g. Leslie (spouse)",
+        placeholder: "e.g. Jane Tan (spouse)",
         section: "💰 Payout",
       },
 
