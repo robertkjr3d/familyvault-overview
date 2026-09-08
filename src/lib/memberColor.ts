@@ -71,3 +71,27 @@ export function readableMemberColor(hex: string, isDark: boolean): string {
   const [r2, g2, b2] = hslToRgb(h, s, l2);
   return `#${toHexByte(r2)}${toHexByte(g2)}${toHexByte(b2)}`;
 }
+
+/**
+ * Sep 6 2026: readableMemberColor above solves a DIFFERENT problem — making
+ * the dot itself visible against the page background, by clamping lightness
+ * up in dark mode. That clamp (l>=0.65) is exactly why it broke here: white
+ * text on a color deliberately brightened for dark-mode visibility (yellow,
+ * light blue) is genuinely low-contrast, even though the dot itself reads
+ * fine against the page. Text-on-dot contrast is a separate question from
+ * dot-on-page contrast, so it needs its own real check, not a guess — this
+ * uses the actual W3C relative luminance formula (the standard for exactly
+ * this: given a background, should the text on it be black or white).
+ */
+export function readableTextOn(bgHex: string): "#000000" | "#ffffff" {
+  if (!/^#[0-9a-fA-F]{6}$/.test(bgHex)) return "#ffffff";
+  const [r, g, b] = hexToRgb(bgHex).map((c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  // Contrast ratio against white is (1.05)/(L+0.05); against black is (L+0.05)/0.05.
+  // Picking whichever gives the higher ratio is more reliable across the full
+  // hue range than a single fixed luminance threshold (e.g. saturated blues
+  // and yellows land at similar luminance but read very differently).
+  const contrastWithWhite = 1.05 / (luminance + 0.05);
+  const contrastWithBlack = (luminance + 0.05) / 0.05;
+  return contrastWithWhite >= contrastWithBlack ? "#ffffff" : "#000000";
+}
