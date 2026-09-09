@@ -528,6 +528,33 @@ function SignInScreen() {
     }
   }
 
+  // Passkey sign-in — deliberately NOT offered in inviteMode: a brand-new
+  // invited person has no passkey registered yet (registration only happens
+  // from an already-signed-in session, in Settings), so the button would
+  // just fail confusingly for the one group of people who can't use it.
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const [passkeyError, setPasskeyError] = useState<string | null>(null);
+  const passkeySupported =
+    typeof window !== "undefined" && typeof window.PublicKeyCredential !== "undefined";
+
+  async function signInWithPasskey() {
+    setPasskeyLoading(true);
+    setPasskeyError(null);
+    const { error: pkError } = await supabase.auth.signInWithPasskey();
+    setPasskeyLoading(false);
+    if (pkError) {
+      // The most common "error" here is the person tapping Cancel on their
+      // device's biometric prompt — not a real failure, so don't show a
+      // scary red message for that specific case. Verified against the
+      // installed SDK's actual error shape (WebAuthnError.code), not
+      // guessed — the browser-level "AbortError" DOMException is
+      // translated into this SDK-level code, not surfaced by that name.
+      const isUserCancelled =
+        "code" in pkError && (pkError as { code?: string }).code === "ERROR_CEREMONY_ABORTED";
+      if (!isUserCancelled) setPasskeyError(pkError.message);
+    }
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-6">
       <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
@@ -549,6 +576,28 @@ function SignInScreen() {
           </p>
 
           <div className="mt-5 space-y-3">
+            {!inviteMode && passkeySupported && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={signInWithPasskey}
+                  disabled={passkeyLoading}
+                  className="w-full"
+                >
+                  {passkeyLoading ? "Waiting for your passkey…" : "Sign in with a passkey"}
+                </Button>
+                {passkeyError && <p className="text-xs text-urgent">{passkeyError}</p>}
+                <div className="relative py-1 text-center">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-border" />
+                  </div>
+                  <span className="relative bg-card px-2 text-[11px] text-muted-foreground">
+                    or
+                  </span>
+                </div>
+              </>
+            )}
             <Input
               type="email"
               required
