@@ -135,3 +135,28 @@ export function buildDefaultPhases(
 
   return phases;
 }
+
+export type YearlyBarWithCumulative = YearlyBar & {
+  cumulativeIn: number;
+  cumulativeOut: number;
+};
+
+// Adds a running total to each yearly bar — how much has been paid in, and
+// how much has been received back, as of that age (inclusive). Pure and
+// order-preserving: assumes `bars` is already sorted by age ascending,
+// which is how expandPhasesToYearlyBars always returns it. This is what
+// answers "how much of what I paid have I gotten back, and when" — the
+// per-year bars alone only show one year's flow at a time, not the
+// running picture. A lump-sum capital-release event (e.g. "full premium
+// becomes withdrawable at year 3 of payout") needs no special case here:
+// it's just a large `out` value on one bar, and the cumulative sum picks
+// it up like any other year's payout.
+export function withCumulative(bars: YearlyBar[]): YearlyBarWithCumulative[] {
+  let runningIn = 0;
+  let runningOut = 0;
+  return bars.map((b) => {
+    runningIn += b.in;
+    runningOut += b.out;
+    return { ...b, cumulativeIn: runningIn, cumulativeOut: runningOut };
+  });
+}
