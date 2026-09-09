@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMembers } from "@/hooks/useMembers";
 import { useAppStore } from "@/lib/store";
 import { MemberFilterBar } from "@/components/MemberFilterBar";
-import { RecordCard, Section } from "@/components/RecordCard";
+import { RecordCard } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
 import { sortByStatus } from "@/lib/sort";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
@@ -86,30 +86,13 @@ function HealthRow({ c, onStatus, onDelete }: { c: any; onStatus: (s: any) => vo
         hasNotes={!!c.notes}
         updatedAt={c.updated_at}
         createdAt={c.created_at}
+        chipGroups={[
+          { label: "Take", items: c.supplements ?? [], toneClassName: "bg-accent" },
+          { label: "Do", items: c.actions ?? [], toneClassName: "bg-settled-soft text-settled" },
+        ]}
+        action={c.details}
+        actionLabel="Details"
       >
-        {(c.supplements?.length || 0) > 0 && (
-          <Section title="Take">
-            <div className="flex flex-wrap gap-1.5">
-              {c.supplements.map((s: string) => (
-                <span key={s} className="rounded-full bg-accent px-2.5 py-1 text-xs font-medium">{s}</span>
-              ))}
-            </div>
-          </Section>
-        )}
-        {(c.actions?.length || 0) > 0 && (
-          <Section title="Do">
-            <div className="flex flex-wrap gap-1.5">
-              {c.actions.map((s: string) => (
-                <span key={s} className="rounded-full bg-settled-soft px-2.5 py-1 text-xs font-medium text-settled">{s}</span>
-              ))}
-            </div>
-          </Section>
-        )}
-        {c.details && (
-          <Section title="Details">
-            <p className="text-sm text-foreground/80">{c.details}</p>
-          </Section>
-        )}
         <CollapsibleSection icon={<span>📝</span>} title="Notes">
           <NotesEditor table="health_conditions" queryKey="health" id={c.id} value={c.notes} />
         </CollapsibleSection>
