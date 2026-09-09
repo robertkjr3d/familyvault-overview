@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { expandPhasesToYearlyBars, buildDefaultPhases, type ChartPhase } from "./policyChartMath";
+import {
+  expandPhasesToYearlyBars,
+  buildDefaultPhases,
+  withCumulative,
+  type ChartPhase,
+} from "./policyChartMath";
 
 describe("expandPhasesToYearlyBars", () => {
   it("returns [] for no phases", () => {
@@ -272,5 +277,99 @@ describe("buildDefaultPhases", () => {
       1990,
     );
     expect(phases[0].startAge).toBe(0);
+  });
+});
+
+describe("withCumulative", () => {
+  it("runs a cumulative total for the user's own worked example (100k x 3yr premium, then 6k/yr payout)", () => {
+    const phases: ChartPhase[] = [
+      {
+        id: "p1",
+        label: "Premium",
+        direction: "in",
+        startAge: 30,
+        endAge: 32,
+        amount: 100_000,
+        frequency: "annual",
+      },
+      {
+        id: "p2",
+        label: "Payout",
+        direction: "out",
+        startAge: 33,
+        endAge: 40,
+        amount: 6_000,
+        frequency: "annual",
+      },
+    ];
+    const result = withCumulative(expandPhasesToYearlyBars(phases));
+    expect(result.find((b) => b.age === 30)?.cumulativeIn).toBe(100_000);
+    expect(result.find((b) => b.age === 32)?.cumulativeIn).toBe(300_000);
+    expect(result.find((b) => b.age === 33)?.cumulativeOut).toBe(6_000);
+    expect(result.find((b) => b.age === 35)?.cumulativeOut).toBe(18_000);
+    // cumulativeIn never changes once premiums stop — it's a running total, not per-year
+    expect(result.find((b) => b.age === 40)?.cumulativeIn).toBe(300_000);
+  });
+
+  it("a lump-sum capital-release event needs no special case — it's just a big 'out' value one year, picked up by the running total like any other", () => {
+    const phases: ChartPhase[] = [
+      {
+        id: "p1",
+        label: "Premium",
+        direction: "in",
+        startAge: 30,
+        endAge: 32,
+        amount: 100_000,
+        frequency: "annual",
+      },
+      {
+        id: "p2",
+        label: "Payout",
+        direction: "out",
+        startAge: 33,
+        endAge: 40,
+        amount: 5_000,
+        frequency: "annual",
+      },
+      // Year 3 of payout (age 35): the full 300k premium capital becomes withdrawable,
+      // on top of that year's regular 5k payout — modeled as a second phase landing
+      // on the same age, exactly like two riders paying out at once already do in
+      // expandPhasesToYearlyBars.
+      {
+        id: "p3",
+        label: "Capital release",
+        direction: "out",
+        startAge: 35,
+        endAge: 35,
+        amount: 300_000,
+        frequency: "lump-sum",
+      },
+    ];
+    const result = withCumulative(expandPhasesToYearlyBars(phases));
+    // that year's bar: 5k regular + 300k capital = 305k out
+    expect(result.find((b) => b.age === 35)?.out).toBe(305_000);
+    // cumulative received by that point: 3 years x 5k (ages 33-35) + the 300k = 315k,
+    // matching the user's own numbers exactly.
+    expect(result.find((b) => b.age === 35)?.cumulativeOut).toBe(315_000);
+  });
+
+  it("returns [] for an empty bar list, matching expandPhasesToYearlyBars' own empty-case contract", () => {
+    expect(withCumulative([])).toEqual([]);
+  });
+
+  it("preserves every existing YearlyBar field alongside the two new cumulative fields", () => {
+    const phases: ChartPhase[] = [
+      {
+        id: "p1",
+        label: "Premium",
+        direction: "in",
+        startAge: 30,
+        endAge: 30,
+        amount: 1000,
+        frequency: "annual",
+      },
+    ];
+    const result = withCumulative(expandPhasesToYearlyBars(phases));
+    expect(result[0]).toEqual({ age: 30, in: 1000, out: 0, cumulativeIn: 1000, cumulativeOut: 0 });
   });
 });
