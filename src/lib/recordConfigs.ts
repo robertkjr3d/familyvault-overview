@@ -596,7 +596,13 @@ export const recordConfigs: Record<string, RecordConfig> = {
         showIf: (v) =>
           v.group_name === "ILP (Investment-Linked Policy)" || v.group_name === "Endowment",
       },
-      { key: "strategy", label: "Strategy / notes", type: "textarea" },
+      { key: "strategy", label: "Strategy", type: "textarea" },
+      {
+        key: "action",
+        label: "Action",
+        type: "text",
+        placeholder: "Keep this short. You can add more notes after you save.",
+      },
       {
         key: "external_url",
         label: "Platform website / portal link",
@@ -658,7 +664,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
         key: "action",
         label: "Action",
         type: "text",
-        placeholder: "e.g. Renew FD in Dec — add more notes after saving",
+        placeholder: "Keep this short. You can add more notes after you save.",
       },
     ],
   },
