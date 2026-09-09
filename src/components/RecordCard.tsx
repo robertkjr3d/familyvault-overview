@@ -1,5 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, Copy, Pencil, Trash2, Bell, NotebookPen, MessageSquare, RotateCw, Paperclip, ExternalLink } from "lucide-react";
+import {
+  ChevronDown,
+  Copy,
+  Pencil,
+  Trash2,
+  Bell,
+  NotebookPen,
+  MessageSquare,
+  RotateCw,
+  Paperclip,
+  ExternalLink,
+} from "lucide-react";
 import { StatusToggle, type Status } from "./StatusToggle";
 import { MemberTag } from "./MemberTag";
 import { cn } from "@/lib/utils";
@@ -12,6 +23,15 @@ type Props = {
   status: Status;
   onStatusChange: (s: Status) => void;
   action?: string | null;
+  /** Overrides the "Action:" label shown before the action text — e.g. "Details" for a
+   * tab that has no separate Action concept of its own. Defaults to "Action". Reuses the
+   * exact same 3-line clamp/expand behaviour, so this is purely a label swap, not new logic. */
+  actionLabel?: string;
+  /** Compact, always-visible (collapsed AND expanded) chip rows below the title — e.g. health's
+   * "Take"/"Do" lists. Capped at 4 chips per group + a "+N" overflow count, so a record with a
+   * long list can't make every card in the list tall; the full list still lives in the card's
+   * expanded body/children for tabs that also render it there. */
+  chipGroups?: { label: string; items: string[]; toneClassName?: string }[] | null;
   /** External link (e.g. provider website, portal) shown as an icon next to the title, only while the card is expanded */
   externalUrl?: string | null;
   /** Small informational badges shown below the title/subtitle */
@@ -80,7 +100,10 @@ function CardIconButton({
   return (
     <button
       type="button"
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
       className={cn(
         "flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground",
         active && "text-primary",
@@ -94,11 +117,40 @@ function CardIconButton({
 }
 
 export function RecordCard({
-  title, subtitle, memberId, secondaryMemberId, status, onStatusChange, action, externalUrl, tags, isGiro, rightMeta, children,
-  onEdit, onDelete, onDuplicate, defaultOpen = false, highlight, persistKey, hasNotes, hasAdvisorNote, updatedAt, createdAt,
-  reminderCount, historyCount, documentsCount,
-  onNotesClick, onAdvisorNoteClick, onReminderClick, onHistoryClick, onDocumentsClick,
-  open: openProp, onOpenChange,
+  title,
+  subtitle,
+  memberId,
+  secondaryMemberId,
+  status,
+  onStatusChange,
+  action,
+  actionLabel = "Action",
+  chipGroups,
+  externalUrl,
+  tags,
+  isGiro,
+  rightMeta,
+  children,
+  onEdit,
+  onDelete,
+  onDuplicate,
+  defaultOpen = false,
+  highlight,
+  persistKey,
+  hasNotes,
+  hasAdvisorNote,
+  updatedAt,
+  createdAt,
+  reminderCount,
+  historyCount,
+  documentsCount,
+  onNotesClick,
+  onAdvisorNoteClick,
+  onReminderClick,
+  onHistoryClick,
+  onDocumentsClick,
+  open: openProp,
+  onOpenChange,
 }: Props) {
   const { canEdit } = useCurrentRole();
   const [internalOpen, setInternalOpen] = useState(() => readPersisted(persistKey, defaultOpen));
@@ -143,7 +195,7 @@ export function RecordCard({
       measureEl.style.width = `${el.clientWidth}px`;
 
       // Does the full text already fit in 3 lines? Then there's nothing to truncate.
-      measureEl.textContent = `Action: ${action}`;
+      measureEl.textContent = `${actionLabel}: ${action}`;
       if (measureEl.scrollHeight <= maxHeightPx) {
         setActionOverflows(false);
         return;
@@ -157,7 +209,7 @@ export function RecordCard({
       let hi = words.length;
       while (lo < hi) {
         const mid = Math.ceil((lo + hi) / 2);
-        measureEl.textContent = `Action: ${words.slice(0, mid).join(" ")}…`;
+        measureEl.textContent = `${actionLabel}: ${words.slice(0, mid).join(" ")}…`;
         if (measureEl.scrollHeight <= maxHeightPx) lo = mid;
         else hi = mid - 1;
       }
@@ -168,7 +220,7 @@ export function RecordCard({
     const ro = new ResizeObserver(recompute);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [action, actionExpanded]);
+  }, [action, actionExpanded, actionLabel]);
 
   function setOpen(updater: boolean | ((v: boolean) => boolean)) {
     const next = typeof updater === "function" ? updater(open) : updater;
@@ -189,7 +241,12 @@ export function RecordCard({
     callback?.();
   }
 
-  const hasAnyIcon = hasNotes || hasAdvisorNote || (reminderCount ?? 0) > 0 || (historyCount ?? 0) > 0 || (documentsCount ?? 0) > 0;
+  const hasAnyIcon =
+    hasNotes ||
+    hasAdvisorNote ||
+    (reminderCount ?? 0) > 0 ||
+    (historyCount ?? 0) > 0 ||
+    (documentsCount ?? 0) > 0;
 
   return (
     <article
@@ -210,7 +267,10 @@ export function RecordCard({
       <div className="absolute right-2 top-2 z-10 flex gap-0.5">
         {onEdit && canEdit && (
           <button
-            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
             className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-background/60 hover:text-foreground"
             aria-label="Edit"
             title="Edit"
@@ -220,7 +280,10 @@ export function RecordCard({
         )}
         {onDuplicate && canEdit && (
           <button
-            onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDuplicate();
+            }}
             data-tour="duplicate-icon"
             className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-background/60 hover:text-foreground"
             aria-label="Duplicate"
@@ -231,7 +294,10 @@ export function RecordCard({
         )}
         {onDelete && canEdit && (
           <button
-            onClick={(e) => { e.stopPropagation(); if (confirm("Delete this record?")) onDelete(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (confirm("Delete this record?")) onDelete();
+            }}
             className="cursor-pointer rounded-md p-1 text-urgent hover:bg-urgent/10"
             aria-label="Delete"
             title="Delete"
@@ -309,12 +375,43 @@ export function RecordCard({
           {tags && tags.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {tags.map((t) => (
-                <span key={t} className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                <span
+                  key={t}
+                  className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                >
                   {t}
                 </span>
               ))}
             </div>
           )}
+          {chipGroups &&
+            chipGroups.length > 0 &&
+            chipGroups.map(
+              (g) =>
+                g.items.length > 0 && (
+                  <div key={g.label} className="flex flex-wrap items-center gap-1">
+                    <span className="text-[10px] font-semibold text-muted-foreground">
+                      {g.label}:
+                    </span>
+                    {g.items.slice(0, 4).map((item) => (
+                      <span
+                        key={item}
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                          g.toneClassName ?? "bg-accent",
+                        )}
+                      >
+                        {item}
+                      </span>
+                    ))}
+                    {g.items.length > 4 && (
+                      <span className="text-[10px] text-muted-foreground">
+                        +{g.items.length - 4}
+                      </span>
+                    )}
+                  </div>
+                ),
+            )}
           {action && (
             /* Sep 6 2026 v3: plain inline flow now, no CSS clipping (line-clamp and
                max-height both broke real screenshots — see the big comment above by
@@ -323,12 +420,15 @@ export function RecordCard({
                text flow, so it always sits directly after the last visible word,
                never floating off with a gap when the last line happens to be short. */
             <p ref={actionRef} className="text-sm text-foreground/90">
-              <span className="font-medium text-primary">Action:</span>{" "}
+              <span className="font-medium text-primary">{actionLabel}:</span>{" "}
               {actionOverflows && !actionExpanded ? truncatedAction : action}
               {actionOverflows && !actionExpanded && (
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); setActionExpanded(true); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActionExpanded(true);
+                  }}
                   aria-label="Show full action text"
                   className="font-medium text-primary"
                 >
@@ -338,7 +438,10 @@ export function RecordCard({
               {actionOverflows && actionExpanded && (
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); setActionExpanded(false); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActionExpanded(false);
+                  }}
                   className="ml-1.5 text-xs font-medium text-primary underline decoration-dotted underline-offset-2"
                 >
                   Show less
@@ -353,7 +456,12 @@ export function RecordCard({
             ref={actionMeasureRef}
             aria-hidden="true"
             className="text-sm text-foreground/90"
-            style={{ position: "absolute", visibility: "hidden", pointerEvents: "none", zIndex: -1 }}
+            style={{
+              position: "absolute",
+              visibility: "hidden",
+              pointerEvents: "none",
+              zIndex: -1,
+            }}
           />
         </div>
 
@@ -380,7 +488,10 @@ export function RecordCard({
       >
         <div className="flex items-center gap-1">
           <button
-            onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen((v) => !v);
+            }}
             className="flex items-center"
             aria-label="Toggle status"
             data-tour="status-toggle"
@@ -390,30 +501,50 @@ export function RecordCard({
           {hasAnyIcon && (
             <div className="flex items-center gap-1 text-[11px]">
               {hasNotes && (
-                <CardIconButton onClick={() => handleIconClick(onNotesClick)} active={!!hasNotes} label="1 note">
+                <CardIconButton
+                  onClick={() => handleIconClick(onNotesClick)}
+                  active={!!hasNotes}
+                  label="1 note"
+                >
                   <NotebookPen className="h-3.5 w-3.5" />
                   <span>1</span>
                 </CardIconButton>
               )}
               {hasAdvisorNote && (
-                <CardIconButton onClick={() => handleIconClick(onAdvisorNoteClick)} active={!!hasAdvisorNote} label="Adviser's note">
+                <CardIconButton
+                  onClick={() => handleIconClick(onAdvisorNoteClick)}
+                  active={!!hasAdvisorNote}
+                  label="Adviser's note"
+                >
                   <MessageSquare className="h-3.5 w-3.5" />
                 </CardIconButton>
               )}
               {(reminderCount ?? 0) > 0 && (
-                <CardIconButton onClick={() => handleIconClick(onReminderClick)} active label={`${reminderCount} reminder${reminderCount === 1 ? "" : "s"}`}>
+                <CardIconButton
+                  onClick={() => handleIconClick(onReminderClick)}
+                  active
+                  label={`${reminderCount} reminder${reminderCount === 1 ? "" : "s"}`}
+                >
                   <Bell className="h-3.5 w-3.5 fill-yellow-500 text-yellow-500" />
                   <span>{reminderCount}</span>
                 </CardIconButton>
               )}
               {(historyCount ?? 0) > 0 && (
-                <CardIconButton onClick={() => handleIconClick(onHistoryClick)} active label={`${historyCount} update${historyCount === 1 ? "" : "s"}`}>
+                <CardIconButton
+                  onClick={() => handleIconClick(onHistoryClick)}
+                  active
+                  label={`${historyCount} update${historyCount === 1 ? "" : "s"}`}
+                >
                   <RotateCw className="h-3.5 w-3.5" />
                   <span>{historyCount}</span>
                 </CardIconButton>
               )}
               {(documentsCount ?? 0) > 0 && (
-                <CardIconButton onClick={() => handleIconClick(onDocumentsClick)} active label={`${documentsCount} document${documentsCount === 1 ? "" : "s"}`}>
+                <CardIconButton
+                  onClick={() => handleIconClick(onDocumentsClick)}
+                  active
+                  label={`${documentsCount} document${documentsCount === 1 ? "" : "s"}`}
+                >
                   <Paperclip className="h-3.5 w-3.5" />
                   <span>{documentsCount}</span>
                 </CardIconButton>
@@ -421,17 +552,32 @@ export function RecordCard({
             </div>
           )}
         </div>
-        <button onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} className="flex items-center gap-2" aria-label="Toggle details" data-tour="expand-card">
-          {updatedAt && (() => {
-            const updMs = new Date(updatedAt).getTime();
-            const creMs = createdAt ? new Date(createdAt).getTime() : updMs;
-            const wasEdited = updMs - creMs > 60000;
-            const label = wasEdited ? "Updated" : "Added";
-            const dateStr = new Date(updatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
-            return (
-              <span className="text-[10px] text-muted-foreground">{label} {dateStr}</span>
-            );
-          })()}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen((v) => !v);
+          }}
+          className="flex items-center gap-2"
+          aria-label="Toggle details"
+          data-tour="expand-card"
+        >
+          {updatedAt &&
+            (() => {
+              const updMs = new Date(updatedAt).getTime();
+              const creMs = createdAt ? new Date(createdAt).getTime() : updMs;
+              const wasEdited = updMs - creMs > 60000;
+              const label = wasEdited ? "Updated" : "Added";
+              const dateStr = new Date(updatedAt).toLocaleDateString("en-GB", {
+                day: "numeric",
+                month: "short",
+                year: "2-digit",
+              });
+              return (
+                <span className="text-[10px] text-muted-foreground">
+                  {label} {dateStr}
+                </span>
+              );
+            })()}
           <ChevronDown
             className={cn("h-4 w-4 text-muted-foreground transition", open && "rotate-180")}
           />
