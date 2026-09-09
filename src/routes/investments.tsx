@@ -240,7 +240,7 @@ function InvestmentRow({
         isGiro={!!inv.is_giro}
         status={inv.status}
         onStatusChange={onStatus}
-        action={inv.strategy}
+        action={inv.action}
         externalUrl={inv.external_url}
         onEdit={edit.open}
         onDuplicate={dup.open}
@@ -308,6 +308,12 @@ function InvestmentRow({
           {isILPOrEndowment && inv.payout_frequency && <FieldRow label="Payout frequency" value={freqLabel(inv.payout_frequency)} />}
           {isILPOrEndowment && inv.payout_end_date && <FieldRow label="Payout end" value={fmtDate(inv.payout_end_date)} />}
         </Section>
+
+        {inv.strategy && (
+          <Section title="Strategy">
+            <p className="text-sm text-foreground/80">{inv.strategy}</p>
+          </Section>
+        )}
 
         <CollapsibleSection
           id={`notes-${inv.id}`}
