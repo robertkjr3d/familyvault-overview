@@ -19,10 +19,17 @@ import { useCurrentRole } from "@/lib/useCurrentRole";
 import { useDateInputBuffer } from "@/hooks/useDateInputBuffer";
 import { deleteAccount, HOUSEHOLD_BLOCKING_TABLES } from "@/lib/accountDeletion";
 import { useAuthSession } from "@/hooks/useAuthSession";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { NativeSelect } from "@/components/ui/native-select";
 import { HashHighlight } from "@/components/HashHighlight";
 import { AdvisorSharingSection } from "@/components/AdvisorSharingSection";
+import { PasskeyManager } from "@/components/PasskeyManager";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -30,11 +37,11 @@ export const Route = createFileRoute("/settings")({
 });
 
 const ACCENT_PRESETS = [
-  { name: "Gold",  value: "oklch(0.72 0.13 80)" },
-  { name: "Teal",  value: "oklch(0.62 0.10 195)" },
+  { name: "Gold", value: "oklch(0.72 0.13 80)" },
+  { name: "Teal", value: "oklch(0.62 0.10 195)" },
   { name: "Coral", value: "oklch(0.68 0.18 35)" },
-  { name: "Sage",  value: "oklch(0.65 0.10 150)" },
-  { name: "Plum",  value: "oklch(0.55 0.15 320)" },
+  { name: "Sage", value: "oklch(0.65 0.10 150)" },
+  { name: "Plum", value: "oklch(0.55 0.15 320)" },
   { name: "Slate", value: "oklch(0.45 0.04 250)" },
 ];
 
@@ -122,10 +129,14 @@ function SettingsPage() {
   const [planningHorizonAge, setPlanningHorizonAge] = useState<string>("85");
 
   const [theme, setTheme] = useState<"light" | "dark">(() =>
-    typeof window !== "undefined" && document.documentElement.classList.contains("dark") ? "dark" : "light"
+    typeof window !== "undefined" && document.documentElement.classList.contains("dark")
+      ? "dark"
+      : "light",
   );
-  const [accent, setAccent] = useState<string>(() =>
-    (typeof window !== "undefined" && localStorage.getItem("fv:accent")) || ACCENT_PRESETS[0].value
+  const [accent, setAccent] = useState<string>(
+    () =>
+      (typeof window !== "undefined" && localStorage.getItem("fv:accent")) ||
+      ACCENT_PRESETS[0].value,
   );
   const [mortgageDays, setMortgageDays] = useState<string>("90");
   const [insuranceDays, setInsuranceDays] = useState<string>("60");
@@ -145,16 +156,25 @@ function SettingsPage() {
     if (settings?.monthly_expenses != null) setMonthlyExpenses(String(settings.monthly_expenses));
     if (settings?.retirement_year != null) setRetirementYear(String(settings.retirement_year));
     if (settings?.cpf_payout_age != null) setCpfPayoutAge(String(settings.cpf_payout_age));
-    if (settings?.cpf_monthly_payout != null) setCpfMonthlyPayout(String(settings.cpf_monthly_payout));
-    if (settings?.investment_growth_rate != null) setInvestmentGrowthRate(String(settings.investment_growth_rate));
-    if (settings?.property_appreciation_rate != null) setPropertyAppreciationRate(String(settings.property_appreciation_rate));
+    if (settings?.cpf_monthly_payout != null)
+      setCpfMonthlyPayout(String(settings.cpf_monthly_payout));
+    if (settings?.investment_growth_rate != null)
+      setInvestmentGrowthRate(String(settings.investment_growth_rate));
+    if (settings?.property_appreciation_rate != null)
+      setPropertyAppreciationRate(String(settings.property_appreciation_rate));
     if (settings?.inflation_rate != null) setInflationRate(String(settings.inflation_rate));
-    if (settings?.planning_horizon_age != null) setPlanningHorizonAge(String(settings.planning_horizon_age));
+    if (settings?.planning_horizon_age != null)
+      setPlanningHorizonAge(String(settings.planning_horizon_age));
   }, [
-    settings?.monthly_income, settings?.monthly_expenses,
-    settings?.retirement_year, settings?.cpf_payout_age, settings?.cpf_monthly_payout,
-    settings?.investment_growth_rate, settings?.property_appreciation_rate,
-    settings?.inflation_rate, settings?.planning_horizon_age,
+    settings?.monthly_income,
+    settings?.monthly_expenses,
+    settings?.retirement_year,
+    settings?.cpf_payout_age,
+    settings?.cpf_monthly_payout,
+    settings?.investment_growth_rate,
+    settings?.property_appreciation_rate,
+    settings?.inflation_rate,
+    settings?.planning_horizon_age,
   ]);
 
   useEffect(() => {
@@ -162,7 +182,12 @@ function SettingsPage() {
     if (settings?.insurance_days != null) setInsuranceDays(String(settings.insurance_days));
     if (settings?.fd_days != null) setFdDays(String(settings.fd_days));
     if (settings?.warranty_days != null) setWarrantyDays(String(settings.warranty_days));
-  }, [settings?.mortgage_days, settings?.insurance_days, settings?.fd_days, settings?.warranty_days]);
+  }, [
+    settings?.mortgage_days,
+    settings?.insurance_days,
+    settings?.fd_days,
+    settings?.warranty_days,
+  ]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -253,19 +278,39 @@ function SettingsPage() {
   }
 
   async function clearDemo() {
-    if (!activeHouseholdId) { toast.error("Select a household first."); return; }
+    if (!activeHouseholdId) {
+      toast.error("Select a household first.");
+      return;
+    }
     if (!confirm("Are you sure? This cannot be undone.")) return;
-    const tables = ["properties", "loans", "insurance_policies", "investments", "savings_accounts", "health_conditions"];
+    const tables = [
+      "properties",
+      "loans",
+      "insurance_policies",
+      "investments",
+      "savings_accounts",
+      "health_conditions",
+    ];
     for (const t of tables) {
-      const { error } = await supabase.from(t as any).delete().eq("is_demo", true).eq("household_id", activeHouseholdId);
-      if (error) { toast.error(`Couldn't clear ${t}: ${error.message}`); return; }
+      const { error } = await supabase
+        .from(t as any)
+        .delete()
+        .eq("is_demo", true)
+        .eq("household_id", activeHouseholdId);
+      if (error) {
+        toast.error(`Couldn't clear ${t}: ${error.message}`);
+        return;
+      }
     }
     qc.invalidateQueries();
     toast.success("Demo data cleared");
   }
 
   async function exportFull() {
-    if (!activeHouseholdId) { toast.error("Select a household first."); return; }
+    if (!activeHouseholdId) {
+      toast.error("Select a household first.");
+      return;
+    }
     setGeneratingFullExport(true);
     try {
       await runFullExport(activeHouseholdId, members);
@@ -278,12 +323,17 @@ function SettingsPage() {
   }
 
   async function exportFullBackup() {
-    if (!activeHouseholdId) { toast.error("Select a household first."); return; }
+    if (!activeHouseholdId) {
+      toast.error("Select a household first.");
+      return;
+    }
     setGeneratingFullBackup(true);
     try {
       const result = await runFullBackupZip(activeHouseholdId, members);
       if (result.missingCount > 0) {
-        toast.success(`Backup downloaded (${result.totalFiles - result.missingCount} of ${result.totalFiles} files included — some couldn't be fetched)`);
+        toast.success(
+          `Backup downloaded (${result.totalFiles - result.missingCount} of ${result.totalFiles} files included — some couldn't be fetched)`,
+        );
       } else {
         toast.success("Full backup downloaded");
       }
@@ -295,11 +345,24 @@ function SettingsPage() {
   }
 
   async function exportAssetSummaryDocx() {
-    if (!activeHouseholdId) { toast.error("Select a household first."); return; }
+    if (!activeHouseholdId) {
+      toast.error("Select a household first.");
+      return;
+    }
     setGeneratingEstateDoc(true);
     try {
       const docxLib: any = await import("https://esm.sh/docx@9");
-      const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType } = docxLib;
+      const {
+        Document,
+        Packer,
+        Paragraph,
+        TextRun,
+        HeadingLevel,
+        Table,
+        TableRow,
+        TableCell,
+        WidthType,
+      } = docxLib;
 
       const filter = (q: any) => q.eq("household_id", activeHouseholdId);
       const [propsRes, loansRes, insRes, invRes, savRes, otherRes] = await Promise.all([
@@ -365,7 +428,11 @@ function SettingsPage() {
       // be worse than an incomplete one. Every such item is listed by name
       // in a note at the end of the document so nothing is quietly lost.
       const excludedForFx = new Set<string>();
-      function toSgd(amount: number | null | undefined, currency: string | null | undefined, label: string): number {
+      function toSgd(
+        amount: number | null | undefined,
+        currency: string | null | undefined,
+        label: string,
+      ): number {
         const amt = Number(amount) || 0;
         const cur = currency || "SGD";
         if (cur === "SGD" || amt === 0) return amt;
@@ -376,7 +443,10 @@ function SettingsPage() {
         }
         return converted;
       }
-      function fmtMoneyFx(amount: number | null | undefined, currency: string | null | undefined): string {
+      function fmtMoneyFx(
+        amount: number | null | undefined,
+        currency: string | null | undefined,
+      ): string {
         if (amount == null || isNaN(Number(amount))) return "—";
         const cur = currency || "SGD";
         const base = fmtMoney(amount, cur);
@@ -394,17 +464,32 @@ function SettingsPage() {
 
       const children: any[] = [];
 
-      children.push(new Paragraph({ text: "Asset & Liability Summary", heading: HeadingLevel.TITLE }));
-      children.push(new Paragraph({
-        children: [new TextRun({ text: `Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} via FamilyHub SG`, italics: true, color: "666666" })],
-      }));
+      children.push(
+        new Paragraph({ text: "Asset & Liability Summary", heading: HeadingLevel.TITLE }),
+      );
+      children.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: `Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} via FamilyHub SG`,
+              italics: true,
+              color: "666666",
+            }),
+          ],
+        }),
+      );
       children.push(new Paragraph({ text: "" }));
-      children.push(new Paragraph({
-        children: [new TextRun({
-          text: "This document is a reference summary of assets and liabilities recorded in FamilyHub SG. It is intended to assist with estate planning discussions and does NOT constitute a legal will or binding instruction. Always consult a qualified lawyer or financial advisor for legal estate planning. Foreign-currency amounts are converted to SGD using the most recently cached daily exchange rate — a reference estimate, not a valuation.",
-          italics: true, color: "999999",
-        })],
-      }));
+      children.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: "This document is a reference summary of assets and liabilities recorded in FamilyHub SG. It is intended to assist with estate planning discussions and does NOT constitute a legal will or binding instruction. Always consult a qualified lawyer or financial advisor for legal estate planning. Foreign-currency amounts are converted to SGD using the most recently cached daily exchange rate — a reference estimate, not a valuation.",
+              italics: true,
+              color: "999999",
+            }),
+          ],
+        }),
+      );
       children.push(new Paragraph({ text: "" }));
 
       // Matches the same asset/liability definitions used on the dashboard's
@@ -416,22 +501,75 @@ function SettingsPage() {
       // lib/lifetimeChartMath.ts) — a null surrender_value_date (every
       // policy entered before this field existed) behaves exactly as before.
       const totalAssetsVal =
-        properties.reduce((s: number, p: any) => s + toSgd(p.current_value, p.currency, `${ownerLabel(p.member_id)} — ${p.name ?? "Property"}`), 0) +
-        investments.reduce((s: number, i: any) => s + toSgd(i.current_value, i.currency, `${ownerLabel(i.member_id)} — ${i.name ?? "Investment"}`), 0) +
-        savings.reduce((s: number, a: any) => s + toSgd(a.balance, a.currency, `${ownerLabel(a.member_id)} — ${a.institution ?? "Savings"}`), 0) +
-        otherAssets.reduce((s: number, a: any) => s + toSgd(a.estimated_value, a.currency, `${ownerLabel(a.member_id)} — ${a.name ?? "Other asset"}`), 0) +
-        insurance.reduce((s: number, p: any) => s + (isSurrenderValueVested(p, today) ? toSgd(p.surrender_value, p.currency, `${ownerLabel(p.member_id)} — ${p.name ?? "Insurance"} (surrender value)`) : 0), 0);
-      const totalLiabilitiesVal = loans.reduce((s: number, l: any) => s + toSgd(l.balance, l.currency, `${ownerLabel(l.member_id)} — ${l.bank ?? "Loan"}`), 0);
+        properties.reduce(
+          (s: number, p: any) =>
+            s +
+            toSgd(
+              p.current_value,
+              p.currency,
+              `${ownerLabel(p.member_id)} — ${p.name ?? "Property"}`,
+            ),
+          0,
+        ) +
+        investments.reduce(
+          (s: number, i: any) =>
+            s +
+            toSgd(
+              i.current_value,
+              i.currency,
+              `${ownerLabel(i.member_id)} — ${i.name ?? "Investment"}`,
+            ),
+          0,
+        ) +
+        savings.reduce(
+          (s: number, a: any) =>
+            s +
+            toSgd(
+              a.balance,
+              a.currency,
+              `${ownerLabel(a.member_id)} — ${a.institution ?? "Savings"}`,
+            ),
+          0,
+        ) +
+        otherAssets.reduce(
+          (s: number, a: any) =>
+            s +
+            toSgd(
+              a.estimated_value,
+              a.currency,
+              `${ownerLabel(a.member_id)} — ${a.name ?? "Other asset"}`,
+            ),
+          0,
+        ) +
+        insurance.reduce(
+          (s: number, p: any) =>
+            s +
+            (isSurrenderValueVested(p, today)
+              ? toSgd(
+                  p.surrender_value,
+                  p.currency,
+                  `${ownerLabel(p.member_id)} — ${p.name ?? "Insurance"} (surrender value)`,
+                )
+              : 0),
+          0,
+        );
+      const totalLiabilitiesVal = loans.reduce(
+        (s: number, l: any) =>
+          s + toSgd(l.balance, l.currency, `${ownerLabel(l.member_id)} — ${l.bank ?? "Loan"}`),
+        0,
+      );
 
       children.push(new Paragraph({ text: "Household Summary", heading: HeadingLevel.HEADING_1 }));
-      children.push(makeTable(
-        ["", "Amount (SGD)"],
-        [
-          ["Total assets", fmtMoney(totalAssetsVal)],
-          ["Total liabilities", fmtMoney(totalLiabilitiesVal)],
-          ["Net worth", fmtMoney(totalAssetsVal - totalLiabilitiesVal)],
-        ],
-      ));
+      children.push(
+        makeTable(
+          ["", "Amount (SGD)"],
+          [
+            ["Total assets", fmtMoney(totalAssetsVal)],
+            ["Total liabilities", fmtMoney(totalLiabilitiesVal)],
+            ["Net worth", fmtMoney(totalAssetsVal - totalLiabilitiesVal)],
+          ],
+        ),
+      );
       children.push(new Paragraph({ text: "" }));
 
       for (const ownerId of ownerKeys) {
@@ -442,44 +580,115 @@ function SettingsPage() {
         const ownInv = investments.filter((i: any) => (i.member_id ?? null) === ownerId);
         const ownSav = savings.filter((a: any) => (a.member_id ?? null) === ownerId);
         const ownOther = otherAssets.filter((a: any) => (a.member_id ?? null) === ownerId);
-        const hasAny = ownProps.length || ownLoans.length || ownIns.length || ownInv.length || ownSav.length || ownOther.length;
+        const hasAny =
+          ownProps.length ||
+          ownLoans.length ||
+          ownIns.length ||
+          ownInv.length ||
+          ownSav.length ||
+          ownOther.length;
         if (!hasAny) continue;
 
         children.push(new Paragraph({ text: label, heading: HeadingLevel.HEADING_1 }));
 
         const ownAssetsSgd =
-          ownProps.reduce((s: number, p: any) => s + toSgd(p.current_value, p.currency, `${label} — ${p.name ?? "Property"}`), 0) +
-          ownInv.reduce((s: number, i: any) => s + toSgd(i.current_value, i.currency, `${label} — ${i.name ?? "Investment"}`), 0) +
-          ownSav.reduce((s: number, a: any) => s + toSgd(a.balance, a.currency, `${label} — ${a.institution ?? "Savings"}`), 0) +
-          ownOther.reduce((s: number, a: any) => s + toSgd(a.estimated_value, a.currency, `${label} — ${a.name ?? "Other asset"}`), 0) +
-          ownIns.reduce((s: number, p: any) => s + (isSurrenderValueVested(p, today) ? toSgd(p.surrender_value, p.currency, `${label} — ${p.name ?? "Insurance"} (surrender value)`) : 0), 0);
-        const ownLiabilitiesSgd = ownLoans.reduce((s: number, l: any) => s + toSgd(l.balance, l.currency, `${label} — ${l.bank ?? "Loan"}`), 0);
-        children.push(makeTable(
-          ["", "Amount (SGD)"],
-          [
-            ["Total assets", fmtMoney(ownAssetsSgd)],
-            ["Total liabilities", fmtMoney(ownLiabilitiesSgd)],
-            ["Net worth", fmtMoney(ownAssetsSgd - ownLiabilitiesSgd)],
-          ],
-        ));
+          ownProps.reduce(
+            (s: number, p: any) =>
+              s + toSgd(p.current_value, p.currency, `${label} — ${p.name ?? "Property"}`),
+            0,
+          ) +
+          ownInv.reduce(
+            (s: number, i: any) =>
+              s + toSgd(i.current_value, i.currency, `${label} — ${i.name ?? "Investment"}`),
+            0,
+          ) +
+          ownSav.reduce(
+            (s: number, a: any) =>
+              s + toSgd(a.balance, a.currency, `${label} — ${a.institution ?? "Savings"}`),
+            0,
+          ) +
+          ownOther.reduce(
+            (s: number, a: any) =>
+              s + toSgd(a.estimated_value, a.currency, `${label} — ${a.name ?? "Other asset"}`),
+            0,
+          ) +
+          ownIns.reduce(
+            (s: number, p: any) =>
+              s +
+              (isSurrenderValueVested(p, today)
+                ? toSgd(
+                    p.surrender_value,
+                    p.currency,
+                    `${label} — ${p.name ?? "Insurance"} (surrender value)`,
+                  )
+                : 0),
+            0,
+          );
+        const ownLiabilitiesSgd = ownLoans.reduce(
+          (s: number, l: any) => s + toSgd(l.balance, l.currency, `${label} — ${l.bank ?? "Loan"}`),
+          0,
+        );
+        children.push(
+          makeTable(
+            ["", "Amount (SGD)"],
+            [
+              ["Total assets", fmtMoney(ownAssetsSgd)],
+              ["Total liabilities", fmtMoney(ownLiabilitiesSgd)],
+              ["Net worth", fmtMoney(ownAssetsSgd - ownLiabilitiesSgd)],
+            ],
+          ),
+        );
         children.push(new Paragraph({ text: "" }));
 
         if (ownProps.length) {
           children.push(new Paragraph({ text: "Properties", heading: HeadingLevel.HEADING_2 }));
-          children.push(makeTable(
-            ["Name", "Current value", "Beneficiary / intended for"],
-            ownProps.map((p: any) => [p.name ?? "—", fmtMoneyFx(p.current_value, p.currency), p.beneficiary || "—"]),
-            ["Total", fmtMoney(ownProps.reduce((s: number, p: any) => s + toSgd(p.current_value, p.currency, `${label} — ${p.name ?? "Property"}`), 0)), ""],
-          ));
+          children.push(
+            makeTable(
+              ["Name", "Current value", "Beneficiary / intended for"],
+              ownProps.map((p: any) => [
+                p.name ?? "—",
+                fmtMoneyFx(p.current_value, p.currency),
+                p.beneficiary || "—",
+              ]),
+              [
+                "Total",
+                fmtMoney(
+                  ownProps.reduce(
+                    (s: number, p: any) =>
+                      s + toSgd(p.current_value, p.currency, `${label} — ${p.name ?? "Property"}`),
+                    0,
+                  ),
+                ),
+                "",
+              ],
+            ),
+          );
           children.push(new Paragraph({ text: "" }));
         }
         if (ownInv.length) {
           children.push(new Paragraph({ text: "Investments", heading: HeadingLevel.HEADING_2 }));
-          children.push(makeTable(
-            ["Name", "Type", "Current value"],
-            ownInv.map((i: any) => [i.name ?? "—", i.group_name ?? "—", fmtMoneyFx(i.current_value, i.currency)]),
-            ["Total", "", fmtMoney(ownInv.reduce((s: number, i: any) => s + toSgd(i.current_value, i.currency, `${label} — ${i.name ?? "Investment"}`), 0))],
-          ));
+          children.push(
+            makeTable(
+              ["Name", "Type", "Current value"],
+              ownInv.map((i: any) => [
+                i.name ?? "—",
+                i.group_name ?? "—",
+                fmtMoneyFx(i.current_value, i.currency),
+              ]),
+              [
+                "Total",
+                "",
+                fmtMoney(
+                  ownInv.reduce(
+                    (s: number, i: any) =>
+                      s +
+                      toSgd(i.current_value, i.currency, `${label} — ${i.name ?? "Investment"}`),
+                    0,
+                  ),
+                ),
+              ],
+            ),
+          );
           children.push(new Paragraph({ text: "" }));
         }
         if (ownSav.length) {
@@ -501,7 +710,8 @@ function SettingsPage() {
                   fmtMoney(
                     ownLiquidSav.reduce(
                       (s: number, a: any) =>
-                        s + toSgd(a.balance, a.currency, `${label} — ${a.institution ?? "Savings"}`),
+                        s +
+                        toSgd(a.balance, a.currency, `${label} — ${a.institution ?? "Savings"}`),
                       0,
                     ),
                   ),
@@ -526,7 +736,8 @@ function SettingsPage() {
                   fmtMoney(
                     ownCpfSav.reduce(
                       (s: number, a: any) =>
-                        s + toSgd(a.balance, a.currency, `${label} — ${a.institution ?? "Savings"}`),
+                        s +
+                        toSgd(a.balance, a.currency, `${label} — ${a.institution ?? "Savings"}`),
                       0,
                     ),
                   ),
@@ -538,55 +749,138 @@ function SettingsPage() {
         }
         if (ownOther.length) {
           children.push(new Paragraph({ text: "Other Assets", heading: HeadingLevel.HEADING_2 }));
-          children.push(makeTable(
-            ["Name", "Category", "Estimated value"],
-            ownOther.map((a: any) => [a.name ?? "—", a.category ?? "—", fmtMoneyFx(a.estimated_value, a.currency)]),
-            ["Total", "", fmtMoney(ownOther.reduce((s: number, a: any) => s + toSgd(a.estimated_value, a.currency, `${label} — ${a.name ?? "Other asset"}`), 0))],
-          ));
+          children.push(
+            makeTable(
+              ["Name", "Category", "Estimated value"],
+              ownOther.map((a: any) => [
+                a.name ?? "—",
+                a.category ?? "—",
+                fmtMoneyFx(a.estimated_value, a.currency),
+              ]),
+              [
+                "Total",
+                "",
+                fmtMoney(
+                  ownOther.reduce(
+                    (s: number, a: any) =>
+                      s +
+                      toSgd(a.estimated_value, a.currency, `${label} — ${a.name ?? "Other asset"}`),
+                    0,
+                  ),
+                ),
+              ],
+            ),
+          );
           children.push(new Paragraph({ text: "" }));
         }
         if (ownIns.length) {
-          children.push(new Paragraph({ text: "Insurance Policies", heading: HeadingLevel.HEADING_2 }));
-          children.push(makeTable(
-            ["Policy", "Provider", "Sum assured", "Surrender value", "Beneficiary"],
-            ownIns.map((p: any) => [p.name ?? "—", p.provider || "—", fmtMoneyFx(p.sum_assured, p.currency), surrenderCell(p), p.beneficiary || "—"]),
-            ["Total", "", "", fmtMoney(ownIns.reduce((s: number, p: any) => s + (isSurrenderValueVested(p, today) ? toSgd(p.surrender_value, p.currency, `${label} — ${p.name ?? "Insurance"} (surrender value)`) : 0), 0)), ""],
-          ));
+          children.push(
+            new Paragraph({ text: "Insurance Policies", heading: HeadingLevel.HEADING_2 }),
+          );
+          children.push(
+            makeTable(
+              ["Policy", "Provider", "Sum assured", "Surrender value", "Beneficiary"],
+              ownIns.map((p: any) => [
+                p.name ?? "—",
+                p.provider || "—",
+                fmtMoneyFx(p.sum_assured, p.currency),
+                surrenderCell(p),
+                p.beneficiary || "—",
+              ]),
+              [
+                "Total",
+                "",
+                "",
+                fmtMoney(
+                  ownIns.reduce(
+                    (s: number, p: any) =>
+                      s +
+                      (isSurrenderValueVested(p, today)
+                        ? toSgd(
+                            p.surrender_value,
+                            p.currency,
+                            `${label} — ${p.name ?? "Insurance"} (surrender value)`,
+                          )
+                        : 0),
+                    0,
+                  ),
+                ),
+                "",
+              ],
+            ),
+          );
           children.push(new Paragraph({ text: "" }));
-          children.push(new Paragraph({
-            children: [new TextRun({
-              text: "Sum assured is the policy's payout/coverage amount and is not included in the Net Worth total above. Surrender value — the cash value if the policy were cancelled today — is what counts toward Net Worth, consistent with the dashboard.",
-              italics: true, color: "999999", size: 16,
-            })],
-          }));
+          children.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "Sum assured is the policy's payout/coverage amount and is not included in the Net Worth total above. Surrender value — the cash value if the policy were cancelled today — is what counts toward Net Worth, consistent with the dashboard.",
+                  italics: true,
+                  color: "999999",
+                  size: 16,
+                }),
+              ],
+            }),
+          );
           children.push(new Paragraph({ text: "" }));
         }
         if (ownLoans.length) {
-          children.push(new Paragraph({ text: "Liabilities (Loans)", heading: HeadingLevel.HEADING_2 }));
-          children.push(makeTable(
-            ["Bank", "Purpose", "Outstanding balance"],
-            ownLoans.map((l: any) => [l.bank ?? "—", l.purpose || "—", fmtMoneyFx(l.balance, l.currency)]),
-            ["Total", "", fmtMoney(ownLoans.reduce((s: number, l: any) => s + toSgd(l.balance, l.currency, `${label} — ${l.bank ?? "Loan"}`), 0))],
-          ));
+          children.push(
+            new Paragraph({ text: "Liabilities (Loans)", heading: HeadingLevel.HEADING_2 }),
+          );
+          children.push(
+            makeTable(
+              ["Bank", "Purpose", "Outstanding balance"],
+              ownLoans.map((l: any) => [
+                l.bank ?? "—",
+                l.purpose || "—",
+                fmtMoneyFx(l.balance, l.currency),
+              ]),
+              [
+                "Total",
+                "",
+                fmtMoney(
+                  ownLoans.reduce(
+                    (s: number, l: any) =>
+                      s + toSgd(l.balance, l.currency, `${label} — ${l.bank ?? "Loan"}`),
+                    0,
+                  ),
+                ),
+              ],
+            ),
+          );
           children.push(new Paragraph({ text: "" }));
         }
       }
 
       if (excludedForFx.size > 0) {
         children.push(new Paragraph({ text: "" }));
-        children.push(new Paragraph({
-          children: [new TextRun({
-            text: `Note: no cached exchange rate was available for the following item(s), so they are shown at their original amount only and contribute $0 to every SGD total above (never counted at face value in the wrong currency): ${Array.from(excludedForFx).join("; ")}.`,
-            italics: true, color: "999999", size: 16,
-          })],
-        }));
+        children.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `Note: no cached exchange rate was available for the following item(s), so they are shown at their original amount only and contribute $0 to every SGD total above (never counted at face value in the wrong currency): ${Array.from(excludedForFx).join("; ")}.`,
+                italics: true,
+                color: "999999",
+                size: 16,
+              }),
+            ],
+          }),
+        );
       }
 
       const doc = new Document({
-        sections: [{
-          properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } },
-          children,
-        }],
+        sections: [
+          {
+            properties: {
+              page: {
+                size: { width: 12240, height: 15840 },
+                margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+              },
+            },
+            children,
+          },
+        ],
       });
 
       const blob = await Packer.toBlob(doc);
@@ -610,9 +904,21 @@ function SettingsPage() {
     queryKey: ["has-demo-data", activeHouseholdId],
     enabled: !!activeHouseholdId,
     queryFn: async () => {
-      const tables = ["properties", "loans", "insurance_policies", "investments", "savings_accounts"];
+      const tables = [
+        "properties",
+        "loans",
+        "insurance_policies",
+        "investments",
+        "savings_accounts",
+      ];
       const results = await Promise.all(
-        tables.map((t) => supabase.from(t as any).select("id", { count: "exact", head: true }).eq("is_demo", true).eq("household_id", activeHouseholdId!))
+        tables.map((t) =>
+          supabase
+            .from(t as any)
+            .select("id", { count: "exact", head: true })
+            .eq("is_demo", true)
+            .eq("household_id", activeHouseholdId!),
+        ),
       );
       return results.some((r) => (r.count ?? 0) > 0);
     },
@@ -621,13 +927,17 @@ function SettingsPage() {
   const { data: demoHousehold } = useQuery({
     queryKey: ["demo-household", activeHouseholdId],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return null;
       const { data } = await supabase
         .from("household_users" as any)
         .select("household_id, households(id, name)")
         .eq("user_id", user.id);
-      const found = (data ?? []).find((m: any) => m.households?.name === "Demo Household — FamilyHub SG");
+      const found = (data ?? []).find(
+        (m: any) => m.households?.name === "Demo Household — FamilyHub SG",
+      );
       return found ? found.households : null;
     },
   });
@@ -653,7 +963,9 @@ function SettingsPage() {
       await qc.invalidateQueries({ queryKey: ["household-memberships"] });
       setActiveHouseholdId(result.householdId);
       qc.invalidateQueries();
-      toast.success("Demo Household ready — you're now viewing it. Switch back anytime via the dropdown.");
+      toast.success(
+        "Demo Household ready — you're now viewing it. Switch back anytime via the dropdown.",
+      );
     } catch (err: any) {
       toast.error(err.message || "Could not create demo household.");
     } finally {
@@ -669,7 +981,8 @@ function SettingsPage() {
 
   async function deleteDemoHousehold() {
     if (!demoHousehold) return;
-    if (!confirm("Delete the Demo Household and all its sample data? This cannot be undone.")) return;
+    if (!confirm("Delete the Demo Household and all its sample data? This cannot be undone."))
+      return;
     const demoId = (demoHousehold as any).id;
     // Was previously a hand-copied 8-table list missing 9 of the 16 tables
     // that actually block a household delete (gobag_items, inventory_*,
@@ -678,14 +991,37 @@ function SettingsPage() {
     // silently, since nothing here checked for errors. Now reuses the same
     // canonical list already verified for real account deletion.
     for (const t of HOUSEHOLD_BLOCKING_TABLES) {
-      const { error } = await supabase.from(t as any).delete().eq("household_id", demoId);
-      if (error) { toast.error(`Couldn't clear ${t}: ${error.message}`); return; }
+      const { error } = await supabase
+        .from(t as any)
+        .delete()
+        .eq("household_id", demoId);
+      if (error) {
+        toast.error(`Couldn't clear ${t}: ${error.message}`);
+        return;
+      }
     }
-    const { error: huErr } = await supabase.from("household_users" as any).delete().eq("household_id", demoId);
-    if (huErr) { toast.error(huErr.message); return; }
-    const { data, error: hErr } = await supabase.from("households" as any).delete().eq("id", demoId).select("id").maybeSingle();
-    if (hErr) { toast.error(hErr.message); return; }
-    if (!data) { toast.error("Nothing was deleted — you may not have permission to remove this household."); return; }
+    const { error: huErr } = await supabase
+      .from("household_users" as any)
+      .delete()
+      .eq("household_id", demoId);
+    if (huErr) {
+      toast.error(huErr.message);
+      return;
+    }
+    const { data, error: hErr } = await supabase
+      .from("households" as any)
+      .delete()
+      .eq("id", demoId)
+      .select("id")
+      .maybeSingle();
+    if (hErr) {
+      toast.error(hErr.message);
+      return;
+    }
+    if (!data) {
+      toast.error("Nothing was deleted — you may not have permission to remove this household.");
+      return;
+    }
     if (activeHouseholdId === demoId) {
       const { data: memberships } = await supabase
         .from("household_users" as any)
@@ -719,7 +1055,8 @@ function SettingsPage() {
           onChange={(e) => setFamilyName(e.target.value)}
         />
         <p className="mt-1 text-[11px] text-muted-foreground">
-          Shown as the app's header title — just a label for you, not the household's own name below.
+          Shown as the app's header title — just a label for you, not the household's own name
+          below.
         </p>
         <button
           className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
@@ -730,14 +1067,17 @@ function SettingsPage() {
 
         {currentRole === "owner" && (
           <div className="mt-4 border-t border-border/40 pt-4">
-            <label className="block text-xs font-medium text-muted-foreground">Household name</label>
+            <label className="block text-xs font-medium text-muted-foreground">
+              Household name
+            </label>
             <input
               className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
               value={householdNameInput}
               onChange={(e) => setHouseholdNameInput(e.target.value)}
             />
             <p className="mt-1 text-[11px] text-muted-foreground">
-              This is what shows in the household switcher and the Share dialog — visible to everyone with access.
+              This is what shows in the household switcher and the Share dialog — visible to
+              everyone with access.
             </p>
             <button
               className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
@@ -751,12 +1091,19 @@ function SettingsPage() {
 
         <div className="mt-4">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Members</span>
-            <a href="/members" className="text-xs font-semibold text-primary">Manage →</a>
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Members
+            </span>
+            <a href="/members" className="text-xs font-semibold text-primary">
+              Manage →
+            </a>
           </div>
           <ul className="space-y-1.5">
             {members.map((m) => (
-              <li key={m.id} className="flex items-center gap-3 rounded-lg bg-background/50 px-3 py-2 text-sm">
+              <li
+                key={m.id}
+                className="flex items-center gap-3 rounded-lg bg-background/50 px-3 py-2 text-sm"
+              >
                 <span className="h-3 w-3 rounded-full" style={{ background: m.color }} />
                 <span className="flex-1 font-medium">{m.name}</span>
                 <span className="text-xs text-muted-foreground">{m.short_name}</span>
@@ -776,9 +1123,12 @@ function SettingsPage() {
         </p>
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">Monthly income ({currency})</label>
+            <label className="block text-xs font-medium text-muted-foreground">
+              Monthly income ({currency})
+            </label>
             <input
-              type="number" min="0"
+              type="number"
+              min="0"
               className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
               placeholder="e.g. 12000"
               value={monthlyIncome}
@@ -786,9 +1136,12 @@ function SettingsPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">Monthly expenses ({currency})</label>
+            <label className="block text-xs font-medium text-muted-foreground">
+              Monthly expenses ({currency})
+            </label>
             <input
-              type="number" min="0"
+              type="number"
+              min="0"
               className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
               placeholder="e.g. 6000"
               value={monthlyExpenses}
@@ -801,17 +1154,21 @@ function SettingsPage() {
           {showSurplus && (
             <div className="rounded-lg bg-background/50 px-3 py-2 text-sm">
               <span className="text-muted-foreground">Discretionary surplus: </span>
-              <span className={`font-semibold ${surplusColor}`}>{currency} {surplus.toLocaleString()}</span>
+              <span className={`font-semibold ${surplusColor}`}>
+                {currency} {surplus.toLocaleString()}
+              </span>
               <span className="text-xs text-muted-foreground"> / month</span>
             </div>
           )}
         </div>
         <button
           className="mt-3 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
-          onClick={() => save.mutate({
-            monthly_income: parseFloat(monthlyIncome) || 0,
-            monthly_expenses: parseFloat(monthlyExpenses) || 0,
-          })}
+          onClick={() =>
+            save.mutate({
+              monthly_income: parseFloat(monthlyIncome) || 0,
+              monthly_expenses: parseFloat(monthlyExpenses) || 0,
+            })
+          }
         >
           Save
         </button>
@@ -821,14 +1178,21 @@ function SettingsPage() {
       <section className="rounded-2xl border border-border bg-card p-4">
         <h2 className="mb-1 text-sm font-bold">Projection Assumptions</h2>
         <p className="mb-3 text-xs text-muted-foreground">
-          Used only for the Lifetime Net Worth chart. All rates are annual percentages. These are one shared set of assumptions for the whole household (not tied to a specific member) — for a household with more than one income earner, treat them as a simplified, combined estimate rather than any one person's exact numbers.
+          Used only for the Lifetime Net Worth chart. All rates are annual percentages. These are
+          one shared set of assumptions for the whole household (not tied to a specific member) —
+          for a household with more than one income earner, treat them as a simplified, combined
+          estimate rather than any one person's exact numbers.
         </p>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-muted-foreground">Retirement year</label>
+              <label className="block text-xs font-medium text-muted-foreground">
+                Retirement year
+              </label>
               <input
-                type="number" min="2024" max="2100"
+                type="number"
+                min="2024"
+                max="2100"
                 className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                 placeholder="e.g. 2045"
                 value={retirementYear}
@@ -837,33 +1201,48 @@ function SettingsPage() {
               <p className="mt-0.5 text-[10px] text-muted-foreground">Salary stops this year</p>
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground">Planning horizon (age)</label>
+              <label className="block text-xs font-medium text-muted-foreground">
+                Planning horizon (age)
+              </label>
               <input
-                type="number" min="60" max="120"
+                type="number"
+                min="60"
+                max="120"
                 className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                 placeholder="85"
                 value={planningHorizonAge}
                 onChange={(e) => setPlanningHorizonAge(e.target.value)}
               />
-              <p className="mt-0.5 text-[10px] text-muted-foreground">Chart projects to this age, for your household's oldest member</p>
+              <p className="mt-0.5 text-[10px] text-muted-foreground">
+                Chart projects to this age, for your household's oldest member
+              </p>
             </div>
           </div>
           <div className="grid grid-cols-2 items-start gap-3">
             <div>
-              <label className="block text-xs font-medium text-muted-foreground">CPF payout age</label>
+              <label className="block text-xs font-medium text-muted-foreground">
+                CPF payout age
+              </label>
               <input
-                type="number" min="55" max="75"
+                type="number"
+                min="55"
+                max="75"
                 className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                 placeholder="65"
                 value={cpfPayoutAge}
                 onChange={(e) => setCpfPayoutAge(e.target.value)}
               />
-              <p className="mt-0.5 text-[10px] text-muted-foreground">Based on your household's oldest member</p>
+              <p className="mt-0.5 text-[10px] text-muted-foreground">
+                Based on your household's oldest member
+              </p>
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground">CPF payout (SGD/mth)</label>
+              <label className="block text-xs font-medium text-muted-foreground">
+                CPF payout (SGD/mth)
+              </label>
               <input
-                type="number" min="0"
+                type="number"
+                min="0"
                 className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                 placeholder="e.g. 1500"
                 value={cpfMonthlyPayout}
@@ -873,9 +1252,14 @@ function SettingsPage() {
           </div>
           <div className="grid grid-cols-3 items-start gap-3">
             <div>
-              <label className="block text-xs font-medium text-muted-foreground">Investment growth (%)</label>
+              <label className="block text-xs font-medium text-muted-foreground">
+                Investment growth (%)
+              </label>
               <input
-                type="number" min="0" max="30" step="0.5"
+                type="number"
+                min="0"
+                max="30"
+                step="0.5"
                 className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                 placeholder="4"
                 value={investmentGrowthRate}
@@ -883,9 +1267,14 @@ function SettingsPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground">Property growth (%)</label>
+              <label className="block text-xs font-medium text-muted-foreground">
+                Property growth (%)
+              </label>
               <input
-                type="number" min="0" max="20" step="0.5"
+                type="number"
+                min="0"
+                max="20"
+                step="0.5"
                 className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                 placeholder="2"
                 value={propertyAppreciationRate}
@@ -893,29 +1282,41 @@ function SettingsPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground">Inflation (%)</label>
+              <label className="block text-xs font-medium text-muted-foreground">
+                Inflation (%)
+              </label>
               <input
-                type="number" min="0" max="20" step="0.5"
+                type="number"
+                min="0"
+                max="20"
+                step="0.5"
                 className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                 placeholder="2"
                 value={inflationRate}
                 onChange={(e) => setInflationRate(e.target.value)}
               />
-              <p className="mt-0.5 text-[10px] text-muted-foreground">Grows living expenses &amp; property running costs only — not loan repayments, insurance/ILP premiums, or planned events</p>
+              <p className="mt-0.5 text-[10px] text-muted-foreground">
+                Grows living expenses &amp; property running costs only — not loan repayments,
+                insurance/ILP premiums, or planned events
+              </p>
             </div>
           </div>
         </div>
         <button
           className="mt-3 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
-          onClick={() => save.mutate({
-            retirement_year: parseInt(retirementYear) || null,
-            cpf_payout_age: parseInt(cpfPayoutAge) || 65,
-            cpf_monthly_payout: parseFloat(cpfMonthlyPayout) || 0,
-            investment_growth_rate: investmentGrowthRate === "" ? 4 : parseFloat(investmentGrowthRate),
-            property_appreciation_rate: propertyAppreciationRate === "" ? 2 : parseFloat(propertyAppreciationRate),
-            inflation_rate: inflationRate === "" ? 2 : parseFloat(inflationRate),
-            planning_horizon_age: parseInt(planningHorizonAge) || 85,
-          })}
+          onClick={() =>
+            save.mutate({
+              retirement_year: parseInt(retirementYear) || null,
+              cpf_payout_age: parseInt(cpfPayoutAge) || 65,
+              cpf_monthly_payout: parseFloat(cpfMonthlyPayout) || 0,
+              investment_growth_rate:
+                investmentGrowthRate === "" ? 4 : parseFloat(investmentGrowthRate),
+              property_appreciation_rate:
+                propertyAppreciationRate === "" ? 2 : parseFloat(propertyAppreciationRate),
+              inflation_rate: inflationRate === "" ? 2 : parseFloat(inflationRate),
+              planning_horizon_age: parseInt(planningHorizonAge) || 85,
+            })
+          }
         >
           Save
         </button>
@@ -936,7 +1337,9 @@ function SettingsPage() {
             aria-pressed={theme === "dark"}
             aria-label="Toggle dark mode"
           >
-            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all duration-200 ${theme === "dark" ? "left-5" : "left-0.5"}`} />
+            <span
+              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all duration-200 ${theme === "dark" ? "left-5" : "left-0.5"}`}
+            />
           </button>
         </div>
         <div className="mt-4">
@@ -960,13 +1363,29 @@ function SettingsPage() {
       <section className="rounded-2xl border border-border bg-card p-4">
         <h2 className="mb-3 text-sm font-bold">Alerts & Reminders</h2>
         <p className="mb-3 text-xs text-muted-foreground">
-          How many days before each kind of date you want to start seeing it on the dashboard and in the bell.
+          How many days before each kind of date you want to start seeing it on the dashboard and in
+          the bell.
         </p>
         {[
-          { key: "mortgage_days", label: "Mortgage repricing alert", value: mortgageDays, set: setMortgageDays },
-          { key: "insurance_days", label: "Insurance renewal alert", value: insuranceDays, set: setInsuranceDays },
+          {
+            key: "mortgage_days",
+            label: "Mortgage repricing alert",
+            value: mortgageDays,
+            set: setMortgageDays,
+          },
+          {
+            key: "insurance_days",
+            label: "Insurance renewal alert",
+            value: insuranceDays,
+            set: setInsuranceDays,
+          },
           { key: "fd_days", label: "Fixed Deposit maturity alert", value: fdDays, set: setFdDays },
-          { key: "warranty_days", label: "Warranty expiry alert", value: warrantyDays, set: setWarrantyDays },
+          {
+            key: "warranty_days",
+            label: "Warranty expiry alert",
+            value: warrantyDays,
+            set: setWarrantyDays,
+          },
         ].map((r) => (
           <div key={r.key} className="flex items-center justify-between py-1.5 text-sm">
             <span>{r.label}</span>
@@ -984,12 +1403,14 @@ function SettingsPage() {
         ))}
         <button
           className="mt-3 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
-          onClick={() => save.mutate({
-            mortgage_days: parseInt(mortgageDays) || 90,
-            insurance_days: parseInt(insuranceDays) || 60,
-            fd_days: parseInt(fdDays) || 30,
-            warranty_days: parseInt(warrantyDays) || 90,
-          })}
+          onClick={() =>
+            save.mutate({
+              mortgage_days: parseInt(mortgageDays) || 90,
+              insurance_days: parseInt(insuranceDays) || 60,
+              fd_days: parseInt(fdDays) || 30,
+              warranty_days: parseInt(warrantyDays) || 90,
+            })
+          }
         >
           Save
         </button>
@@ -999,7 +1420,8 @@ function SettingsPage() {
       <section className="rounded-2xl border border-review/40 bg-review-soft/30 p-4">
         <h2 className="mb-1 text-sm font-bold">Test Mode</h2>
         <p className="mb-3 text-xs text-muted-foreground">
-          Simulate a future date (for testing alerts). The whole app behaves as if today were the date you pick.
+          Simulate a future date (for testing alerts). The whole app behaves as if today were the
+          date you pick.
         </p>
         <input
           type="date"
@@ -1008,10 +1430,23 @@ function SettingsPage() {
           onChange={simDateBuffer.handleChange}
         />
         <div className="mt-3 flex gap-2">
-          <button className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"
-            onClick={() => { if (simDate) save.mutate({ simulated_date: simDate }); }}>Apply</button>
-          <button className="rounded-lg border border-border px-3 py-2 text-xs font-semibold"
-            onClick={() => { simDateBuffer.clear(); save.mutate({ simulated_date: null }); }}>Clear</button>
+          <button
+            className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"
+            onClick={() => {
+              if (simDate) save.mutate({ simulated_date: simDate });
+            }}
+          >
+            Apply
+          </button>
+          <button
+            className="rounded-lg border border-border px-3 py-2 text-xs font-semibold"
+            onClick={() => {
+              simDateBuffer.clear();
+              save.mutate({ simulated_date: null });
+            }}
+          >
+            Clear
+          </button>
         </div>
       </section>
 
@@ -1019,22 +1454,41 @@ function SettingsPage() {
       <section className="rounded-2xl border border-border bg-card p-4">
         <h2 className="mb-3 text-sm font-bold">Data</h2>
         <div className="flex flex-col gap-2">
-          <button onClick={exportFull} disabled={generatingFullExport} className="rounded-lg border border-border px-3 py-2 text-sm font-semibold">
+          <button
+            onClick={exportFull}
+            disabled={generatingFullExport}
+            className="rounded-lg border border-border px-3 py-2 text-sm font-semibold"
+          >
             {generatingFullExport ? "Generating…" : "Export everything (Excel)"}
           </button>
-          <button onClick={exportFullBackup} disabled={generatingFullBackup} className="rounded-lg border border-border px-3 py-2 text-sm font-semibold">
-            {generatingFullBackup ? "Downloading files, this can take a moment…" : "Download full backup (Excel + all photos & documents, .zip)"}
+          <button
+            onClick={exportFullBackup}
+            disabled={generatingFullBackup}
+            className="rounded-lg border border-border px-3 py-2 text-sm font-semibold"
+          >
+            {generatingFullBackup
+              ? "Downloading files, this can take a moment…"
+              : "Download full backup (Excel + all photos & documents, .zip)"}
           </button>
           <p className="px-1 text-[11px] text-muted-foreground">
-            "Export everything" gives you a spreadsheet with 10-year links to your files. "Download full backup" downloads the actual files too, in one .zip — nothing depends on FamilyHub SG still running.
+            "Export everything" gives you a spreadsheet with 10-year links to your files. "Download
+            full backup" downloads the actual files too, in one .zip — nothing depends on FamilyHub
+            SG still running.
           </p>
           <HashHighlight id="export-summary">
-            <button onClick={exportAssetSummaryDocx} disabled={generatingEstateDoc} className="w-full rounded-lg border border-border px-3 py-2 text-sm font-semibold">
+            <button
+              onClick={exportAssetSummaryDocx}
+              disabled={generatingEstateDoc}
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm font-semibold"
+            >
               {generatingEstateDoc ? "Generating…" : "Export Asset & Liability Summary (.docx)"}
             </button>
           </HashHighlight>
           {hasDemoData && (
-            <button onClick={clearDemo} className="rounded-lg border border-urgent/40 px-3 py-2 text-sm font-semibold text-urgent">
+            <button
+              onClick={clearDemo}
+              className="rounded-lg border border-urgent/40 px-3 py-2 text-sm font-semibold text-urgent"
+            >
               Remove sample data
             </button>
           )}
@@ -1051,7 +1505,8 @@ function SettingsPage() {
         <section className="rounded-2xl border border-border bg-card p-4">
           <h2 className="mb-1 text-sm font-bold">Take the Tour</h2>
           <p className="mb-3 text-xs text-muted-foreground">
-            A quick walkthrough of adding your first record and setting a reminder — the same tour new members see automatically on their first login.
+            A quick walkthrough of adding your first record and setting a reminder — the same tour
+            new members see automatically on their first login.
           </p>
           <div className="flex flex-wrap gap-2">
             <button
@@ -1063,7 +1518,11 @@ function SettingsPage() {
             <button
               onClick={() => useAppStore.getState().startTour("extras")}
               disabled={!hasLoanForTour}
-              title={hasLoanForTour ? undefined : "Add a loan first (via \"Take the Tour\") — this walkthrough needs a real entry to show you around"}
+              title={
+                hasLoanForTour
+                  ? undefined
+                  : 'Add a loan first (via "Take the Tour") — this walkthrough needs a real entry to show you around'
+              }
               className="rounded-lg border border-border px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
             >
               More Tips & Tricks
@@ -1071,7 +1530,8 @@ function SettingsPage() {
           </div>
           {!hasLoanForTour && (
             <p className="mt-2 text-xs text-muted-foreground">
-              Add a loan entry first (the tour above walks you through it) — these tips are shown on a real entry.
+              Add a loan entry first (the tour above walks you through it) — these tips are shown on
+              a real entry.
             </p>
           )}
         </section>
@@ -1081,7 +1541,9 @@ function SettingsPage() {
       <section className="rounded-2xl border border-review/40 bg-review-soft/20 p-4">
         <h2 className="mb-1 text-sm font-bold">Demo Mode</h2>
         <p className="mb-3 text-xs text-muted-foreground">
-          Create a separate household pre-filled with sample Singapore data — useful for showing the app to someone without exposing your real family records. Switch between households anytime using the dropdown in the top bar.
+          Create a separate household pre-filled with sample Singapore data — useful for showing the
+          app to someone without exposing your real family records. Switch between households
+          anytime using the dropdown in the top bar.
         </p>
         {!demoHousehold ? (
           <button
@@ -1132,6 +1594,7 @@ function SettingsPage() {
           >
             Share household access
           </button>
+          <PasskeyManager />
           <button
             onClick={() => void supabase.auth.signOut()}
             className="rounded-lg border border-urgent/40 px-3 py-2 text-sm font-semibold text-urgent"
@@ -1149,7 +1612,16 @@ function SettingsPage() {
         </div>
       </section>
 
-      <Dialog open={deleteAccountOpen} onOpenChange={(open) => { setDeleteAccountOpen(open); if (!open) { setDeleteConfirmEmail(""); setDeleteStep("input"); } }}>
+      <Dialog
+        open={deleteAccountOpen}
+        onOpenChange={(open) => {
+          setDeleteAccountOpen(open);
+          if (!open) {
+            setDeleteConfirmEmail("");
+            setDeleteStep("input");
+          }
+        }}
+      >
         <DialogContent>
           {deleteStep === "input" ? (
             <>
@@ -1160,11 +1632,14 @@ function SettingsPage() {
                     <p>This permanently deletes your account and cannot be undone.</p>
                     {currentRole === "owner" ? (
                       <p className="font-semibold text-urgent">
-                        You own "{householdName ?? "this household"}" — deleting your account deletes this entire household, including every record and document in it, for everyone who has access.
+                        You own "{householdName ?? "this household"}" — deleting your account
+                        deletes this entire household, including every record and document in it,
+                        for everyone who has access.
                       </p>
                     ) : (
                       <p>
-                        Your access to any shared household will be removed. Shared household records are not affected.
+                        Your access to any shared household will be removed. Shared household
+                        records are not affected.
                       </p>
                     )}
                     <p>Type your email address ({user?.email}) to confirm.</p>
@@ -1180,7 +1655,10 @@ function SettingsPage() {
               />
               <button
                 onClick={handleProceedToConfirm}
-                disabled={deleteConfirmEmail.trim().toLowerCase() !== (user?.email ?? "").trim().toLowerCase()}
+                disabled={
+                  deleteConfirmEmail.trim().toLowerCase() !==
+                  (user?.email ?? "").trim().toLowerCase()
+                }
                 className="w-full rounded-lg bg-urgent px-3 py-2 text-sm font-semibold text-urgent-foreground disabled:opacity-40"
               >
                 Delete My Account Forever
@@ -1197,7 +1675,8 @@ function SettingsPage() {
                     </p>
                     {currentRole === "owner" && (
                       <p>
-                        "{householdName ?? "This household"}" and everything in it will be gone permanently for everyone with access.
+                        "{householdName ?? "This household"}" and everything in it will be gone
+                        permanently for everyone with access.
                       </p>
                     )}
                   </div>
@@ -1228,16 +1707,26 @@ function SettingsPage() {
       <section className="rounded-2xl border border-border bg-card p-4 text-sm">
         <h2 className="mb-2 text-sm font-bold">About</h2>
         <p className="font-semibold">FamilyHub SG</p>
-        <p className="text-muted-foreground">Your one stop for everything family — all in one place.</p>
+        <p className="text-muted-foreground">
+          Your one stop for everything family — all in one place.
+        </p>
         <p className="mt-2 text-xs text-muted-foreground">Version 1.0.0</p>
         <p className="mt-2 text-xs italic text-muted-foreground">
           Built for families who want one place to track everything that matters.
         </p>
         <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-border/60 pt-3 text-xs">
-          <a href="/#onboarding" className="font-semibold text-primary underline">Quick Start Guide</a>
-          <a href="/privacy" className="font-semibold text-primary underline">Privacy Policy</a>
-          <a href="/terms" className="font-semibold text-primary underline">Terms of Service</a>
-          <a href="mailto:support@familyhubsg.com" className="font-semibold text-primary underline">Contact Us</a>
+          <a href="/#onboarding" className="font-semibold text-primary underline">
+            Quick Start Guide
+          </a>
+          <a href="/privacy" className="font-semibold text-primary underline">
+            Privacy Policy
+          </a>
+          <a href="/terms" className="font-semibold text-primary underline">
+            Terms of Service
+          </a>
+          <a href="mailto:support@familyhubsg.com" className="font-semibold text-primary underline">
+            Contact Us
+          </a>
         </div>
       </section>
     </div>
@@ -1254,7 +1743,13 @@ type PlannedEvent = {
   type: "inflow" | "outflow";
 };
 
-function PlannedEvents({ householdId, currency }: { householdId: string | null; currency: string }) {
+function PlannedEvents({
+  householdId,
+  currency,
+}: {
+  householdId: string | null;
+  currency: string;
+}) {
   const qc = useQueryClient();
   const [label, setLabel] = useState("");
   const [year, setYear] = useState<string>("");
@@ -1279,21 +1774,42 @@ function PlannedEvents({ householdId, currency }: { householdId: string | null; 
   async function addEvent() {
     if (!householdId || !label || !year || !amount) return;
     setAdding(true);
-    const { error } = await supabase
-      .from("planned_cashflow_events" as any)
-      .insert({ household_id: householdId, label, year: parseInt(year), amount: parseFloat(amount), type });
+    const { error } = await supabase.from("planned_cashflow_events" as any).insert({
+      household_id: householdId,
+      label,
+      year: parseInt(year),
+      amount: parseFloat(amount),
+      type,
+    });
     setAdding(false);
-    if (error) { toast.error("Could not save event."); return; }
-    setLabel(""); setYear(""); setAmount(""); setType("outflow");
+    if (error) {
+      toast.error("Could not save event.");
+      return;
+    }
+    setLabel("");
+    setYear("");
+    setAmount("");
+    setType("outflow");
     qc.invalidateQueries({ queryKey: ["planned_events", householdId] });
     qc.invalidateQueries({ queryKey: ["planned_events_chart", householdId] });
     toast.success("Event added");
   }
 
   async function deleteEvent(id: string) {
-    const { data, error } = await supabase.from("planned_cashflow_events" as any).delete().eq("id", id).select("id").maybeSingle();
-    if (error) { toast.error(error.message); return; }
-    if (!data) { toast.error("Nothing was deleted — you may not have permission to remove this."); return; }
+    const { data, error } = await supabase
+      .from("planned_cashflow_events" as any)
+      .delete()
+      .eq("id", id)
+      .select("id")
+      .maybeSingle();
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    if (!data) {
+      toast.error("Nothing was deleted — you may not have permission to remove this.");
+      return;
+    }
     qc.invalidateQueries({ queryKey: ["planned_events", householdId] });
     qc.invalidateQueries({ queryKey: ["planned_events_chart", householdId] });
   }
@@ -1315,14 +1831,17 @@ function PlannedEvents({ householdId, currency }: { householdId: string | null; 
         />
         <div className="grid grid-cols-3 gap-2">
           <input
-            type="number" min={currentYear} max="2100"
+            type="number"
+            min={currentYear}
+            max="2100"
             className="rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm"
             placeholder="Year"
             value={year}
             onChange={(e) => setYear(e.target.value)}
           />
           <input
-            type="number" min="0"
+            type="number"
+            min="0"
             className="rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm"
             placeholder={`Amount (${currency})`}
             value={amount}
@@ -1357,7 +1876,8 @@ function PlannedEvents({ householdId, currency }: { householdId: string | null; 
                   <span className="ml-2 text-xs text-muted-foreground">{e.year}</span>
                 </div>
                 <span className={`shrink-0 font-semibold ${typeColor}`}>
-                  {typeSign}{currency} {Number(e.amount).toLocaleString()}
+                  {typeSign}
+                  {currency} {Number(e.amount).toLocaleString()}
                 </span>
                 <button
                   onClick={() => deleteEvent(e.id)}
@@ -1429,8 +1949,14 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
       .eq("id", item.id)
       .select("id")
       .maybeSingle();
-    if (error) { toast.error("Could not delete item."); return; }
-    if (!data) { toast.error("Nothing was deleted — you may not have permission to do this."); return; }
+    if (error) {
+      toast.error("Could not delete item.");
+      return;
+    }
+    if (!data) {
+      toast.error("Nothing was deleted — you may not have permission to do this.");
+      return;
+    }
     await qc.invalidateQueries({ queryKey: ["dismissed-dashboard", householdId] });
     await qc.invalidateQueries({ queryKey: ["alert-count", householdId] });
     await qc.invalidateQueries({ queryKey: ["alert-count-extras", householdId] }); // alert-count no longer exists as a query - this is the key that actually needs invalidating now
@@ -1440,7 +1966,12 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
 
   async function clearAll() {
     if (!householdId) return;
-    if (!confirm("Clear all completed items? This cannot be undone and nothing will return to the dashboard.")) return;
+    if (
+      !confirm(
+        "Clear all completed items? This cannot be undone and nothing will return to the dashboard.",
+      )
+    )
+      return;
 
     // Same rule as single-item delete: manually-created reminders must be deleted outright,
     // not just suppressed, or they'd keep regenerating on the dashboard after "Clear all."
@@ -1463,7 +1994,10 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
       .update({ permanently_deleted: true })
       .eq("household_id", householdId)
       .eq("permanently_deleted", false);
-    if (error) { toast.error("Could not clear items."); return; }
+    if (error) {
+      toast.error("Could not clear items.");
+      return;
+    }
     await qc.invalidateQueries({ queryKey: ["dismissed-dashboard", householdId] });
     await qc.invalidateQueries({ queryKey: ["reminders-dashboard"] });
     await qc.invalidateQueries({ queryKey: ["alert-count", householdId] });
@@ -1479,23 +2013,35 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
         <h2 className="text-sm font-bold flex items-center gap-1.5">
           <span>🔔</span> Completed & Dismissed
         </h2>
-        <button onPointerDown={() => setExpanded((v) => !v)} className="flex items-center gap-1 text-xs font-semibold text-primary">
+        <button
+          onPointerDown={() => setExpanded((v) => !v)}
+          className="flex items-center gap-1 text-xs font-semibold text-primary"
+        >
           {expanded ? "Hide" : `Show (${historyCount})`}
-          <span className={`transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}>▾</span>
+          <span className={`transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}>
+            ▾
+          </span>
         </button>
       </div>
       {expanded && (
         <div className="mt-3">
           {historyCount === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">Nothing here yet. Items you mark as done on the dashboard appear here.</p>
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              Nothing here yet. Items you mark as done on the dashboard appear here.
+            </p>
           ) : (
             <>
               <ul className="divide-y divide-border">
                 {history.map((item: any) => {
                   const dismissedAtDate = item.dismissed_at ? new Date(item.dismissed_at) : null;
-                  const dismissedOn = dismissedAtDate && !isNaN(dismissedAtDate.getTime())
-                    ? dismissedAtDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
-                    : "recently";
+                  const dismissedOn =
+                    dismissedAtDate && !isNaN(dismissedAtDate.getTime())
+                      ? dismissedAtDate.toLocaleDateString("en-GB", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })
+                      : "recently";
                   return (
                     <li key={item.id} className="flex items-start justify-between gap-2 py-2.5">
                       <div className="flex-1 min-w-0">
@@ -1577,7 +2123,9 @@ function RecycleBin({ householdId }: { householdId: string | null }) {
     // its original id, then remove it from the trash. If the re-insert fails
     // (e.g. it references a member that's since been deleted), the trash
     // entry stays put so nothing is lost — just tell the user why.
-    const { error: insertError } = await (supabase as any).from(item.table_name).insert(item.record_data);
+    const { error: insertError } = await (supabase as any)
+      .from(item.table_name)
+      .insert(item.record_data);
     if (insertError) {
       toast.error(`Could not restore — ${insertError.message}`);
       return;
@@ -1590,7 +2138,9 @@ function RecycleBin({ householdId }: { householdId: string | null }) {
     if (reminders.length > 0) {
       const { error: reminderError } = await (supabase as any).from("reminders").insert(reminders);
       if (reminderError) {
-        toast.error(`Restored, but its reminders couldn't be brought back — ${reminderError.message}`);
+        toast.error(
+          `Restored, but its reminders couldn't be brought back — ${reminderError.message}`,
+        );
       }
     }
     await (supabase as any).from("deleted_records").delete().eq("id", item.id);
@@ -1614,12 +2164,19 @@ function RecycleBin({ householdId }: { householdId: string | null }) {
 
   async function clearAll() {
     if (!householdId) return;
-    if (!confirm("Permanently empty the Recycle Bin? Nothing in it can be restored after this.")) return;
+    if (!confirm("Permanently empty the Recycle Bin? Nothing in it can be restored after this."))
+      return;
     for (const item of trash) {
       await purgeDocumentsFor((item as any).entity_type, (item as any).record_id);
     }
-    const { error } = await (supabase as any).from("deleted_records").delete().eq("household_id", householdId);
-    if (error) { toast.error("Could not empty the Recycle Bin."); return; }
+    const { error } = await (supabase as any)
+      .from("deleted_records")
+      .delete()
+      .eq("household_id", householdId);
+    if (error) {
+      toast.error("Could not empty the Recycle Bin.");
+      return;
+    }
     await qc.invalidateQueries({ queryKey: ["deleted-records", householdId] });
     toast.success("Recycle Bin emptied.");
   }
@@ -1632,32 +2189,50 @@ function RecycleBin({ householdId }: { householdId: string | null }) {
         <h2 className="text-sm font-bold flex items-center gap-1.5">
           <span>🗑️</span> Recycle Bin
         </h2>
-        <button onPointerDown={() => setExpanded((v) => !v)} className="flex items-center gap-1 text-xs font-semibold text-primary">
+        <button
+          onPointerDown={() => setExpanded((v) => !v)}
+          className="flex items-center gap-1 text-xs font-semibold text-primary"
+        >
           {expanded ? "Hide" : `Show (${trashCount})`}
-          <span className={`transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}>▾</span>
+          <span className={`transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}>
+            ▾
+          </span>
         </button>
       </div>
       {expanded && (
         <div className="mt-3">
           <p className="mb-3 text-xs text-muted-foreground">
-            Deleted entries stay here for 30 days before being permanently removed. Restoring brings back the entry, its documents, and its reminders. Doesn't cover Inventory, Members, or account deletion.
+            Deleted entries stay here for 30 days before being permanently removed. Restoring brings
+            back the entry, its documents, and its reminders. Doesn't cover Inventory, Members, or
+            account deletion.
           </p>
           {trashCount === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">Nothing in the Recycle Bin.</p>
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              Nothing in the Recycle Bin.
+            </p>
           ) : (
             <>
               <ul className="divide-y divide-border">
                 {trash.map((item: any) => {
                   const deletedAtDate = item.deleted_at ? new Date(item.deleted_at) : null;
-                  const deletedOn = deletedAtDate && !isNaN(deletedAtDate.getTime())
-                    ? deletedAtDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
-                    : "recently";
+                  const deletedOn =
+                    deletedAtDate && !isNaN(deletedAtDate.getTime())
+                      ? deletedAtDate.toLocaleDateString("en-GB", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })
+                      : "recently";
                   const categoryLabel = recordConfigs[item.table_name]?.label ?? item.table_name;
                   return (
                     <li key={item.id} className="flex items-start justify-between gap-2 py-2.5">
                       <div className="flex-1 min-w-0">
-                        <p className="truncate text-sm font-medium">{recordLabel(item.record_data)}</p>
-                        <p className="text-xs text-muted-foreground">{categoryLabel} · Deleted {deletedOn}</p>
+                        <p className="truncate text-sm font-medium">
+                          {recordLabel(item.record_data)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {categoryLabel} · Deleted {deletedOn}
+                        </p>
                       </div>
                       <div className="flex shrink-0 gap-1.5 pt-0.5">
                         <button
