@@ -2,8 +2,9 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  BarChart,
+  ComposedChart,
   Bar,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -20,6 +21,7 @@ import {
 import {
   expandPhasesToYearlyBars,
   buildDefaultPhases,
+  withCumulative,
   type ChartPhase,
   type ChartPhaseDirection,
   type ChartPhaseFrequency,
@@ -264,7 +266,7 @@ function PolicyChartEditor({
       toast.error(err instanceof Error ? err.message : "Unable to remove chart."),
   });
 
-  const bars = useMemo(() => expandPhasesToYearlyBars(phases ?? []), [phases]);
+  const bars = useMemo(() => withCumulative(expandPhasesToYearlyBars(phases ?? [])), [phases]);
 
   if (isLoading || phases === null) {
     return <p className="mt-2 text-xs text-muted-foreground">Loading...</p>;
@@ -312,18 +314,65 @@ function PolicyChartEditor({
         <div>
           <div className="h-40 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={bars} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
+              {/* barCategoryGap near 0 (not a fixed oversized barSize) is deliberate: with up to
+                  ~70 yearly categories (age 30-100), a fixed pixel bar width would either force
+                  the chart to overflow/scroll (changing how the age axis reads) or overlap once
+                  the chart narrows on a phone. Shrinking the gap between categories instead makes
+                  each bar fill nearly its whole year-slot — the standard technique for many
+                  categories in limited width (sometimes called a "barcode" density pattern) —
+                  without touching the age scale or spacing at all; every age still gets exactly
+                  one evenly-spaced slot, just a thinner sliver of empty space around it. */}
+              <ComposedChart
+                data={bars}
+                margin={{ top: 4, right: 8, left: 4, bottom: 0 }}
+                barCategoryGap={1}
+                barGap={0}
+              >
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis dataKey="age" tick={{ fontSize: 10, fill: "var(--color-chart-axis)" }} />
-                <YAxis tick={{ fontSize: 10, fill: "var(--color-chart-axis)" }} width={44} tickFormatter={tickAbbrev} />
+                <YAxis
+                  yAxisId="left"
+                  tick={{ fontSize: 10, fill: "var(--color-chart-axis)" }}
+                  width={44}
+                  tickFormatter={tickAbbrev}
+                />
+                {/* Right axis is deliberately separate from the left — cumulative totals run into
+                    the hundreds of thousands while a single year's premium/payout is a fraction of
+                    that. Sharing one axis would either flatten the bars to invisible slivers or
+                    crush the axis scale for the running totals; two axes keep both readable. */}
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  tick={{ fontSize: 10, fill: "var(--color-chart-axis)" }}
+                  width={44}
+                  tickFormatter={tickAbbrev}
+                />
                 <Tooltip
                   formatter={(v: number) => fmtMoney(v, undefined)}
                   labelFormatter={(age) => `Age ${age}`}
                 />
                 <Legend verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: 10 }} />
-                <Bar dataKey="in" name="Pay in" fill="#b91c1c" />
-                <Bar dataKey="out" name="Pay out" fill="#15803d" />
-              </BarChart>
+                <Bar yAxisId="left" dataKey="in" name="Pay in" fill="#b91c1c" />
+                <Bar yAxisId="left" dataKey="out" name="Pay out" fill="#15803d" />
+                <Line
+                  yAxisId="right"
+                  type="linear"
+                  dataKey="cumulativeIn"
+                  name="Total paid in"
+                  stroke="#f9a8d4"
+                  strokeWidth={2}
+                  dot={false}
+                />
+                <Line
+                  yAxisId="right"
+                  type="linear"
+                  dataKey="cumulativeOut"
+                  name="Total received"
+                  stroke="#86efac"
+                  strokeWidth={2}
+                  dot={false}
+                />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
           <p className="text-center text-[9px] text-muted-foreground">Age</p>
@@ -546,13 +595,28 @@ export function PolicyChartCompareSection({
     for (const b of bars) ageSet.add(b.age);
   }
   const ages = [...ageSet].sort((a, b) => a - b);
+  // Combined running totals across every DISPLAYED policy — a household with 3 shared
+  // policies but only 2 toggled on should see cumulative lines for just those 2, so this
+  // is computed from activeCharts, not all charts. Deliberately a separate running sum from
+  // withCumulative (which works on one policy's own bars): this one needs to add up the
+  // union across policies at each age first, then run the cumulative total over that union.
+  let runningIn = 0;
+  let runningOut = 0;
   const merged = ages.map((age) => {
     const row: Record<string, number> = { age };
+    let ageTotalIn = 0;
+    let ageTotalOut = 0;
     for (const c of activeCharts) {
       const v = expandedByChart.get(c.id)?.get(age);
       row[`${c.id}_in`] = v?.in ?? 0;
       row[`${c.id}_out`] = v?.out ?? 0;
+      ageTotalIn += v?.in ?? 0;
+      ageTotalOut += v?.out ?? 0;
     }
+    runningIn += ageTotalIn;
+    runningOut += ageTotalOut;
+    row.cumulativeIn = runningIn;
+    row.cumulativeOut = runningOut;
     return row;
   });
 
@@ -581,10 +645,29 @@ export function PolicyChartCompareSection({
         <div>
           <div className="h-56 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={merged} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
+              {/* Same barCategoryGap/barGap tightening as the single-policy chart above, and the
+                  same reasoning — this view can have up to ~70 age categories too. */}
+              <ComposedChart
+                data={merged}
+                margin={{ top: 4, right: 8, left: 4, bottom: 0 }}
+                barCategoryGap={1}
+                barGap={0}
+              >
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis dataKey="age" tick={{ fontSize: 10, fill: "var(--color-chart-axis)" }} />
-                <YAxis tick={{ fontSize: 10, fill: "var(--color-chart-axis)" }} width={44} tickFormatter={tickAbbrev} />
+                <YAxis
+                  yAxisId="left"
+                  tick={{ fontSize: 10, fill: "var(--color-chart-axis)" }}
+                  width={44}
+                  tickFormatter={tickAbbrev}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  tick={{ fontSize: 10, fill: "var(--color-chart-axis)" }}
+                  width={44}
+                  tickFormatter={tickAbbrev}
+                />
                 <Tooltip
                   formatter={(v: number) => fmtMoney(v, undefined)}
                   labelFormatter={(age) => `Age ${age}`}
@@ -593,12 +676,14 @@ export function PolicyChartCompareSection({
                   const pair = colorByChartId.get(c.id)!;
                   return [
                     <Bar
+                      yAxisId="left"
                       key={`${c.id}_in`}
                       dataKey={`${c.id}_in`}
                       name={`${c.title || c.policyName} (in)`}
                       fill={pair.dark}
                     />,
                     <Bar
+                      yAxisId="left"
                       key={`${c.id}_out`}
                       dataKey={`${c.id}_out`}
                       name={`${c.title || c.policyName} (out)`}
@@ -606,26 +691,57 @@ export function PolicyChartCompareSection({
                     />,
                   ];
                 })}
-              </BarChart>
+                {/* Combined totals across every displayed policy — fixed pink/green, distinct from
+                    each policy's own color pair above, since these represent the sum of all of
+                    them together, not any one policy. */}
+                <Line
+                  yAxisId="right"
+                  type="linear"
+                  dataKey="cumulativeIn"
+                  name="Total paid in (all shown)"
+                  stroke="#f9a8d4"
+                  strokeWidth={2}
+                  dot={false}
+                />
+                <Line
+                  yAxisId="right"
+                  type="linear"
+                  dataKey="cumulativeOut"
+                  name="Total received (all shown)"
+                  stroke="#86efac"
+                  strokeWidth={2}
+                  dot={false}
+                />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
           <p className="text-center text-[9px] text-muted-foreground">Age</p>
           {activeCharts.length > 1 && (
             <div className="mt-2 grid grid-cols-2 gap-x-4 text-[10px]">
               <div className="space-y-1">
-                <div className="text-[9px] font-semibold uppercase text-muted-foreground">Pay in</div>
+                <div className="text-[9px] font-semibold uppercase text-muted-foreground">
+                  Pay in
+                </div>
                 {activeCharts.map((c) => (
                   <div key={c.id} className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: colorByChartId.get(c.id)!.dark }} />
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ background: colorByChartId.get(c.id)!.dark }}
+                    />
                     <span className="truncate">{c.title || c.policyName}</span>
                   </div>
                 ))}
               </div>
               <div className="space-y-1 border-l border-border pl-4">
-                <div className="text-[9px] font-semibold uppercase text-muted-foreground">Pay out</div>
+                <div className="text-[9px] font-semibold uppercase text-muted-foreground">
+                  Pay out
+                </div>
                 {activeCharts.map((c) => (
                   <div key={c.id} className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: colorByChartId.get(c.id)!.light }} />
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ background: colorByChartId.get(c.id)!.light }}
+                    />
                     <span className="truncate">{c.title || c.policyName}</span>
                   </div>
                 ))}
