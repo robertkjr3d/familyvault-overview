@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 const invitePayloadSchema = z.object({
   householdId: z.string().uuid(),
@@ -56,6 +57,19 @@ export const sendHouseholdInvite = createServerFn({ method: "POST" })
       throw new Error("Only household owners can send invites.");
     }
 
+    // Keyed by the inviter's own user id, not IP — this is an authenticated action, and the
+    // realistic risk is one account rapid-firing invites (a bug in a caller, or a compromised
+    // account), not an anonymous flood. 5 per 60 seconds: generous enough that inviting your
+    // whole family in one sitting never gets blocked, tight enough to stop a runaway loop.
+    // See rateLimit.ts for why this is a 60s window specifically, and the one part of this
+    // I couldn't verify without a live deploy.
+    const withinLimit = await checkRateLimit("INVITE_RATE_LIMITER", userId);
+    if (!withinLimit) {
+      throw new Error(
+        "Too many invites sent in a short time — please wait a minute and try again.",
+      );
+    }
+
     const householdName = (ownerMembership as any).households?.name ?? "a household";
 
     const invitedEmail = normalizeEmail(data.email);
@@ -97,15 +111,13 @@ export const sendHouseholdInvite = createServerFn({ method: "POST" })
       .is("accepted_at", null)
       .is("cancelled_at", null);
 
-    const { error: insertError } = await supabaseAdmin
-      .from("household_invites" as any)
-      .insert({
-        household_id: data.householdId,
-        invited_email: invitedEmail,
-        role: data.role,
-        invited_by_user_id: userId,
-        token,
-      });
+    const { error: insertError } = await supabaseAdmin.from("household_invites" as any).insert({
+      household_id: data.householdId,
+      invited_email: invitedEmail,
+      role: data.role,
+      invited_by_user_id: userId,
+      token,
+    });
 
     if (insertError) throw insertError;
 
@@ -119,7 +131,10 @@ export const sendHouseholdInvite = createServerFn({ method: "POST" })
     });
 
     if (otpError) {
-      await supabaseAdmin.from("household_invites" as any).delete().eq("token", token);
+      await supabaseAdmin
+        .from("household_invites" as any)
+        .delete()
+        .eq("token", token);
       throw otpError;
     }
 
@@ -187,17 +202,15 @@ export const acceptPendingInvitesForCurrentUser = createServerFn({ method: "POST
     const acceptedHouseholdIds: string[] = [];
 
     for (const invite of invites as any[]) {
-      const { error: membershipError } = await supabaseAdmin
-        .from("household_users" as any)
-        .upsert(
-          {
-            household_id: invite.household_id,
-            user_id: userId,
-            role: invite.role,
-            invited_by: invite.invited_by_user_id,
-          },
-          { onConflict: "household_id,user_id" },
-        );
+      const { error: membershipError } = await supabaseAdmin.from("household_users" as any).upsert(
+        {
+          household_id: invite.household_id,
+          user_id: userId,
+          role: invite.role,
+          invited_by: invite.invited_by_user_id,
+        },
+        { onConflict: "household_id,user_id" },
+      );
       if (membershipError) throw membershipError;
 
       const { data: completeData, error: completeError } = await supabaseAdmin
@@ -229,7 +242,9 @@ export const acceptHouseholdInvite = createServerFn({ method: "POST" })
 
     const { data: invite, error: inviteError } = await supabaseAdmin
       .from("household_invites" as any)
-      .select("id, household_id, invited_email, role, invited_by_user_id, accepted_at, cancelled_at, expires_at")
+      .select(
+        "id, household_id, invited_email, role, invited_by_user_id, accepted_at, cancelled_at, expires_at",
+      )
       .eq("token", token)
       .is("accepted_at", null)
       .is("cancelled_at", null)
@@ -246,17 +261,15 @@ export const acceptHouseholdInvite = createServerFn({ method: "POST" })
       throw new Error("This invite is for a different email account.");
     }
 
-    const { error: membershipError } = await supabaseAdmin
-      .from("household_users" as any)
-      .upsert(
-        {
-          household_id: invite.household_id,
-          user_id: userId,
-          role: invite.role,
-          invited_by: invite.invited_by_user_id,
-        },
-        { onConflict: "household_id,user_id" },
-      );
+    const { error: membershipError } = await supabaseAdmin.from("household_users" as any).upsert(
+      {
+        household_id: invite.household_id,
+        user_id: userId,
+        role: invite.role,
+        invited_by: invite.invited_by_user_id,
+      },
+      { onConflict: "household_id,user_id" },
+    );
 
     if (membershipError) throw membershipError;
 
@@ -268,7 +281,8 @@ export const acceptHouseholdInvite = createServerFn({ method: "POST" })
       .maybeSingle();
 
     if (completeError) throw completeError;
-    if (!completeData) throw new Error("This invite could not be marked accepted — it may have been cancelled.");
+    if (!completeData)
+      throw new Error("This invite could not be marked accepted — it may have been cancelled.");
 
     return { householdId: invite.household_id as string };
   });
@@ -311,7 +325,7 @@ export const removeHouseholdMember = createServerFn({ method: "POST" })
     if (listError) throw listError;
 
     const targetUser = listData.users.find(
-      (u) => normalizeEmail(u.email ?? "") === normalizeEmail(data.email)
+      (u) => normalizeEmail(u.email ?? "") === normalizeEmail(data.email),
     );
     if (!targetUser) throw new Error("No account found for that email.");
     if (targetUser.id === userId) throw new Error("You cannot remove yourself.");
@@ -325,7 +339,8 @@ export const removeHouseholdMember = createServerFn({ method: "POST" })
 
     if (membershipError) throw membershipError;
     if (!targetMembership) throw new Error("That person is not a member of this household.");
-    if ((targetMembership as any).role === "owner") throw new Error("Cannot remove another owner. Transfer ownership first.");
+    if ((targetMembership as any).role === "owner")
+      throw new Error("Cannot remove another owner. Transfer ownership first.");
 
     const { error: deleteError } = await supabaseAdmin
       .from("household_users" as any)
@@ -367,7 +382,10 @@ export const cancelHouseholdInvite = createServerFn({ method: "POST" })
       .maybeSingle();
 
     if (cancelError) throw cancelError;
-    if (!cancelData) throw new Error("No pending invite found for that email — it may already be cancelled or accepted.");
+    if (!cancelData)
+      throw new Error(
+        "No pending invite found for that email — it may already be cancelled or accepted.",
+      );
     return { ok: true };
   });
 
@@ -397,7 +415,11 @@ export const listHouseholdPeople = createServerFn({ method: "POST" })
 
     if (memberError) throw memberError;
 
-    const typedMemberRows = (memberRows ?? []) as Array<{ user_id: string; role: string; created_at: string }>;
+    const typedMemberRows = (memberRows ?? []) as Array<{
+      user_id: string;
+      role: string;
+      created_at: string;
+    }>;
 
     // Look up all emails with ONE admin.listUsers() call instead of one
     // getUserById() call per member. Firing N concurrent admin-API calls
@@ -432,14 +454,19 @@ export const listHouseholdPeople = createServerFn({ method: "POST" })
 
     if (inviteError) throw inviteError;
 
-    const pending = ((inviteRows ?? []) as Array<{ invited_email: string; role: string; created_at: string; expires_at: string }>).map(
-      (i) => ({
-        email: i.invited_email,
-        role: i.role as "member" | "viewer",
-        invitedAt: i.created_at,
-        expiresAt: i.expires_at,
-      })
-    );
+    const pending = (
+      (inviteRows ?? []) as Array<{
+        invited_email: string;
+        role: string;
+        created_at: string;
+        expires_at: string;
+      }>
+    ).map((i) => ({
+      email: i.invited_email,
+      role: i.role as "member" | "viewer",
+      invitedAt: i.created_at,
+      expiresAt: i.expires_at,
+    }));
 
     return { members, pending };
   });
@@ -456,7 +483,7 @@ export const createDemoHousehold = createServerFn({ method: "POST" })
       .eq("user_id", userId);
 
     const existing = (existingMemberships ?? []).find(
-      (m: any) => m.households?.name === "Demo Household — FamilyHub SG"
+      (m: any) => m.households?.name === "Demo Household — FamilyHub SG",
     );
     if (existing) {
       const existingHhId = existing.households.id as string;
@@ -468,15 +495,15 @@ export const createDemoHousehold = createServerFn({ method: "POST" })
       // nothing else look "done" and get reused forever, exactly as broken as
       // before. Check every table this function seeds, not just the first one.
       const [propCount, loanCount, insCount, invCount, savCount] = await Promise.all(
-        (["properties", "loans", "insurance_policies", "investments", "savings_accounts"] as const).map(
-          async (t) => {
-            const { count } = await supabaseAdmin
-              .from(t as any)
-              .select("id", { count: "exact", head: true })
-              .eq("household_id", existingHhId);
-            return count ?? 0;
-          },
-        ),
+        (
+          ["properties", "loans", "insurance_policies", "investments", "savings_accounts"] as const
+        ).map(async (t) => {
+          const { count } = await supabaseAdmin
+            .from(t as any)
+            .select("id", { count: "exact", head: true })
+            .eq("household_id", existingHhId);
+          return count ?? 0;
+        }),
       );
 
       if (propCount > 0 && loanCount > 0 && insCount > 0 && invCount > 0 && savCount > 0) {
@@ -487,9 +514,18 @@ export const createDemoHousehold = createServerFn({ method: "POST" })
       // accountDeletion.ts notes) — clear those first, same order used
       // by the account-deletion flow, or this delete just trades one
       // FK-violation error for another.
-      await supabaseAdmin.from("household_users" as any).delete().eq("household_id", existingHhId);
-      await supabaseAdmin.from("members" as any).delete().eq("household_id", existingHhId);
-      await supabaseAdmin.from("households" as any).delete().eq("id", existingHhId);
+      await supabaseAdmin
+        .from("household_users" as any)
+        .delete()
+        .eq("household_id", existingHhId);
+      await supabaseAdmin
+        .from("members" as any)
+        .delete()
+        .eq("household_id", existingHhId);
+      await supabaseAdmin
+        .from("households" as any)
+        .delete()
+        .eq("id", existingHhId);
     }
 
     const { data: hh, error: hhErr } = await supabaseAdmin
@@ -517,12 +553,20 @@ export const createDemoHousehold = createServerFn({ method: "POST" })
     const nextYear = today.getFullYear() + 1;
     const in2Years = today.getFullYear() + 2;
 
-    const { data: prop, error: propErr } = await supabaseAdmin.from("properties" as any).insert({
-      household_id: hhId, member_id: memberId, is_demo: true,
-      name: "3-Room HDB, Tampines",
-      purchase_price: 380000, current_value: 450000,
-      monthly_rent: 0, status: "settled",
-    }).select("id").single();
+    const { data: prop, error: propErr } = await supabaseAdmin
+      .from("properties" as any)
+      .insert({
+        household_id: hhId,
+        member_id: memberId,
+        is_demo: true,
+        name: "3-Room HDB, Tampines",
+        purchase_price: 380000,
+        current_value: 450000,
+        monthly_rent: 0,
+        status: "settled",
+      })
+      .select("id")
+      .single();
     if (propErr) throw new Error(`properties: ${propErr.message}`);
     const propertyId = (prop as any).id as string;
 
@@ -532,11 +576,17 @@ export const createDemoHousehold = createServerFn({ method: "POST" })
     // schema before shipping (July 27, 2026 fix; this table has no "name"
     // or "loan_type" column at all, and the rate column is called "rate").
     const { error: loanErr } = await supabaseAdmin.from("loans" as any).insert({
-      household_id: hhId, member_id: memberId, is_demo: true,
-      bank: "DBS", purpose: "HDB Housing Loan",
+      household_id: hhId,
+      member_id: memberId,
+      is_demo: true,
+      bank: "DBS",
+      purpose: "HDB Housing Loan",
       property_id: propertyId,
-      balance: 210000, monthly_payment: 1450, rate: 2.6,
-      reprice_date: `${nextYear}-03-01`, status: "settled",
+      balance: 210000,
+      monthly_payment: 1450,
+      rate: 2.6,
+      reprice_date: `${nextYear}-03-01`,
+      status: "settled",
     });
     if (loanErr) throw new Error(`loans: ${loanErr.message}`);
 
@@ -546,20 +596,32 @@ export const createDemoHousehold = createServerFn({ method: "POST" })
     // not "whole_life"/"hospitalisation") — verified against types.ts and
     // tested against a local mock schema before shipping (July 27, 2026 fix).
     const { error: ins1Err } = await supabaseAdmin.from("insurance_policies" as any).insert({
-      household_id: hhId, member_id: memberId, is_demo: true,
-      name: "Prudential PruLife", category: "Life",
-      sum_assured: 200000, premium: 320,
-      frequency: "monthly", start_date: "2018-06-01",
-      end_date: `${in2Years}-06-01`, status: "settled",
+      household_id: hhId,
+      member_id: memberId,
+      is_demo: true,
+      name: "Prudential PruLife",
+      category: "Life",
+      sum_assured: 200000,
+      premium: 320,
+      frequency: "monthly",
+      start_date: "2018-06-01",
+      end_date: `${in2Years}-06-01`,
+      status: "settled",
     });
     if (ins1Err) throw new Error(`insurance 1: ${ins1Err.message}`);
 
     const { error: ins2Err } = await supabaseAdmin.from("insurance_policies" as any).insert({
-      household_id: hhId, member_id: memberId, is_demo: true,
-      name: "AIA HealthShield Gold", category: "Health",
-      sum_assured: 0, premium: 85,
-      frequency: "annual", start_date: "2020-01-01",
-      end_date: `${nextYear}-01-01`, status: "settled",
+      household_id: hhId,
+      member_id: memberId,
+      is_demo: true,
+      name: "AIA HealthShield Gold",
+      category: "Health",
+      sum_assured: 0,
+      premium: 85,
+      frequency: "annual",
+      start_date: "2020-01-01",
+      end_date: `${nextYear}-01-01`,
+      status: "settled",
     });
     if (ins2Err) throw new Error(`insurance 2: ${ins2Err.message}`);
 
@@ -571,9 +633,13 @@ export const createDemoHousehold = createServerFn({ method: "POST" })
     // verified against types.ts and tested against a local mock schema
     // before shipping (July 27, 2026 fix).
     const { error: invErr } = await supabaseAdmin.from("investments" as any).insert({
-      household_id: hhId, member_id: memberId, is_demo: true,
-      name: "Manulife InvestReady III", group_name: "ILP (Investment-Linked Policy)",
-      current_value: 52000, premium_amount: 500,
+      household_id: hhId,
+      member_id: memberId,
+      is_demo: true,
+      name: "Manulife InvestReady III",
+      group_name: "ILP (Investment-Linked Policy)",
+      current_value: 52000,
+      premium_amount: 500,
       premium_start_date: "2019-09-01",
       status: "review",
     });
@@ -585,21 +651,34 @@ export const createDemoHousehold = createServerFn({ method: "POST" })
     // types.ts and tested against a local mock schema before shipping
     // (July 27, 2026 fix).
     const { error: savErr } = await supabaseAdmin.from("savings_accounts" as any).insert({
-      household_id: hhId, member_id: memberId, is_demo: true,
-      institution: "DBS Multiplier", account_type: "Savings Account",
-      balance: 38000, interest_rate: 3.5, status: "settled",
+      household_id: hhId,
+      member_id: memberId,
+      is_demo: true,
+      institution: "DBS Multiplier",
+      account_type: "Savings Account",
+      balance: 38000,
+      interest_rate: 3.5,
+      status: "settled",
     });
     if (savErr) throw new Error(`savings: ${savErr.message}`);
 
     // Note: app_settings has no "currency" column at all — verified against
     // types.ts and tested against a local mock schema before shipping
     // (July 27, 2026 fix).
-    const { error: settErr } = await supabaseAdmin.from("app_settings" as any).upsert({
-      household_id: hhId, family_name: "Tan Family",
-      monthly_income: 7200, monthly_expenses: 3500,
-      mortgage_days: 90, insurance_days: 60,
-      fd_days: 30, warranty_days: 90, onboarding_dismissed: true,
-    }, { onConflict: "household_id" });
+    const { error: settErr } = await supabaseAdmin.from("app_settings" as any).upsert(
+      {
+        household_id: hhId,
+        family_name: "Tan Family",
+        monthly_income: 7200,
+        monthly_expenses: 3500,
+        mortgage_days: 90,
+        insurance_days: 60,
+        fd_days: 30,
+        warranty_days: 90,
+        onboarding_dismissed: true,
+      },
+      { onConflict: "household_id" },
+    );
     if (settErr) throw new Error(`app_settings: ${settErr.message}`);
 
     return { householdId: hhId };
