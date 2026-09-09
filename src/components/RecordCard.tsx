@@ -180,7 +180,7 @@ export function RecordCard({
   const [actionOverflows, setActionOverflows] = useState(false);
   const [truncatedAction, setTruncatedAction] = useState("");
   useLayoutEffect(() => {
-    if (actionExpanded || !action) {
+    if (!action) {
       setActionOverflows(false);
       return;
     }
@@ -194,13 +194,17 @@ export function RecordCard({
       const maxHeightPx = lineHeight * 3 + 1; // +1px rounding tolerance
       measureEl.style.width = `${el.clientWidth}px`;
 
-      // Does the full text already fit in 3 lines? Then there's nothing to truncate.
+      // Whether the FULL text overflows 3 lines is measured independently of whether
+      // the card is currently expanded — this is what decides if a "Show less" button
+      // should exist at all, not just whether we're truncating right now. (Bug fixed
+      // Sep 9 2026: this used to bail out and reset to "not overflowing" the instant
+      // actionExpanded became true, which made the "Show less" button disappear the
+      // moment someone tapped "…" to expand — they could open it but never close it
+      // back down without collapsing the whole card.)
       measureEl.textContent = `${actionLabel}: ${action}`;
-      if (measureEl.scrollHeight <= maxHeightPx) {
-        setActionOverflows(false);
-        return;
-      }
-      setActionOverflows(true);
+      const overflows = measureEl.scrollHeight > maxHeightPx;
+      setActionOverflows(overflows);
+      if (!overflows || actionExpanded) return; // nothing to truncate once we know it fits, or while showing the full text
 
       // Binary search over WHOLE WORDS (never characters) for the most that fit
       // alongside "…" — guarantees no mid-word cut, ever, regardless of font/width.
@@ -397,7 +401,7 @@ export function RecordCard({
                       <span
                         key={item}
                         className={cn(
-                          "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                          "rounded-full px-2 py-0.5 text-[10px] font-medium text-foreground",
                           g.toneClassName ?? "bg-accent",
                         )}
                       >
