@@ -88,7 +88,7 @@ function HealthRow({ c, onStatus, onDelete }: { c: any; onStatus: (s: any) => vo
         createdAt={c.created_at}
         chipGroups={[
           { label: "Take", items: c.supplements ?? [], toneClassName: "bg-accent" },
-          { label: "Do", items: c.actions ?? [], toneClassName: "bg-settled-soft text-settled" },
+          { label: "Do", items: c.actions ?? [], toneClassName: "bg-settled-soft" },
         ]}
         action={c.details}
         actionLabel="Details"
