@@ -15,11 +15,13 @@ import appCss from "../styles.css?url";
 import { BottomTabs } from "@/components/BottomTabs";
 import { GuidedTour } from "@/components/GuidedTour";
 import { TourWelcomeScreen } from "@/components/TourWelcomeScreen";
+import { PostLoginPasskeyPrompt } from "@/components/PostLoginPasskeyPrompt";
 import { AppHeader } from "@/components/AppHeader";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthSession } from "@/hooks/useAuthSession";
+import { isPasskeySupported } from "@/lib/passkeyPrompt";
 import { acceptPendingInvitesForCurrentUser, createOwnHousehold } from "@/lib/householdInvites";
 import {
   acceptPendingAdvisorInvitesForCurrentUser,
@@ -287,6 +289,7 @@ function RootContent() {
         <BottomTabs />
         <GuidedTour />
         <TourWelcomeScreen />
+        <PostLoginPasskeyPrompt />
         <Toaster
           position="bottom-right"
           richColors
@@ -534,14 +537,20 @@ function SignInScreen() {
   // just fail confusingly for the one group of people who can't use it.
   const [passkeyLoading, setPasskeyLoading] = useState(false);
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
-  const passkeySupported =
-    typeof window !== "undefined" && typeof window.PublicKeyCredential !== "undefined";
+  const passkeySupported = isPasskeySupported();
 
   async function signInWithPasskey() {
     setPasskeyLoading(true);
     setPasskeyError(null);
-    const { error: pkError } = await supabase.auth.signInWithPasskey();
+    const { error: pkError } = await supabase.auth.signInWithPasskey({
+      options: { captchaToken: captchaToken ?? undefined },
+    });
     setPasskeyLoading(false);
+    // Same single-use-token reset as the OTP flow above — this was the actual bug:
+    // signInWithPasskey wasn't passing the token at all, so Supabase's captcha check
+    // rejected it even though Turnstile itself had already succeeded client-side.
+    setCaptchaToken(null);
+    setCaptchaResetKey((k) => k + 1);
     if (pkError) {
       // The most common "error" here is the person tapping Cancel on their
       // device's biometric prompt — not a real failure, so don't show a
@@ -554,6 +563,24 @@ function SignInScreen() {
       if (!isUserCancelled) setPasskeyError(pkError.message);
     }
   }
+
+  // Conditional UI (passkey autofill) — the modern top-tier pattern: instead of only a
+  // separate button, a saved passkey shows up right inside the email field's own autofill
+  // dropdown the moment it's focused, same place saved passwords already appear. This is
+  // Conditional UI (passkey autofill) — the modern top-tier pattern where a saved passkey
+  // shows up right inside the email field's own autofill dropdown, not just via a separate
+  // button. RESEARCHED AND ATTEMPTED, then deliberately NOT shipped: it requires
+  // deserializeCredentialRequestOptions/getCredential/serializeCredentialRequestResponse,
+  // which turned out to exist only inside @supabase/auth-js's compiled internals, not
+  // actually re-exported from the package's public entry point (caught by tsc, not
+  // guessed — see the failed build this produced). The only way to use them would be
+  // importing a deep internal file path that a routine dependency update could silently
+  // break, or hand-rolling the WebAuthn serialization myself — both worse than the
+  // button-only flow already working today. The email field below still gets
+  // autocomplete="email webauthn" for free, priming the browser for whenever Supabase
+  // ships native mediation support in signInWithPasskey() itself (their own maintainer
+  // said this was coming "shortly" as of this session) — pure upside, no downside, so
+  // kept. Revisit the full conditional-UI ceremony once that ships.
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-6">
@@ -582,10 +609,14 @@ function SignInScreen() {
                   type="button"
                   variant="outline"
                   onClick={signInWithPasskey}
-                  disabled={passkeyLoading}
+                  disabled={passkeyLoading || (!captchaToken && !captchaTimedOut)}
                   className="w-full"
                 >
-                  {passkeyLoading ? "Waiting for your passkey…" : "Sign in with a passkey"}
+                  {passkeyLoading
+                    ? "Waiting for your passkey…"
+                    : !captchaToken && !captchaTimedOut
+                      ? "Preparing…"
+                      : "Sign in with a passkey"}
                 </Button>
                 {passkeyError && <p className="text-xs text-urgent">{passkeyError}</p>}
                 <div className="relative py-1 text-center">
@@ -601,7 +632,10 @@ function SignInScreen() {
             <Input
               type="email"
               required
-              autoComplete="email"
+              // "webauthn" appended is the DOM signal that tells the browser to
+              // include saved passkeys in this field's autofill dropdown — required
+              // for conditional UI, confirmed via MDN's own reference example.
+              autoComplete="email webauthn"
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
