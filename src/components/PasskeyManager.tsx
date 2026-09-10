@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtDate } from "@/lib/format";
+import { isPasskeySupported } from "@/lib/passkeyPrompt";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -16,6 +17,7 @@ export function PasskeyManager() {
 
   const { data: passkeys, isLoading } = useQuery({
     queryKey: ["passkeys"],
+    enabled: isPasskeySupported(),
     queryFn: async () => {
       const { data, error } = await supabase.auth.passkey.list();
       if (error) throw new Error(error.message);
@@ -78,6 +80,17 @@ export function PasskeyManager() {
     },
     onError: (err: Error) => toast.error(err.message),
   });
+
+  if (!isPasskeySupported()) {
+    return (
+      <div className="mt-2 border-t border-border pt-3">
+        <h3 className="mb-2 text-xs font-bold text-muted-foreground">Passkeys</h3>
+        <p className="text-xs text-muted-foreground">
+          This browser doesn't support passkeys — try a recent version of Chrome, Safari, or Edge.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="mt-2 border-t border-border pt-3">
