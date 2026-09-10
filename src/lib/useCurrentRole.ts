@@ -27,14 +27,22 @@ export function useCurrentRole() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("household_users" as any)
-        .select("household_id, role, has_seen_tour, households(id, name, storage_tier, storage_bytes_used)")
+        .select(
+          "household_id, role, has_seen_tour, has_seen_passkey_prompt, households(id, name, storage_tier, storage_bytes_used)",
+        )
         .eq("user_id", user!.id);
       if (error) throw error;
       return (data ?? []) as unknown as Array<{
         household_id: string;
         role: Role;
         has_seen_tour: boolean;
-        households: { id: string; name: string; storage_tier: string | null; storage_bytes_used: number | null } | null;
+        has_seen_passkey_prompt: boolean;
+        households: {
+          id: string;
+          name: string;
+          storage_tier: string | null;
+          storage_bytes_used: number | null;
+        } | null;
       }>;
     },
   });
@@ -52,7 +60,12 @@ export function useCurrentRole() {
   // undefined (not false) while loading, so callers can tell "don't know
   // yet" apart from "confirmed not seen" and avoid a flash of the welcome
   // screen before the real value arrives.
-  const hasSeenTour: boolean | undefined = selectedMembership ? selectedMembership.has_seen_tour : undefined;
+  const hasSeenTour: boolean | undefined = selectedMembership
+    ? selectedMembership.has_seen_tour
+    : undefined;
+  const hasSeenPasskeyPrompt: boolean | undefined = selectedMembership
+    ? selectedMembership.has_seen_passkey_prompt
+    : undefined;
 
   const storageTier: string | null = selectedMembership?.households?.storage_tier ?? "free";
   const storageBytesUsed: number = selectedMembership?.households?.storage_bytes_used ?? 0;
@@ -67,6 +80,7 @@ export function useCurrentRole() {
     householdId,
     householdName,
     hasSeenTour,
+    hasSeenPasskeyPrompt,
     storageTier,
     storageBytesUsed,
   };
