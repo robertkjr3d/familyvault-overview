@@ -22,6 +22,7 @@ import { freqLabel, INSURANCE_CATEGORIES } from "@/lib/options";
 import { DocumentsList } from "@/components/DocumentsList";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { HistoryLog } from "@/components/HistoryLog";
+import { AuditTrail } from "@/components/AuditTrail";
 import { NotesEditor } from "@/components/NotesEditor";
 import { ReminderButton } from "@/components/ReminderButton";
 import { RemindersList } from "@/components/RemindersList";
@@ -247,6 +248,7 @@ function InsurancePage() {
                 onDelete={() => del.mutate(p.id)}
                 reminderCount={counts.reminderCounts[p.id] || 0}
                 historyCount={counts.historyCounts[p.id] || 0}
+                auditCount={counts.auditCounts[p.id] || 0}
                 documentsCount={counts.documentsCounts[p.id] || 0}
                 advisorNotes={advisorNotesByRecordId.get(p.id) ?? []}
               />
@@ -274,6 +276,7 @@ function InsuranceRow({
   onDelete,
   reminderCount,
   historyCount,
+  auditCount,
   documentsCount,
   advisorNotes,
 }: {
@@ -282,6 +285,7 @@ function InsuranceRow({
   onDelete: () => void;
   reminderCount: number;
   historyCount: number;
+  auditCount: number;
   documentsCount: number;
   advisorNotes: any[];
 }) {
@@ -305,11 +309,11 @@ function InsuranceRow({
   const isSurrenderStale = surrenderVested && surrenderStale != null && surrenderStale >= 90;
 
   const [cardOpen, setCardOpen] = useState(false);
-  const [section, setSection] = useState<"notes" | "reminders" | "history" | "documents" | null>(
-    null,
-  );
+  const [section, setSection] = useState<
+    "notes" | "reminders" | "history" | "audit" | "documents" | null
+  >(null);
 
-  function openSection(target: "notes" | "reminders" | "history" | "documents") {
+  function openSection(target: "notes" | "reminders" | "history" | "audit" | "documents") {
     setCardOpen(true);
     setSection(target);
     setTimeout(() => {
@@ -342,11 +346,13 @@ function InsuranceRow({
         onOpenChange={setCardOpen}
         reminderCount={reminderCount}
         historyCount={historyCount}
+        auditCount={auditCount}
         documentsCount={documentsCount}
         onNotesClick={() => openSection("notes")}
         onAdvisorNoteClick={() => setCardOpen(true)}
         onReminderClick={() => openSection("reminders")}
         onHistoryClick={() => openSection("history")}
+        onAuditClick={() => openSection("audit")}
         onDocumentsClick={() => openSection("documents")}
         rightMeta={
           <div className="text-right text-xs">
@@ -517,6 +523,17 @@ function InsuranceRow({
           onOpenChange={(o) => setSection(o ? "history" : null)}
         >
           <HistoryLog entityType="insurance" entityId={p.id} />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          id={`audit-${p.id}`}
+          icon={<span>🛡️</span>}
+          title="Audit Trail"
+          count={auditCount}
+          open={section === "audit"}
+          onOpenChange={(o) => setSection(o ? "audit" : null)}
+        >
+          <AuditTrail tableName="insurance_policies" recordId={p.id} />
         </CollapsibleSection>
 
         <CollapsibleSection
