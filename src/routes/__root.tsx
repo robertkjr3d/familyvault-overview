@@ -436,6 +436,30 @@ function TurnstileWidget({
   return <div ref={containerRef} />;
 }
 
+// Shared by every auth flow below that needs a redirectTo — deliberately
+// NEVER window.location.href. This app's Supabase client (client.ts) doesn't
+// set flowType, so it defaults to 'implicit' (confirmed in the installed
+// @supabase/auth-js source, GoTrueClient.js) — a successful sign-in returns
+// tokens as a URL HASH FRAGMENT (#access_token=...&refresh_token=...), and
+// that hash is only stripped from the address bar AFTER an async round-trip
+// (_getUser) completes, not instantly. If a user starts a second sign-in
+// before that finishes, window.location.href still contains the OLD,
+// unprocessed "#access_token=..." — and passing that back in as redirectTo
+// made Supabase append its own NEW "#access_token=..." after it, producing
+// a URL with two "#" fragments that supabase-js cannot parse back out. That
+// was the actual cause of "choose Google account → bounces back to sign-in"
+// (confirmed against the library source, not guessed). Always building a
+// clean origin(+invite) URL here, instead of trusting whatever's currently
+// in the address bar, closes the whole class of this bug — not just the
+// one call site it was first noticed on.
+function buildAuthRedirectUrl(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  const inviteToken = new URLSearchParams(window.location.search).get("invite");
+  const url = new URL(window.location.origin);
+  if (inviteToken) url.searchParams.set("invite", inviteToken);
+  return url.toString();
+}
+
 function SignInScreen() {
   const [email, setEmail] = useState(() => {
     if (typeof window === "undefined") return "";
@@ -472,13 +496,7 @@ function SignInScreen() {
       typeof window !== "undefined"
         ? new URLSearchParams(window.location.search).get("invite")
         : null;
-    const base = typeof window !== "undefined" ? window.location.origin : undefined;
-    let redirectTo = base;
-    if (base && typeof window !== "undefined") {
-      const url = new URL(base);
-      if (inviteToken) url.searchParams.set("invite", inviteToken);
-      redirectTo = url.toString();
-    }
+    const redirectTo = buildAuthRedirectUrl();
     const { error: signInError } = await supabase.auth.signInWithOtp({
       email,
       options: {
@@ -545,17 +563,15 @@ function SignInScreen() {
   async function signInWithGoogle() {
     setGoogleLoading(true);
     setGoogleError(null);
-    // redirectTo = the current URL as-is (including ?invite=/?email= when
-    // present) — Supabase appends its own ?code=&state= to whatever this
-    // is, and it lands back on this exact page/query, same as the magic
-    // link flow's own redirect target. No captchaToken here on purpose:
-    // signInWithOAuth doesn't accept one — Google's own sign-in screen is
-    // the bot check for this path, Turnstile is only for the OTP/passkey
-    // paths that talk to Supabase directly.
+    // See buildAuthRedirectUrl()'s own comment above for exactly why this
+    // can't be window.location.href — that was the actual bug. No
+    // captchaToken here on purpose: signInWithOAuth doesn't accept one —
+    // Google's own sign-in screen is the bot check for this path, Turnstile
+    // is only for the OTP/passkey paths that talk to Supabase directly.
     const { error: googleErr } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: typeof window !== "undefined" ? window.location.href : undefined,
+        redirectTo: buildAuthRedirectUrl(),
       },
     });
     if (googleErr) {
