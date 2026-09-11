@@ -10,6 +10,7 @@ import {
   RotateCw,
   Paperclip,
   ExternalLink,
+  ShieldCheck,
 } from "lucide-react";
 import { StatusToggle, type Status } from "./StatusToggle";
 import { MemberTag } from "./MemberTag";
@@ -58,6 +59,7 @@ type Props = {
   /** Counts for the icon row below the status toggle. Pass undefined/0 to hide an icon entirely. */
   reminderCount?: number;
   historyCount?: number;
+  auditCount?: number;
   documentsCount?: number;
   /** Called when the Notes/Reminder/Update/Documents icon is tapped. The card expands itself;
    * the parent is responsible for opening the right inner CollapsibleSection and scrolling to it. */
@@ -65,6 +67,7 @@ type Props = {
   onAdvisorNoteClick?: () => void;
   onReminderClick?: () => void;
   onHistoryClick?: () => void;
+  onAuditClick?: () => void;
   onDocumentsClick?: () => void;
   /** Controlled open state, so a click on an icon can force the card open even if it was collapsed.
    * Falls back to internal state if not provided (existing behaviour preserved). */
@@ -143,11 +146,13 @@ export function RecordCard({
   createdAt,
   reminderCount,
   historyCount,
+  auditCount,
   documentsCount,
   onNotesClick,
   onAdvisorNoteClick,
   onReminderClick,
   onHistoryClick,
+  onAuditClick,
   onDocumentsClick,
   open: openProp,
   onOpenChange,
@@ -250,6 +255,7 @@ export function RecordCard({
     hasAdvisorNote ||
     (reminderCount ?? 0) > 0 ||
     (historyCount ?? 0) > 0 ||
+    (auditCount ?? 0) > 0 ||
     (documentsCount ?? 0) > 0;
 
   return (
@@ -541,6 +547,16 @@ export function RecordCard({
                 >
                   <RotateCw className="h-3.5 w-3.5" />
                   <span>{historyCount}</span>
+                </CardIconButton>
+              )}
+              {(auditCount ?? 0) > 0 && (
+                <CardIconButton
+                  onClick={() => handleIconClick(onAuditClick)}
+                  active
+                  label={`Edited ${auditCount} time${auditCount === 1 ? "" : "s"} — view audit trail`}
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  <span>{auditCount}</span>
                 </CardIconButton>
               )}
               {(documentsCount ?? 0) > 0 && (
