@@ -16,6 +16,7 @@ import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { NotesEditor } from "@/components/NotesEditor";
 import { HistoryLog } from "@/components/HistoryLog";
+import { AuditTrail } from "@/components/AuditTrail";
 import { DocumentsList } from "@/components/DocumentsList";
 import { ReminderButton } from "@/components/ReminderButton";
 import { RemindersList } from "@/components/RemindersList";
@@ -64,7 +65,9 @@ function OtherAssetsPage() {
         <>
           {groups.map((g) => (
             <section key={g}>
-              <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">{g}</h2>
+              <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                {g}
+              </h2>
               <div className="space-y-3">
                 {sortByStatus(items.filter((i: any) => i.category === g)).map((asset: any) => (
                   <AssetRow
@@ -74,6 +77,7 @@ function OtherAssetsPage() {
                     onDelete={() => del.mutate(asset.id)}
                     reminderCount={counts.reminderCounts[asset.id] || 0}
                     historyCount={counts.historyCounts[asset.id] || 0}
+                    auditCount={counts.auditCounts[asset.id] || 0}
                     documentsCount={counts.documentsCounts[asset.id] || 0}
                   />
                 ))}
@@ -85,10 +89,15 @@ function OtherAssetsPage() {
               <span className="text-muted-foreground">
                 Total estimated value{valueTotals.foreign.length > 0 && <FxInfoNote fx={fxRates} />}
               </span>
-              <span className="font-bold">{fmtMoney(totalValue)} <span className="text-xs font-normal text-muted-foreground">(est.)</span></span>
+              <span className="font-bold">
+                {fmtMoney(totalValue)}{" "}
+                <span className="text-xs font-normal text-muted-foreground">(est.)</span>
+              </span>
             </div>
             <ForeignCurrencyTotals foreign={valueTotals.foreign} fx={fxRates} />
-            <p className="mt-1 text-[11px] text-muted-foreground">Values are manually entered estimates. Check "Value as of" dates.</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Values are manually entered estimates. Check "Value as of" dates.
+            </p>
           </div>
         </>
       )}
@@ -98,22 +107,37 @@ function OtherAssetsPage() {
 }
 
 function AssetRow({
-  asset, onStatus, onDelete, reminderCount, historyCount, documentsCount,
+  asset,
+  onStatus,
+  onDelete,
+  reminderCount,
+  historyCount,
+  auditCount,
+  documentsCount,
 }: {
-  asset: any; onStatus: (s: any) => void; onDelete: () => void;
-  reminderCount: number; historyCount: number; documentsCount: number;
+  asset: any;
+  onStatus: (s: any) => void;
+  onDelete: () => void;
+  reminderCount: number;
+  historyCount: number;
+  auditCount: number;
+  documentsCount: number;
 }) {
   const edit = useEditRecord("other_assets", asset);
   const dup = useDuplicateRecord("other_assets", asset);
 
   const [cardOpen, setCardOpen] = useState(false);
-  const [section, setSection] = useState<"notes" | "reminders" | "history" | "documents" | null>(null);
+  const [section, setSection] = useState<
+    "notes" | "reminders" | "history" | "audit" | "documents" | null
+  >(null);
 
-  function openSection(target: "notes" | "reminders" | "history" | "documents") {
+  function openSection(target: "notes" | "reminders" | "history" | "audit" | "documents") {
     setCardOpen(true);
     setSection(target);
     setTimeout(() => {
-      document.getElementById(`${target}-${asset.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document
+        .getElementById(`${target}-${asset.id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 60);
   }
 
@@ -135,10 +159,12 @@ function AssetRow({
         onOpenChange={setCardOpen}
         reminderCount={reminderCount}
         historyCount={historyCount}
+        auditCount={auditCount}
         documentsCount={documentsCount}
         onNotesClick={() => openSection("notes")}
         onReminderClick={() => openSection("reminders")}
         onHistoryClick={() => openSection("history")}
+        onAuditClick={() => openSection("audit")}
         onDocumentsClick={() => openSection("documents")}
         rightMeta={
           asset.estimated_value ? (
@@ -150,8 +176,18 @@ function AssetRow({
         }
       >
         <Section title="Details">
-          <FieldRow label="Estimated value" value={asset.estimated_value ? `${fmtMoney(asset.estimated_value, asset.currency)} (est.)` : "—"} />
-          <FieldRow label="Value as of" value={asset.last_updated ? fmtDate(asset.last_updated) : "—"} />
+          <FieldRow
+            label="Estimated value"
+            value={
+              asset.estimated_value
+                ? `${fmtMoney(asset.estimated_value, asset.currency)} (est.)`
+                : "—"
+            }
+          />
+          <FieldRow
+            label="Value as of"
+            value={asset.last_updated ? fmtDate(asset.last_updated) : "—"}
+          />
           {asset.action && <FieldRow label="Action" value={asset.action} />}
         </Section>
 
@@ -192,6 +228,17 @@ function AssetRow({
           onOpenChange={(o) => setSection(o ? "history" : null)}
         >
           <HistoryLog entityType="other_asset" entityId={asset.id} />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          id={`audit-${asset.id}`}
+          icon={<span>🛡️</span>}
+          title="Audit Trail"
+          count={auditCount}
+          open={section === "audit"}
+          onOpenChange={(o) => setSection(o ? "audit" : null)}
+        >
+          <AuditTrail tableName="other_assets" recordId={asset.id} />
         </CollapsibleSection>
 
         <CollapsibleSection
