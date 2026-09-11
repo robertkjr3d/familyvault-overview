@@ -23,6 +23,7 @@ import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { NotesEditor } from "@/components/NotesEditor";
 import { HistoryLog } from "@/components/HistoryLog";
+import { AuditTrail } from "@/components/AuditTrail";
 import { DocumentsList } from "@/components/DocumentsList";
 import { ReminderButton } from "@/components/ReminderButton";
 import { RemindersList } from "@/components/RemindersList";
@@ -38,7 +39,11 @@ export const Route = createFileRoute("/investments")({
 
 function staleDays(lastUpdated: string | null | undefined) {
   if (!lastUpdated) return null;
-  try { return differenceInDays(new Date(), parseISO(lastUpdated)); } catch { return null; }
+  try {
+    return differenceInDays(new Date(), parseISO(lastUpdated));
+  } catch {
+    return null;
+  }
 }
 
 function UpdateValueInline({ id, current }: { id: string; current: number | null | undefined }) {
@@ -48,9 +53,17 @@ function UpdateValueInline({ id, current }: { id: string; current: number | null
 
   async function save() {
     const num = Number(val.replace(/,/g, ""));
-    if (isNaN(num)) { toast.error("Enter a valid number"); return; }
+    if (isNaN(num)) {
+      toast.error("Enter a valid number");
+      return;
+    }
     const today = new Date().toISOString().slice(0, 10);
-    const { data, error } = await supabase.from("investments").update({ current_value: num, last_updated: today } as any).eq("id", id).select("id").maybeSingle();
+    const { data, error } = await supabase
+      .from("investments")
+      .update({ current_value: num, last_updated: today } as any)
+      .eq("id", id)
+      .select("id")
+      .maybeSingle();
     if (error) toast.error(error.message);
     else if (!data) toast.error("Nothing was updated — you may not have permission to edit this.");
     else {
@@ -63,17 +76,42 @@ function UpdateValueInline({ id, current }: { id: string; current: number | null
 
   if (!editing) {
     return (
-      <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs"
-        onClick={(e) => { e.stopPropagation(); setEditing(true); }}>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-7 px-2 text-xs"
+        onClick={(e) => {
+          e.stopPropagation();
+          setEditing(true);
+        }}
+      >
         Update
       </Button>
     );
   }
   return (
     <div className="flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
-      <Input type="text" inputMode="decimal" value={val} onChange={(e) => setVal(e.target.value)} className="h-7 w-24 text-xs" autoFocus />
-      <Button type="button" size="sm" className="h-7 px-2 text-xs" onClick={save}>Save</Button>
-      <Button type="button" size="sm" variant="ghost" className="h-7 px-1.5 text-xs" onClick={() => setEditing(false)}>✕</Button>
+      <Input
+        type="text"
+        inputMode="decimal"
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        className="h-7 w-24 text-xs"
+        autoFocus
+      />
+      <Button type="button" size="sm" className="h-7 px-2 text-xs" onClick={save}>
+        Save
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="h-7 px-1.5 text-xs"
+        onClick={() => setEditing(false)}
+      >
+        ✕
+      </Button>
     </div>
   );
 }
@@ -119,7 +157,10 @@ function InvestmentsPage() {
   const groups = Array.from(new Set(items.map((i: any) => i.group_name)));
   const costTotals = groupByCurrency(items, (i: any) => i.cost_basis);
   const valueTotals = groupByCurrency(items, (i: any) => i.current_value);
-  const gainTotals = groupByCurrency(items, (i: any) => (Number(i.current_value) || 0) - (Number(i.cost_basis) || 0));
+  const gainTotals = groupByCurrency(
+    items,
+    (i: any) => (Number(i.current_value) || 0) - (Number(i.cost_basis) || 0),
+  );
   const totalCost = totalWithFx(costTotals, fxRates);
   const totalValue = totalWithFx(valueTotals, fxRates);
 
@@ -135,7 +176,9 @@ function InvestmentsPage() {
         <>
           {groups.map((g) => (
             <section key={g}>
-              <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">{g}</h2>
+              <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                {g}
+              </h2>
               <div className="space-y-3">
                 {sortByStatus(items.filter((i: any) => i.group_name === g)).map((inv: any) => (
                   <InvestmentRow
@@ -145,6 +188,7 @@ function InvestmentsPage() {
                     onDelete={() => del.mutate(inv.id)}
                     reminderCount={counts.reminderCounts[inv.id] || 0}
                     historyCount={counts.historyCounts[inv.id] || 0}
+                    auditCount={counts.auditCounts[inv.id] || 0}
                     documentsCount={counts.documentsCounts[inv.id] || 0}
                     advisorNotes={advisorNotesByRecordId.get(inv.id) ?? []}
                   />
@@ -185,10 +229,22 @@ function InvestmentsPage() {
 }
 
 function InvestmentRow({
-  inv, onStatus, onDelete, reminderCount, historyCount, documentsCount, advisorNotes,
+  inv,
+  onStatus,
+  onDelete,
+  reminderCount,
+  historyCount,
+  auditCount,
+  documentsCount,
+  advisorNotes,
 }: {
-  inv: any; onStatus: (s: any) => void; onDelete: () => void;
-  reminderCount: number; historyCount: number; documentsCount: number;
+  inv: any;
+  onStatus: (s: any) => void;
+  onDelete: () => void;
+  reminderCount: number;
+  historyCount: number;
+  auditCount: number;
+  documentsCount: number;
   advisorNotes: any[];
 }) {
   const edit = useEditRecord("investments", inv);
@@ -201,9 +257,14 @@ function InvestmentRow({
   // having been refreshed. Same reasoning savings_accounts already uses.
   const stale = staleDays(inv.last_updated);
   const isStale = stale != null && stale >= 90;
-  const isILPOrEndowment = inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
+  const isILPOrEndowment =
+    inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
   const staleTitle = "Updated " + stale + "d ago";
-  const staleIndicator = isStale ? <span className="ml-1 text-review" title={staleTitle}>⚠</span> : null;
+  const staleIndicator = isStale ? (
+    <span className="ml-1 text-review" title={staleTitle}>
+      ⚠
+    </span>
+  ) : null;
 
   // Premium shown on the collapsed card in its actual frequency — e.g. $3,600/yr
   // not converted to a monthly estimate (that was confusing). Monthly equivalent
@@ -214,21 +275,28 @@ function InvestmentRow({
     const freq = (inv.premium_frequency || "annual").toLowerCase();
     if (freq === "one-off" || freq === "one_off") return null;
     const suffix =
-      freq === "monthly" ? "/mo" :
-      freq === "quarterly" ? "/qtr" :
-      freq === "semi-annual" ? "/6mo" :
-      "/yr";
+      freq === "monthly"
+        ? "/mo"
+        : freq === "quarterly"
+          ? "/qtr"
+          : freq === "semi-annual"
+            ? "/6mo"
+            : "/yr";
     return { amt, suffix };
   })();
 
   const [cardOpen, setCardOpen] = useState(false);
-  const [section, setSection] = useState<"notes" | "reminders" | "history" | "documents" | null>(null);
+  const [section, setSection] = useState<
+    "notes" | "reminders" | "history" | "audit" | "documents" | null
+  >(null);
 
-  function openSection(target: "notes" | "reminders" | "history" | "documents") {
+  function openSection(target: "notes" | "reminders" | "history" | "audit" | "documents") {
     setCardOpen(true);
     setSection(target);
     setTimeout(() => {
-      document.getElementById(`${target}-${inv.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document
+        .getElementById(`${target}-${inv.id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 60);
   }
 
@@ -253,28 +321,35 @@ function InvestmentRow({
         onOpenChange={setCardOpen}
         reminderCount={reminderCount}
         historyCount={historyCount}
+        auditCount={auditCount}
         documentsCount={documentsCount}
         onNotesClick={() => openSection("notes")}
         onAdvisorNoteClick={() => setCardOpen(true)}
         onReminderClick={() => openSection("reminders")}
         onHistoryClick={() => openSection("history")}
+        onAuditClick={() => openSection("audit")}
         onDocumentsClick={() => openSection("documents")}
         rightMeta={
           <div className="text-right text-xs">
-            <div className="text-muted-foreground">
-              Value (est.){staleIndicator}
-            </div>
+            <div className="text-muted-foreground">Value (est.){staleIndicator}</div>
             <div className="font-bold">{fmtMoney(inv.current_value, inv.currency)}</div>
-            <div className={gain >= 0 ? "text-settled" : "text-urgent"}>{fmtMoney(gain, inv.currency)}</div>
+            <div className={gain >= 0 ? "text-settled" : "text-urgent"}>
+              {fmtMoney(gain, inv.currency)}
+            </div>
             <div className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
               {isStale && (
-                <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: "hsl(38 95% 55%)" }} aria-label="Value is stale" />
+                <span
+                  className="inline-block h-1.5 w-1.5 rounded-full"
+                  style={{ background: "hsl(38 95% 55%)" }}
+                  aria-label="Value is stale"
+                />
               )}
               <LastUpdatedLine date={inv.last_updated} />
             </div>
             {premiumDisplay != null && (
               <div className="mt-1 font-semibold text-urgent">
-                −{fmtMoney(premiumDisplay.amt, inv.currency)}{premiumDisplay.suffix}
+                −{fmtMoney(premiumDisplay.amt, inv.currency)}
+                {premiumDisplay.suffix}
               </div>
             )}
           </div>
@@ -283,7 +358,9 @@ function InvestmentRow({
         <div className="flex items-center justify-between gap-2 rounded-md border border-dashed border-border/60 px-3 py-2">
           <div className="text-xs">
             {isStale ? (
-              <span className="font-medium" style={{ color: "hsl(38 95% 35%)" }}>● Current value is {stale} days old — update it</span>
+              <span className="font-medium" style={{ color: "hsl(38 95% 35%)" }}>
+                ● Current value is {stale} days old — update it
+              </span>
             ) : (
               <span className="text-muted-foreground">Update current value</span>
             )}
@@ -292,21 +369,51 @@ function InvestmentRow({
         </div>
         <Section title="Holding">
           <FieldRow label="Amount invested" value={fmtMoney(inv.cost_basis, inv.currency)} />
-          <FieldRow label="Current value (est.)" value={fmtMoney(inv.current_value, inv.currency)} />
+          <FieldRow
+            label="Current value (est.)"
+            value={fmtMoney(inv.current_value, inv.currency)}
+          />
           <FieldRow label="Value as of" value={fmtDate(inv.last_updated)} />
           <FieldRow
-            label={<span className="inline-flex items-center">Projected return<InfoNote text="This rate is for your own reference only. The Lifetime Net Worth chart uses one global growth rate set in Settings → Projection Assumptions, not this field." /></span>}
+            label={
+              <span className="inline-flex items-center">
+                Projected return
+                <InfoNote text="This rate is for your own reference only. The Lifetime Net Worth chart uses one global growth rate set in Settings → Projection Assumptions, not this field." />
+              </span>
+            }
             value={fmtPct(inv.projected_return_pct)}
           />
           {isILPOrEndowment && inv.coverage && <FieldRow label="Coverage" value={inv.coverage} />}
-          {isILPOrEndowment && inv.premium_amount && <FieldRow label="Premium amount" value={fmtMoney(inv.premium_amount, inv.currency)} />}
-          {isILPOrEndowment && inv.premium_start_date && <FieldRow label="Premium start" value={fmtDate(inv.premium_start_date)} />}
-          {isILPOrEndowment && inv.premium_frequency && <FieldRow label="Premium frequency" value={freqLabel(inv.premium_frequency)} />}
-          {isILPOrEndowment && inv.premium_end_date && <FieldRow label={<AlertLabel text="Premium end" />} value={fmtDate(inv.premium_end_date)} />}
-          {isILPOrEndowment && inv.payout_amount && <FieldRow label="Payout amount (est.)" value={fmtMoney(inv.payout_amount, inv.currency)} />}
-          {isILPOrEndowment && inv.payout_start_date && <FieldRow label="Payout start" value={fmtDate(inv.payout_start_date)} />}
-          {isILPOrEndowment && inv.payout_frequency && <FieldRow label="Payout frequency" value={freqLabel(inv.payout_frequency)} />}
-          {isILPOrEndowment && inv.payout_end_date && <FieldRow label="Payout end" value={fmtDate(inv.payout_end_date)} />}
+          {isILPOrEndowment && inv.premium_amount && (
+            <FieldRow label="Premium amount" value={fmtMoney(inv.premium_amount, inv.currency)} />
+          )}
+          {isILPOrEndowment && inv.premium_start_date && (
+            <FieldRow label="Premium start" value={fmtDate(inv.premium_start_date)} />
+          )}
+          {isILPOrEndowment && inv.premium_frequency && (
+            <FieldRow label="Premium frequency" value={freqLabel(inv.premium_frequency)} />
+          )}
+          {isILPOrEndowment && inv.premium_end_date && (
+            <FieldRow
+              label={<AlertLabel text="Premium end" />}
+              value={fmtDate(inv.premium_end_date)}
+            />
+          )}
+          {isILPOrEndowment && inv.payout_amount && (
+            <FieldRow
+              label="Payout amount (est.)"
+              value={fmtMoney(inv.payout_amount, inv.currency)}
+            />
+          )}
+          {isILPOrEndowment && inv.payout_start_date && (
+            <FieldRow label="Payout start" value={fmtDate(inv.payout_start_date)} />
+          )}
+          {isILPOrEndowment && inv.payout_frequency && (
+            <FieldRow label="Payout frequency" value={freqLabel(inv.payout_frequency)} />
+          )}
+          {isILPOrEndowment && inv.payout_end_date && (
+            <FieldRow label="Payout end" value={fmtDate(inv.payout_end_date)} />
+          )}
         </Section>
 
         {inv.strategy && (
@@ -322,12 +429,7 @@ function InvestmentRow({
           open={section === "notes"}
           onOpenChange={(o) => setSection(o ? "notes" : null)}
         >
-          <NotesEditor
-            table="investments"
-            queryKey="investments"
-            id={inv.id}
-            value={inv.notes}
-          />
+          <NotesEditor table="investments" queryKey="investments" id={inv.id} value={inv.notes} />
         </CollapsibleSection>
 
         {advisorNotes.length > 0 && (
@@ -342,7 +444,9 @@ function InvestmentRow({
                 <div key={n.id} className="rounded-lg border border-primary/15 bg-primary/5 p-2.5">
                   <p className="text-[10px] font-semibold text-primary/80">{n.advisorName}</p>
                   <p className="whitespace-pre-wrap text-sm text-foreground">{n.note}</p>
-                  <p className="mt-1 text-[10px] text-muted-foreground">Updated {fmtDate(n.updatedAt)}</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    Updated {fmtDate(n.updatedAt)}
+                  </p>
                 </div>
               ))}
             </div>
@@ -371,6 +475,17 @@ function InvestmentRow({
           onOpenChange={(o) => setSection(o ? "history" : null)}
         >
           <HistoryLog entityType="investment" entityId={inv.id} />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          id={`audit-${inv.id}`}
+          icon={<span>🛡️</span>}
+          title="Audit Trail"
+          count={auditCount}
+          open={section === "audit"}
+          onOpenChange={(o) => setSection(o ? "audit" : null)}
+        >
+          <AuditTrail tableName="investments" recordId={inv.id} />
         </CollapsibleSection>
 
         <CollapsibleSection
