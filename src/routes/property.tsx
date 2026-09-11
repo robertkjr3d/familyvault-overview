@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { HistoryLog } from "@/components/HistoryLog";
+import { AuditTrail } from "@/components/AuditTrail";
 import { AddRecordFab } from "@/components/AddRecordFab";
 import { Bell } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
@@ -10,7 +11,15 @@ import { MemberFilterBar } from "@/components/MemberFilterBar";
 import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
 import { sortByStatus } from "@/lib/sort";
-import { fmtMoney, fmtDate, fmtPct, groupByCurrency, totalWithFx, convertToSgd, type FxRates } from "@/lib/format";
+import {
+  fmtMoney,
+  fmtDate,
+  fmtPct,
+  groupByCurrency,
+  totalWithFx,
+  convertToSgd,
+  type FxRates,
+} from "@/lib/format";
 import { useFxRates } from "@/hooks/useFxRates";
 import { ForeignCurrencyTotals } from "@/components/ForeignCurrencyTotals";
 import { FxInfoNote } from "@/components/FxInfoNote";
@@ -30,8 +39,17 @@ export const Route = createFileRoute("/property")({
 });
 
 function totalCosts(p: any) {
-  return ["cost_management","cost_property_tax","cost_fire_insurance","cost_maintenance","cost_other"]
-    .reduce((s, k) => s + (Number(p[k]) || 0), 0) || Number(p.monthly_costs) || 0;
+  return (
+    [
+      "cost_management",
+      "cost_property_tax",
+      "cost_fire_insurance",
+      "cost_maintenance",
+      "cost_other",
+    ].reduce((s, k) => s + (Number(p[k]) || 0), 0) ||
+    Number(p.monthly_costs) ||
+    0
+  );
 }
 
 function yearsBetween(dateStr: string | null | undefined, now = new Date()) {
@@ -66,7 +84,10 @@ function PropertyPage() {
     enabled: !!activeHouseholdId,
     queryFn: async () => {
       if (!activeHouseholdId) return [];
-      const { data } = await supabase.from("loans").select("id, property_id, monthly_payment, bank, balance, currency").eq("household_id", activeHouseholdId);
+      const { data } = await supabase
+        .from("loans")
+        .select("id, property_id, monthly_payment, bank, balance, currency")
+        .eq("household_id", activeHouseholdId);
       return data ?? [];
     },
   });
@@ -114,6 +135,7 @@ function PropertyPage() {
             onDelete={() => del.mutate(p.id)}
             reminderCount={counts.reminderCounts[p.id] || 0}
             historyCount={counts.historyCounts[p.id] || 0}
+            auditCount={counts.auditCounts[p.id] || 0}
             documentsCount={counts.documentsCounts[p.id] || 0}
           />
         ))}
@@ -133,6 +155,7 @@ function PropertyPage() {
                 onDelete={() => del.mutate(p.id)}
                 reminderCount={counts.reminderCounts[p.id] || 0}
                 historyCount={counts.historyCounts[p.id] || 0}
+                auditCount={counts.auditCounts[p.id] || 0}
                 documentsCount={counts.documentsCounts[p.id] || 0}
               />
             ))}
@@ -156,7 +179,8 @@ function PropertyPage() {
           </div>
           <ForeignCurrencyTotals foreign={netTotals.foreign} fx={fxRates} />
           <p className="mt-1 text-[11px] text-muted-foreground">
-            Net of mortgage uses each property's own "Mortgage" balance field — update it there to keep this accurate.
+            Net of mortgage uses each property's own "Mortgage" balance field — update it there to
+            keep this accurate.
           </p>
         </div>
       )}
@@ -182,6 +206,7 @@ function PropertyRow({
   onDelete,
   reminderCount,
   historyCount,
+  auditCount,
   documentsCount,
 }: {
   p: any;
@@ -191,6 +216,7 @@ function PropertyRow({
   onDelete: () => void;
   reminderCount: number;
   historyCount: number;
+  auditCount: number;
   documentsCount: number;
 }) {
   const edit = useEditRecord("properties", p);
@@ -221,22 +247,31 @@ function PropertyRow({
   const gainPa = capitalGainPa(p);
   const target = parseTargetPct(p.strategy);
   const gainColor =
-    gainPa == null || target == null ? "" :
-    gainPa >= target ? "text-settled" :
-    gainPa >= target - 1 ? "text-review" : "text-urgent";
-  const grossYield = p.current_value && p.monthly_rent ? ((p.monthly_rent * 12) / p.current_value) * 100 : null;
+    gainPa == null || target == null
+      ? ""
+      : gainPa >= target
+        ? "text-settled"
+        : gainPa >= target - 1
+          ? "text-review"
+          : "text-urgent";
+  const grossYield =
+    p.current_value && p.monthly_rent ? ((p.monthly_rent * 12) / p.current_value) * 100 : null;
   const netRent = (Number(p.monthly_rent) || 0) - costs;
-  const netYield = p.current_value ? (netRent * 12) / p.current_value * 100 : null;
+  const netYield = p.current_value ? ((netRent * 12) / p.current_value) * 100 : null;
   const cashFlow = netRent - (Number(p.monthly_payment) || 0);
 
   const [cardOpen, setCardOpen] = useState(false);
-  const [section, setSection] = useState<"notes" | "reminders" | "history" | "documents" | null>(null);
+  const [section, setSection] = useState<
+    "notes" | "reminders" | "history" | "audit" | "documents" | null
+  >(null);
 
-  function openSection(target: "notes" | "reminders" | "history" | "documents") {
+  function openSection(target: "notes" | "reminders" | "history" | "audit" | "documents") {
     setCardOpen(true);
     setSection(target);
     setTimeout(() => {
-      document.getElementById(`${target}-${p.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document
+        .getElementById(`${target}-${p.id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 60);
   }
 
@@ -261,10 +296,12 @@ function PropertyRow({
         onOpenChange={setCardOpen}
         reminderCount={reminderCount}
         historyCount={historyCount}
+        auditCount={auditCount}
         documentsCount={documentsCount}
         onNotesClick={() => openSection("notes")}
         onReminderClick={() => openSection("reminders")}
         onHistoryClick={() => openSection("history")}
+        onAuditClick={() => openSection("audit")}
         onDocumentsClick={() => openSection("documents")}
         rightMeta={
           <div className="text-right text-xs">
@@ -273,7 +310,9 @@ function PropertyRow({
             {p.monthly_rent && (
               <>
                 <div className="mt-1 text-muted-foreground">Rental</div>
-                <div className="font-semibold text-settled">+{fmtMoney(p.monthly_rent, p.currency)}/mo</div>
+                <div className="font-semibold text-settled">
+                  +{fmtMoney(p.monthly_rent, p.currency)}/mo
+                </div>
               </>
             )}
           </div>
@@ -287,27 +326,62 @@ function PropertyRow({
           <FieldRow label="Purchase price" value={fmtMoney(p.purchase_price, p.currency)} />
           <FieldRow label="Purchase date" value={fmtDate(p.purchase_date)} />
           <FieldRow label="Current value" value={fmtMoney(p.current_value, p.currency)} />
-          <FieldRow label="Capital gain" value={fmtMoney((p.current_value || 0) - (p.purchase_price || 0), p.currency)} />
+          <FieldRow
+            label="Capital gain"
+            value={fmtMoney((p.current_value || 0) - (p.purchase_price || 0), p.currency)}
+          />
           <FieldRow
             label="Capital gain p.a."
-            value={gainPa == null ? "—" : <span className={`font-semibold ${gainColor}`}>{gainPa.toFixed(1)}%</span>}
+            value={
+              gainPa == null ? (
+                "—"
+              ) : (
+                <span className={`font-semibold ${gainColor}`}>{gainPa.toFixed(1)}%</span>
+              )
+            }
           />
-          <FieldRow label="Mortgage" value={p.mortgage_bank ? `${p.mortgage_bank} · ${fmtMoney(p.mortgage_balance, p.currency)}` : "—"} />
+          <FieldRow
+            label="Mortgage"
+            value={
+              p.mortgage_bank
+                ? `${p.mortgage_bank} · ${fmtMoney(p.mortgage_balance, p.currency)}`
+                : "—"
+            }
+          />
           <FieldRow label="Monthly payment" value={fmtMoney(p.monthly_payment, p.currency)} />
           {hasMismatch && (
             <div className="rounded-lg border border-review/40 bg-review-soft/30 px-3 py-2 text-xs text-muted-foreground">
-              ⚠ Linked loan ({linkedLoan.bank}) has a different monthly payment of {fmtMoney(linkedLoan.monthly_payment, linkedLoan.currency)}. The loan amount is used for cash flow calculations — update one to match.
+              ⚠ Linked loan ({linkedLoan.bank}) has a different monthly payment of{" "}
+              {fmtMoney(linkedLoan.monthly_payment, linkedLoan.currency)}. The loan amount is used
+              for cash flow calculations — update one to match.
             </div>
           )}
           {hasBalanceMismatch && (
             <div className="rounded-lg border border-review/40 bg-review-soft/30 px-3 py-2 text-xs text-muted-foreground">
-              ⚠ Linked loan ({linkedLoan.bank}) shows a balance of {fmtMoney(linkedLoan.balance, linkedLoan.currency)}, which doesn't match this property's Mortgage balance of {fmtMoney(p.mortgage_balance, p.currency)}. This property's "Net of mortgage" total uses the figure above — update one so they agree.
+              ⚠ Linked loan ({linkedLoan.bank}) shows a balance of{" "}
+              {fmtMoney(linkedLoan.balance, linkedLoan.currency)}, which doesn't match this
+              property's Mortgage balance of {fmtMoney(p.mortgage_balance, p.currency)}. This
+              property's "Net of mortgage" total uses the figure above — update one so they agree.
             </div>
           )}
           <FieldRow label="Interest rate" value={fmtPct(p.interest_rate)} />
           <FieldRow label="Rate type" value={p.rate_type ?? "—"} />
-          <FieldRow label={<AlertLabel text="Rate ends / Reprice" />} value={fmtDate(p.fixed_rate_end)} />
-          <FieldRow label="Mortgage end date" value={p.mortgage_end_date ? fmtDate(p.mortgage_end_date) : <span className="text-muted-foreground text-xs">Not set — chart assumes ongoing</span>} />
+          <FieldRow
+            label={<AlertLabel text="Rate ends / Reprice" />}
+            value={fmtDate(p.fixed_rate_end)}
+          />
+          <FieldRow
+            label="Mortgage end date"
+            value={
+              p.mortgage_end_date ? (
+                fmtDate(p.mortgage_end_date)
+              ) : (
+                <span className="text-muted-foreground text-xs">
+                  Not set — chart assumes ongoing
+                </span>
+              )
+            }
+          />
           <FieldRow label="Monthly rent" value={fmtMoney(p.monthly_rent, p.currency)} />
         </Section>
 
@@ -315,15 +389,35 @@ function PropertyRow({
           <FieldRow label="Management fee" value={fmtMoney(p.cost_management, p.currency)} />
           <FieldRow label="Property tax" value={fmtMoney(p.cost_property_tax, p.currency)} />
           <FieldRow label="Fire insurance" value={fmtMoney(p.cost_fire_insurance, p.currency)} />
-          <FieldRow label="Maintenance / repairs" value={fmtMoney(p.cost_maintenance, p.currency)} />
-          <FieldRow label={p.cost_other_label || "Other"} value={fmtMoney(p.cost_other, p.currency)} />
-          <FieldRow label={<span className="font-bold">Total monthly costs</span> as any} value={<span className="font-bold">{fmtMoney(costs, p.currency)}</span>} />
+          <FieldRow
+            label="Maintenance / repairs"
+            value={fmtMoney(p.cost_maintenance, p.currency)}
+          />
+          <FieldRow
+            label={p.cost_other_label || "Other"}
+            value={fmtMoney(p.cost_other, p.currency)}
+          />
+          <FieldRow
+            label={(<span className="font-bold">Total monthly costs</span>) as any}
+            value={<span className="font-bold">{fmtMoney(costs, p.currency)}</span>}
+          />
           <FieldRow label="Gross yield %" value={grossYield != null ? fmtPct(grossYield) : "—"} />
           <FieldRow label="Net yield %" value={netYield != null ? fmtPct(netYield) : "—"} />
-          <FieldRow label="Monthly cash flow" value={<span className={cashFlow >= 0 ? "text-settled" : "text-urgent"}>{fmtMoney(cashFlow, p.currency)}</span>} />
+          <FieldRow
+            label="Monthly cash flow"
+            value={
+              <span className={cashFlow >= 0 ? "text-settled" : "text-urgent"}>
+                {fmtMoney(cashFlow, p.currency)}
+              </span>
+            }
+          />
           <FieldRow
             label="Loan vs Value %"
-            value={p.current_value && p.mortgage_balance ? fmtPct((p.mortgage_balance / p.current_value) * 100) : "—"}
+            value={
+              p.current_value && p.mortgage_balance
+                ? fmtPct((p.mortgage_balance / p.current_value) * 100)
+                : "—"
+            }
           />
         </Section>
 
@@ -357,6 +451,17 @@ function PropertyRow({
           onOpenChange={(o) => setSection(o ? "history" : null)}
         >
           <HistoryLog entityType="property" entityId={p.id} />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          id={`audit-${p.id}`}
+          icon={<span>🛡️</span>}
+          title="Audit Trail"
+          count={auditCount}
+          open={section === "audit"}
+          onOpenChange={(o) => setSection(o ? "audit" : null)}
+        >
+          <AuditTrail tableName="properties" recordId={p.id} />
         </CollapsibleSection>
         <CollapsibleSection
           id={`documents-${p.id}`}
