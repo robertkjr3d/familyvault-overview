@@ -22,6 +22,7 @@ import { RemindersList } from "@/components/RemindersList";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { NotesEditor } from "@/components/NotesEditor";
 import { HistoryLog } from "@/components/HistoryLog";
+import { AuditTrail } from "@/components/AuditTrail";
 import { DocumentsList } from "@/components/DocumentsList";
 import { HashHighlight } from "@/components/HashHighlight";
 import { useEntityCounts } from "@/lib/useEntityCounts";
@@ -52,7 +53,11 @@ function groupRank(name: string) {
 
 function staleDays(lastUpdated: string | null | undefined) {
   if (!lastUpdated) return null;
-  try { return differenceInDays(new Date(), parseISO(lastUpdated)); } catch { return null; }
+  try {
+    return differenceInDays(new Date(), parseISO(lastUpdated));
+  } catch {
+    return null;
+  }
 }
 
 function UpdateBalanceInline({ id, current }: { id: string; current: number | null | undefined }) {
@@ -62,9 +67,17 @@ function UpdateBalanceInline({ id, current }: { id: string; current: number | nu
 
   async function save() {
     const num = Number(val.replace(/,/g, ""));
-    if (isNaN(num)) { toast.error("Enter a valid number"); return; }
+    if (isNaN(num)) {
+      toast.error("Enter a valid number");
+      return;
+    }
     const today = new Date().toISOString().slice(0, 10);
-    const { data, error } = await supabase.from("savings_accounts").update({ balance: num, last_updated: today }).eq("id", id).select("id").maybeSingle();
+    const { data, error } = await supabase
+      .from("savings_accounts")
+      .update({ balance: num, last_updated: today })
+      .eq("id", id)
+      .select("id")
+      .maybeSingle();
     if (error) toast.error(error.message);
     else if (!data) toast.error("Nothing was updated — you may not have permission to edit this.");
     else {
@@ -77,17 +90,42 @@ function UpdateBalanceInline({ id, current }: { id: string; current: number | nu
 
   if (!editing) {
     return (
-      <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs"
-        onClick={(e) => { e.stopPropagation(); setEditing(true); }}>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-7 px-2 text-xs"
+        onClick={(e) => {
+          e.stopPropagation();
+          setEditing(true);
+        }}
+      >
         Update
       </Button>
     );
   }
   return (
     <div className="flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
-      <Input type="text" inputMode="decimal" value={val} onChange={(e) => setVal(e.target.value)} className="h-7 w-24 text-xs" autoFocus />
-      <Button type="button" size="sm" className="h-7 px-2 text-xs" onClick={save}>Save</Button>
-      <Button type="button" size="sm" variant="ghost" className="h-7 px-1.5 text-xs" onClick={() => setEditing(false)}>✕</Button>
+      <Input
+        type="text"
+        inputMode="decimal"
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        className="h-7 w-24 text-xs"
+        autoFocus
+      />
+      <Button type="button" size="sm" className="h-7 px-2 text-xs" onClick={save}>
+        Save
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="h-7 px-1.5 text-xs"
+        onClick={() => setEditing(false)}
+      >
+        ✕
+      </Button>
     </div>
   );
 }
@@ -113,7 +151,9 @@ function SavingsPage() {
     },
   });
 
-  const groups = Array.from(new Set(items.map((i: any) => i.account_type || "Other"))).sort((a, b) => groupRank(a) - groupRank(b));
+  const groups = Array.from(new Set(items.map((i: any) => i.account_type || "Other"))).sort(
+    (a, b) => groupRank(a) - groupRank(b),
+  );
   const cpfItems = items.filter((i: any) => isCpfAccountType(i.account_type));
   const liquidItems = items.filter((i: any) => !isCpfAccountType(i.account_type));
   const liquidTotals = groupByCurrency(liquidItems, (i: any) => i.balance);
@@ -125,19 +165,24 @@ function SavingsPage() {
       <MemberFilterBar table="savings_accounts" />
       {groups.map((g) => (
         <section key={g}>
-          <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">{g}</h2>
+          <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            {g}
+          </h2>
           <div className="space-y-3">
-            {sortByStatus(items.filter((i: any) => (i.account_type || "Other") === g)).map((a: any) => (
-              <SavingsRow
-                key={a.id}
-                a={a}
-                onStatus={(s) => status.mutate({ id: a.id, status: s })}
-                onDelete={() => del.mutate(a.id)}
-                reminderCount={counts.reminderCounts[a.id] || 0}
-                historyCount={counts.historyCounts[a.id] || 0}
-                documentsCount={counts.documentsCounts[a.id] || 0}
-              />
-            ))}
+            {sortByStatus(items.filter((i: any) => (i.account_type || "Other") === g)).map(
+              (a: any) => (
+                <SavingsRow
+                  key={a.id}
+                  a={a}
+                  onStatus={(s) => status.mutate({ id: a.id, status: s })}
+                  onDelete={() => del.mutate(a.id)}
+                  reminderCount={counts.reminderCounts[a.id] || 0}
+                  historyCount={counts.historyCounts[a.id] || 0}
+                  auditCount={counts.auditCounts[a.id] || 0}
+                  documentsCount={counts.documentsCounts[a.id] || 0}
+                />
+              ),
+            )}
           </div>
         </section>
       ))}
@@ -186,10 +231,21 @@ function AlertLabel({ text }: { text: string }) {
 }
 
 function SavingsRow({
-  a, onStatus, onDelete, reminderCount, historyCount, documentsCount,
+  a,
+  onStatus,
+  onDelete,
+  reminderCount,
+  historyCount,
+  auditCount,
+  documentsCount,
 }: {
-  a: any; onStatus: (s: any) => void; onDelete: () => void;
-  reminderCount: number; historyCount: number; documentsCount: number;
+  a: any;
+  onStatus: (s: any) => void;
+  onDelete: () => void;
+  reminderCount: number;
+  historyCount: number;
+  auditCount: number;
+  documentsCount: number;
 }) {
   const edit = useEditRecord("savings_accounts", a);
   const dup = useDuplicateRecord("savings_accounts", a);
@@ -199,13 +255,17 @@ function SavingsRow({
   const isCPF = isCpfAccountType(a.account_type);
 
   const [cardOpen, setCardOpen] = useState(false);
-  const [section, setSection] = useState<"notes" | "reminders" | "history" | "documents" | null>(null);
+  const [section, setSection] = useState<
+    "notes" | "reminders" | "history" | "audit" | "documents" | null
+  >(null);
 
-  function openSection(target: "notes" | "reminders" | "history" | "documents") {
+  function openSection(target: "notes" | "reminders" | "history" | "audit" | "documents") {
     setCardOpen(true);
     setSection(target);
     setTimeout(() => {
-      document.getElementById(`${target}-${a.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document
+        .getElementById(`${target}-${a.id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 60);
   }
 
@@ -229,35 +289,55 @@ function SavingsRow({
         onOpenChange={setCardOpen}
         reminderCount={reminderCount}
         historyCount={historyCount}
+        auditCount={auditCount}
         documentsCount={documentsCount}
         onNotesClick={() => openSection("notes")}
         onReminderClick={() => openSection("reminders")}
         onHistoryClick={() => openSection("history")}
+        onAuditClick={() => openSection("audit")}
         onDocumentsClick={() => openSection("documents")}
         rightMeta={
           <div className="text-right text-xs">
             <div className="text-muted-foreground">Balance</div>
-            <div className="font-bold">{fmtMoney(a.balance, a.currency)} <span className="text-[10px] font-normal text-muted-foreground">(est.)</span></div>
+            <div className="font-bold">
+              {fmtMoney(a.balance, a.currency)}{" "}
+              <span className="text-[10px] font-normal text-muted-foreground">(est.)</span>
+            </div>
             <div className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
               {isStale && (
-                <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: "hsl(38 95% 55%)" }} aria-label="Balance is stale" />
+                <span
+                  className="inline-block h-1.5 w-1.5 rounded-full"
+                  style={{ background: "hsl(38 95% 55%)" }}
+                  aria-label="Balance is stale"
+                />
               )}
               <LastUpdatedLine date={a.last_updated} />
             </div>
-            {a.interest_rate != null && <div className="text-muted-foreground">{fmtPct(a.interest_rate)}</div>}
+            {a.interest_rate != null && (
+              <div className="text-muted-foreground">{fmtPct(a.interest_rate)}</div>
+            )}
           </div>
         }
       >
         <Section title="Account">
           <FieldRow label="Balance" value={fmtMoney(a.balance, a.currency)} />
           <FieldRow label="Interest rate" value={fmtPct(a.interest_rate)} />
-          {isFD && <FieldRow label={<AlertLabel text="Maturity" />} value={fmtDate(a.maturity_date)} />}
+          {isFD && (
+            <FieldRow label={<AlertLabel text="Maturity" />} value={fmtDate(a.maturity_date)} />
+          )}
           {isCPF && (
             <>
-              <FieldRow label={<AlertLabel text="Withdrawal eligible" />} value={fmtDate(a.withdrawal_date)} />
-              <FieldRow label="Est. monthly payout" value={fmtMoney(a.estimated_monthly_payout, a.currency)} />
+              <FieldRow
+                label={<AlertLabel text="Withdrawal eligible" />}
+                value={fmtDate(a.withdrawal_date)}
+              />
+              <FieldRow
+                label="Est. monthly payout"
+                value={fmtMoney(a.estimated_monthly_payout, a.currency)}
+              />
               <p className="pt-1 text-[11px] text-muted-foreground">
-                Reference only — not used in the Lifetime Net Worth chart. The chart's CPF LIFE payout estimate is set under Settings.
+                Reference only — not used in the Lifetime Net Worth chart. The chart's CPF LIFE
+                payout estimate is set under Settings.
               </p>
             </>
           )}
@@ -267,7 +347,9 @@ function SavingsRow({
         <div className="flex items-center justify-between gap-2 rounded-md border border-dashed border-border/60 px-3 py-2">
           <div className="text-xs">
             {isStale ? (
-              <span className="font-medium" style={{ color: "hsl(38 95% 35%)" }}>● Update balance</span>
+              <span className="font-medium" style={{ color: "hsl(38 95% 35%)" }}>
+                ● Update balance
+              </span>
             ) : (
               <span className="text-muted-foreground">Update balance</span>
             )}
@@ -282,12 +364,7 @@ function SavingsRow({
           open={section === "notes"}
           onOpenChange={(o) => setSection(o ? "notes" : null)}
         >
-          <NotesEditor
-            table="savings_accounts"
-            queryKey="savings"
-            id={a.id}
-            value={a.notes}
-          />
+          <NotesEditor table="savings_accounts" queryKey="savings" id={a.id} value={a.notes} />
         </CollapsibleSection>
 
         <CollapsibleSection
@@ -312,6 +389,17 @@ function SavingsRow({
           onOpenChange={(o) => setSection(o ? "history" : null)}
         >
           <HistoryLog entityType="savings" entityId={a.id} />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          id={`audit-${a.id}`}
+          icon={<span>🛡️</span>}
+          title="Audit Trail"
+          count={auditCount}
+          open={section === "audit"}
+          onOpenChange={(o) => setSection(o ? "audit" : null)}
+        >
+          <AuditTrail tableName="savings_accounts" recordId={a.id} />
         </CollapsibleSection>
 
         <CollapsibleSection
