@@ -17,6 +17,7 @@ import { HashHighlight } from "@/components/HashHighlight";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { NotesEditor } from "@/components/NotesEditor";
 import { HistoryLog } from "@/components/HistoryLog";
+import { AuditTrail } from "@/components/AuditTrail";
 import { DocumentsList } from "@/components/DocumentsList";
 import { RateSchedule } from "@/components/loan/RateSchedule";
 import { ReminderButton } from "@/components/ReminderButton";
@@ -69,6 +70,7 @@ function LoansPage() {
             onDelete={() => del.mutate(l.id)}
             reminderCount={counts.reminderCounts[l.id] || 0}
             historyCount={counts.historyCounts[l.id] || 0}
+            auditCount={counts.auditCounts[l.id] || 0}
             documentsCount={counts.documentsCounts[l.id] || 0}
           />
         ))}
@@ -117,6 +119,7 @@ function LoanRow({
   onDelete,
   reminderCount,
   historyCount,
+  auditCount,
   documentsCount,
 }: {
   l: any;
@@ -125,6 +128,7 @@ function LoanRow({
   onDelete: () => void;
   reminderCount: number;
   historyCount: number;
+  auditCount: number;
   documentsCount: number;
 }) {
   const edit = useEditRecord("loans", l);
@@ -147,11 +151,11 @@ function LoanRow({
   const displayedMonthlyPayment = l.monthly_payment || calcPmt;
 
   const [cardOpen, setCardOpen] = useState(false);
-  const [section, setSection] = useState<"notes" | "reminders" | "history" | "documents" | null>(
-    null,
-  );
+  const [section, setSection] = useState<
+    "notes" | "reminders" | "history" | "audit" | "documents" | null
+  >(null);
 
-  function openSection(target: "notes" | "reminders" | "history" | "documents") {
+  function openSection(target: "notes" | "reminders" | "history" | "audit" | "documents") {
     setCardOpen(true);
     setSection(target);
     setTimeout(() => {
@@ -180,10 +184,12 @@ function LoanRow({
         onOpenChange={setCardOpen}
         reminderCount={reminderCount}
         historyCount={historyCount}
+        auditCount={auditCount}
         documentsCount={documentsCount}
         onNotesClick={() => openSection("notes")}
         onReminderClick={() => openSection("reminders")}
         onHistoryClick={() => openSection("history")}
+        onAuditClick={() => openSection("audit")}
         onDocumentsClick={() => openSection("documents")}
         rightMeta={
           <div className="text-right text-xs">
@@ -278,6 +284,17 @@ function LoanRow({
           onOpenChange={(o) => setSection(o ? "history" : null)}
         >
           <HistoryLog entityType="loan" entityId={l.id} />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          id={`audit-${l.id}`}
+          icon={<span>🛡️</span>}
+          title="Audit Trail"
+          count={auditCount}
+          open={section === "audit"}
+          onOpenChange={(o) => setSection(o ? "audit" : null)}
+        >
+          <AuditTrail tableName="loans" recordId={l.id} />
         </CollapsibleSection>
 
         <CollapsibleSection
