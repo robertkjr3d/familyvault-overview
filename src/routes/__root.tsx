@@ -111,7 +111,7 @@ function RootComponent() {
 }
 
 function RootContent() {
-  const { initialized, session } = useAuthSession();
+  const { initialized, session, authRedirectError } = useAuthSession();
   const setActiveHouseholdId = useAppStore((s) => s.setActiveHouseholdId);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const queryClient = useQueryClient();
@@ -268,7 +268,7 @@ function RootContent() {
   }
 
   if (viewMode === "sign-in") {
-    return <SignInScreen />;
+    return <SignInScreen redirectError={authRedirectError} />;
   }
 
   if (viewMode === "no-access") {
@@ -460,7 +460,7 @@ function buildAuthRedirectUrl(): string | undefined {
   return url.toString();
 }
 
-function SignInScreen() {
+function SignInScreen({ redirectError }: { redirectError: string | null }) {
   const [email, setEmail] = useState(() => {
     if (typeof window === "undefined") return "";
     // Prefill from the invite link when present, so someone who actually
@@ -654,6 +654,13 @@ function SignInScreen() {
               ? "Enter the invited email and the code from your invite email."
               : "Enter your email and the code we send you — no password needed."}
           </p>
+
+          {redirectError && (
+            <div className="mt-4 rounded-lg border border-urgent/30 bg-urgent/5 p-3 text-sm text-urgent">
+              That link didn't work — it may be an older or already-used one. Please enter your
+              email below and type in the 6-digit code from your email instead.
+            </div>
+          )}
 
           <div className="mt-5 space-y-3">
             <Button
