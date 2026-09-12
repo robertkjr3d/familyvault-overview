@@ -1,0 +1,148 @@
+name: Migrate Database to Singapore
+
+# Manual trigger ONLY — never runs automatically on push or pull requests.
+# This is deliberate: secrets are only ever used when a person with write
+# access to this repo explicitly clicks "Run workflow" and chooses a mode.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "rehearsal = safe practice run into the new project. final-topup = the last real copy, run during the short cutover window."
+        required: true
+        type: choice
+        options:
+          - rehearsal
+          - final-topup
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Dump roles from OLD (Seoul) project
+        run: supabase db dump --db-url "$OLD_DB_URL" -f roles.sql --role-only
+        env:
+          OLD_DB_URL: ${{ secrets.OLD_DB_URL }}
+
+      - name: Dump schema from OLD (Seoul) project
+        run: supabase db dump --db-url "$OLD_DB_URL" -f schema.sql
+        env:
+          OLD_DB_URL: ${{ secrets.OLD_DB_URL }}
+
+      - name: Dump data from OLD (Seoul) project
+        run: |
+          supabase db dump --db-url "$OLD_DB_URL" -f data.sql --use-copy --data-only \
+            -x "storage.buckets_vectors" -x "storage.vector_indexes"
+        env:
+          OLD_DB_URL: ${{ secrets.OLD_DB_URL }}
+
+      # Auth/storage schema objects (the sign-up trigger + storage security
+      # rules) live in Supabase-managed schemas that the dumps above skip
+      # automatically. This step captures them separately, using Supabase's
+      # own documented method: link to the OLD project (spins up a
+      # temporary local comparison database via Docker, which is why this
+      # needs supabase/setup-cli + Docker, both already on this runner) and
+      # diff the real live schema against a fresh baseline.
+      - name: Diff auth/storage schema from OLD (Seoul) project
+        run: |
+          supabase link --project-ref "$OLD_PROJECT_REF"
+          supabase db diff --linked --schema auth,storage > auth_storage_extra.sql
+        env:
+          OLD_PROJECT_REF: ${{ secrets.OLD_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.OLD_DB_PASSWORD }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      # A documented, known rough edge (Supabase's own troubleshooting notes
+      # for this exact migration path): restoring can fail on permission
+      # errors tied to the "supabase_admin" internal role. Comment those
+      # specific lines out before restoring, rather than finding out the
+      # hard way mid-restore.
+      - name: Remove known-problematic ownership lines
+        run: |
+          sed -i 's/^ALTER .* OWNER TO "supabase_admin";$/-- &/' schema.sql
+          sed -i 's/^ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin"/-- ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin"/' schema.sql
+
+      - name: Restore roles + schema + data into NEW (Singapore) project
+        run: |
+          psql --single-transaction --variable ON_ERROR_STOP=1 \
+            --file roles.sql --file schema.sql --file data.sql \
+            --dbname "$NEW_DB_URL"
+        env:
+          NEW_DB_URL: ${{ secrets.NEW_DB_URL }}
+
+      - name: Restore auth/storage schema extras into NEW (Singapore) project
+        run: |
+          if [ -s auth_storage_extra.sql ]; then
+            psql --single-transaction --variable ON_ERROR_STOP=1 \
+              --file auth_storage_extra.sql --dbname "$NEW_DB_URL"
+          else
+            echo "No auth/storage schema differences found — nothing extra to restore."
+          fi
+        env:
+          NEW_DB_URL: ${{ secrets.NEW_DB_URL }}
+
+      # Risk #11 from the plan: verify the 6 function grants that let
+      # logged-in people actually use the app made it across. This fails
+      # the whole workflow loudly if even one is missing, instead of
+      # silently "succeeding" with a broken app underneath.
+      - name: Verify the 6 critical function grants survived
+        run: |
+          psql "$NEW_DB_URL" --single-transaction --variable ON_ERROR_STOP=1 -c "
+            DO \$\$
+            DECLARE
+              missing text;
+            BEGIN
+              SELECT string_agg(fn, ', ') INTO missing FROM (
+                SELECT unnest(ARRAY[
+                  'public.current_household_id()',
+                  'public.current_user_household_ids()',
+                  'public.default_household_id()',
+                  'public.is_household_member(uuid)',
+                  'public.share_household_by_email(uuid,text,text)',
+                  'public.transfer_household_ownership_by_email(uuid,text)'
+                ]) AS fn
+              ) checks
+              WHERE NOT has_function_privilege('authenticated', fn::regprocedure, 'execute');
+              IF missing IS NOT NULL THEN
+                RAISE EXCEPTION 'Missing EXECUTE grant for authenticated on: %', missing;
+              END IF;
+              RAISE NOTICE 'All 6 critical function grants verified present.';
+            END \$\$;
+          "
+        env:
+          NEW_DB_URL: ${{ secrets.NEW_DB_URL }}
+
+      - name: Row counts — OLD vs NEW (manual comparison)
+        run: |
+          echo "=== OLD (Seoul) row counts ==="
+          psql "$OLD_DB_URL" -c "
+            SELECT schemaname, relname, n_live_tup
+            FROM pg_stat_user_tables
+            WHERE schemaname = 'public'
+            ORDER BY relname;
+          "
+          echo "=== NEW (Singapore) row counts ==="
+          psql "$NEW_DB_URL" -c "
+            SELECT schemaname, relname, n_live_tup
+            FROM pg_stat_user_tables
+            WHERE schemaname = 'public'
+            ORDER BY relname;
+          "
+        env:
+          OLD_DB_URL: ${{ secrets.OLD_DB_URL }}
+          NEW_DB_URL: ${{ secrets.NEW_DB_URL }}
+
+      - name: Migrate storage files (photos/PDFs)
+        run: node migrate-storage.js
+        env:
+          OLD_PROJECT_URL: ${{ secrets.OLD_PROJECT_URL }}
+          OLD_SERVICE_ROLE_KEY: ${{ secrets.OLD_SERVICE_ROLE_KEY }}
+          NEW_PROJECT_URL: ${{ secrets.NEW_PROJECT_URL }}
+          NEW_SERVICE_ROLE_KEY: ${{ secrets.NEW_SERVICE_ROLE_KEY }}
+
+      - name: Done
+        run: echo "Migration step (mode = ${{ inputs.mode }}) finished. Read every step above for errors before trusting this run."
