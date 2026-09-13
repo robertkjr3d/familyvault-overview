@@ -15,7 +15,7 @@ on:
           - final-topup
 
 jobs:
-  migrate:
+  migrate-database:
     runs-on: ubuntu-latest
     steps:
       - name: Install Supabase CLI
@@ -71,7 +71,6 @@ jobs:
         env:
           NEW_DB_URL: ${{ secrets.NEW_DB_URL }}
 
-
       # Risk #11 from the plan: verify the 6 function grants that let
       # logged-in people actually use the app made it across. This fails
       # the whole workflow loudly if even one is missing, instead of
@@ -123,6 +122,27 @@ jobs:
           OLD_DB_URL: ${{ secrets.OLD_DB_URL }}
           NEW_DB_URL: ${{ secrets.NEW_DB_URL }}
 
+  migrate-storage:
+    needs: migrate-database
+    runs-on: ubuntu-latest
+    steps:
+      # This was the actual bug: without this, the runner's filesystem is
+      # essentially empty — migrate-storage.js (a file that lives IN the
+      # repo) was never actually present for node to find. Every other step
+      # in the database job above only ever ran shell commands or wrote
+      # files the dump commands created themselves, so this gap never
+      # showed up until now.
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install storage migration script's one dependency
+        run: npm install @supabase/supabase-js@2
+
       - name: Migrate storage files (photos/PDFs)
         run: node migrate-storage.js
         env:
@@ -132,4 +152,4 @@ jobs:
           NEW_SERVICE_ROLE_KEY: ${{ secrets.NEW_SERVICE_ROLE_KEY }}
 
       - name: Done
-        run: echo "Migration step (mode = ${{ inputs.mode }}) finished. Read every step above for errors before trusting this run."
+        run: echo "Migration (mode = ${{ inputs.mode }}) finished. Read every step above for errors before trusting this run."
