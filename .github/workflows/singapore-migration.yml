@@ -40,21 +40,18 @@ jobs:
         env:
           OLD_DB_URL: ${{ secrets.OLD_DB_URL }}
 
-      # Auth/storage schema objects (the sign-up trigger + storage security
-      # rules) live in Supabase-managed schemas that the dumps above skip
-      # automatically. This step captures them separately, using Supabase's
-      # own documented method: link to the OLD project (spins up a
-      # temporary local comparison database via Docker, which is why this
-      # needs supabase/setup-cli + Docker, both already on this runner) and
-      # diff the real live schema against a fresh baseline.
-      - name: Diff auth/storage schema from OLD (Seoul) project
-        run: |
-          supabase link --project-ref "$OLD_PROJECT_REF"
-          supabase db diff --linked --schema auth,storage > auth_storage_extra.sql
-        env:
-          OLD_PROJECT_REF: ${{ secrets.OLD_PROJECT_REF }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.OLD_DB_PASSWORD }}
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      # NOTE: the "diff auth/storage schema" step that used to be here was
+      # removed. Confirmed via Supabase's own current CLI documentation:
+      # "supabase db diff ... is known to fail [if] your schema contains
+      # ... changes to storage buckets" — exactly our case (this app has
+      # RLS policies on storage.objects referencing specific bucket names).
+      # Not something we did wrong; a documented tool limitation. The
+      # auth.users trigger + storage.objects policies are verified and
+      # applied manually via the Supabase SQL Editor instead — see the
+      # migration plan doc for the exact statements. This is arguably more
+      # trustworthy anyway, since it's built from what's actually live on
+      # the old project right now, not from a tool that's known to choke
+      # on this exact case.
 
       # A documented, known rough edge (Supabase's own troubleshooting notes
       # for this exact migration path): restoring can fail on permission
@@ -74,16 +71,6 @@ jobs:
         env:
           NEW_DB_URL: ${{ secrets.NEW_DB_URL }}
 
-      - name: Restore auth/storage schema extras into NEW (Singapore) project
-        run: |
-          if [ -s auth_storage_extra.sql ]; then
-            psql --single-transaction --variable ON_ERROR_STOP=1 \
-              --file auth_storage_extra.sql --dbname "$NEW_DB_URL"
-          else
-            echo "No auth/storage schema differences found — nothing extra to restore."
-          fi
-        env:
-          NEW_DB_URL: ${{ secrets.NEW_DB_URL }}
 
       # Risk #11 from the plan: verify the 6 function grants that let
       # logged-in people actually use the app made it across. This fails
