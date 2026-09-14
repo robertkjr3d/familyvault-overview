@@ -144,7 +144,7 @@ jobs:
         run: npm install @supabase/supabase-js@2
 
       - name: Migrate storage files (photos/PDFs)
-        run: node migrate-storage.js
+        run: node migrate-storage.cjs
         env:
           OLD_PROJECT_URL: ${{ secrets.OLD_PROJECT_URL }}
           OLD_SERVICE_ROLE_KEY: ${{ secrets.OLD_SERVICE_ROLE_KEY }}
