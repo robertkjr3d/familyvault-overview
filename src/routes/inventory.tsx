@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Camera, Plus, Search, Trash2, ChevronDown, Folder as FolderIcon, X, Pencil, ArrowRightLeft, Bell } from "lucide-react";
+import { Camera, Plus, Search, Trash2, ChevronDown, Folder as FolderIcon, X, Pencil, ArrowRightLeft, Bell, ChefHat, BedDouble, Bath, Sofa, Car, Archive, Briefcase, DoorOpen } from "lucide-react";
 import { HashHighlight } from "@/components/HashHighlight";
 import { ReminderButton } from "@/components/ReminderButton";
 import { RemindersList } from "@/components/RemindersList";
@@ -30,6 +30,34 @@ head: () => ({ meta: [{ title: "Inventory — FamilyHub SG" }] }),
 });
 
 type Folder = { id: string; name: string; parent_id: string | null; photo_url: string | null; photo_size_bytes: number | null; sort_order: number };
+
+// Folder names are free text (there's no "default folder" or folder-type
+// field in the schema) — this can only ever be a best-effort match on
+// common room names. Anything unrecognized (e.g. "Aza's room", a name in
+// another language) safely falls through to the generic folder icon, same
+// as it does today — this never renders worse than before, only better for
+// common cases. Uses the app's existing accent token, no new colors added.
+const FOLDER_ICON_MATCHERS: { keywords: string[]; Icon: typeof FolderIcon }[] = [
+  { keywords: ["kitchen"], Icon: ChefHat },
+  { keywords: ["bedroom", "room", "bed"], Icon: BedDouble },
+  { keywords: ["bathroom", "toilet", "shower"], Icon: Bath },
+  { keywords: ["living", "hall", "lounge"], Icon: Sofa },
+  { keywords: ["garage", "car"], Icon: Car },
+  { keywords: ["store", "storage", "closet", "wardrobe"], Icon: Archive },
+  { keywords: ["office", "study", "work"], Icon: Briefcase },
+  { keywords: ["entrance", "door", "foyer"], Icon: DoorOpen },
+];
+
+function FolderThumbnailFallback({ name }: { name: string }) {
+  const lower = name.toLowerCase();
+  const match = FOLDER_ICON_MATCHERS.find((m) => m.keywords.some((k) => lower.includes(k)));
+  const Icon = match?.Icon ?? FolderIcon;
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-accent/40">
+      <Icon className="h-9 w-9 text-accent-foreground/70" />
+    </div>
+  );
+}
 type Item = {
 id: string;
 folder_id: string;
@@ -524,9 +552,7 @@ return (
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <FolderIcon className="h-10 w-10 text-muted-foreground" />
-                </div>
+                <FolderThumbnailFallback name={f.name} />
               )}
               <span className="absolute right-2 top-2 rounded-full bg-background/85 px-2 py-0.5 text-[10px] font-semibold">
                 {totalCountByFolder.get(f.id) ?? 0}
@@ -1345,9 +1371,7 @@ alt={sf.name}
 className="h-full w-full object-cover"
 />
 ) : (
-<div className="flex h-full w-full items-center justify-center">
-<FolderIcon className="h-10 w-10 text-muted-foreground" />
-</div>
+<FolderThumbnailFallback name={sf.name} />
 )}
 <span className="absolute right-2 top-2 rounded-full bg-background/85 px-2 py-0.5 text-[10px] font-semibold">
 {itemCountBySf.get(sf.id) ?? 0}
