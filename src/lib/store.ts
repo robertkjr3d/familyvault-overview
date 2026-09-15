@@ -16,6 +16,15 @@ type AppStore = {
   startTour: (tour: TourId) => void;
   advanceTour: () => void;
   endTour: () => void;
+  // Closing the wizard any way OTHER than its explicit "Don't show this
+  // again" link doesn't persist onboarding_dismissed to the database (that's
+  // intentional — a soft "not now" shouldn't be permanent). But without
+  // SOME memory of that close, navigating away and back to "/" remounts the
+  // dashboard, resets its local ref, and the wizard pops back up — this
+  // flag is that memory. Persisted (survives reload, same browser only) so
+  // it never nags again this browser once you've closed it once.
+  onboardingSoftDismissed: boolean;
+  setOnboardingSoftDismissed: (v: boolean) => void;
 };
 
 export const useAppStore = create<AppStore>()(
@@ -32,6 +41,8 @@ export const useAppStore = create<AppStore>()(
       startTour: (activeTour) => set({ activeTour, tourStep: 0 }),
       advanceTour: () => set((s) => ({ tourStep: s.tourStep + 1 })),
       endTour: () => set({ activeTour: null, tourStep: 0 }),
+      onboardingSoftDismissed: false,
+      setOnboardingSoftDismissed: (onboardingSoftDismissed) => set({ onboardingSoftDismissed }),
     }),
     { name: "familyvault-ui" },
   ),
