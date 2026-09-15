@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentRole } from "@/lib/useCurrentRole";
 import { useAppStore } from "@/lib/store";
 import { markTourSeen } from "@/lib/tourSteps";
@@ -21,6 +22,7 @@ export function TourWelcomeScreen() {
   const activeTour = useAppStore((s) => s.activeTour);
   const startTour = useAppStore((s) => s.startTour);
   const [dismissedThisSession, setDismissedThisSession] = useState(false);
+  const queryClient = useQueryClient();
 
   const show =
     !isLoading && hasSeenTour === false && !isViewer && !activeTour && !dismissedThisSession;
@@ -43,7 +45,9 @@ export function TourWelcomeScreen() {
 
   function cancel() {
     setDismissedThisSession(true);
-    void markTourSeen();
+    void markTourSeen().then(() => {
+      queryClient.invalidateQueries({ queryKey: ["household-memberships"] });
+    });
     toast("You can take the tour anytime from Settings.");
   }
 
