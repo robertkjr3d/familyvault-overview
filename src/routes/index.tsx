@@ -84,7 +84,8 @@ const netWorthBreakdownRef = useRef<any>(null);
 const [highlight, setHighlight] = useState<string | null>(null);
 const [onboardingOpen, setOnboardingOpen] = useState(false);
 const [chartInfoOpen, setChartInfoOpen] = useState(false);
-const autoShownOnboardingRef = useRef(false);
+const onboardingSoftDismissed = useAppStore((s) => s.onboardingSoftDismissed);
+const setOnboardingSoftDismissed = useAppStore((s) => s.setOnboardingSoftDismissed);
 
 function scrollTo(ref: any, key: string) {
 if (!ref.current) return;
@@ -238,15 +239,16 @@ inventoryItems.length === 0 &&
 otherAssets.length === 0 &&
 creditCards.length === 0;
 
-// Auto-show once per page load for a fresh, not-yet-dismissed household.
+// Auto-show once per browser for a fresh, not-yet-dismissed household —
+// the soft-dismiss flag (not a ref) is what stops this from re-firing
+// every time the tour navigates back to "/".
 useEffect(() => {
-if (autoShownOnboardingRef.current) return;
+if (onboardingSoftDismissed) return;
 if (appSettings === undefined || !tablesLoaded) return; // still loading
 if (!appSettings?.onboarding_dismissed && isEmptyHousehold) {
 setOnboardingOpen(true);
-autoShownOnboardingRef.current = true;
 }
-}, [appSettings, isEmptyHousehold, tablesLoaded]);
+}, [appSettings, isEmptyHousehold, tablesLoaded, onboardingSoftDismissed]);
 
 // Manual re-open from Settings → About → "Quick Start Guide" (links to /#onboarding),
 // same hash-link pattern HashHighlight already uses elsewhere in this app.
@@ -261,6 +263,7 @@ return () => window.removeEventListener("hashchange", check);
 
 async function dismissOnboardingForever() {
 setOnboardingOpen(false);
+setOnboardingSoftDismissed(true);
 if (!activeHouseholdId) return;
 // upsert, not update — a fresh household (the exact case this wizard
 // targets) often has no app_settings row yet, and a plain update would
@@ -1018,7 +1021,10 @@ return (
 
   <OnboardingWizard
     open={onboardingOpen}
-    onOpenChange={setOnboardingOpen}
+    onOpenChange={(v) => {
+      setOnboardingOpen(v);
+      if (!v) setOnboardingSoftDismissed(true);
+    }}
     hasProperty={properties.length > 0}
     hasInsurance={insurance.length > 0}
     hasInventoryItem={inventoryItems.length > 0}
@@ -1335,13 +1341,18 @@ const summaryColor = totalScored === 0 ? "text-muted-foreground" : passCount ===
 
 return (
 <section className="rounded-2xl border border-border bg-card p-4">
-<div className="mb-3 flex items-center justify-between">
+<div className="mb-1 flex items-center justify-between">
 <h2 className="text-sm font-bold">Financial Health</h2>
 {totalScored > 0 && (
-<span className={`text-xs font-bold ${summaryColor}`}>{passCount}/{totalScored} checks passed</span>
+<span className={`text-xs font-bold ${summaryColor}`}>{passCount}/{totalScored} passed</span>
 )}
 </div>
-<div className="space-y-2">
+{checks.length - totalScored > 0 && (
+<p className="mb-3 text-[11px] text-muted-foreground">
+{checks.length - totalScored} check{checks.length - totalScored === 1 ? "" : "s"} not set up yet
+</p>
+)}
+<div className={checks.length - totalScored > 0 ? "space-y-2" : "mt-3 space-y-2"}>
 {checks.map((c) => {
 const icon = statusIcon[c.status];
 const color = statusColor[c.status];
