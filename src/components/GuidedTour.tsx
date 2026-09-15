@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { driver, type DriveStep, type Driver } from "driver.js";
 import "driver.js/dist/driver.css";
 import { useAppStore } from "@/lib/store";
@@ -34,6 +35,7 @@ export function GuidedTour() {
   const activeTour = useAppStore((s) => s.activeTour);
   const endTour = useAppStore((s) => s.endTour);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   // Defensive, in addition to the Settings/welcome-screen entry points not
   // offering the tour to Viewers: if a tour is somehow already active when
@@ -61,7 +63,11 @@ export function GuidedTour() {
     function finish(skippedEarly: boolean) {
       if (finished) return;
       finished = true;
-      if (activeTour === "core") void markTourSeen();
+      if (activeTour === "core") {
+        void markTourSeen().then(() => {
+          queryClient.invalidateQueries({ queryKey: ["household-memberships"] });
+        });
+      }
       endTour();
       if (skippedEarly) {
         toast("You can take the tour anytime from Settings.");
