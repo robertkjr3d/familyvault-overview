@@ -36,6 +36,9 @@ export const Route = createFileRoute("/settings")({
   head: () => ({ meta: [{ title: "Settings — FamilyHub SG" }] }),
 });
 
+// TODO: replace with the real published Google Form URL before deploying.
+const FEEDBACK_FORM_URL = "https://forms.gle/REPLACE_ME";
+
 const ACCENT_PRESETS = [
   { name: "Gold", value: "oklch(0.72 0.13 80)" },
   { name: "Teal", value: "oklch(0.62 0.10 195)" },
@@ -1536,6 +1539,34 @@ function SettingsPage() {
           )}
         </section>
       )}
+
+      {/* Beta Feedback — links out to a Google Form (deliberately not built
+          as an in-app form; a small beta cohort doesn't need custom
+          infrastructure, and a Form's responses drop straight into a
+          spreadsheet for pattern-finding). Swap FEEDBACK_FORM_URL for the
+          real published Google Form link before shipping. */}
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <div className="mb-1 flex items-center gap-2">
+          <h2 className="text-sm font-bold">Beta feedback</h2>
+          <span className="rounded-full bg-review px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-review-foreground">
+            Beta
+          </span>
+        </div>
+        <p className="mb-3 text-xs text-muted-foreground">
+          FamilyHub SG is still in beta — your feedback directly shapes what gets fixed next.
+          Specific is more useful than general (e.g. "the loans page was confusing because X" beats
+          "loans page needs work"). Two minutes, and it genuinely helps.
+        </p>
+        <a
+          href={FEEDBACK_FORM_URL}
+          target="_blank"
+          rel="noreferrer"
+          onClick={() => (window as any).posthog?.capture("feedback_form_opened")}
+          className="inline-block rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+        >
+          Share feedback
+        </a>
+      </section>
 
       {/* Demo Mode */}
       <section className="rounded-2xl border border-review/40 bg-review-soft/20 p-4">
