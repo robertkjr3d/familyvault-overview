@@ -34,6 +34,11 @@ import { toast } from "sonner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { setupGlobalErrorHandlers } from "@/lib/errorLogger";
 
+// Accounts you personally use to test the app, live or in dev — kept out of
+// PostHog analytics/session-recording entirely so your own daily usage never
+// pollutes real-user data. Add any other emails you test with yourself.
+const INTERNAL_TEST_EMAILS = ["azariahtan.piano@gmail.com"];
+
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
     meta: [
@@ -123,6 +128,20 @@ function RootContent() {
   useEffect(() => {
     setupGlobalErrorHandlers();
   }, []);
+
+  // Keep your own testing sessions out of PostHog entirely — this is the
+  // actual fix for "which replays are mine vs a real user's": nothing about
+  // your account gets recorded or captured at all, rather than trying to
+  // filter it out after the fact in the PostHog dashboard.
+  useEffect(() => {
+    const posthog = (window as any).posthog;
+    if (!posthog || !session?.user?.email) return;
+    if (INTERNAL_TEST_EMAILS.includes(session.user.email)) {
+      posthog.opt_out_capturing();
+    } else {
+      posthog.opt_in_capturing();
+    }
+  }, [session?.user?.email]);
 
   useEffect(() => {
     if (!session?.user?.id) {
