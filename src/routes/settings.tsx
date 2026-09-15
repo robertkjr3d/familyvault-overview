@@ -37,7 +37,7 @@ export const Route = createFileRoute("/settings")({
 });
 
 // TODO: replace with the real published Google Form URL before deploying.
-const FEEDBACK_FORM_URL = "https://forms.gle/REPLACE_ME";
+const FEEDBACK_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSf-yj_CnXgi9fCeytclhTWvLZeB_CaiyVlRrlqbbIaPSJHCoQ/viewform?usp=publish-editor";
 
 const ACCENT_PRESETS = [
   { name: "Gold", value: "oklch(0.72 0.13 80)" },
