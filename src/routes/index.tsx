@@ -635,14 +635,9 @@ return (
     </Link>
   )}
 
-  {/* KPI ROW */}
+  {/* KPI ROW — Net Worth is the headline number, so it leads; Assets/
+      Liabilities are supporting detail, styled flatter and placed below. */}
   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-    <button type="button" onClick={openNetWorthBreakdown} className="text-left w-full h-full">
-      <Kpi label="Total Assets" value={fmtMoney(totalAssets)} />
-    </button>
-    <button type="button" onClick={openNetWorthBreakdown} className="text-left w-full h-full">
-      <Kpi label="Total Liabilities" value={fmtMoney(totalLiabilities)} />
-    </button>
     {/* Not a <button>: netWorthSub can render FxInfoNote's own "ⓘ" button,
         and nesting <button> inside <button> is invalid HTML that this SSR
         app can't safely rely on browsers to fix up. div+role="button" gets
@@ -669,6 +664,12 @@ return (
         accent={alertCount > 0 ? "bad" : "neutral"}
         sub={`${urgent.length} urgent · ${review.length} to review`}
       />
+    </button>
+    <button type="button" onClick={openNetWorthBreakdown} className="text-left w-full h-full">
+      <Kpi label="Total Assets" value={fmtMoney(totalAssets)} flat />
+    </button>
+    <button type="button" onClick={openNetWorthBreakdown} className="text-left w-full h-full">
+      <Kpi label="Total Liabilities" value={fmtMoney(totalLiabilities)} flat />
     </button>
   </div>
 
@@ -1036,13 +1037,16 @@ return (
 );
 }
 
-function Kpi({ label, value, accent, big, sub }: { label: string; value: string; accent?: "good" | "bad" | "neutral" | "gold"; big?: boolean; sub?: ReactNode }) {
+function Kpi({ label, value, accent, big, sub, flat }: { label: string; value: string; accent?: "good" | "bad" | "neutral" | "gold"; big?: boolean; sub?: ReactNode; flat?: boolean }) {
 const valueColor = accent === "good" ? "text-settled" : accent === "bad" ? "text-urgent" : accent === "gold" ? "text-primary" : "";
 const borderTop = accent === "bad" ? "bg-urgent-soft/30 border-urgent/30" : accent === "gold" ? "border-primary/40" : "";
+const shell = flat
+  ? "rounded-2xl border border-transparent bg-transparent p-3 h-full"
+  : `rounded-2xl border border-border bg-card p-3 h-full ${borderTop}`;
 return (
-<div className={`rounded-2xl border border-border bg-card p-3 h-full ${borderTop}`}>
+<div className={shell}>
 <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
-<div className={`mt-1 ${big ? "text-2xl" : "text-xl"} font-bold ${valueColor}`}>{value}</div>
+<div className={`mt-1 ${big ? "text-2xl" : flat ? "text-lg" : "text-xl"} font-bold ${flat ? "text-muted-foreground" : valueColor}`}>{value}</div>
 {sub && <div className="mt-0.5 text-[10px] text-muted-foreground">{sub}</div>}
 </div>
 );
