@@ -21,11 +21,12 @@ export function TourWelcomeScreen() {
   const { hasSeenTour, isLoading, isViewer } = useCurrentRole();
   const activeTour = useAppStore((s) => s.activeTour);
   const startTour = useAppStore((s) => s.startTour);
+  const wizardOpen = useAppStore((s) => s.wizardOpen);
   const [dismissedThisSession, setDismissedThisSession] = useState(false);
   const queryClient = useQueryClient();
 
   const show =
-    !isLoading && hasSeenTour === false && !isViewer && !activeTour && !dismissedThisSession;
+    !isLoading && hasSeenTour === false && !isViewer && !activeTour && !dismissedThisSession && !wizardOpen;
 
   // Lock background scroll while this full-screen modal is up, same as the
   // GuidedTour overlay — restores on every unmount path (state changes to
