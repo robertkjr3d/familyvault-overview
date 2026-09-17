@@ -86,6 +86,16 @@ const [onboardingOpen, setOnboardingOpen] = useState(false);
 const [chartInfoOpen, setChartInfoOpen] = useState(false);
 const onboardingSoftDismissed = useAppStore((s) => s.onboardingSoftDismissed);
 const setOnboardingSoftDismissed = useAppStore((s) => s.setOnboardingSoftDismissed);
+const setWizardOpen = useAppStore((s) => s.setWizardOpen);
+
+// Keeps the globally-mounted tour welcome popup (TourWelcomeScreen, in
+// __root.tsx) aware of the wizard's real open state, regardless of which
+// of the several places below actually changes it — single source of
+// truth instead of remembering to call setWizardOpen at every call site.
+useEffect(() => {
+  setWizardOpen(onboardingOpen);
+  return () => setWizardOpen(false);
+}, [onboardingOpen, setWizardOpen]);
 
 function scrollTo(ref: any, key: string) {
 if (!ref.current) return;
