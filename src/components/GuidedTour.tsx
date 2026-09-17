@@ -64,6 +64,7 @@ export function GuidedTour() {
       if (finished) return;
       finished = true;
       if (activeTour === "core") {
+        useAppStore.getState().setCoreTourResolved(true);
         void markTourSeen().then(() => {
           queryClient.invalidateQueries({ queryKey: ["household-memberships"] });
         });
@@ -77,13 +78,22 @@ export function GuidedTour() {
         // themselves. Uses sonner's own action/cancel buttons (confirmed
         // real fields on its toast() options, not a custom component) —
         // "Later" just dismisses, "Yes" starts the extras tour directly.
+        // No longer auto-dismisses (Sep 2026 — "it disappeared too fast"):
+        // stays up until the person actually answers Yes/Later/closes it.
+        useAppStore.getState().setExtrasOfferPending(true);
+        const clearPending = () => useAppStore.getState().setExtrasOfferPending(false);
         toast("Want more tips & tricks?", {
-          duration: 10000,
-          cancel: { label: "Later", onClick: () => {} },
+          duration: Infinity,
+          cancel: { label: "Later", onClick: clearPending },
           action: {
             label: "Yes",
-            onClick: () => useAppStore.getState().startTour("extras"),
+            onClick: () => {
+              clearPending();
+              useAppStore.getState().startTour("extras");
+            },
           },
+          onDismiss: clearPending,
+          onAutoClose: clearPending,
         });
       }
     }
@@ -346,19 +356,55 @@ export function GuidedTour() {
     // visualViewport directly (the one API that DOES fire for this) and
     // force driver.js to re-measure whenever it changes.
     const vv = window.visualViewport;
-    let viewportSettleTimer: number | undefined;
+    let stabilizeFrame: number | undefined;
+    let stabilizeTimeout: number | undefined;
+    function stopStabilizing() {
+      if (stabilizeFrame) cancelAnimationFrame(stabilizeFrame);
+      if (stabilizeTimeout) window.clearTimeout(stabilizeTimeout);
+      stabilizeFrame = undefined;
+      stabilizeTimeout = undefined;
+    }
     function handleViewportChange() {
-      if (viewportSettleTimer) window.clearTimeout(viewportSettleTimer);
-      viewportSettleTimer = window.setTimeout(() => {
-        if (driverObj.isActive()) driverObj.refresh();
-      }, 120);
+      if (!driverObj.isActive()) return;
+      const el = driverObj.getActiveElement();
+      if (!el) {
+        driverObj.refresh();
+        return;
+      }
+      stopStabilizing();
+      let lastRect = el.getBoundingClientRect();
+      let stableTicks = 0;
+      // Poll the real element's position every frame; once it reports the
+      // same position twice in a row, whatever's animating it (the
+      // keyboard, the Sheet's own internal scroll-into-view, or both) has
+      // actually finished, so refresh() then reflects reality instead of a
+      // guessed delay that this nested-scroll case already proved wrong.
+      function check() {
+        const rect = el!.getBoundingClientRect();
+        const moved = Math.abs(rect.top - lastRect.top) > 0.5 || Math.abs(rect.left - lastRect.left) > 0.5;
+        lastRect = rect;
+        stableTicks = moved ? 0 : stableTicks + 1;
+        if (stableTicks >= 2) {
+          driverObj.refresh();
+          stopStabilizing();
+          return;
+        }
+        stabilizeFrame = requestAnimationFrame(check);
+      }
+      stabilizeFrame = requestAnimationFrame(check);
+      // Safety net: iOS animations normally settle well under this: don't
+      // poll forever if something never quite stops moving by a pixel.
+      stabilizeTimeout = window.setTimeout(() => {
+        stopStabilizing();
+        driverObj.refresh();
+      }, 1000);
     }
     vv?.addEventListener("resize", handleViewportChange);
     vv?.addEventListener("scroll", handleViewportChange);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
-      if (viewportSettleTimer) window.clearTimeout(viewportSettleTimer);
+      stopStabilizing();
       vv?.removeEventListener("resize", handleViewportChange);
       vv?.removeEventListener("scroll", handleViewportChange);
       if (driverObj.isActive()) driverObj.destroy();
