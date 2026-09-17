@@ -130,6 +130,16 @@ export const CORE_TOUR_STEPS: TourStep[] = [
     body: "If your household has more than one person, tap a name here anytime to see just their portfolio.",
     placement: "bottom",
     advanceOnClick: true, // whole filter bar, tapping any chip is a complete, instant action
+    // Bug fix (Sep 2026): this step didn't need a settleDelay historically
+    // because the tour almost always started while already on "/" — no
+    // navigation, nothing to wait for. The wizard/tour sequencing fix
+    // changed that: starting the tour now commonly happens from a
+    // different tab, which always triggers a real navigate() back to "/"
+    // right before this step's own first measurement. Same root cause as
+    // member-confirm below (a target measured before its route's DOM has
+    // actually mounted reads back a bogus position, which driver.js shows
+    // as pinned in a corner) — same fix.
+    settleDelay: 400,
   },
   {
     id: "loans-tab",
