@@ -136,10 +136,19 @@ function RootContent() {
   useEffect(() => {
     const posthog = (window as any).posthog;
     if (!posthog || !session?.user?.email) return;
-    if (INTERNAL_TEST_EMAILS.includes(session.user.email)) {
-      posthog.opt_out_capturing();
-    } else {
-      posthog.opt_in_capturing();
+    try {
+      if (INTERNAL_TEST_EMAILS.includes(session.user.email)) {
+        posthog.opt_out_capturing();
+      } else {
+        posthog.opt_in_capturing();
+      }
+    } catch {
+      // Privacy tools (Brave Shields, Safari's tracking prevention) can
+      // block PostHog's script from ever loading. When that happens,
+      // PostHog's own stub throws internally on these two specific calls
+      // rather than failing silently like capture()/identify() do. A user
+      // actively blocking analytics correctly ending up with no analytics
+      // is fine and expected — it just shouldn't crash the app around it.
     }
   }, [session?.user?.email]);
 
