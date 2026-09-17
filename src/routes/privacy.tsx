@@ -74,8 +74,13 @@ function PrivacyPage() {
           <p>
             Only people you've explicitly invited into your household, plus FamilyHub SG's
             operator for the limited purpose of running and maintaining the service. We do not
-            sell your data, and we do not share it with advertisers — FamilyHub SG does not run
-            ads or third-party analytics or tracking scripts.
+            sell your data, and we do not share it with advertisers.
+          </p>
+          <p>
+            We use PostHog, a product analytics tool, to understand how the app is used and to
+            record anonymized usage sessions so we can find and fix problems. This helps us
+            improve FamilyHub SG during its beta — it is not used for advertising, and your data
+            is never sold or shared with advertisers.
           </p>
           <p>
             We use Supabase and Cloudflare as infrastructure providers to operate the service;
