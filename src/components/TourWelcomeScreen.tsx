@@ -22,11 +22,19 @@ export function TourWelcomeScreen() {
   const activeTour = useAppStore((s) => s.activeTour);
   const startTour = useAppStore((s) => s.startTour);
   const wizardOpen = useAppStore((s) => s.wizardOpen);
+  const coreTourResolved = useAppStore((s) => s.coreTourResolved);
+  const setCoreTourResolved = useAppStore((s) => s.setCoreTourResolved);
   const [dismissedThisSession, setDismissedThisSession] = useState(false);
   const queryClient = useQueryClient();
 
   const show =
-    !isLoading && hasSeenTour === false && !isViewer && !activeTour && !dismissedThisSession && !wizardOpen;
+    !isLoading &&
+    hasSeenTour === false &&
+    !isViewer &&
+    !activeTour &&
+    !dismissedThisSession &&
+    !wizardOpen &&
+    !coreTourResolved;
 
   // Lock background scroll while this full-screen modal is up, same as the
   // GuidedTour overlay — restores on every unmount path (state changes to
@@ -46,6 +54,7 @@ export function TourWelcomeScreen() {
 
   function cancel() {
     setDismissedThisSession(true);
+    setCoreTourResolved(true);
     void markTourSeen().then(() => {
       queryClient.invalidateQueries({ queryKey: ["household-memberships"] });
     });
