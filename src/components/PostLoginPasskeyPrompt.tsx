@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentRole } from "@/lib/useCurrentRole";
+import { useAppStore } from "@/lib/store";
 import { isPasskeySupported, markPasskeyPromptSeen } from "@/lib/passkeyPrompt";
 
 /**
@@ -28,6 +29,8 @@ import { isPasskeySupported, markPasskeyPromptSeen } from "@/lib/passkeyPrompt";
 export function PostLoginPasskeyPrompt() {
   const { hasSeenTour, hasSeenPasskeyPrompt, isLoading: roleLoading } = useCurrentRole();
   const queryClient = useQueryClient();
+  const activeTour = useAppStore((s) => s.activeTour);
+  const extrasOfferPending = useAppStore((s) => s.extrasOfferPending);
   const [dismissedThisSession, setDismissedThisSession] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
@@ -50,7 +53,15 @@ export function PostLoginPasskeyPrompt() {
     !passkeysLoading &&
     (existingPasskeys?.length ?? 0) === 0 &&
     !dismissedThisSession &&
-    !justAdded;
+    !justAdded &&
+    // Bug fix (Sep 2026): gating on hasSeenTour === true alone meant this
+    // could appear stacked on top of the "Want more tips & tricks?" toast
+    // (both become eligible at almost the same moment once Tour 1 ends),
+    // or even during Tour 2 itself if the person said yes to it. Wait for
+    // the Tour 2 question to actually be answered one way or the other,
+    // and for no tour to be actively running, before showing this.
+    !activeTour &&
+    !extrasOfferPending;
 
   useEffect(() => {
     if (!show) return;
