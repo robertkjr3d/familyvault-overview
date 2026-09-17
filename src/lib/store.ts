@@ -25,6 +25,15 @@ type AppStore = {
   // it never nags again this browser once you've closed it once.
   onboardingSoftDismissed: boolean;
   setOnboardingSoftDismissed: (v: boolean) => void;
+  // Live "is the onboarding wizard actually on screen right now" signal —
+  // the wizard itself only mounts on the dashboard route (index.tsx), but
+  // the tour welcome popup is mounted globally (__root.tsx) and has no
+  // other way to know the wizard is currently up. Deliberately NOT
+  // persisted (see partialize below): unlike onboardingSoftDismissed, a
+  // stale `true` surviving a reload would permanently block the tour
+  // welcome popup for no reason.
+  wizardOpen: boolean;
+  setWizardOpen: (v: boolean) => void;
 };
 
 export const useAppStore = create<AppStore>()(
@@ -43,7 +52,15 @@ export const useAppStore = create<AppStore>()(
       endTour: () => set({ activeTour: null, tourStep: 0 }),
       onboardingSoftDismissed: false,
       setOnboardingSoftDismissed: (onboardingSoftDismissed) => set({ onboardingSoftDismissed }),
+      wizardOpen: false,
+      setWizardOpen: (wizardOpen) => set({ wizardOpen }),
     }),
-    { name: "familyvault-ui" },
+    {
+      name: "familyvault-ui",
+      partialize: (state) => {
+        const { wizardOpen: _wizardOpen, ...rest } = state;
+        return rest;
+      },
+    },
   ),
 );
