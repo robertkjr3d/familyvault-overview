@@ -346,14 +346,19 @@ export function GuidedTour() {
     // visualViewport directly (the one API that DOES fire for this) and
     // force driver.js to re-measure whenever it changes.
     const vv = window.visualViewport;
+    let viewportSettleTimer: number | undefined;
     function handleViewportChange() {
-      if (driverObj.isActive()) driverObj.refresh();
+      if (viewportSettleTimer) window.clearTimeout(viewportSettleTimer);
+      viewportSettleTimer = window.setTimeout(() => {
+        if (driverObj.isActive()) driverObj.refresh();
+      }, 120);
     }
     vv?.addEventListener("resize", handleViewportChange);
     vv?.addEventListener("scroll", handleViewportChange);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
+      if (viewportSettleTimer) window.clearTimeout(viewportSettleTimer);
       vv?.removeEventListener("resize", handleViewportChange);
       vv?.removeEventListener("scroll", handleViewportChange);
       if (driverObj.isActive()) driverObj.destroy();
