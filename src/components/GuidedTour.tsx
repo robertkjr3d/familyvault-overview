@@ -467,16 +467,21 @@ export function GuidedTour() {
     // doesn't depend on that API at all — it's a basic DOM event that
     // fires the instant any field is tapped, keyboard or no keyboard,
     // reliable in every context including this one.
-    document.addEventListener("focusin", handleViewportChange);
-    document.addEventListener("focusout", handleViewportChange);
+    function handleFocusChange(e: FocusEvent) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) {
+        handleViewportChange();
+      }
+    }
+    document.addEventListener("focusin", handleFocusChange, true);
+    document.addEventListener("focusout", handleFocusChange, true);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
       stopStabilizing();
       vv?.removeEventListener("resize", handleViewportChange);
       vv?.removeEventListener("scroll", handleViewportChange);
-      document.removeEventListener("focusin", handleViewportChange);
-      document.removeEventListener("focusout", handleViewportChange);
+      document.removeEventListener("focusin", handleFocusChange, true);
+      document.removeEventListener("focusout", handleFocusChange, true);
       if (driverObj.isActive()) driverObj.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
