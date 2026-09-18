@@ -13,50 +13,6 @@ import { toast } from "sonner";
 // spotlight's cutout corners matching the app's own card/button rounding.
 const STAGE_RADIUS = 18;
 
-// Bug fix (Sep 2026): settleDelay used to be a plain window.setTimeout —
-// wait a guessed number of milliseconds, then proceed regardless. Real
-// device testing showed this isn't reliable even on a step that already
-// had it (member-confirm, settleDelay: 400) — a fixed guess can't adapt to
-// real, variable conditions (network speed, device speed, an animation
-// that happens to run long that one time). This replaces the guess with
-// watching the ACTUAL thing that matters: does the target exist yet, and
-// has it stopped moving? `maxWaitMs` (each step's existing settleDelay
-// value, reused, so no step's config needs to change) is only a safety
-// ceiling now, not the wait itself — this resolves the moment reality is
-// actually ready, often faster than the old fixed guess, and never less
-// reliable than it.
-function waitForStableTarget(selector: string, onReady: () => void, maxWaitMs: number) {
-  const start = Date.now();
-  let lastRect: DOMRect | null = null;
-  let stableTicks = 0;
-  let frame: number | undefined;
-
-  function tick() {
-    const el = document.querySelector(selector);
-    if (!el) {
-      if (Date.now() - start > maxWaitMs) {
-        onReady(); // give up waiting for existence — let driver.js's own skipMissingElement handling take it from here, same as before
-        return;
-      }
-      frame = requestAnimationFrame(tick);
-      return;
-    }
-    const rect = el.getBoundingClientRect();
-    const moved = !lastRect || Math.abs(rect.top - lastRect.top) > 0.5 || Math.abs(rect.left - lastRect.left) > 0.5;
-    lastRect = rect;
-    stableTicks = moved ? 0 : stableTicks + 1;
-    if (stableTicks >= 2 || Date.now() - start > maxWaitMs) {
-      onReady();
-      return;
-    }
-    frame = requestAnimationFrame(tick);
-  }
-  frame = requestAnimationFrame(tick);
-  return () => {
-    if (frame) cancelAnimationFrame(frame);
-  };
-}
-
 /**
  * Drives the user through a sequence of real UI elements using driver.js
  * (https://driverjs.com — MIT, actively maintained), rather than a
@@ -324,15 +280,15 @@ export function GuidedTour() {
         // once moveNext() is called, so delaying that call means the
         // Sheet/route transition has already finished by the time it
         // measures, instead of needing a correction afterward.
+        // Reverted (Sep 2026): the "wait for stable position" version below
+        // was tried across two rounds and made things worse or unchanged
+        // on a real device, not better — clear enough signal to stop
+        // experimenting on this and go back to what was actually working.
         if (nextTourStep?.settleDelay) {
-          waitForStableTarget(
-            `[data-tour="${nextTourStep.target}"]`,
-            () => {
-              scrollToTargetIfNeeded();
-              opts.driver.moveNext();
-            },
-            nextTourStep.settleDelay,
-          );
+          window.setTimeout(() => {
+            scrollToTargetIfNeeded();
+            opts.driver.moveNext();
+          }, nextTourStep.settleDelay);
         } else {
           scrollToTargetIfNeeded();
           opts.driver.moveNext();
@@ -353,7 +309,7 @@ export function GuidedTour() {
       navigate({ to: first.route });
     }
     if (first?.settleDelay) {
-      waitForStableTarget(`[data-tour="${first.target}"]`, () => driverObj.drive(), first.settleDelay);
+      window.setTimeout(() => driverObj.drive(), first.settleDelay);
     } else {
       driverObj.drive();
     }
