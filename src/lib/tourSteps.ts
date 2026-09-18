@@ -185,7 +185,17 @@ export const CORE_TOUR_STEPS: TourStep[] = [
     body: "Pick the bank this loan is with.",
     placement: "bottom",
     requireValue: true,
-    settleDelay: 400, // follows add-entry opening the record Sheet
+    // Bug fix (Sep 18 2026): confirmed by reading the real Sheet component
+    // (src/components/ui/sheet.tsx) — it opens over 500ms
+    // (data-[state=open]:duration-500), not 400ms. The old 400ms wait here
+    // measured this field's position 100ms before the Sheet had actually
+    // finished sliding into place, catching it mid-animation; a separate
+    // safety check 400ms after that then corrected it to the real,
+    // settled position — visible as the highlight "adjusting slightly"
+    // about half a second in, 100% reproducible because a CSS animation
+    // duration doesn't vary run to run, unlike a phone's keyboard timing.
+    // 550ms clears the real 500ms animation with a small safety margin.
+    settleDelay: 550, // follows add-entry opening the record Sheet
     // A dropdown — tapping it only OPENS the list, picking a bank is a
     // separate later moment. Next-only, and hidden until a bank is picked.
   },
@@ -299,7 +309,10 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
     body: "A short label is enough, e.g. \"Reprice loan.\"",
     placement: "bottom",
     requireValue: true,
-    settleDelay: 400, // follows reminder-trigger opening the reminder Sheet
+    // Same real cause and fix as "bank-field" above: this also opens the
+    // shared Sheet component (500ms open animation), so it needs the same
+    // 550ms wait, not 400ms.
+    settleDelay: 550, // follows reminder-trigger opening the reminder Sheet
     // Confirmed: the real Save button's own validation silently rejects
     // an empty "what" (a toast, not a disabled button) — without gating
     // Next here, the tour could walk someone straight into that toast
