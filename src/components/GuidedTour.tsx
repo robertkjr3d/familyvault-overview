@@ -160,6 +160,26 @@ export function GuidedTour() {
       // which specific steps are affected.
       onHighlighted: (_element, _step, opts) => {
         window.setTimeout(() => opts.driver.refresh(), 400);
+        // Bug fix (Sep 18 2026): confirmed by reading driver.js's own
+        // compiled source (its internal x() function, run every time a
+        // step highlights) — it deliberately auto-focuses the first
+        // focusable element it finds inside the popover or the target
+        // itself, for accessibility (so keyboard/screen-reader users land
+        // on the right control). That's driver.js's own built-in behavior,
+        // not this app's code or anything added by a previous fix. The
+        // side effect on a phone: whenever a step's target is a real
+        // <input> or <textarea> (the money/text fields, "what"), that
+        // auto-focus opens the on-screen keyboard the instant the step
+        // appears — before the person has tapped anything — confirmed as
+        // the cause of the keyboard popping open unprompted on several
+        // steps, and of it still being open (and blocking the next
+        // step's dialogue box) on the step right after. Blurring
+        // whatever driver.js just force-focused, once, right as each
+        // step finishes highlighting, cancels that without touching
+        // anything the person does afterward — if they then tap the
+        // field themselves a moment later, that's a fresh, real focus
+        // event this code never sees or interferes with.
+        (document.activeElement as HTMLElement | null)?.blur();
       },
     }));
 
@@ -365,92 +385,64 @@ export function GuidedTour() {
     }
     document.addEventListener("visibilitychange", handleVisibility);
 
-    // Bug fix (Aug 28, 2026): reported as the highlight jumping to the
-    // wrong element, and separately the popover covering the field being
-    // typed into, both specifically when the on-screen keyboard opens on
-    // phone (Bank amount, the "action" field, and Tour 2's "what's it
-    // about" reminder field). Confirmed real cause by reading driver.js's
-    // own source: it only listens for window's resize event to know when
-    // to reposition. On iOS, opening the keyboard does NOT fire that —
-    // the layout viewport's dimensions don't change, only the separate
-    // visualViewport shrinks — so driver.js never finds out the keyboard
-    // opened, and its highlight/popover stay frozen at their pre-keyboard
-    // screen coordinates while the real page shifts to bring the focused
-    // field above the keyboard. That mismatch is exactly "highlights
-    // random stuff" and "popover now sits over the field." Fix: listen to
-    // visualViewport directly (the one API that DOES fire for this) and
-    // force driver.js to re-measure whenever it changes.
-    const vv = window.visualViewport;
-    let stabilizeFrame: number | undefined;
-    let stabilizeTimeout: number | undefined;
-    function stopStabilizing() {
-      if (stabilizeFrame) cancelAnimationFrame(stabilizeFrame);
-      if (stabilizeTimeout) window.clearTimeout(stabilizeTimeout);
-      stabilizeFrame = undefined;
-      stabilizeTimeout = undefined;
+    // Sep 18 2026 rewrite — replaces the visualViewport-based fix above's
+    // failure. Confirmed on a real device via screen recording (not a
+    // guess this time): visualViewport's resize/scroll events never fire
+    // at all in this app's installed/home-screen mode when the keyboard
+    // opens — not late, not occasionally, never, for the whole time a
+    // field is focused. So the highlight simply stayed frozen at its
+    // pre-keyboard screen position while the real page scrolled the
+    // focused field above the keyboard underneath it — which is why it
+    // looked like it "grew" to cover two other fields (the page moved,
+    // the frozen highlight didn't). It only ever looked "fixed" once the
+    // keyboard closed, because the page scrolling back down happened to
+    // land content back where the still-frozen highlight already was —
+    // an illusion of a fix, not an actual one.
+    // New approach, chosen specifically to survive that: rather than try
+    // to catch the exact right moment to reposition (three attempts at
+    // that have now failed), hide the highlight and popover completely
+    // the instant a field is focused or blurred, wait a fixed pause for
+    // whatever's about to move (keyboard opening/closing, the page
+    // scrolling) to actually finish, then reposition and reveal. If the
+    // timing is slightly off, the worst case is it appears a bit early
+    // or late in the CORRECT spot — it can no longer show a broken,
+    // wrong-position highlight on screen, which is the actual complaint,
+    // regardless of how well-tuned the delay turns out to be.
+    // Uses driver.js's own public, documented CSS class names (its
+    // theming API, not internal state) so this doesn't depend on
+    // anything undocumented that could change under a version bump.
+    const KEYBOARD_TRANSITION_DELAY = 550; // matches this file's own Sheet-open-animation convention elsewhere
+    let keyboardTransitionTimeout: number | undefined;
+    function setTourVisible(visible: boolean) {
+      const popover = document.querySelector<HTMLElement>(".driver-popover");
+      const overlay = document.querySelector<HTMLElement>(".driver-overlay");
+      if (popover) popover.style.opacity = visible ? "" : "0";
+      if (overlay) overlay.style.opacity = visible ? "" : "0";
     }
-    function handleViewportChange() {
+    function handleFieldFocusChange(e: FocusEvent) {
       if (!driverObj.isActive()) return;
-      const el = driverObj.getActiveElement();
-      if (!el) {
-        driverObj.refresh();
+      if (
+        !(e.target instanceof HTMLInputElement) &&
+        !(e.target instanceof HTMLTextAreaElement) &&
+        !(e.target instanceof HTMLSelectElement)
+      ) {
         return;
       }
-      stopStabilizing();
-      let lastRect = el.getBoundingClientRect();
-      let stableTicks = 0;
-      // Poll the real element's position every frame; once it reports the
-      // same position twice in a row, whatever's animating it (the
-      // keyboard, the Sheet's own internal scroll-into-view, or both) has
-      // actually finished, so refresh() then reflects reality instead of a
-      // guessed delay that this nested-scroll case already proved wrong.
-      function check() {
-        const rect = el!.getBoundingClientRect();
-        const moved = Math.abs(rect.top - lastRect.top) > 0.5 || Math.abs(rect.left - lastRect.left) > 0.5;
-        lastRect = rect;
-        stableTicks = moved ? 0 : stableTicks + 1;
-        if (stableTicks >= 2) {
-          driverObj.refresh();
-          stopStabilizing();
-          return;
-        }
-        stabilizeFrame = requestAnimationFrame(check);
-      }
-      stabilizeFrame = requestAnimationFrame(check);
-      // Safety net: iOS animations normally settle well under this: don't
-      // poll forever if something never quite stops moving by a pixel.
-      stabilizeTimeout = window.setTimeout(() => {
-        stopStabilizing();
-        driverObj.refresh();
-      }, 1000);
+      setTourVisible(false);
+      if (keyboardTransitionTimeout) window.clearTimeout(keyboardTransitionTimeout);
+      keyboardTransitionTimeout = window.setTimeout(() => {
+        if (driverObj.isActive()) driverObj.refresh();
+        setTourVisible(true);
+      }, KEYBOARD_TRANSITION_DELAY);
     }
-    vv?.addEventListener("resize", handleViewportChange);
-    vv?.addEventListener("scroll", handleViewportChange);
-    // Bug fix (Sep 2026): confirmed via WebKit's own bug tracker that
-    // visualViewport's resize/scroll events are unreliable specifically in
-    // iOS's standalone "Add to Home Screen" mode — sometimes they don't
-    // fire at all, sometimes only after the keyboard animation already
-    // finished, sometimes with a stale height. That's the real reason the
-    // fix above (correct in principle, confirmed by reading driver.js's
-    // own source) had no visible effect on a real installed PWA. focusin
-    // doesn't depend on that API at all — it's a basic DOM event that
-    // fires the instant any field is tapped, keyboard or no keyboard,
-    // reliable in every context including this one.
-    function handleFocusChange(e: FocusEvent) {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) {
-        handleViewportChange();
-      }
-    }
-    document.addEventListener("focusin", handleFocusChange, true);
-    document.addEventListener("focusout", handleFocusChange, true);
+    document.addEventListener("focusin", handleFieldFocusChange, true);
+    document.addEventListener("focusout", handleFieldFocusChange, true);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
-      stopStabilizing();
-      vv?.removeEventListener("resize", handleViewportChange);
-      vv?.removeEventListener("scroll", handleViewportChange);
-      document.removeEventListener("focusin", handleFocusChange, true);
-      document.removeEventListener("focusout", handleFocusChange, true);
+      document.removeEventListener("focusin", handleFieldFocusChange, true);
+      document.removeEventListener("focusout", handleFieldFocusChange, true);
+      if (keyboardTransitionTimeout) window.clearTimeout(keyboardTransitionTimeout);
       if (driverObj.isActive()) driverObj.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
