@@ -13,6 +13,50 @@ import { toast } from "sonner";
 // spotlight's cutout corners matching the app's own card/button rounding.
 const STAGE_RADIUS = 18;
 
+// Bug fix (Sep 2026): settleDelay used to be a plain window.setTimeout —
+// wait a guessed number of milliseconds, then proceed regardless. Real
+// device testing showed this isn't reliable even on a step that already
+// had it (member-confirm, settleDelay: 400) — a fixed guess can't adapt to
+// real, variable conditions (network speed, device speed, an animation
+// that happens to run long that one time). This replaces the guess with
+// watching the ACTUAL thing that matters: does the target exist yet, and
+// has it stopped moving? `maxWaitMs` (each step's existing settleDelay
+// value, reused, so no step's config needs to change) is only a safety
+// ceiling now, not the wait itself — this resolves the moment reality is
+// actually ready, often faster than the old fixed guess, and never less
+// reliable than it.
+function waitForStableTarget(selector: string, onReady: () => void, maxWaitMs: number) {
+  const start = Date.now();
+  let lastRect: DOMRect | null = null;
+  let stableTicks = 0;
+  let frame: number | undefined;
+
+  function tick() {
+    const el = document.querySelector(selector);
+    if (!el) {
+      if (Date.now() - start > maxWaitMs) {
+        onReady(); // give up waiting for existence — let driver.js's own skipMissingElement handling take it from here, same as before
+        return;
+      }
+      frame = requestAnimationFrame(tick);
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    const moved = !lastRect || Math.abs(rect.top - lastRect.top) > 0.5 || Math.abs(rect.left - lastRect.left) > 0.5;
+    lastRect = rect;
+    stableTicks = moved ? 0 : stableTicks + 1;
+    if (stableTicks >= 2 || Date.now() - start > maxWaitMs) {
+      onReady();
+      return;
+    }
+    frame = requestAnimationFrame(tick);
+  }
+  frame = requestAnimationFrame(tick);
+  return () => {
+    if (frame) cancelAnimationFrame(frame);
+  };
+}
+
 /**
  * Drives the user through a sequence of real UI elements using driver.js
  * (https://driverjs.com — MIT, actively maintained), rather than a
@@ -281,10 +325,14 @@ export function GuidedTour() {
         // Sheet/route transition has already finished by the time it
         // measures, instead of needing a correction afterward.
         if (nextTourStep?.settleDelay) {
-          window.setTimeout(() => {
-            scrollToTargetIfNeeded();
-            opts.driver.moveNext();
-          }, nextTourStep.settleDelay);
+          waitForStableTarget(
+            `[data-tour="${nextTourStep.target}"]`,
+            () => {
+              scrollToTargetIfNeeded();
+              opts.driver.moveNext();
+            },
+            nextTourStep.settleDelay,
+          );
         } else {
           scrollToTargetIfNeeded();
           opts.driver.moveNext();
@@ -305,7 +353,7 @@ export function GuidedTour() {
       navigate({ to: first.route });
     }
     if (first?.settleDelay) {
-      window.setTimeout(() => driverObj.drive(), first.settleDelay);
+      waitForStableTarget(`[data-tour="${first.target}"]`, () => driverObj.drive(), first.settleDelay);
     } else {
       driverObj.drive();
     }
@@ -325,13 +373,21 @@ export function GuidedTour() {
     // on resume: if the page was hidden for more than a few seconds and
     // driver.js is still nominally active when it becomes visible again,
     // don't trust whatever state it's in — end the tour outright.
+    // Threshold raised from 3s to 20s (Sep 2026): the original 3s assumed
+    // ending the tour was low-cost, since reloading the page was always an
+    // easy recovery. On a PWA added to the Home Screen, there's no visible
+    // reload button or pull-to-refresh — reported as the tour disappearing
+    // just from a brief few-second app switch, with no easy way back in.
+    // 20s still catches genuinely extended backgrounding (the real
+    // iOS-timer-suspension failure this guards against), just without
+    // punishing a quick notification check or app switch.
     let hiddenAt: number | null = null;
     function handleVisibility() {
       if (document.hidden) {
         hiddenAt = Date.now();
         return;
       }
-      if (hiddenAt && Date.now() - hiddenAt > 3000 && driverObj.isActive()) {
+      if (hiddenAt && Date.now() - hiddenAt > 20000 && driverObj.isActive()) {
         driverObj.destroy();
         document.body.classList.remove("driver-active", "driver-fade", "driver-simple", "driver-no-scroll");
         finish(true);
@@ -401,12 +457,26 @@ export function GuidedTour() {
     }
     vv?.addEventListener("resize", handleViewportChange);
     vv?.addEventListener("scroll", handleViewportChange);
+    // Bug fix (Sep 2026): confirmed via WebKit's own bug tracker that
+    // visualViewport's resize/scroll events are unreliable specifically in
+    // iOS's standalone "Add to Home Screen" mode — sometimes they don't
+    // fire at all, sometimes only after the keyboard animation already
+    // finished, sometimes with a stale height. That's the real reason the
+    // fix above (correct in principle, confirmed by reading driver.js's
+    // own source) had no visible effect on a real installed PWA. focusin
+    // doesn't depend on that API at all — it's a basic DOM event that
+    // fires the instant any field is tapped, keyboard or no keyboard,
+    // reliable in every context including this one.
+    document.addEventListener("focusin", handleViewportChange);
+    document.addEventListener("focusout", handleViewportChange);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
       stopStabilizing();
       vv?.removeEventListener("resize", handleViewportChange);
       vv?.removeEventListener("scroll", handleViewportChange);
+      document.removeEventListener("focusin", handleViewportChange);
+      document.removeEventListener("focusout", handleViewportChange);
       if (driverObj.isActive()) driverObj.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
