@@ -108,112 +108,138 @@ export function GuidedTour() {
       }
     }
 
-    const driveSteps: DriveStep[] = tourSteps.map((step) => ({
-      element: `[data-tour="${step.target}"]`,
-      popover: {
-        title: step.title,
-        description: step.body,
-        side: step.placement,
-        // A step marked advanceOnClick is only ever completed by the
-        // real tap — showing Next as an alternative lets someone skip
-        // past it WITHOUT doing the real action, and the step right
-        // after often depends on that action having actually happened
-        // (e.g. skipping the "+" FAB step means no record exists, so
-        // every field step after it can never find its target). Close
-        // stays available either way, so the tour is never a dead end.
-        showButtons: step.advanceOnClick ? ["close" as const] : ["next" as const, "close" as const],
-        // For a requireValue step (a required field), start with Next
-        // hidden and reveal it once the real input actually has
-        // something in it — implemented here rather than as a
-        // driver.js built-in, since driver.js has no concept of "wait
-        // for a value" (it only knows about the element existing).
-        onPopoverRender: step.requireValue
-          ? (popover, opts) => {
-              const target = opts.driver.getActiveElement();
-              const control = target?.querySelector<
-                HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-              >("input, select, textarea");
-              const update = () => {
-                const has = !!control && !!String(control.value ?? "").trim();
-                popover.nextButton.style.display = has ? "" : "none";
-              };
-              update();
-              control?.addEventListener("input", update);
-              control?.addEventListener("change", update);
-            }
-          : step.requireChange
+    const driveSteps: DriveStep[] = tourSteps.map((step) => {
+      // Bug fix (Sep 2026): onPopoverRender's requireValue/requireChange
+      // branches were attaching real DOM listeners (to the actual page's
+      // input, or a MutationObserver on the actual page's element) and
+      // never removing them when the step was left — driver.js only
+      // destroys its OWN popover/overlay between steps, not the real app
+      // elements it was pointed at, so a still-open Sheet (true for the
+      // reminder flow, where "when" and "save" are two steps inside the
+      // same open Sheet) meant that listener just kept sitting on the
+      // real date input indefinitely. Leading suspect for the native
+      // calendar re-opening a step later than where it was picked.
+      // driver.js has a real onDeselected hook for exactly this, that
+      // nothing in this file was using — cleanupListeners closes over
+      // this one step's own listener/observer so onDeselected can
+      // release it the moment the tour moves off this step.
+      let cleanupListeners: (() => void) | undefined;
+      return {
+        element: `[data-tour="${step.target}"]`,
+        popover: {
+          title: step.title,
+          description: step.body,
+          side: step.placement,
+          // A step marked advanceOnClick is only ever completed by the
+          // real tap — showing Next as an alternative lets someone skip
+          // past it WITHOUT doing the real action, and the step right
+          // after often depends on that action having actually happened
+          // (e.g. skipping the "+" FAB step means no record exists, so
+          // every field step after it can never find its target). Close
+          // stays available either way, so the tour is never a dead end.
+          showButtons: step.advanceOnClick ? ["close" as const] : ["next" as const, "close" as const],
+          // For a requireValue step (a required field), start with Next
+          // hidden and reveal it once the real input actually has
+          // something in it — implemented here rather than as a
+          // driver.js built-in, since driver.js has no concept of "wait
+          // for a value" (it only knows about the element existing).
+          onPopoverRender: step.requireValue
             ? (popover, opts) => {
                 const target = opts.driver.getActiveElement();
-                if (!target) return;
-                const initialText = target.textContent;
-                popover.nextButton.style.display = "none";
-                const observer = new MutationObserver(() => {
-                  if (target.textContent !== initialText) {
-                    popover.nextButton.style.display = "";
-                    observer.disconnect();
-                  }
-                });
-                observer.observe(target, { childList: true, subtree: true, characterData: true });
+                const control = target?.querySelector<
+                  HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+                >("input, select, textarea");
+                const update = () => {
+                  const has = !!control && !!String(control.value ?? "").trim();
+                  popover.nextButton.style.display = has ? "" : "none";
+                };
+                update();
+                control?.addEventListener("input", update);
+                control?.addEventListener("change", update);
+                cleanupListeners = () => {
+                  control?.removeEventListener("input", update);
+                  control?.removeEventListener("change", update);
+                };
               }
-            : undefined,
-      },
-      advanceOnClick: !!step.advanceOnClick,
-      disableActiveInteraction: !!step.disableInteraction,
-      // driver.js measures the target's position once when a step first
-      // highlights. If that target only just finished navigating to, or
-      // sits inside a Sheet still mid-open-animation, that first
-      // measurement can be taken before the layout has actually settled
-      // — confirmed cause of the stage/popover appearing cut off or far
-      // from the real element on some steps. refresh() re-measures and
-      // repositions everything; running it again ~400ms later (past any
-      // normal CSS transition) corrects that without needing to guess
-      // which specific steps are affected.
-      onHighlighted: (_element, _step, opts) => {
-        window.setTimeout(() => opts.driver.refresh(), 400);
-        // Bug fix (Sep 18 2026): confirmed by reading driver.js's own
-        // compiled source (its internal x() function, run every time a
-        // step highlights) — it deliberately auto-focuses the first
-        // focusable element it finds inside the popover or the target
-        // itself, for accessibility (so keyboard/screen-reader users land
-        // on the right control). That's driver.js's own built-in behavior,
-        // not this app's code or anything added by a previous fix. The
-        // side effect on a phone: whenever a step's target is a real
-        // <input> or <textarea> (the money/text fields, "what"), that
-        // auto-focus opens the on-screen keyboard the instant the step
-        // appears — before the person has tapped anything — confirmed as
-        // the cause of the keyboard popping open unprompted on several
-        // steps, and of it still being open (and blocking the next
-        // step's dialogue box) on the step right after. Blurring
-        // whatever driver.js just force-focused, once, right as each
-        // step finishes highlighting, cancels that without touching
-        // anything the person does afterward — if they then tap the
-        // field themselves a moment later, that's a fresh, real focus
-        // event this code never sees or interferes with.
-        // Two refinements, Sep 18 2026 later same night, both from a real
-        // device video:
-        // - Scoped to touch devices only. Desktop has no on-screen
-        //   keyboard for this to protect against, and undoing driver.js's
-        //   own focus is arguably a small accessibility regression there
-        //   (it's what lets keyboard/screen-reader users land on the
-        //   control) — so only step in where the problem actually exists.
-        // - Skip native date/time-type inputs specifically. Confirmed on
-        //   video: after picking a date, that field can still be the
-        //   logically-focused element even once its native calendar
-        //   closes, and calling .blur() on an iOS date input in that
-        //   state can make Safari flash the calendar open again — this
-        //   was the direct cause of "the calendar popped up a second
-        //   time" on the very next step. Every other field type doesn't
-        //   have this quirk, so excluding just date-like inputs keeps
-        //   the original fix intact everywhere it was actually needed.
-        if (isTouchDevice) {
-          const active = document.activeElement as HTMLElement | null;
-          const isDateLikeInput =
-            active instanceof HTMLInputElement &&
-            ["date", "time", "datetime-local", "month", "week"].includes(active.type);
-          if (active && !isDateLikeInput) active.blur();
-        }
-      },
-    }));
+            : step.requireChange
+              ? (popover, opts) => {
+                  const target = opts.driver.getActiveElement();
+                  if (!target) return;
+                  const initialText = target.textContent;
+                  popover.nextButton.style.display = "none";
+                  const observer = new MutationObserver(() => {
+                    if (target.textContent !== initialText) {
+                      popover.nextButton.style.display = "";
+                      observer.disconnect();
+                    }
+                  });
+                  observer.observe(target, { childList: true, subtree: true, characterData: true });
+                  cleanupListeners = () => observer.disconnect();
+                }
+              : undefined,
+        },
+        advanceOnClick: !!step.advanceOnClick,
+        disableActiveInteraction: !!step.disableInteraction,
+        // driver.js measures the target's position once when a step first
+        // highlights. If that target only just finished navigating to, or
+        // sits inside a Sheet still mid-open-animation, that first
+        // measurement can be taken before the layout has actually settled
+        // — confirmed cause of the stage/popover appearing cut off or far
+        // from the real element on some steps. refresh() re-measures and
+        // repositions everything; running it again ~400ms later (past any
+        // normal CSS transition) corrects that without needing to guess
+        // which specific steps are affected.
+        onHighlighted: (_element, _step, opts) => {
+          window.setTimeout(() => opts.driver.refresh(), 400);
+          // Bug fix (Sep 18 2026): confirmed by reading driver.js's own
+          // compiled source (its internal x() function, run every time a
+          // step highlights) — it deliberately auto-focuses the first
+          // focusable element it finds inside the popover or the target
+          // itself, for accessibility (so keyboard/screen-reader users land
+          // on the right control). That's driver.js's own built-in behavior,
+          // not this app's code or anything added by a previous fix. The
+          // side effect on a phone: whenever a step's target is a real
+          // <input> or <textarea> (the money/text fields, "what"), that
+          // auto-focus opens the on-screen keyboard the instant the step
+          // appears — before the person has tapped anything — confirmed as
+          // the cause of the keyboard popping open unprompted on several
+          // steps, and of it still being open (and blocking the next
+          // step's dialogue box) on the step right after. Blurring
+          // whatever driver.js just force-focused, once, right as each
+          // step finishes highlighting, cancels that without touching
+          // anything the person does afterward — if they then tap the
+          // field themselves a moment later, that's a fresh, real focus
+          // event this code never sees or interferes with.
+          // Two refinements, Sep 18 2026 later same night, both from a real
+          // device video:
+          // - Scoped to touch devices only. Desktop has no on-screen
+          //   keyboard for this to protect against, and undoing driver.js's
+          //   own focus is arguably a small accessibility regression there
+          //   (it's what lets keyboard/screen-reader users land on the
+          //   control) — so only step in where the problem actually exists.
+          // - Skip native date/time-type inputs specifically. Confirmed on
+          //   video: after picking a date, that field can still be the
+          //   logically-focused element even once its native calendar
+          //   closes, and calling .blur() on an iOS date input in that
+          //   state can make Safari flash the calendar open again — this
+          //   was the direct cause of "the calendar popped up a second
+          //   time" on the very next step. Every other field type doesn't
+          //   have this quirk, so excluding just date-like inputs keeps
+          //   the original fix intact everywhere it was actually needed.
+          if (isTouchDevice) {
+            const active = document.activeElement as HTMLElement | null;
+            const isDateLikeInput =
+              active instanceof HTMLInputElement &&
+              ["date", "time", "datetime-local", "month", "week"].includes(active.type);
+            if (active && !isDateLikeInput) active.blur();
+          }
+        },
+        onDeselected: () => {
+          cleanupListeners?.();
+          cleanupListeners = undefined;
+        },
+      };
+    });
 
     const driverObj: Driver = driver({
       showProgress: true,
