@@ -59,6 +59,16 @@ export function GuidedTour() {
     // still reliable (driver.js hasn't reset anything yet when it fires),
     // so track it here instead of trusting a post-destroy read.
     let lastActiveIndex = 0;
+    // Sep 18 2026, later same night: user flagged that none of this
+    // session's mobile-only fixes (the keyboard auto-focus cancel below,
+    // and the now-reverted keyboard-repositioning attempt) were actually
+    // scoped to mobile — they ran on desktop too, unnoticed only because
+    // desktop has no on-screen keyboard to visibly react to them. Using
+    // "is the primary pointer a finger, not a mouse" rather than a
+    // screen-width guess, since a resized browser window shouldn't be
+    // able to flip this by accident the way a width check could.
+    const isTouchDevice =
+      typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
 
     function finish(skippedEarly: boolean) {
       if (finished) return;
@@ -179,7 +189,29 @@ export function GuidedTour() {
         // anything the person does afterward — if they then tap the
         // field themselves a moment later, that's a fresh, real focus
         // event this code never sees or interferes with.
-        (document.activeElement as HTMLElement | null)?.blur();
+        // Two refinements, Sep 18 2026 later same night, both from a real
+        // device video:
+        // - Scoped to touch devices only. Desktop has no on-screen
+        //   keyboard for this to protect against, and undoing driver.js's
+        //   own focus is arguably a small accessibility regression there
+        //   (it's what lets keyboard/screen-reader users land on the
+        //   control) — so only step in where the problem actually exists.
+        // - Skip native date/time-type inputs specifically. Confirmed on
+        //   video: after picking a date, that field can still be the
+        //   logically-focused element even once its native calendar
+        //   closes, and calling .blur() on an iOS date input in that
+        //   state can make Safari flash the calendar open again — this
+        //   was the direct cause of "the calendar popped up a second
+        //   time" on the very next step. Every other field type doesn't
+        //   have this quirk, so excluding just date-like inputs keeps
+        //   the original fix intact everywhere it was actually needed.
+        if (isTouchDevice) {
+          const active = document.activeElement as HTMLElement | null;
+          const isDateLikeInput =
+            active instanceof HTMLInputElement &&
+            ["date", "time", "datetime-local", "month", "week"].includes(active.type);
+          if (active && !isDateLikeInput) active.blur();
+        }
       },
     }));
 
@@ -378,71 +410,42 @@ export function GuidedTour() {
       }
       if (hiddenAt && Date.now() - hiddenAt > 20000 && driverObj.isActive()) {
         driverObj.destroy();
-        document.body.classList.remove("driver-active", "driver-fade", "driver-simple", "driver-no-scroll");
+        document.body.classList.remove(
+          "driver-active",
+          "driver-fade",
+          "driver-simple",
+          "driver-no-scroll",
+        );
         finish(true);
       }
       hiddenAt = null;
     }
     document.addEventListener("visibilitychange", handleVisibility);
 
-    // Sep 18 2026 rewrite — replaces the visualViewport-based fix above's
-    // failure. Confirmed on a real device via screen recording (not a
-    // guess this time): visualViewport's resize/scroll events never fire
-    // at all in this app's installed/home-screen mode when the keyboard
-    // opens — not late, not occasionally, never, for the whole time a
-    // field is focused. So the highlight simply stayed frozen at its
-    // pre-keyboard screen position while the real page scrolled the
-    // focused field above the keyboard underneath it — which is why it
-    // looked like it "grew" to cover two other fields (the page moved,
-    // the frozen highlight didn't). It only ever looked "fixed" once the
-    // keyboard closed, because the page scrolling back down happened to
-    // land content back where the still-frozen highlight already was —
-    // an illusion of a fix, not an actual one.
-    // New approach, chosen specifically to survive that: rather than try
-    // to catch the exact right moment to reposition (three attempts at
-    // that have now failed), hide the highlight and popover completely
-    // the instant a field is focused or blurred, wait a fixed pause for
-    // whatever's about to move (keyboard opening/closing, the page
-    // scrolling) to actually finish, then reposition and reveal. If the
-    // timing is slightly off, the worst case is it appears a bit early
-    // or late in the CORRECT spot — it can no longer show a broken,
-    // wrong-position highlight on screen, which is the actual complaint,
-    // regardless of how well-tuned the delay turns out to be.
-    // Uses driver.js's own public, documented CSS class names (its
-    // theming API, not internal state) so this doesn't depend on
-    // anything undocumented that could change under a version bump.
-    const KEYBOARD_TRANSITION_DELAY = 550; // matches this file's own Sheet-open-animation convention elsewhere
-    let keyboardTransitionTimeout: number | undefined;
-    function setTourVisible(visible: boolean) {
-      const popover = document.querySelector<HTMLElement>(".driver-popover");
-      const overlay = document.querySelector<HTMLElement>(".driver-overlay");
-      if (popover) popover.style.opacity = visible ? "" : "0";
-      if (overlay) overlay.style.opacity = visible ? "" : "0";
-    }
-    function handleFieldFocusChange(e: FocusEvent) {
-      if (!driverObj.isActive()) return;
-      if (
-        !(e.target instanceof HTMLInputElement) &&
-        !(e.target instanceof HTMLTextAreaElement) &&
-        !(e.target instanceof HTMLSelectElement)
-      ) {
-        return;
-      }
-      setTourVisible(false);
-      if (keyboardTransitionTimeout) window.clearTimeout(keyboardTransitionTimeout);
-      keyboardTransitionTimeout = window.setTimeout(() => {
-        if (driverObj.isActive()) driverObj.refresh();
-        setTourVisible(true);
-      }, KEYBOARD_TRANSITION_DELAY);
-    }
-    document.addEventListener("focusin", handleFieldFocusChange, true);
-    document.addEventListener("focusout", handleFieldFocusChange, true);
+    // Sep 18 2026 — Option A (hide highlight+popover on focus/blur, wait a
+    // fixed pause, reposition, reveal) tried here and reverted same night.
+    // Confirmed on a real device video it made things worse, not better:
+    // while a field was actively being typed into, the popover stayed
+    // hidden and the highlight stayed frozen on the wrong fields for the
+    // ENTIRE time typing continued (evidence pointed to the reveal timer
+    // never getting a clean run — something about typing kept resetting
+    // it), not just briefly as intended. That's a bigger loss of
+    // information than the original bug being replaced. Also flagged: it
+    // ran unconditionally on desktop too, which was never actually needed
+    // there — this file had no touch-device gating at all before tonight.
+    // Reverted rather than tuned again: this is now four attempts at this
+    // specific bug (three before tonight, plus this one) — no fifth blind
+    // attempt without new evidence pointing at a specific different
+    // mechanism. Current state: no custom keyboard-repositioning code
+    // remains. The underlying bug (driver.js's highlight freezing at its
+    // pre-keyboard screen position while the real page scrolls under it)
+    // is UNSOLVED, not fixed — known, accepted for now, not silently
+    // dropped. The keyboard-auto-popping-open fix above (a different,
+    // confirmed-working mechanism, now scoped to touch devices only) is
+    // unaffected by this revert.
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
-      document.removeEventListener("focusin", handleFieldFocusChange, true);
-      document.removeEventListener("focusout", handleFieldFocusChange, true);
-      if (keyboardTransitionTimeout) window.clearTimeout(keyboardTransitionTimeout);
       if (driverObj.isActive()) driverObj.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
