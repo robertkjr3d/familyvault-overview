@@ -18,6 +18,9 @@ export function ReminderButton({ entityType, entityId }: { entityType: string; e
   const [date, setDate] = useState("");
   const [saving, setSaving] = useState(false);
   const qc = useQueryClient();
+  // Reactive on purpose (unlike the getState() read in save() below): the Sheet's
+  // modal setting has to change as soon as a tour starts or ends.
+  const activeTour = useAppStore((s) => s.activeTour);
 
   if (!canEdit) return null;
 
@@ -59,13 +62,31 @@ export function ReminderButton({ entityType, entityId }: { entityType: string; e
   }
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    // EXPERIMENT (Sep 21 2026) — iPhone-only bug: after picking a date in Tour 2,
+    // the native calendar re-opens by itself when the tour moves to the Save step.
+    // Hypothesis, read from the installed library source, NOT yet confirmed on a
+    // phone: a normal ("modal") Radix Sheet traps keyboard focus inside itself.
+    // driver.js's popover lives outside the Sheet and calls .focus() on its own
+    // button at every step; the trap immediately hands focus back to the last
+    // field used inside the Sheet — the date input — and iOS opens the picker
+    // whenever a date input is focused by code. Making the Sheet non-modal WHILE
+    // A TOUR IS RUNNING removes the trap; outside taps are ignored during the
+    // tour (below) so the driver.js popover can't accidentally close the Sheet.
+    // Outside a tour nothing changes. TO UNDO: delete `modal={!activeTour}` and
+    // the onInteractOutside prop, and the activeTour line above.
+    <Sheet open={open} onOpenChange={setOpen} modal={!activeTour}>
       <SheetTrigger asChild>
         <Button size="sm" variant="outline" data-tour="reminder-trigger">
           <Bell className="mr-1 h-3.5 w-3.5 fill-yellow-500 text-yellow-500" /> Set Reminder
         </Button>
       </SheetTrigger>
-      <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
+      <SheetContent
+        side="bottom"
+        className="max-h-[85vh] overflow-y-auto rounded-t-2xl"
+        onInteractOutside={(e) => {
+          if (useAppStore.getState().activeTour) e.preventDefault();
+        }}
+      >
         <SheetHeader>
           <SheetTitle>Set Reminder</SheetTitle>
         </SheetHeader>
