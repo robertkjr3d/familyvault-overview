@@ -1,31 +1,104 @@
 import { createClient } from "@supabase/supabase-js";
 
 // Small retry wrapper for the daily table-read loop below. This loop makes
-// 22 sequential requests using the same client/credentials that fx-cron and
-// trash-cleanup-cron also use successfully in the same invocation — so a
-// one-off failure here (e.g. the PGRST303 "JWT issued at future" seen once,
-// Aug 2026) looks like a transient timing blip rather than a real problem
-// with the credentials themselves. This loop has 22x the exposure to that
-// kind of blip compared to the other two crons' 1-3 calls each, so it's the
-// one that actually needs a retry, not a signal something is wrong with the
-// approach. Two retries, short fixed backoff — deliberately not fancier
-// than that; if it's still failing after 3 attempts total, that's a real
-// problem worth surfacing loudly (the caller aborts the whole run), not
-// something to keep silently retrying around.
+// one request per table (plus extra pages for any table over 1,000 rows — see
+// below) using the same client/credentials that fx-cron and trash-cleanup-cron
+// also use successfully in the same invocation — so a one-off failure here
+// (e.g. the PGRST303 "JWT issued at future" seen once, Aug 2026) looks like a
+// transient timing blip rather than a real problem with the credentials
+// themselves. This loop has far more exposure to that kind of blip than the
+// other two crons' 1-3 calls each, so it's the one that actually needs a
+// retry. Two retries, short fixed backoff — deliberately not fancier than
+// that; if it's still failing after 3 attempts total, that's a real problem
+// worth surfacing loudly (the caller aborts the whole run), not something to
+// keep silently retrying around.
+//
+// Sep 20 2026 — PAGINATION + COMPLETENESS CHECK. Supabase's API returns at
+// most 1,000 rows per request by default (documented: Supabase JS reference,
+// "Fetch data") and reports SUCCESS when it cuts a bigger table short — no
+// error, no warning. The old plain select("*") therefore would have silently
+// dropped rows from any table over 1,000 rows, which is the worst failure
+// mode for a disaster-recovery file. Now: ask for an exact row count with the
+// very first request (same request as before, just with the count header) and
+// compare it with what came back. If everything came back, done — identical
+// to the old behavior. If not, re-read the table page by page in a fixed
+// order, and finally verify rows collected === the count. Any mismatch is an
+// error, and the caller aborts the whole run (same "no partial snapshot"
+// rule as before).
+const PAGE_SIZE = 1000;
+const MAX_PAGES = 200; // runaway guard — 200k rows in one table means something is wrong
+
+// Column(s) to sort by when a table has to be paged. Paging without a fixed,
+// unique order can skip or repeat rows between pages, so this matters. Almost
+// every table has a unique `id` (the default). These don't, and the columns
+// below are the ones the app's own upsert/lookup code treats as unique for
+// that table (onConflict / .eq("token")) — evidence from the code, not guesses.
+const ORDER_COLUMNS: Record<string, string[]> = {
+  household_users: ["household_id", "user_id"],
+  user_profiles: ["user_id"],
+  estate_checklist: ["household_id", "item_id"],
+  advisor_link_members: ["link_id", "member_id"],
+  advisor_invites: ["token"],
+};
+
+type PageResult = { data: unknown[] | null; error: { message: string; code?: string } | null };
+
+async function selectAllPages(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  table: string,
+  filter?: { column: string; value: string },
+): Promise<PageResult> {
+  // First request: exactly the old shape (no ordering, no range) + exact count.
+  let first = admin.from(table).select("*", { count: "exact" });
+  if (filter) first = first.eq(filter.column, filter.value);
+  const { data: firstData, error: firstError, count } = await first;
+  if (firstError) return { data: null, error: firstError };
+  if (count === null || count === undefined) {
+    return { data: null, error: { message: `No row count returned for "${table}" — cannot verify completeness.` } };
+  }
+  const firstRows = firstData ?? [];
+  if (firstRows.length >= count) return { data: firstRows, error: null };
+
+  // Truncated by the server's row cap → page through in a fixed order.
+  const orderColumns = ORDER_COLUMNS[table] ?? ["id"];
+  const rows: unknown[] = [];
+  for (let page = 0; page < MAX_PAGES && rows.length < count; page++) {
+    let query = admin.from(table).select("*");
+    if (filter) query = query.eq(filter.column, filter.value);
+    for (const column of orderColumns) query = query.order(column, { ascending: true });
+    const { data, error } = await query.range(rows.length, rows.length + PAGE_SIZE - 1);
+    if (error) {
+      const hint =
+        error.code === "42703"
+          ? ` This table has no column to sort by (${orderColumns.join(", ")}) — add it to ORDER_COLUMNS in backupCron.ts.`
+          : "";
+      return { data: null, error: { ...error, message: error.message + hint } };
+    }
+    if (!data || data.length === 0) break;
+    rows.push(...data);
+  }
+  if (rows.length !== count) {
+    return {
+      data: null,
+      error: { message: `Read ${rows.length} rows from "${table}" but the database reports ${count} — refusing to write a partial copy.` },
+    };
+  }
+  return { data: rows, error: null };
+}
+
 async function selectAllWithRetry(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: any,
   table: string,
   attempts = 3,
   filter?: { column: string; value: string },
-): Promise<{ data: unknown[] | null; error: { message: string } | null }> {
-  let lastError: { message: string } | null = null;
+): Promise<PageResult> {
+  let lastError: PageResult["error"] = null;
   for (let i = 0; i < attempts; i++) {
-    let query = admin.from(table).select("*");
-    if (filter) query = query.eq(filter.column, filter.value);
-    const { data, error } = await query;
-    if (!error) return { data, error: null };
-    lastError = error;
+    const result = await selectAllPages(admin, table, filter);
+    if (!result.error) return result;
+    lastError = result.error;
     if (i < attempts - 1) await new Promise((r) => setTimeout(r, 500 * (i + 1)));
   }
   return { data: null, error: lastError };
@@ -35,7 +108,8 @@ async function selectAllWithRetry(
 // trash cleanup (see src/server.ts's `scheduled` export) — no new trigger
 // slot used. Writes one JSON file per day to the `familyhub-backups` R2
 // bucket (binding: BACKUPS_BUCKET), containing every row from every
-// household-scoped table. This is the "disaster recovery" layer — for a
+// household-scoped table (plus the login-profile and advisor-sharing tables —
+// see EXTRA_TABLES). This is the "disaster recovery" layer — for a
 // bad SQL statement run directly in Supabase, or an accidental account/
 // household deletion — as opposed to the Recycle Bin, which only catches
 // in-app delete-button mistakes.
@@ -50,7 +124,7 @@ async function selectAllWithRetry(
 // A 30-day object lifecycle rule on the bucket (configured in the Cloudflare
 // dashboard, not in code) handles retention — no cleanup logic needed here.
 
-const BACKUP_TABLES = [
+const CORE_TABLES = [
   "households",
   "household_users",
   "household_invites",
@@ -75,6 +149,32 @@ const BACKUP_TABLES = [
   "dismissed_dashboard_items",
   "deleted_records",
 ];
+// Sep 20 2026 — tables that hold real user data but were missing from the list
+// above (found by comparing every .from("...") in the app's code against this
+// list, not from memory). Kept in a separate list on purpose: some of them
+// have NO household_id column (user_profiles is keyed by user_id;
+// advisor_link_members by link_id), so the per-household test function below
+// — which filters every table by household_id — must keep using CORE_TABLES
+// only. Deliberately NOT included:
+//   - audit_log: grows with every edit and has no purge; one big table could
+//     push the whole snapshot over the size ceiling below and disable ALL
+//     backups. Needs its own separate file if it's ever backed up.
+//   - fx_rates: re-fetched daily by fx-cron, nothing user-entered.
+//   - error_logs, inventory_locations (empty/obsolete), and the two
+//     advisor_*_view views (computed from tables already backed up).
+const EXTRA_TABLES = [
+  "planned_cashflow_events",
+  "estate_checklist",
+  "travel_checklist_items",
+  "user_profiles",
+  "advisor_household_links",
+  "advisor_link_members",
+  "advisor_invites",
+  "advisor_record_notes",
+  "advisor_policy_charts",
+];
+
+const BACKUP_TABLES = [...CORE_TABLES, ...EXTRA_TABLES];
 
 // Sanity ceiling, not a real expectation — this is JSON rows only (no
 // files/images), so even at hundreds of households this should be a few MB
@@ -111,6 +211,7 @@ export async function runDailyBackup(env: BackupEnv): Promise<void> {
   });
 
   const snapshot: Record<string, unknown> = {};
+  const rowCounts: Record<string, number> = {};
   for (const table of BACKUP_TABLES) {
     const { data, error } = await selectAllWithRetry(admin, table);
     if (error) {
@@ -125,9 +226,12 @@ export async function runDailyBackup(env: BackupEnv): Promise<void> {
       return;
     }
     snapshot[table] = data ?? [];
+    rowCounts[table] = (data ?? []).length;
   }
 
-  const payload = JSON.stringify({ generated_at: new Date().toISOString(), tables: snapshot });
+  // row_counts: makes it a 10-second job to compare a backup against the live
+  // database (SELECT count(*) per table) before trusting it for a restore.
+  const payload = JSON.stringify({ generated_at: new Date().toISOString(), row_counts: rowCounts, tables: snapshot });
   const byteSize = new TextEncoder().encode(payload).length;
 
   if (byteSize > MAX_BACKUP_BYTES) {
@@ -182,7 +286,9 @@ export async function runTestBackupForHousehold(
   });
 
   const snapshot: Record<string, unknown> = {};
-  for (const table of BACKUP_TABLES) {
+  // CORE_TABLES, not BACKUP_TABLES: every table here is filtered by
+  // household_id, which EXTRA_TABLES don't all have (see comment on EXTRA_TABLES).
+  for (const table of CORE_TABLES) {
     const filterColumn = table === "households" ? "id" : "household_id";
     // Correction on re-review: this used to call admin.from(table).select("*")
     // directly, un-retried — a real gap against runDailyBackup's own
