@@ -31,6 +31,47 @@ const STAGE_RADIUS = 18;
  * overlay, the hole, the click-blocking, the positioning, and the
  * click-to-advance behavior itself.
  */
+// Resolves once the tour target exists, has a real size, has stopped moving for
+// ~300ms, and is inside the visible screen (scrolling it there itself if not —
+// safe here because driver.js hasn't locked page scrolling yet). Gives up
+// quietly after maxWaitMs so a target that never settles can't block the tour.
+async function waitForStableTarget(
+  target: string,
+  minDelayMs: number,
+  isCancelled: () => boolean,
+  maxWaitMs = 5000,
+): Promise<void> {
+  const selector = `[data-tour="${target}"]`;
+  const startedAt = performance.now();
+  const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
+  if (minDelayMs > 0) await sleep(minDelayMs);
+  let lastKey = "";
+  let stablePolls = 0;
+  let scrolledIntoView = false;
+  while (performance.now() - startedAt < maxWaitMs && !isCancelled()) {
+    const el = document.querySelector(selector);
+    const r = el?.getBoundingClientRect();
+    const hasSize = !!r && r.width > 0 && r.height > 0;
+    const key = hasSize ? `${Math.round(r!.top)}|${Math.round(r!.left)}|${Math.round(r!.width)}|${Math.round(r!.height)}` : "";
+    if (key && key === lastKey) {
+      stablePolls++;
+      if (stablePolls >= 5) {
+        const offScreen = r!.top < 0 || r!.bottom > window.innerHeight;
+        if (!offScreen || scrolledIntoView) return;
+        // Same instant scroll-to-centre used elsewhere in this file; then let
+        // the position settle again before returning.
+        el!.scrollIntoView({ behavior: "auto", block: "center" });
+        scrolledIntoView = true;
+        stablePolls = 0;
+      }
+    } else {
+      stablePolls = 0;
+      lastKey = key;
+    }
+    await sleep(60);
+  }
+}
+
 export function GuidedTour() {
   const activeTour = useAppStore((s) => s.activeTour);
   const endTour = useAppStore((s) => s.endTour);
@@ -395,14 +436,38 @@ export function GuidedTour() {
       },
     });
 
+    // Sep 21 2026 — Tour 2 started from Settings on an account with lots of
+    // loans: the "Track progress" popover sat pinned at the very top with no
+    // highlight, and only came right after a full page refresh (a brand-new
+    // account with almost no loans never showed it). Two things can leave a
+    // first step in that state, and both apply only when the tour starts by
+    // NAVIGATING to another page (as it does from Settings): (1) driver.js
+    // measures the target once, at the instant the target first exists in the
+    // page — on a big page that is before layout has settled, and with
+    // animate:false nothing re-measures until the 400ms refresh; (2) the new
+    // page can open still scrolled down from where Settings was, and
+    // driver.js's own scroll-into-view is silently blocked once the tour has
+    // locked page scrolling (see scrollToTarget in tourSteps.ts) — which
+    // happens the moment drive() runs. So, in that case only, wait BEFORE
+    // starting: target exists, has a real size, has stopped moving, and is
+    // on screen (scrolling it there ourselves while scrolling is still
+    // unlocked). Unchanged when the tour starts on the right page already.
+    // If the target never settles, start anyway after 5s — the same as before.
+    let cancelled = false;
+    const startFirstStep = () => {
+      if (!cancelled) driverObj.drive();
+    };
     const first = tourSteps[0];
-    if (first?.route && window.location.pathname !== first.route) {
-      navigate({ to: first.route });
-    }
-    if (first?.settleDelay) {
-      window.setTimeout(() => driverObj.drive(), first.settleDelay);
+    const needsNavigation = !!(first?.route && window.location.pathname !== first.route);
+    if (needsNavigation) {
+      navigate({ to: first.route! });
+      void waitForStableTarget(first.target, first.settleDelay ?? 0, () => cancelled).then(
+        startFirstStep,
+      );
+    } else if (first?.settleDelay) {
+      window.setTimeout(startFirstStep, first.settleDelay);
     } else {
-      driverObj.drive();
+      startFirstStep();
     }
 
     // Bug fix (Aug 28, 2026): reported as the tour app becoming completely
@@ -504,6 +569,7 @@ export function GuidedTour() {
     }
 
     return () => {
+      cancelled = true;
       document.removeEventListener("visibilitychange", handleVisibility);
       vv?.removeEventListener("resize", refreshNow);
       vv?.removeEventListener("scroll", refreshNow);
