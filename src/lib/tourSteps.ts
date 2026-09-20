@@ -208,6 +208,16 @@ export const CORE_TOUR_STEPS: TourStep[] = [
     requireValue: true,
     // Text field — tapping it only focuses it for typing. Next-only, and
     // hidden until a number is actually typed in.
+    // Sep 20 2026: found by comparing against the Aug 31 version of these
+    // tour files plus a real iPhone Safari screenshot. driver.js only scrolls
+    // a target into view if it's outside the WINDOW — it has no idea the
+    // Sheet's own sticky Cancel/Save bar covers the bottom of the form. On
+    // Safari in a browser tab (shorter than the Home Screen app, because of
+    // the address bar) this field sits inside the window but underneath that
+    // bar, so nothing scrolled and the highlight came out cut off. Same
+    // instant scroll-to-centre already used elsewhere, run before driver.js
+    // measures, so it always measures the settled position.
+    scrollToTarget: true,
   },
   {
     id: "action-field",
@@ -216,6 +226,14 @@ export const CORE_TOUR_STEPS: TourStep[] = [
     body: "Optional — a note on what to do next, e.g. \"Ask for a repricing rate by May.\" Then tap Next.",
     placement: "bottom",
     // Text field, same reasoning. Next-only.
+    // Sep 20 2026: this field sits far below the fold of the long loan form,
+    // so driver.js has to scroll the Sheet to reach it. With animate:false
+    // (set Sep 18) driver.js measures the highlight ONCE at the start of
+    // its own smooth scroll, so the highlight lands where the field USED to
+    // be. Scrolling instantly first (scrollToTarget) means the field is
+    // already in place when driver.js measures. Confirmed symptom: highlight
+    // on the wrong field on iPhone Safari and on desktop Brave.
+    scrollToTarget: true,
   },
   {
     id: "save",
