@@ -470,8 +470,47 @@ export function GuidedTour() {
     // confirmed-working mechanism, now scoped to touch devices only) is
     // unaffected by this revert.
 
+    // Sep 20 2026 — re-measure on touch devices when the keyboard opens/closes.
+    // Found by comparing against the Aug 31 version of this file: that version
+    // had a visualViewport listener calling refresh(); the Sep 18 revert of
+    // "Option A" removed it too, even though it was a separate, simpler
+    // mechanism (it never hid anything). Real iPhone Safari screenshot after
+    // typing a balance: highlight left behind on the wrong field once the
+    // keyboard closed. Nothing here hides or freezes anything (that was what
+    // went wrong with Option A) — it only asks driver.js to re-measure. Touch
+    // devices only, per the Sep 18 scoping rule.
+    let refreshRaf = 0;
+    let refreshTimers: number[] = [];
+    function refreshNow() {
+      if (refreshRaf) return;
+      refreshRaf = window.requestAnimationFrame(() => {
+        refreshRaf = 0;
+        if (driverObj.isActive()) driverObj.refresh();
+      });
+    }
+    // focusin/focusout are reliable on iOS even when visualViewport events
+    // are not (e.g. Home Screen app). The keyboard slides for roughly 300ms,
+    // so re-measure a few times across that window, not just once.
+    function refreshAfterFocusChange() {
+      refreshTimers.forEach((t) => window.clearTimeout(t));
+      refreshTimers = [150, 400, 800].map((ms) => window.setTimeout(refreshNow, ms));
+    }
+    const vv = window.visualViewport;
+    if (isTouchDevice) {
+      vv?.addEventListener("resize", refreshNow);
+      vv?.addEventListener("scroll", refreshNow);
+      document.addEventListener("focusin", refreshAfterFocusChange);
+      document.addEventListener("focusout", refreshAfterFocusChange);
+    }
+
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
+      vv?.removeEventListener("resize", refreshNow);
+      vv?.removeEventListener("scroll", refreshNow);
+      document.removeEventListener("focusin", refreshAfterFocusChange);
+      document.removeEventListener("focusout", refreshAfterFocusChange);
+      refreshTimers.forEach((t) => window.clearTimeout(t));
+      if (refreshRaf) window.cancelAnimationFrame(refreshRaf);
       if (driverObj.isActive()) driverObj.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
