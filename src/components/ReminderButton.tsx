@@ -62,18 +62,23 @@ export function ReminderButton({ entityType, entityId }: { entityType: string; e
   }
 
   return (
-    // EXPERIMENT (Sep 21 2026) — iPhone-only bug: after picking a date in Tour 2,
-    // the native calendar re-opens by itself when the tour moves to the Save step.
-    // Hypothesis, read from the installed library source, NOT yet confirmed on a
-    // phone: a normal ("modal") Radix Sheet traps keyboard focus inside itself.
-    // driver.js's popover lives outside the Sheet and calls .focus() on its own
+    // FIX, CONFIRMED ON A REAL iPHONE (Sep 21 2026) — do not remove without reading this.
+    // Symptom: on iPhone (Safari AND Home Screen app), after picking a date in
+    // Tour 2, the native calendar re-opened by itself when the tour moved to the
+    // Save step. Never happened on desktop. Several earlier attempts inside
+    // GuidedTour.tsx (skipping .blur() on date inputs, releasing listeners in
+    // onDeselected) did not fix it — the cause was not in the tour code.
+    // Cause: a normal ("modal") Radix Sheet traps keyboard focus inside itself.
+    // driver.js's popover lives OUTSIDE the Sheet and calls .focus() on its own
     // button at every step; the trap immediately hands focus back to the last
     // field used inside the Sheet — the date input — and iOS opens the picker
-    // whenever a date input is focused by code. Making the Sheet non-modal WHILE
-    // A TOUR IS RUNNING removes the trap; outside taps are ignored during the
-    // tour (below) so the driver.js popover can't accidentally close the Sheet.
-    // Outside a tour nothing changes. TO UNDO: delete `modal={!activeTour}` and
-    // the onInteractOutside prop, and the activeTour line above.
+    // whenever a date input is focused by code (no tap needed).
+    // Fix: make the Sheet non-modal WHILE A TOUR IS RUNNING (no focus trap), and
+    // ignore outside taps during the tour (below) so the driver.js popover can't
+    // accidentally dismiss the Sheet. Outside a tour nothing changes.
+    // If a similar "keyboard / picker opens by itself during a tour" bug shows up
+    // in another Sheet (e.g. RecordFormSheet.tsx in Tour 1), the same two props
+    // are the first thing to try there.
     <Sheet open={open} onOpenChange={setOpen} modal={!activeTour}>
       <SheetTrigger asChild>
         <Button size="sm" variant="outline" data-tour="reminder-trigger">
