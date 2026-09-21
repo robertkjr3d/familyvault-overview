@@ -47,7 +47,7 @@ type ExportRow = Record<string, any>;
 
 type SheetSpec = {
   name: string;
-  columns: { header: string; key: string; width: number; numFmt?: string }[];
+  columns: { header: string; key: string; width: number; numFmt?: string; wrap?: boolean }[];
   rows: ExportRow[];
 };
 
@@ -237,8 +237,15 @@ function buildRecordSheet(
   ctx: { memberNameById: Map<string, string>; propertyNameById: Map<string, string> }
 ): SheetSpec {
   const cfg = recordConfigs[configKey];
-  const columns = [
+  const columns: SheetSpec["columns"] = [
     ...cfg.fields.map((f) => ({ header: f.label, key: f.key, width: resolvedWidth(f, configKey), numFmt: numFmtFor(f) })),
+    // Sep 21 2026: the detailed Notes (the rich-text editor inside each card) live in a
+    // `notes` column that is NOT one of the form fields above, so they were silently missing
+    // from every export. Same for who the follow-up action is assigned to, and the
+    // packed/unpacked tick on the travel checklist.
+    ...(NOTES_TABLES.has(configKey as string) ? [{ header: "Notes", key: "__notes", width: 60, wrap: true }] : []),
+    ...(ACTION_OWNER_TABLES.has(configKey as string) ? [{ header: "Action owner", key: "__action_owner", width: 18 }] : []),
+    ...(configKey === "travel_checklist_items" ? [{ header: "Checked", key: "__checked", width: 10 }] : []),
     { header: "Status", key: "__status", width: STATUS_COL_WIDTH },
     { header: "Last Updated In App", key: "__updated_at", width: UPDATED_AT_COL_WIDTH, numFmt: "dd mmm yyyy" },
   ];
@@ -247,11 +254,132 @@ function buildRecordSheet(
     for (const f of cfg.fields) {
       out[f.key] = cellValue(f, r[f.key], ctx);
     }
+    if (NOTES_TABLES.has(configKey as string)) out.__notes = notesToPlainText(r.notes);
+    if (ACTION_OWNER_TABLES.has(configKey as string)) {
+      out.__action_owner = r.action_member_id ? (ctx.memberNameById.get(r.action_member_id) ?? null) : null;
+    }
+    if (configKey === "travel_checklist_items") out.__checked = r.checked ? "Yes" : "No";
     out.__status = STATUS_LABEL[r.status] ?? r.status ?? "";
     out.__updated_at = r.updated_at ? new Date(r.updated_at) : null;
     return out;
   });
   return { name: sheetName, columns, rows: outRows };
+}
+
+// Record types whose table has a `notes` column (the rich-text "Notes" editor in each card) /
+// an `action_member_id` column (who the follow-up action is assigned to). Static lists so the
+// columns appear even on an empty sheet. Checked against a real nightly backup on Sep 21 2026.
+const NOTES_TABLES = new Set([
+  "properties", "loans", "insurance_policies", "investments",
+  "savings_accounts", "other_assets", "credit_cards", "health_conditions",
+]);
+const ACTION_OWNER_TABLES = new Set([
+  "properties", "loans", "insurance_policies", "investments",
+  "savings_accounts", "other_assets", "health_conditions",
+]);
+
+function decodeHtmlEntities(s: string): string {
+  if (typeof document !== "undefined") {
+    const t = document.createElement("textarea");
+    t.innerHTML = s;
+    return t.value;
+  }
+  return s
+    .replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+}
+
+// Notes are stored as HTML (or plain text on older records). For a spreadsheet cell: keep the
+// line breaks and bullets, drop the tags.
+function notesToPlainText(value: unknown): string | null {
+  if (value == null || value === "") return null;
+  let s = String(value);
+  if (/<[a-z][\s\S]*>/i.test(s)) {
+    s = s
+      .replace(/<li[^>]*>/gi, "\u2022 ")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|div|li|h[1-6]|ul|ol)>/gi, "\n")
+      .replace(/<[^>]+>/g, "");
+    s = decodeHtmlEntities(s);
+  }
+  s = s.replace(/\u00a0/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  return s || null;
+}
+
+// A reminder's time is stored as a moment; the app is Singapore-based, so take the calendar date
+// as it is in Singapore (a plain UTC conversion could show the day before for early-morning times).
+function singaporeDate(raw: unknown): Date | null {
+  if (!raw) return null;
+  const d = new Date(String(raw));
+  if (isNaN(d.getTime())) return null;
+  const parsed = new Date(d.toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" }));
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+const ACTIVITY_TYPE_LABEL: Record<string, string> = {
+  property: "Property", loan: "Loan", insurance: "Insurance", investment: "Investment",
+  savings: "Savings & CPF", other_asset: "Other Asset", credit_card: "Credit Card",
+  health: "Health", inventory: "Inventory",
+};
+
+// The Reminders and Updates sheets (Updates = the record_history table). Both tables point at a record by (entity_type, entity_id), so
+// the record's name is looked up from the rows already loaded for the other sheets.
+// recordRows: entity type -> that type's rows (records + inventory items).
+function buildActivitySheets(args: {
+  reminders: any[];
+  history: any[];
+  recordRows: Record<string, any[]>;
+}): SheetSpec[] {
+  const nameById = new Map<string, string>();
+  for (const [entityType, rows] of Object.entries(args.recordRows)) {
+    for (const row of rows) {
+      nameById.set(row.id, entityType === "inventory" ? (row.name ?? "Item") : recordDisplayName(entityType, row));
+    }
+  }
+  const describe = (entityType: string, entityId: string) => ({
+    item_type: ACTIVITY_TYPE_LABEL[entityType] ?? entityType ?? "",
+    item: nameById.get(entityId) ?? "(item deleted)",
+  });
+
+  const reminders = [...args.reminders].sort((a, b) => String(a.remind_at).localeCompare(String(b.remind_at)));
+  const history = [...args.history].sort((a, b) =>
+    String(b.occurred_on ?? "").localeCompare(String(a.occurred_on ?? "")) ||
+    String(b.created_at ?? "").localeCompare(String(a.created_at ?? ""))
+  );
+
+  return [
+    {
+      name: "Reminders",
+      columns: [
+        { header: "Item type", key: "item_type", width: 16 },
+        { header: "Item", key: "item", width: 30 },
+        { header: "Reminder", key: "what", width: 40, wrap: true },
+        { header: "Remind on", key: "remind_on", width: 14, numFmt: "dd mmm yyyy" },
+        { header: "Dismissed", key: "dismissed", width: 10 },
+      ],
+      rows: reminders.map((r) => ({
+        ...describe(r.entity_type, r.entity_id),
+        what: r.what ?? "",
+        remind_on: singaporeDate(r.remind_at),
+        dismissed: r.dismissed ? "Yes" : "No",
+      })),
+    },
+    {
+      // Named "Updates" (what the app calls them) - Excel itself reserves the sheet name "History".
+      name: "Updates",
+      columns: [
+        { header: "Item type", key: "item_type", width: 16 },
+        { header: "Item", key: "item", width: 30 },
+        { header: "Date", key: "occurred_on", width: 14, numFmt: "dd mmm yyyy" },
+        { header: "Note", key: "note", width: 60, wrap: true },
+      ],
+      rows: history.map((h) => ({
+        ...describe(h.entity_type, h.entity_id),
+        occurred_on: h.occurred_on ? new Date(h.occurred_on) : null,
+        note: h.note ?? "",
+      })),
+    },
+  ];
 }
 
 const FINANCIAL_TABLES: { configKey: keyof typeof recordConfigs; sheetName: string }[] = [
@@ -289,10 +417,14 @@ export async function runFullExport(householdId: string, members: Member[]) {
     travelChecklistRes,
     foldersRes,
     inventoryRes,
+    remindersRes,
+    historyRes,
   ] = await Promise.all([
     ...tableQueries,
     filter(supabase.from("inventory_folders").select("*").order("sort_order")),
     filter(supabase.from("inventory_items").select("*").order("name")),
+    filter(supabase.from("reminders" as any).select("*")),
+    filter(supabase.from("record_history" as any).select("*")),
   ]);
 
   const properties = propertiesRes.data ?? [];
@@ -398,6 +530,23 @@ export async function runFullExport(householdId: string, members: Member[]) {
     rows: inventoryRows,
   });
 
+  sheets.push(
+    ...buildActivitySheets({
+      reminders: remindersRes.data ?? [],
+      history: historyRes.data ?? [],
+      recordRows: {
+        property: propertiesRes.data ?? [],
+        loan: loansRes.data ?? [],
+        insurance: insuranceRes.data ?? [],
+        investment: investmentsRes.data ?? [],
+        savings: savingsRes.data ?? [],
+        other_asset: otherAssetsRes.data ?? [],
+        credit_card: creditCardsRes.data ?? [],
+        health: healthRes.data ?? [],
+        inventory: inventoryItems,
+      },
+    })
+  );
   // Members reference sheet — useful since every other sheet resolves
   // owner/insured/person to a name rather than a raw ID.
   sheets.push({
@@ -436,6 +585,9 @@ async function writeWorkbook(sheets: SheetSpec[], context: "standalone" | "backu
     "The Inventory sheet's Photo column and each record's document links still work too (valid for up to 10",
     "years), as a convenient shortcut — but you don't need them, since the real files are right here.",
     "",
+    "Also included: the detailed Notes on each record, plus a Reminders sheet and an Updates sheet (the dated update log).",
+    "Not included: planned one-off cash-flow events, estate checklist ticks, and your projection assumptions (income, growth rates, etc.).",
+    "",
     "Each sheet below is safe to delete if you don't need it — they're independent.",
     "",
     "This export is for your own records and is not financial advice.",
@@ -458,6 +610,9 @@ async function writeWorkbook(sheets: SheetSpec[], context: "standalone" | "backu
     "still running, use \"Download full backup (.zip)\" from Settings \u2192 Data instead — it includes this same",
     "spreadsheet plus every photo and document as real files.",
     "",
+    "Also included: the detailed Notes on each record, plus a Reminders sheet and an Updates sheet (the dated update log).",
+    "Not included: planned one-off cash-flow events, estate checklist ticks, and your projection assumptions (income, growth rates, etc.).",
+    "",
     "Each sheet below is safe to delete if you don't need it — they're independent.",
     "",
     "This export is for your own records and is not financial advice.",
@@ -478,6 +633,15 @@ async function writeWorkbook(sheets: SheetSpec[], context: "standalone" | "backu
     ws.views = [{ state: "frozen", ySplit: 1 }];
     if (spec.rows.length > 0) {
       ws.addRows(spec.rows);
+    }
+    // Columns flagged wrap (Notes, Reminder, History note): long multi-line text
+    // must wrap inside its cell, otherwise Excel shows it as one long line.
+    for (const c of spec.columns) {
+      if (!c.wrap) continue;
+      const colIdx = ws.getColumn(c.key).number;
+      for (let r = 2; r <= spec.rows.length + 1; r++) {
+        ws.getCell(r, colIdx).alignment = { wrapText: true, vertical: "top" };
+      }
     }
     for (const c of spec.columns) {
       if (!c.numFmt) continue;
@@ -601,10 +765,13 @@ export async function runFullBackupZip(householdId: string, members: Member[]) {
   const [
     propertiesRes, loansRes, insuranceRes, investmentsRes, savingsRes,
     otherAssetsRes, creditCardsRes, healthRes, gobagRes, travelChecklistRes, foldersRes, inventoryRes,
+    remindersRes, historyRes,
   ] = await Promise.all([
     ...tableQueries,
     filter(supabase.from("inventory_folders").select("*").order("sort_order")),
     filter(supabase.from("inventory_items").select("*").order("name")),
+    filter(supabase.from("reminders" as any).select("*")),
+    filter(supabase.from("record_history" as any).select("*")),
   ]);
 
   const properties = propertiesRes.data ?? [];
@@ -691,6 +858,23 @@ export async function runFullBackupZip(householdId: string, members: Member[]) {
     ],
     rows: inventoryRows,
   });
+  sheets.push(
+    ...buildActivitySheets({
+      reminders: remindersRes.data ?? [],
+      history: historyRes.data ?? [],
+      recordRows: {
+        property: propertiesRes.data ?? [],
+        loan: loansRes.data ?? [],
+        insurance: insuranceRes.data ?? [],
+        investment: investmentsRes.data ?? [],
+        savings: savingsRes.data ?? [],
+        other_asset: otherAssetsRes.data ?? [],
+        credit_card: creditCardsRes.data ?? [],
+        health: healthRes.data ?? [],
+        inventory: inventoryItems,
+      },
+    })
+  );
   sheets.push({
     name: "Members",
     columns: [
