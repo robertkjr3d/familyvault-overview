@@ -354,7 +354,9 @@ function SettingsPage() {
     }
     setGeneratingEstateDoc(true);
     try {
-      const docxLib: any = await import("https://esm.sh/docx@9");
+      // Sep 22 2026 -- bundled as a real dependency instead of fetched from
+      // esm.sh at click-time (see package.json).
+      const docxLib: any = await import("docx");
       const {
         Document,
         Packer,
