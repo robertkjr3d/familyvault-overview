@@ -1,0 +1,80 @@
+# FamilyHub SG — Architecture Reference
+
+*Written 21 Sep 2026. This is a living reference, not a one-time report — bring it back into a new chat and ask Claude to update it after future sessions, rather than starting over. Where something hasn't been checked on the live system, it's marked "unverified."*
+
+## Quick summary — read this first
+*One paragraph your dad, or anyone with zero tech knowledge, can read and understand.*
+
+FamilyHub SG stores each family's financial data in a database (Supabase, Singapore), with a copy of that data automatically saved every night to a separate backup service (Cloudflare R2) in case something is deleted by mistake or the main database has a problem. That nightly backup covers all the data itself (properties, loans, notes, reminders, etc.) but **not** uploaded photos/documents and **not** login accounts — those aren't currently backed up elsewhere, though every household can download their own copy any time from Settings. The app currently runs entirely on free hosting plans. The one part that could need a paid plan as more families join is the nightly backup, and even then the cost is a predictable $5/month, not a surprise bill — see §5 below for the trigger point.
+
+**Status as of 22 Sep 2026:** live, in private family/friend testing, not yet charging anyone. Real database migration (Seoul → Singapore) is complete. Security basics (passkey login, encrypted storage, audit trail, rate limiting) are built and confirmed working. A single-record restore from backup has been tested successfully.
+
+## 1. What this is
+A Singapore-focused family financial management web app. Households track properties, loans, insurance, investments, savings/CPF, other assets, credit cards, health, a "go-bag" list, travel checklist, and an inventory of belongings — one shared "household" per family, with individual members inside it. A separate financial-adviser (FA) dashboard lets a household selectively share some of this with a real financial adviser.
+
+## 2. Stack
+- **Frontend:** React, deployed as a Cloudflare Worker (`app.familyhubsg.com`). Built with TanStack Start/Router.
+- **Database:** Supabase (Postgres), Singapore region, project ref `aowvotxddrlfnpzhejvc`. Free plan.
+- **File storage:** Supabase Storage — `vault-docs` (10MB/file cap) and `inventory-photos` (5MB/file cap) buckets, both private.
+- **Backups:** Cloudflare R2 (`familyhub-backups` bucket), written nightly by a Cloudflare Cron Trigger.
+- **Repo:** GitHub, `robertkjr3d/familyvault-overview`, `azariah` branch. Robert owns the repo and infrastructure; the user codes exclusively via Claude + the GitHub web editor (no CLI) plus the Supabase SQL Editor.
+- **Cloudflare plan:** Free (confirmed by user Sep 21 2026) — this caps CPU time and outside-request count per Worker invocation; see §6.
+
+## 3. Data model & multi-tenancy
+- Every table that holds real data has a `household_id`. A row belongs to exactly one household.
+- `household_users` links a login (`auth.users`) to a household with a role (owner/editor/viewer).
+- `members` are people inside a household (not logins) — e.g. "Dad", "Mum" — and most record tables point at a `member_id` (who owns this) and sometimes a separate `action_member_id` (who's responsible for following up).
+- **Row-level security (RLS)** is the real access barrier: every table's policies check `is_household_member()` / `is_household_editor()` / `current_household_id()`. The `anon` database role has broad grants at the table level, but RLS is what actually stops cross-household access — this is normal Supabase practice, not a gap by itself (see §6 for the one caveat).
+- **Deleting a member** (checked live, Sep 21 2026): every record they own is kept — it just loses its owner tag. The one exception is `advisor_link_members`, which cascades (an adviser-sharing link tied to that member is removed). **Known display gap:** the Health page (`health.tsx`) only lists records grouped under a member's name — an ownerless Health record currently has no place to show up in that page's UI. Not yet fixed.
+- **Entity types:** reminders, documents, history entries and the Recycle Bin all key off an `entity_type` enum (`property`, `loan`, `insurance`, …) plus an `entity_id`. Adding a new record type (e.g. Credit Cards) requires adding a new enum value or every reminder/document/history action on it fails at the database level.
+
+## 4. Security
+- **Sign-in:** passkeys (primary, deployed and working), Google OAuth, and email 6-digit code (`verifyOtp`) as the reliable fallback. Magic-link "click here" buttons in emails are known to fail after the Sep 2026 PKCE fix (see below) — the 6-digit code is unaffected and always works. **Recommended, not yet done:** edit the Supabase email templates to foreground the 6-digit code over the click-through button.
+- **Passkey RP ID** is permanently set to `familyhubsg.com` (not the `app.` subdomain) — changing this later would invalidate every enrolled passkey. Do not suggest changing it.
+- **Auth flow type:** `pkce` on the browser client (`client.ts`), left as `implicit`-default on the server client (`client.server.ts`) deliberately, because server-generated invite/magic-links are opened on a different device than the one that requested them, which PKCE can't support.
+- **Encryption:** AES-256 at rest + TLS in transit, via Supabase's own infrastructure — no custom encryption layer. End-to-end/"zero-knowledge" encryption was deliberately rejected (would make lost-credential data unrecoverable, breaks server-side calculations, and multi-person key-sharing is a hard problem). The audit log (below) is the chosen trust mechanism instead.
+- **Audit log:** a database trigger (not app code) logs every change to the 6 core financial tables (insurance, investments, savings, loans, properties, other assets) — who changed what, old value → new value. Shown as an "Audit Trail" section inside each record's expanded card (no longer a collapsed-card icon, per the user's Sep 21 2026 request). Known limitation: writes made by the service role (e.g. an admin script) show no user, since `auth.uid()` is null for those.
+- **Rate limiting:** household invites are capped via a Cloudflare `ratelimits` binding (5 per 60s per inviter). Other server actions (e.g. the adviser policy-chart tool) aren't rate-limited yet.
+- **Consent:** the sign-in screen already has a standing notice ("By continuing, you agree to our Terms of Service and Privacy Policy", linking both pages) — no separate checkbox exists, and per Singapore PDPA guidance this notice-based approach is acceptable; a tick-box is optional, not required.
+- **Two database functions worth knowing:**
+  - `current_household_id()` — reads a JWT claim that nothing in this app currently sets, so it always falls back to a normal membership lookup. Not a security issue. Possibly unused by any policy (a check was pending as of Sep 21).
+  - `increment_household_storage()` — used to trust a caller-supplied byte count; fixed Sep 21 2026 to recompute the true total from `storage.objects` instead (see handed-over SQL file from that session).
+- **Not implemented:** 2FA/TOTP (skipped — passwordless + passkeys already cover this well), session idle-timeout (deliberately rejected — trusted personal devices, convenience prioritized).
+- **Cleaned up Sep 21 2026:** the unused `inventory_locations` table (had an effectively-no-RLS policy) and the empty public `documents` storage bucket were both dropped/deleted after confirming zero rows/objects.
+
+## 5. Backups & disaster recovery
+Three layers — see `backups-feature-list.md` (a companion document, written Sep 21 2026) for the full detail. In short:
+1. **Recycle Bin** (in-app, 30 days) — covers accidental deletion of the main record types, self-service restore. Does NOT cover inventory items/folders, members, or single documents.
+2. **Exports** — an Excel workbook and a full .zip (workbook + actual files) that any household can download any time from Settings → Data. As of Sep 21 2026 the Excel export also includes each record's detailed Notes, who a follow-up action is assigned to, and Reminders/Updates sheets (previously missing — found and fixed after the user flagged it).
+3. **Nightly database snapshot to R2** — all 32 real data tables, kept 30 days, with row-count verification so a partial/truncated day is never silently saved. Does NOT cover files/photos, login accounts, or the database's structure/security rules. A real single-record restore was rehearsed and confirmed working (Sep 21 2026).
+- **Known scaling risk (Free Cloudflare plan):** a laptop benchmark suggests the nightly backup could start silently failing somewhere around 2-4× today's data volume, because Free Workers get only 10ms of processing time per run. Not yet redesigned — current plan is to add a free failure-alert (Healthchecks.io) and watch trend, then move to Cloudflare's $5/month Workers Paid plan if/when it's actually needed, rather than a risky rewrite now.
+- **Guiding principle (user's words, Sep 21 2026):** if anything goes wrong, people should have an easy, reasonable way to get their data back — while keeping the app's own running costs as close to $0 as possible.
+
+## 6. Known backlog (security-audit-derived, none urgent)
+From a third-party read-only audit run after the Seoul→Singapore migration — all pre-existing (not migration-caused):
+- `anon` role has broad table-level grants; RLS is the real barrier so this isn't automatically exploitable, but is broader than ideal. Don't revoke blindly — needs a check of what the app legitimately needs anon for first.
+- Two adviser-facing views (`advisor_client_summary_view`, `advisor_networth_components_view`) rely on in-view access checks rather than their own RLS. No demonstrated leak; worth hardening before onboarding non-family advisers.
+- `other_assets` has two redundant delete triggers doing the same cleanup — harmless, low priority.
+
+## 7. The onboarding product tour
+Built with `driver.js` + React (`GuidedTour.tsx`, `tourSteps.ts`). Runs on both desktop and mobile, including inside bottom Sheets on phones. Several real, confirmed-fixed mobile bugs (Sep 2026), kept here so the same class of bug is recognized faster next time:
+- **A native date picker reopening itself after being dismissed** (iPhone only) — caused by a Radix Sheet's focus trap fighting with the tour's own popover focus; fixed by making the Sheet non-modal only while a tour is running.
+- **The highlight landing on the wrong field** after the on-screen keyboard opened/closed, or after scrolling a long form — fixed by re-measuring on keyboard events (touch devices only) and by scrolling instantly instead of relying on driver.js's own animated scroll.
+- **The first step of a tour appearing with no highlight, only fixed by a page refresh** — caused by the tour measuring its target before a newly-navigated-to page had finished laying out; fixed by waiting for the target to exist, stop moving, and be on-screen before starting.
+
+## 8. Advisor (FA) dashboard — separate sub-project
+Full detail in a dedicated reference (`advisor-dashboard.md`) — summary: a financial adviser can be given selective, per-category, per-member access to a household's data (insurance, investments, property, loans), with a household-side toggle to hide individual items regardless. Includes adviser notes, a policy-illustration chart tool, and per-member net worth. Built and deployed; still evolving.
+
+## 9. Exports rely on a third-party CDN at runtime
+The Excel, ZIP, Word (.docx) and PDF export/import tools are all loaded from `esm.sh` at the moment a user taps the relevant button, rather than being bundled into the app. If that CDN is ever unreachable, those specific features fail (the rest of the app is unaffected). Not yet addressed — worth bundling before this matters to real users.
+
+## 10. Where things are decided vs. still open
+This document summarizes decisions and status as of 21 Sep 2026. For the day-to-day working notes, open decisions, and exact file lists behind each of the above, the fuller working files are:
+- Security/auth tasks and status
+- The Seoul→Singapore database migration (complete) and R2 backup detail
+- The advisor dashboard sub-project
+- Individual features as they're built (e.g. the Credit Cards tab)
+
+Ask to have this document refreshed after a session that changes any of the above, rather than letting it go stale.
+
+**Where to keep this file:** either works — save it in Google Drive/Notion for easy personal reference, AND/OR commit it into the repo at `docs/ARCHITECTURE.md` so it's included automatically every time the repo is uploaded to a new chat (meaning a future Claude session can read it directly, without you re-explaining anything). The repo copy doesn't replace memory — keep both in sync by asking for a refresh of both after a session that changes something.
