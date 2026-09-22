@@ -191,18 +191,42 @@ type BackupEnv = {
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
   BACKUPS_BUCKET?: R2BucketLike;
+  // Sep 22 2026 — optional on purpose: if this secret is never set, every ping
+  // below is a silent no-op (see pingHealthcheck) and the backup behaves
+  // exactly as before. A Healthchecks.io "check" URL, kept secret (it can
+  // trigger a failure alert if leaked and spammed, nothing worse than that).
+  HEALTHCHECKS_PING_URL?: string;
 };
 
+// Tells Healthchecks.io this run started/finished/failed, so a missed night
+// (no ping at all) or a failed run (an explicit /fail ping) triggers an
+// email. Wrapped so a Healthchecks outage or typo'd URL can NEVER break the
+// actual backup — every call is fire-and-forget and swallows its own errors.
+async function pingHealthcheck(env: BackupEnv, suffix: "" | "/start" | "/fail", detail?: string): Promise<void> {
+  if (!env.HEALTHCHECKS_PING_URL) return;
+  try {
+    await fetch(env.HEALTHCHECKS_PING_URL + suffix, {
+      method: detail ? "POST" : "GET",
+      body: detail,
+    });
+  } catch {
+    // Deliberately ignored — see comment above.
+  }
+}
+
 export async function runDailyBackup(env: BackupEnv): Promise<void> {
+  await pingHealthcheck(env, "/start");
   const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, BACKUPS_BUCKET } = env;
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     console.error(
       "[backup-cron] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY — skipping backup.",
     );
+    await pingHealthcheck(env, "/fail", "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
     return;
   }
   if (!BACKUPS_BUCKET) {
     console.error("[backup-cron] Missing BACKUPS_BUCKET binding — skipping backup.");
+    await pingHealthcheck(env, "/fail", "Missing BACKUPS_BUCKET binding");
     return;
   }
 
@@ -223,6 +247,7 @@ export async function runDailyBackup(env: BackupEnv): Promise<void> {
         `[backup-cron] Failed to read table "${table}" after retries — aborting this run rather than writing an incomplete snapshot.`,
         error,
       );
+      await pingHealthcheck(env, "/fail", `Failed to read table "${table}": ${error.message ?? error}`);
       return;
     }
     snapshot[table] = data ?? [];
@@ -238,6 +263,7 @@ export async function runDailyBackup(env: BackupEnv): Promise<void> {
     console.error(
       `[backup-cron] Snapshot is ${byteSize} bytes — over the ${MAX_BACKUP_BYTES}-byte sanity ceiling. Not writing it. Investigate before raising this limit.`,
     );
+    await pingHealthcheck(env, "/fail", `Snapshot is ${byteSize} bytes, over the ${MAX_BACKUP_BYTES}-byte ceiling`);
     return;
   }
 
@@ -247,8 +273,13 @@ export async function runDailyBackup(env: BackupEnv): Promise<void> {
   try {
     await BACKUPS_BUCKET.put(key, payload);
     console.log(`[backup-cron] Wrote ${key} (${byteSize} bytes, ${BACKUP_TABLES.length} tables).`);
+    // Success ping LAST, after the write genuinely succeeded — a ping here
+    // means "there really is a backup file for today," not just "the code
+    // reached this line."
+    await pingHealthcheck(env, "", `Wrote ${key}, ${byteSize} bytes, ${BACKUP_TABLES.length} tables`);
   } catch (error) {
     console.error("[backup-cron] Failed to write backup to R2.", error);
+    await pingHealthcheck(env, "/fail", `Failed to write backup to R2: ${(error as Error)?.message ?? error}`);
   }
 }
 
