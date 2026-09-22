@@ -34,6 +34,18 @@ export async function logError(params: LogParams): Promise<void> {
     if (count >= MAX_PER_SESSION) return;
     _seen.set(key, count + 1);
 
+    // Sep 22 2026 — reported BEFORE the auth check below, deliberately: a bug
+    // on the sign-in screen itself (before anyone is logged in) is exactly the
+    // kind of thing worth an alert for, and unlike the error_logs insert below
+    // this isn't blocked by RLS — Sentry doesn't care whether the visitor is
+    // signed in. No-ops entirely when VITE_SENTRY_DSN isn't set (see sentryReport.ts).
+    reportToSentry(SENTRY_DSN, {
+      message: params.errorMessage,
+      stack: params.errorStack,
+      tags: { error_type: params.errorType, component: params.componentName ?? "" },
+      extra: { pageUrl: params.pageUrl, ...params.metadata },
+    });
+
     // getSession() reads from the local cache — no network call.
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user?.id) return; // RLS blocks unauthenticated inserts anyway
