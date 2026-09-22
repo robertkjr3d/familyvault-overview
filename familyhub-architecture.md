@@ -7,7 +7,9 @@
 
 FamilyHub SG stores each family's financial data in a database (Supabase, Singapore), with a copy of that data automatically saved every night to a separate backup service (Cloudflare R2) in case something is deleted by mistake or the main database has a problem. That nightly backup covers all the data itself (properties, loans, notes, reminders, etc.) but **not** uploaded photos/documents and **not** login accounts — those aren't currently backed up elsewhere, though every household can download their own copy any time from Settings. The app currently runs entirely on free hosting plans. The one part that could need a paid plan as more families join is the nightly backup, and even then the cost is a predictable $5/month, not a surprise bill — see §5 below for the trigger point.
 
-**Status as of 22 Sep 2026:** live, in private family/friend testing, not yet charging anyone. Real database migration (Seoul → Singapore) is complete. Security basics (passkey login, encrypted storage, audit trail, rate limiting) are built and confirmed working. A single-record restore from backup has been tested successfully.
+**Status as of 22 Sep 2026:** live, in private family/friend testing, not yet charging anyone. Real database migration (Seoul → Singapore) is complete. Security basics (passkey login, encrypted storage, audit trail, rate limiting) are built and confirmed working. A single-record restore from backup has been tested successfully. The nightly backup now emails on failure (Healthchecks.io). Error alerts (Sentry) added Sep 22 2026. Export tools (Excel/ZIP/Word/PDF) no longer depend on a third-party website at the moment of use.
+
+**Current data (checked 21 Sep 2026):** the real database already has 10 households — 1 real family household ("Tan Family") plus 9 dev/test accounts made while building. This matters for reading §5's cost-scaling estimate correctly: that estimate scales the WHOLE current file (already ~10 households' worth of data, mostly small/sparse test accounts), not a single household — so "10x today" is closer to "100 similar-sized households," not "10 real families." A handful of real, fully-used families could carry more data each than these sparse test accounts do, so treat the estimate as rough in either direction, not a hard number.
 
 ## 1. What this is
 A Singapore-focused family financial management web app. Households track properties, loans, insurance, investments, savings/CPF, other assets, credit cards, health, a "go-bag" list, travel checklist, and an inventory of belongings — one shared "household" per family, with individual members inside it. A separate financial-adviser (FA) dashboard lets a household selectively share some of this with a real financial adviser.
@@ -40,7 +42,12 @@ A Singapore-focused family financial management web app. Households track proper
   - `current_household_id()` — reads a JWT claim that nothing in this app currently sets, so it always falls back to a normal membership lookup. Not a security issue. Possibly unused by any policy (a check was pending as of Sep 21).
   - `increment_household_storage()` — used to trust a caller-supplied byte count; fixed Sep 21 2026 to recompute the true total from `storage.objects` instead (see handed-over SQL file from that session).
 - **Not implemented:** 2FA/TOTP (skipped — passwordless + passkeys already cover this well), session idle-timeout (deliberately rejected — trusted personal devices, convenience prioritized).
+- **Error visibility:** the app already logged frontend crashes into a Supabase `error_logs` table (silent, nobody reads it). As of Sep 22 2026, that same pipeline also emails an alert via Sentry (a plain HTTP call, not the full Sentry SDK — see §5a) whenever `VITE_SENTRY_DSN` (frontend) / `SENTRY_DSN` (Worker secret) is set. No-op, zero cost, and zero behavior change if left unset.
 - **Cleaned up Sep 21 2026:** the unused `inventory_locations` table (had an effectively-no-RLS policy) and the empty public `documents` storage bucket were both dropped/deleted after confirming zero rows/objects.
+
+## 5a. Error alerts (Sentry) & scheduled-job alerts (Healthchecks.io)
+- **Sentry** — free plan, 5,000 errors/month. Deliberately NOT the official `@sentry/cloudflare` SDK (that requires turning on Cloudflare's `nodejs_compat` flag, a broad runtime change not worth making just for error alerts). Instead, a small shared file (`src/lib/sentryReport.ts`) makes one plain HTTP call to Sentry's documented ingest API — same "optional secret, silent no-op if unset" pattern as Healthchecks below. Wired into: the existing frontend error logger (so this piggybacks on error-catching code that already existed, rather than adding a second system) and the two places the Worker already catches unexpected errors.
+- **Healthchecks.io** — free plan, 20 checks (this app uses 1). Pings after the nightly backup starts, succeeds, or fails; an alert fires only if a night is missed entirely or the backup explicitly fails. By default it also sends a one-line "recovered" email once a failure resolves — no confirmed way to disable just that email through Healthchecks' own settings, so if only-failure-emails matters, filter it with an email rule (e.g. "if subject contains 'is UP', skip inbox").
 
 ## 5. Backups & disaster recovery
 Three layers — see `backups-feature-list.md` (a companion document, written Sep 21 2026) for the full detail. In short:
@@ -53,7 +60,7 @@ Three layers — see `backups-feature-list.md` (a companion document, written Se
 ## 6. Known backlog (security-audit-derived, none urgent)
 From a third-party read-only audit run after the Seoul→Singapore migration — all pre-existing (not migration-caused):
 - `anon` role has broad table-level grants; RLS is the real barrier so this isn't automatically exploitable, but is broader than ideal. Don't revoke blindly — needs a check of what the app legitimately needs anon for first.
-- Two adviser-facing views (`advisor_client_summary_view`, `advisor_networth_components_view`) rely on in-view access checks rather than their own RLS. No demonstrated leak; worth hardening before onboarding non-family advisers.
+- Two adviser-facing views (`advisor_client_summary_view`, `advisor_networth_components_view`) rely on in-view access checks rather than their own RLS. No demonstrated leak; worth hardening before onboarding non-family advisers. **In plain terms:** converting these to real RLS does NOT reduce what an adviser can see — the check itself (using the same `has_advisor_access()` rule already used everywhere else) stays identical, it just moves to a place that's much harder to accidentally bypass. Scoped as its own future session (touches adviser data access — deserves dedicated review, not a quick patch).
 - `other_assets` has two redundant delete triggers doing the same cleanup — harmless, low priority.
 
 ## 7. The onboarding product tour
@@ -62,11 +69,14 @@ Built with `driver.js` + React (`GuidedTour.tsx`, `tourSteps.ts`). Runs on both 
 - **The highlight landing on the wrong field** after the on-screen keyboard opened/closed, or after scrolling a long form — fixed by re-measuring on keyboard events (touch devices only) and by scrolling instantly instead of relying on driver.js's own animated scroll.
 - **The first step of a tour appearing with no highlight, only fixed by a page refresh** — caused by the tour measuring its target before a newly-navigated-to page had finished laying out; fixed by waiting for the target to exist, stop moving, and be on-screen before starting.
 
+## 7a. Known display gap, now fixed (health.tsx)
+A Health record whose owning family member was later deleted had no section to appear under and was effectively invisible on the Health page, even though the row still existed everywhere else (exports, backups). Fixed Sep 22 2026 with a plain "Unassigned" section for exactly this case.
+
 ## 8. Advisor (FA) dashboard — separate sub-project
 Full detail in a dedicated reference (`advisor-dashboard.md`) — summary: a financial adviser can be given selective, per-category, per-member access to a household's data (insurance, investments, property, loans), with a household-side toggle to hide individual items regardless. Includes adviser notes, a policy-illustration chart tool, and per-member net worth. Built and deployed; still evolving.
 
-## 9. Exports rely on a third-party CDN at runtime
-The Excel, ZIP, Word (.docx) and PDF export/import tools are all loaded from `esm.sh` at the moment a user taps the relevant button, rather than being bundled into the app. If that CDN is ever unreachable, those specific features fail (the rest of the app is unaffected). Not yet addressed — worth bundling before this matters to real users.
+## 9. Exports
+As of Sep 22 2026, the Excel, ZIP, Word (.docx) and PDF export/import tools (ExcelJS, JSZip, docx, pdf-lib) are real dependencies of the app, downloaded from the app's own server the first time someone taps an export button — not fetched from a third-party website (`esm.sh`) at that moment, as they were before. Each library still only loads when its specific feature is used, so this didn't make the app's normal first load any bigger.
 
 ## 10. Where things are decided vs. still open
 This document summarizes decisions and status as of 21 Sep 2026. For the day-to-day working notes, open decisions, and exact file lists behind each of the above, the fuller working files are:
