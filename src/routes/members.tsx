@@ -149,7 +149,19 @@ function MembersPage() {
     // the button being hidden doesn't stop this function being callable.
     if (currentRole !== "owner") { toast.error("Only the household owner can remove a member."); return; }
     if (members.length <= 1) { toast.error("At least one member is required."); return; }
-    if (!confirm(`Delete member "${member.name}"?`)) return;
+    // Sep 22 2026: made the confirmation say what actually happens, verified live
+    // against the database (not assumed) -- every record type keeps its data and
+    // just loses its owner tag (a database-level "set null" rule on member_id),
+    // EXCEPT advisor-sharing links for this member, which are removed outright.
+    // Called out Health specifically because the Health page only lists records
+    // grouped under a member's name -- an ownerless Health record has nowhere to
+    // show up there today, so it can look "gone" even though the row still exists.
+    if (
+      !confirm(
+        `Delete member "${member.name}"?\n\nTheir records (properties, loans, etc.) will be KEPT, just no longer linked to them. Health entries will still exist but won't show up on the Health page until reassigned. Any advisor-sharing access for this member will be removed.`,
+      )
+    )
+      return;
     setDeletingId(member.id);
     try {
       const { data, error } = await supabase.from("members" as any).delete().eq("id", member.id).select("id").maybeSingle();
