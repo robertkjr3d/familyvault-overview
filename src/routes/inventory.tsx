@@ -371,7 +371,9 @@ return results;
 async function exportDocx() {
 setGeneratingDocx(true);
 try {
-const docxLib: any = await import("https://esm.sh/docx@9");
+// Sep 22 2026 -- bundled as a real dependency instead of fetched from esm.sh
+// at click-time (see package.json), same as the identical import in settings.tsx.
+const docxLib: any = await import("docx");
 const { Document, Packer, Paragraph, TextRun, ImageRun, HeadingLevel } = docxLib;
 
   // Collect every photo URL we need, fetch them all up front (with a concurrency cap)
