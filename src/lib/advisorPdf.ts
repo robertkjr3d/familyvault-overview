@@ -408,7 +408,10 @@ function downloadBlob(blob: Blob, filename: string) {
 // usage in fullExport.ts — never bundled into the base app for users who
 // never touch this feature.
 export async function generateAndDownloadAdvisorPdf(data: AdvisorPdfData) {
-  const pdfLib = await import("https://esm.sh/pdf-lib@1.17.1");
+  // Sep 22 2026 -- bundled as a real dependency instead of fetched from esm.sh
+  // at click-time (see package.json). Still lazy/dynamic on purpose -- only the
+  // adviser PDF feature pays for this, not the whole app's first load.
+  const pdfLib = await import("pdf-lib");
   const bytes = await buildAdvisorPdfBytes(pdfLib, data);
   const blob = new Blob([new Uint8Array(bytes)], { type: "application/pdf" });
   const namePart = [data.householdName, data.memberName].filter(Boolean).join("-");
