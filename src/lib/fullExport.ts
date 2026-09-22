@@ -132,13 +132,11 @@ const GLOBAL_OVERRIDES: Record<string, number> = {
 
 // Status and Last Updated columns are appended by buildRecordSheet
 // (not driven by recordConfigs), so they get their own constants.
-const STATUS_COL_WIDTH = 8;       // "Status": fits "Settled" / "Urgent"
-const UPDATED_AT_COL_WIDTH = 16;  // "Last Updated In App": date, no need for 20
+const STATUS_COL_WIDTH = 8; // "Status": fits "Settled" / "Urgent"
+const UPDATED_AT_COL_WIDTH = 16; // "Last Updated In App": date, no need for 20
 
 function resolvedWidth(f: FieldDef, configKey: string): number {
-  return SHEET_OVERRIDES[configKey]?.[f.key]
-    ?? GLOBAL_OVERRIDES[f.key]
-    ?? widthFor(f);
+  return SHEET_OVERRIDES[configKey]?.[f.key] ?? GLOBAL_OVERRIDES[f.key] ?? widthFor(f);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -194,7 +192,8 @@ function measureDisplayLength(value: any, numFmt?: string): number {
   }
   if (typeof value === "number") {
     if (numFmt === "#,##0.00") {
-      return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).length;
+      return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        .length;
     }
     if (numFmt === '0.00"%"') {
       return `${value.toFixed(2)}%`.length;
@@ -206,13 +205,15 @@ function measureDisplayLength(value: any, numFmt?: string): number {
   }
   // Plain text — longest line, so a multi-line note doesn't force a column
   // wide enough to fit the whole note on one line.
-  return String(value).split("\n").reduce((m, l) => Math.max(m, l.length), 0);
+  return String(value)
+    .split("\n")
+    .reduce((m, l) => Math.max(m, l.length), 0);
 }
 
 function cellValue(
   f: FieldDef,
   raw: any,
-  ctx: { memberNameById: Map<string, string>; propertyNameById: Map<string, string> }
+  ctx: { memberNameById: Map<string, string>; propertyNameById: Map<string, string> },
 ): any {
   if (raw == null || raw === "") return null;
   if (f.type === "member") return ctx.memberNameById.get(raw) ?? raw;
@@ -234,20 +235,36 @@ function buildRecordSheet(
   configKey: keyof typeof recordConfigs,
   sheetName: string,
   rows: any[],
-  ctx: { memberNameById: Map<string, string>; propertyNameById: Map<string, string> }
+  ctx: { memberNameById: Map<string, string>; propertyNameById: Map<string, string> },
 ): SheetSpec {
   const cfg = recordConfigs[configKey];
   const columns: SheetSpec["columns"] = [
-    ...cfg.fields.map((f) => ({ header: f.label, key: f.key, width: resolvedWidth(f, configKey), numFmt: numFmtFor(f) })),
+    ...cfg.fields.map((f) => ({
+      header: f.label,
+      key: f.key,
+      width: resolvedWidth(f, configKey),
+      numFmt: numFmtFor(f),
+    })),
     // Sep 21 2026: the detailed Notes (the rich-text editor inside each card) live in a
     // `notes` column that is NOT one of the form fields above, so they were silently missing
     // from every export. Same for who the follow-up action is assigned to, and the
     // packed/unpacked tick on the travel checklist.
-    ...(NOTES_TABLES.has(configKey as string) ? [{ header: "Notes", key: "__notes", width: 60, wrap: true }] : []),
-    ...(ACTION_OWNER_TABLES.has(configKey as string) ? [{ header: "Action owner", key: "__action_owner", width: 18 }] : []),
-    ...(configKey === "travel_checklist_items" ? [{ header: "Checked", key: "__checked", width: 10 }] : []),
+    ...(NOTES_TABLES.has(configKey as string)
+      ? [{ header: "Notes", key: "__notes", width: 60, wrap: true }]
+      : []),
+    ...(ACTION_OWNER_TABLES.has(configKey as string)
+      ? [{ header: "Action owner", key: "__action_owner", width: 18 }]
+      : []),
+    ...(configKey === "travel_checklist_items"
+      ? [{ header: "Checked", key: "__checked", width: 10 }]
+      : []),
     { header: "Status", key: "__status", width: STATUS_COL_WIDTH },
-    { header: "Last Updated In App", key: "__updated_at", width: UPDATED_AT_COL_WIDTH, numFmt: "dd mmm yyyy" },
+    {
+      header: "Last Updated In App",
+      key: "__updated_at",
+      width: UPDATED_AT_COL_WIDTH,
+      numFmt: "dd mmm yyyy",
+    },
   ];
   const outRows: ExportRow[] = rows.map((r) => {
     const out: ExportRow = {};
@@ -256,7 +273,9 @@ function buildRecordSheet(
     }
     if (NOTES_TABLES.has(configKey as string)) out.__notes = notesToPlainText(r.notes);
     if (ACTION_OWNER_TABLES.has(configKey as string)) {
-      out.__action_owner = r.action_member_id ? (ctx.memberNameById.get(r.action_member_id) ?? null) : null;
+      out.__action_owner = r.action_member_id
+        ? (ctx.memberNameById.get(r.action_member_id) ?? null)
+        : null;
     }
     if (configKey === "travel_checklist_items") out.__checked = r.checked ? "Yes" : "No";
     out.__status = STATUS_LABEL[r.status] ?? r.status ?? "";
@@ -270,12 +289,23 @@ function buildRecordSheet(
 // an `action_member_id` column (who the follow-up action is assigned to). Static lists so the
 // columns appear even on an empty sheet. Checked against a real nightly backup on Sep 21 2026.
 const NOTES_TABLES = new Set([
-  "properties", "loans", "insurance_policies", "investments",
-  "savings_accounts", "other_assets", "credit_cards", "health_conditions",
+  "properties",
+  "loans",
+  "insurance_policies",
+  "investments",
+  "savings_accounts",
+  "other_assets",
+  "credit_cards",
+  "health_conditions",
 ]);
 const ACTION_OWNER_TABLES = new Set([
-  "properties", "loans", "insurance_policies", "investments",
-  "savings_accounts", "other_assets", "health_conditions",
+  "properties",
+  "loans",
+  "insurance_policies",
+  "investments",
+  "savings_accounts",
+  "other_assets",
+  "health_conditions",
 ]);
 
 function decodeHtmlEntities(s: string): string {
@@ -285,8 +315,12 @@ function decodeHtmlEntities(s: string): string {
     return t.value;
   }
   return s
-    .replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&");
 }
 
 // Notes are stored as HTML (or plain text on older records). For a spreadsheet cell: keep the
@@ -302,7 +336,11 @@ function notesToPlainText(value: unknown): string | null {
       .replace(/<[^>]+>/g, "");
     s = decodeHtmlEntities(s);
   }
-  s = s.replace(/\u00a0/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  s = s
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   return s || null;
 }
 
@@ -317,9 +355,15 @@ function singaporeDate(raw: unknown): Date | null {
 }
 
 const ACTIVITY_TYPE_LABEL: Record<string, string> = {
-  property: "Property", loan: "Loan", insurance: "Insurance", investment: "Investment",
-  savings: "Savings & CPF", other_asset: "Other Asset", credit_card: "Credit Card",
-  health: "Health", inventory: "Inventory",
+  property: "Property",
+  loan: "Loan",
+  insurance: "Insurance",
+  investment: "Investment",
+  savings: "Savings & CPF",
+  other_asset: "Other Asset",
+  credit_card: "Credit Card",
+  health: "Health",
+  inventory: "Inventory",
 };
 
 // The Reminders and Updates sheets (Updates = the record_history table). Both tables point at a record by (entity_type, entity_id), so
@@ -333,7 +377,10 @@ function buildActivitySheets(args: {
   const nameById = new Map<string, string>();
   for (const [entityType, rows] of Object.entries(args.recordRows)) {
     for (const row of rows) {
-      nameById.set(row.id, entityType === "inventory" ? (row.name ?? "Item") : recordDisplayName(entityType, row));
+      nameById.set(
+        row.id,
+        entityType === "inventory" ? (row.name ?? "Item") : recordDisplayName(entityType, row),
+      );
     }
   }
   const describe = (entityType: string, entityId: string) => ({
@@ -341,10 +388,13 @@ function buildActivitySheets(args: {
     item: nameById.get(entityId) ?? "(item deleted)",
   });
 
-  const reminders = [...args.reminders].sort((a, b) => String(a.remind_at).localeCompare(String(b.remind_at)));
-  const history = [...args.history].sort((a, b) =>
-    String(b.occurred_on ?? "").localeCompare(String(a.occurred_on ?? "")) ||
-    String(b.created_at ?? "").localeCompare(String(a.created_at ?? ""))
+  const reminders = [...args.reminders].sort((a, b) =>
+    String(a.remind_at).localeCompare(String(b.remind_at)),
+  );
+  const history = [...args.history].sort(
+    (a, b) =>
+      String(b.occurred_on ?? "").localeCompare(String(a.occurred_on ?? "")) ||
+      String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")),
   );
 
   return [
@@ -396,12 +446,14 @@ const FINANCIAL_TABLES: { configKey: keyof typeof recordConfigs; sheetName: stri
 ];
 
 export async function runFullExport(householdId: string, members: Member[]) {
-  const memberNameById = new Map(members.map((m) => [m.id, `${m.emoji ? m.emoji + " " : ""}${m.name}`]));
+  const memberNameById = new Map(
+    members.map((m) => [m.id, `${m.emoji ? m.emoji + " " : ""}${m.name}`]),
+  );
 
   const filter = (q: any) => q.eq("household_id", householdId);
 
   const tableQueries = FINANCIAL_TABLES.map((t) =>
-    filter(supabase.from(t.configKey as any).select("*"))
+    filter(supabase.from(t.configKey as any).select("*")),
   );
 
   const [
@@ -442,7 +494,14 @@ export async function runFullExport(householdId: string, members: Member[]) {
   sheets.push(buildRecordSheet("credit_cards", "Credit Cards", creditCardsRes.data ?? [], ctx));
   sheets.push(buildRecordSheet("health_conditions", "Health", healthRes.data ?? [], ctx));
   sheets.push(buildRecordSheet("gobag_items", "Go-Bag", gobagRes.data ?? [], ctx));
-  sheets.push(buildRecordSheet("travel_checklist_items", "Travel Checklist", travelChecklistRes.data ?? [], ctx));
+  sheets.push(
+    buildRecordSheet(
+      "travel_checklist_items",
+      "Travel Checklist",
+      travelChecklistRes.data ?? [],
+      ctx,
+    ),
+  );
 
   // Inventory is hand-built — its forms don't go through recordConfigs.ts,
   // and items are nested inside locations/subfolders rather than being flat
@@ -475,9 +534,13 @@ export async function runFullExport(householdId: string, members: Member[]) {
   // every distinct one into a long-lived (10 year) signed link before
   // writing rows, since this workbook is meant to be kept outside the app.
   const uniquePhotoPaths = new Set<string>();
-  inventoryItems.forEach((it: any) => { if (it.photo_url) uniquePhotoPaths.add(it.photo_url); });
+  inventoryItems.forEach((it: any) => {
+    if (it.photo_url) uniquePhotoPaths.add(it.photo_url);
+  });
   const photoUrlEntries = await Promise.all(
-    Array.from(uniquePhotoPaths).map(async (p) => [p, await getExportUrl("inventory-photos", p)] as const)
+    Array.from(uniquePhotoPaths).map(
+      async (p) => [p, await getExportUrl("inventory-photos", p)] as const,
+    ),
   );
   const photoUrlMap = new Map(photoUrlEntries);
   // Shown as short clickable "Open photo" text instead of the raw signed
@@ -493,24 +556,48 @@ export async function runFullExport(householdId: string, members: Member[]) {
     const directItems = itemsByFolder.get(f.id) ?? [];
     const children = childrenByParent.get(f.id) ?? [];
     if (directItems.length === 0 && children.length === 0) {
-      inventoryRows.push({ location: f.name, subfolder: "", name: "", category: "", action: "", warranty_date: null, photo_url: "" });
+      inventoryRows.push({
+        location: f.name,
+        subfolder: "",
+        name: "",
+        category: "",
+        action: "",
+        warranty_date: null,
+        photo_url: "",
+      });
     }
     directItems.forEach((it: any) => {
       inventoryRows.push({
-        location: f.name, subfolder: "", name: it.name ?? "", category: it.category ?? "",
-        action: it.action ?? "", warranty_date: it.warranty_date ? new Date(it.warranty_date) : null,
+        location: f.name,
+        subfolder: "",
+        name: it.name ?? "",
+        category: it.category ?? "",
+        action: it.action ?? "",
+        warranty_date: it.warranty_date ? new Date(it.warranty_date) : null,
         photo_url: photoCell(it.photo_url),
       });
     });
     children.forEach((sf: any) => {
       const subItems = itemsByFolder.get(sf.id) ?? [];
       if (subItems.length === 0) {
-        inventoryRows.push({ location: f.name, subfolder: sf.name, name: "", category: "", action: "", warranty_date: null, photo_url: "" });
+        inventoryRows.push({
+          location: f.name,
+          subfolder: sf.name,
+          name: "",
+          category: "",
+          action: "",
+          warranty_date: null,
+          photo_url: "",
+        });
       }
       subItems.forEach((it: any) => {
         inventoryRows.push({
-          location: f.name, subfolder: sf.name, name: it.name ?? "", category: it.category ?? "",
-          action: it.action ?? "", warranty_date: it.warranty_date ? new Date(it.warranty_date) : null,
+          location: f.name,
+          subfolder: sf.name,
+          name: it.name ?? "",
+          category: it.category ?? "",
+          action: it.action ?? "",
+          warranty_date: it.warranty_date ? new Date(it.warranty_date) : null,
           photo_url: photoCell(it.photo_url),
         });
       });
@@ -545,7 +632,7 @@ export async function runFullExport(householdId: string, members: Member[]) {
         health: healthRes.data ?? [],
         inventory: inventoryItems,
       },
-    })
+    }),
   );
   // Members reference sheet — useful since every other sheet resolves
   // owner/insured/person to a name rather than a raw ID.
@@ -555,15 +642,23 @@ export async function runFullExport(householdId: string, members: Member[]) {
       { header: "Name", key: "name", width: 20 },
       { header: "Short name", key: "short_name", width: 16 },
     ],
-    rows: members.map((m) => ({ name: `${m.emoji ? m.emoji + " " : ""}${m.name}`, short_name: m.short_name ?? "" })),
+    rows: members.map((m) => ({
+      name: `${m.emoji ? m.emoji + " " : ""}${m.name}`,
+      short_name: m.short_name ?? "",
+    })),
   });
 
   const buffer = await writeWorkbook(sheets);
-  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
   downloadBlob(blob, `familyhub-full-export-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
-async function writeWorkbook(sheets: SheetSpec[], context: "standalone" | "backup-zip" = "standalone") {
+async function writeWorkbook(
+  sheets: SheetSpec[],
+  context: "standalone" | "backup-zip" = "standalone",
+) {
   // Sep 22 2026 -- bundled as a real dependency instead of fetched from esm.sh
   // at click-time (see package.json). Still a dynamic import deliberately --
   // Vite still code-splits this into its own chunk, so it is NOT added to
@@ -578,50 +673,53 @@ async function writeWorkbook(sheets: SheetSpec[], context: "standalone" | "backu
   // Read Me sheet — first tab, sets expectations honestly.
   const readMe = workbook.addWorksheet("Read Me");
   readMe.columns = [{ width: 100 }];
-  const readMeLines = context === "backup-zip" ? [
-    "FamilyHub SG — Full Backup",
-    `Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`,
-    "",
-    "What's included: every record from every tab in the app, as one sheet per tab — plus the actual photo",
-    "and document files themselves, included right alongside this spreadsheet in the \"Documents\" and",
-    "\"Inventory Photos\" folders of this .zip. This backup is fully self-contained: nothing in it depends on",
-    "FamilyHub SG, Supabase, or any link ever again.",
-    "",
-    "The Inventory sheet's Photo column and each record's document links still work too (valid for up to 10",
-    "years), as a convenient shortcut — but you don't need them, since the real files are right here.",
-    "",
-    "Also included: the detailed Notes on each record, plus a Reminders sheet and an Updates sheet (the dated update log).",
-    "Not included: planned one-off cash-flow events, estate checklist ticks, and your projection assumptions (income, growth rates, etc.).",
-    "",
-    "Each sheet below is safe to delete if you don't need it — they're independent.",
-    "",
-    "This export is for your own records and is not financial advice.",
-  ] : [
-    "FamilyHub SG — Full Data Export",
-    `Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`,
-    "",
-    "What's included: every record from every tab in the app — Properties, Loans, Insurance, Investments,",
-    "Savings & CPF, Other Assets, Health, Go-Bag, and Inventory — as one sheet per tab, with names instead",
-    "of internal IDs and real numbers/dates you can sort, filter, and calculate with directly in Excel or",
-    "Google Sheets.",
-    "",
-    "What's NOT included in this version: the actual photo and document FILES (e.g. inventory item photos,",
-    "insurance policy PDFs). Instead, each has a private link (see the Inventory sheet's Photo column and",
-    "each record's documents) that opens the real file directly, valid for up to 10 years from when this",
-    "export was generated. Treat these links like a shared cloud storage link — anyone with the exact link",
-    "can open it, so avoid forwarding this file to anyone you wouldn't want to have that access.",
-    "",
-    "If you'd rather have the actual files themselves, with nothing depending on a link or on FamilyHub SG",
-    "still running, use \"Download full backup (.zip)\" from Settings \u2192 Data instead — it includes this same",
-    "spreadsheet plus every photo and document as real files.",
-    "",
-    "Also included: the detailed Notes on each record, plus a Reminders sheet and an Updates sheet (the dated update log).",
-    "Not included: planned one-off cash-flow events, estate checklist ticks, and your projection assumptions (income, growth rates, etc.).",
-    "",
-    "Each sheet below is safe to delete if you don't need it — they're independent.",
-    "",
-    "This export is for your own records and is not financial advice.",
-  ];
+  const readMeLines =
+    context === "backup-zip"
+      ? [
+          "FamilyHub SG — Full Backup",
+          `Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`,
+          "",
+          "What's included: every record from every tab in the app, as one sheet per tab — plus the actual photo",
+          'and document files themselves, included right alongside this spreadsheet in the "Documents" and',
+          '"Inventory Photos" folders of this .zip. This backup is fully self-contained: nothing in it depends on',
+          "FamilyHub SG, Supabase, or any link ever again.",
+          "",
+          "The Inventory sheet's Photo column and each record's document links still work too (valid for up to 10",
+          "years), as a convenient shortcut — but you don't need them, since the real files are right here.",
+          "",
+          "Also included: the detailed Notes on each record, plus a Reminders sheet and an Updates sheet (the dated update log).",
+          "Not included: planned one-off cash-flow events, estate checklist ticks, and your projection assumptions (income, growth rates, etc.).",
+          "",
+          "Each sheet below is safe to delete if you don't need it — they're independent.",
+          "",
+          "This export is for your own records and is not financial advice.",
+        ]
+      : [
+          "FamilyHub SG — Full Data Export",
+          `Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`,
+          "",
+          "What's included: every record from every tab in the app — Properties, Loans, Insurance, Investments,",
+          "Savings & CPF, Other Assets, Health, Go-Bag, and Inventory — as one sheet per tab, with names instead",
+          "of internal IDs and real numbers/dates you can sort, filter, and calculate with directly in Excel or",
+          "Google Sheets.",
+          "",
+          "What's NOT included in this version: the actual photo and document FILES (e.g. inventory item photos,",
+          "insurance policy PDFs). Instead, each has a private link (see the Inventory sheet's Photo column and",
+          "each record's documents) that opens the real file directly, valid for up to 10 years from when this",
+          "export was generated. Treat these links like a shared cloud storage link — anyone with the exact link",
+          "can open it, so avoid forwarding this file to anyone you wouldn't want to have that access.",
+          "",
+          "If you'd rather have the actual files themselves, with nothing depending on a link or on FamilyHub SG",
+          'still running, use "Download full backup (.zip)" from Settings \u2192 Data instead — it includes this same',
+          "spreadsheet plus every photo and document as real files.",
+          "",
+          "Also included: the detailed Notes on each record, plus a Reminders sheet and an Updates sheet (the dated update log).",
+          "Not included: planned one-off cash-flow events, estate checklist ticks, and your projection assumptions (income, growth rates, etc.).",
+          "",
+          "Each sheet below is safe to delete if you don't need it — they're independent.",
+          "",
+          "This export is for your own records and is not financial advice.",
+        ];
   readMeLines.forEach((line, i) => {
     const row = readMe.getRow(i + 1);
     row.getCell(1).value = line;
@@ -738,7 +836,10 @@ function recordDisplayName(entityType: string, row: any): string {
 }
 
 function sanitizeForFilename(s: string): string {
-  return (s || "untitled").replace(/[\\/:*?"<>|]/g, "-").trim().slice(0, 80);
+  return (s || "untitled")
+    .replace(/[\\/:*?"<>|]/g, "-")
+    .trim()
+    .slice(0, 80);
 }
 
 function extensionFromPath(path: string): string {
@@ -763,14 +864,29 @@ async function fetchBytes(url: string): Promise<ArrayBuffer | null> {
  * still running, or on any link still being valid, ever.
  */
 export async function runFullBackupZip(householdId: string, members: Member[]) {
-  const memberNameById = new Map(members.map((m) => [m.id, `${m.emoji ? m.emoji + " " : ""}${m.name}`]));
+  const memberNameById = new Map(
+    members.map((m) => [m.id, `${m.emoji ? m.emoji + " " : ""}${m.name}`]),
+  );
   const filter = (q: any) => q.eq("household_id", householdId);
 
-  const tableQueries = FINANCIAL_TABLES.map((t) => filter(supabase.from(t.configKey as any).select("*")));
+  const tableQueries = FINANCIAL_TABLES.map((t) =>
+    filter(supabase.from(t.configKey as any).select("*")),
+  );
   const [
-    propertiesRes, loansRes, insuranceRes, investmentsRes, savingsRes,
-    otherAssetsRes, creditCardsRes, healthRes, gobagRes, travelChecklistRes, foldersRes, inventoryRes,
-    remindersRes, historyRes,
+    propertiesRes,
+    loansRes,
+    insuranceRes,
+    investmentsRes,
+    savingsRes,
+    otherAssetsRes,
+    creditCardsRes,
+    healthRes,
+    gobagRes,
+    travelChecklistRes,
+    foldersRes,
+    inventoryRes,
+    remindersRes,
+    historyRes,
   ] = await Promise.all([
     ...tableQueries,
     filter(supabase.from("inventory_folders").select("*").order("sort_order")),
@@ -795,7 +911,14 @@ export async function runFullBackupZip(householdId: string, members: Member[]) {
   sheets.push(buildRecordSheet("credit_cards", "Credit Cards", creditCardsRes.data ?? [], ctx));
   sheets.push(buildRecordSheet("health_conditions", "Health", healthRes.data ?? [], ctx));
   sheets.push(buildRecordSheet("gobag_items", "Go-Bag", gobagRes.data ?? [], ctx));
-  sheets.push(buildRecordSheet("travel_checklist_items", "Travel Checklist", travelChecklistRes.data ?? [], ctx));
+  sheets.push(
+    buildRecordSheet(
+      "travel_checklist_items",
+      "Travel Checklist",
+      travelChecklistRes.data ?? [],
+      ctx,
+    ),
+  );
 
   // Walks folders the same way the inventory tab's own CSV export does
   // (July 2026 fix — see the matching fix + comment in runFullExport above
@@ -827,24 +950,48 @@ export async function runFullBackupZip(householdId: string, members: Member[]) {
     const directItems = itemsByFolder.get(f.id) ?? [];
     const children = childrenByParent.get(f.id) ?? [];
     if (directItems.length === 0 && children.length === 0) {
-      inventoryRows.push({ location: f.name, subfolder: "", name: "", category: "", action: "", warranty_date: null, photo_url: "" });
+      inventoryRows.push({
+        location: f.name,
+        subfolder: "",
+        name: "",
+        category: "",
+        action: "",
+        warranty_date: null,
+        photo_url: "",
+      });
     }
     directItems.forEach((it: any) => {
       inventoryRows.push({
-        location: f.name, subfolder: "", name: it.name ?? "", category: it.category ?? "",
-        action: it.action ?? "", warranty_date: it.warranty_date ? new Date(it.warranty_date) : null,
+        location: f.name,
+        subfolder: "",
+        name: it.name ?? "",
+        category: it.category ?? "",
+        action: it.action ?? "",
+        warranty_date: it.warranty_date ? new Date(it.warranty_date) : null,
         photo_url: it.photo_url ? "(see Inventory Photos folder in this zip)" : "",
       });
     });
     children.forEach((sf: any) => {
       const subItems = itemsByFolder.get(sf.id) ?? [];
       if (subItems.length === 0) {
-        inventoryRows.push({ location: f.name, subfolder: sf.name, name: "", category: "", action: "", warranty_date: null, photo_url: "" });
+        inventoryRows.push({
+          location: f.name,
+          subfolder: sf.name,
+          name: "",
+          category: "",
+          action: "",
+          warranty_date: null,
+          photo_url: "",
+        });
       }
       subItems.forEach((it: any) => {
         inventoryRows.push({
-          location: f.name, subfolder: sf.name, name: it.name ?? "", category: it.category ?? "",
-          action: it.action ?? "", warranty_date: it.warranty_date ? new Date(it.warranty_date) : null,
+          location: f.name,
+          subfolder: sf.name,
+          name: it.name ?? "",
+          category: it.category ?? "",
+          action: it.action ?? "",
+          warranty_date: it.warranty_date ? new Date(it.warranty_date) : null,
           photo_url: it.photo_url ? "(see Inventory Photos folder in this zip)" : "",
         });
       });
@@ -878,7 +1025,7 @@ export async function runFullBackupZip(householdId: string, members: Member[]) {
         health: healthRes.data ?? [],
         inventory: inventoryItems,
       },
-    })
+    }),
   );
   sheets.push({
     name: "Members",
@@ -886,7 +1033,10 @@ export async function runFullBackupZip(householdId: string, members: Member[]) {
       { header: "Name", key: "name", width: 20 },
       { header: "Short name", key: "short_name", width: 16 },
     ],
-    rows: members.map((m) => ({ name: `${m.emoji ? m.emoji + " " : ""}${m.name}`, short_name: m.short_name ?? "" })),
+    rows: members.map((m) => ({
+      name: `${m.emoji ? m.emoji + " " : ""}${m.name}`,
+      short_name: m.short_name ?? "",
+    })),
   });
 
   const workbookBuffer = await writeWorkbook(sheets, "backup-zip");
@@ -907,9 +1057,15 @@ export async function runFullBackupZip(householdId: string, members: Member[]) {
     other_asset: otherAssetsRes.data ?? [],
     health: healthRes.data ?? [],
   };
-  const allEntityIds = Object.values(tableResByEntity).flat().map((r: any) => r.id);
+  const allEntityIds = Object.values(tableResByEntity)
+    .flat()
+    .map((r: any) => r.id);
   const { data: allDocuments } = allEntityIds.length
-    ? await supabase.from("record_documents").select("*").in("entity_id", allEntityIds).eq("bucket", "vault-docs")
+    ? await supabase
+        .from("record_documents")
+        .select("*")
+        .in("entity_id", allEntityIds)
+        .eq("bucket", "vault-docs")
     : { data: [] as any[] };
 
   const docFetches = (allDocuments ?? []).map(async (doc: any) => {
@@ -923,13 +1079,17 @@ export async function runFullBackupZip(householdId: string, members: Member[]) {
   folders.forEach((f: any) => {
     if (!f.photo_url) return;
     const parent = f.parent_id ? folderById.get(f.parent_id) : null;
-    photoTargets.push({ path: f.photo_url, folderPath: parent ? parent.name : f.name, label: f.name });
+    photoTargets.push({
+      path: f.photo_url,
+      folderPath: parent ? parent.name : f.name,
+      label: f.name,
+    });
   });
   inventoryItems.forEach((it: any) => {
     if (!it.photo_url) return;
     const folder = folderById.get(it.folder_id);
     const parent = folder?.parent_id ? folderById.get(folder.parent_id) : null;
-    const folderPath = parent ? `${parent.name}/${folder?.name ?? ""}` : folder?.name ?? "";
+    const folderPath = parent ? `${parent.name}/${folder?.name ?? ""}` : (folder?.name ?? "");
     photoTargets.push({ path: it.photo_url, folderPath, label: it.name ?? "item" });
   });
   const photoFetches = photoTargets.map(async (t) => {
@@ -947,7 +1107,10 @@ export async function runFullBackupZip(householdId: string, members: Member[]) {
   function uniqueName(base: string): string {
     let name = base;
     let n = 2;
-    while (usedNames.has(name)) { name = `${base} (${n})`; n++; }
+    while (usedNames.has(name)) {
+      name = `${base} (${n})`;
+      n++;
+    }
     usedNames.add(name);
     return name;
   }
@@ -955,22 +1118,34 @@ export async function runFullBackupZip(householdId: string, members: Member[]) {
   let missingCount = 0;
 
   docResults.forEach(({ doc, bytes }) => {
-    if (!bytes) { missingCount++; return; }
+    if (!bytes) {
+      missingCount++;
+      return;
+    }
     const tableConfig = DOCUMENT_ENTITY_TABLES.find((t) => t.entityType === doc.entity_type);
     const rows = tableResByEntity[doc.entity_type] ?? [];
     const record = rows.find((r: any) => r.id === doc.entity_id);
-    const recordName = sanitizeForFilename(record ? recordDisplayName(doc.entity_type, record) : "Record");
+    const recordName = sanitizeForFilename(
+      record ? recordDisplayName(doc.entity_type, record) : "Record",
+    );
     const ext = extensionFromPath(doc.path);
     const baseLabel = sanitizeForFilename(doc.label || doc.path.split("/").pop() || "document");
-    const zipPath = uniqueName(`Documents/${tableConfig?.sheetLabel ?? doc.entity_type}/${recordName}/${baseLabel}`);
+    const zipPath = uniqueName(
+      `Documents/${tableConfig?.sheetLabel ?? doc.entity_type}/${recordName}/${baseLabel}`,
+    );
     zip.file(`${zipPath}.${ext}`, bytes);
   });
 
   photoResults.forEach(({ target, bytes }) => {
-    if (!bytes) { missingCount++; return; }
+    if (!bytes) {
+      missingCount++;
+      return;
+    }
     const ext = extensionFromPath(target.path);
     const safeFolder = target.folderPath.split("/").map(sanitizeForFilename).join("/");
-    const zipPath = uniqueName(`Inventory Photos/${safeFolder}/${sanitizeForFilename(target.label)}`);
+    const zipPath = uniqueName(
+      `Inventory Photos/${safeFolder}/${sanitizeForFilename(target.label)}`,
+    );
     zip.file(`${zipPath}.${ext}`, bytes);
   });
 
