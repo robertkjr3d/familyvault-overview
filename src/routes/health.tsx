@@ -67,6 +67,37 @@ function HealthPage() {
           </section>
         );
       })}
+      {/* Sep 22 2026 -- this page only ever rendered a Health entry under a member's
+          section, keyed off c.member_id === m.id. member_id is a nullable column
+          (deleting a member sets it null rather than deleting the record -- see
+          members.tsx), so a Health entry that has lost its owner had NO section to
+          render in and effectively vanished from this page, even though the row
+          still exists and still shows up in exports/backups. This catches every
+          condition that didn't match any current member (member_id null today;
+          written defensively so it also catches any future case, e.g. bad data,
+          rather than assuming null is the only possibility) and gives it a home. */}
+      {(() => {
+        const memberIds = new Set(members.map((m) => m.id));
+        const unassigned = items.filter((c: any) => !memberIds.has(c.member_id));
+        if (unassigned.length === 0) return null;
+        return (
+          <section>
+            <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Unassigned
+            </h2>
+            <div className="space-y-3">
+              {sortByStatus(unassigned).map((c: any) => (
+                <HealthRow
+                  key={c.id}
+                  c={c}
+                  onStatus={(s) => status.mutate({ id: c.id, status: s })}
+                  onDelete={() => del.mutate(c.id)}
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })()}
       <AddRecordFab configKey="health_conditions" />
     </div>
   );
