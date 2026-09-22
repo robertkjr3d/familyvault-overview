@@ -55,7 +55,10 @@ async function selectAllPages(
   const { data: firstData, error: firstError, count } = await first;
   if (firstError) return { data: null, error: firstError };
   if (count === null || count === undefined) {
-    return { data: null, error: { message: `No row count returned for "${table}" — cannot verify completeness.` } };
+    return {
+      data: null,
+      error: { message: `No row count returned for "${table}" — cannot verify completeness.` },
+    };
   }
   const firstRows = firstData ?? [];
   if (firstRows.length >= count) return { data: firstRows, error: null };
@@ -81,7 +84,9 @@ async function selectAllPages(
   if (rows.length !== count) {
     return {
       data: null,
-      error: { message: `Read ${rows.length} rows from "${table}" but the database reports ${count} — refusing to write a partial copy.` },
+      error: {
+        message: `Read ${rows.length} rows from "${table}" but the database reports ${count} — refusing to write a partial copy.`,
+      },
     };
   }
   return { data: rows, error: null };
@@ -202,7 +207,11 @@ type BackupEnv = {
 // (no ping at all) or a failed run (an explicit /fail ping) triggers an
 // email. Wrapped so a Healthchecks outage or typo'd URL can NEVER break the
 // actual backup — every call is fire-and-forget and swallows its own errors.
-async function pingHealthcheck(env: BackupEnv, suffix: "" | "/start" | "/fail", detail?: string): Promise<void> {
+async function pingHealthcheck(
+  env: BackupEnv,
+  suffix: "" | "/start" | "/fail",
+  detail?: string,
+): Promise<void> {
   if (!env.HEALTHCHECKS_PING_URL) return;
   try {
     await fetch(env.HEALTHCHECKS_PING_URL + suffix, {
@@ -247,7 +256,11 @@ export async function runDailyBackup(env: BackupEnv): Promise<void> {
         `[backup-cron] Failed to read table "${table}" after retries — aborting this run rather than writing an incomplete snapshot.`,
         error,
       );
-      await pingHealthcheck(env, "/fail", `Failed to read table "${table}": ${error.message ?? error}`);
+      await pingHealthcheck(
+        env,
+        "/fail",
+        `Failed to read table "${table}": ${error.message ?? error}`,
+      );
       return;
     }
     snapshot[table] = data ?? [];
@@ -256,14 +269,22 @@ export async function runDailyBackup(env: BackupEnv): Promise<void> {
 
   // row_counts: makes it a 10-second job to compare a backup against the live
   // database (SELECT count(*) per table) before trusting it for a restore.
-  const payload = JSON.stringify({ generated_at: new Date().toISOString(), row_counts: rowCounts, tables: snapshot });
+  const payload = JSON.stringify({
+    generated_at: new Date().toISOString(),
+    row_counts: rowCounts,
+    tables: snapshot,
+  });
   const byteSize = new TextEncoder().encode(payload).length;
 
   if (byteSize > MAX_BACKUP_BYTES) {
     console.error(
       `[backup-cron] Snapshot is ${byteSize} bytes — over the ${MAX_BACKUP_BYTES}-byte sanity ceiling. Not writing it. Investigate before raising this limit.`,
     );
-    await pingHealthcheck(env, "/fail", `Snapshot is ${byteSize} bytes, over the ${MAX_BACKUP_BYTES}-byte ceiling`);
+    await pingHealthcheck(
+      env,
+      "/fail",
+      `Snapshot is ${byteSize} bytes, over the ${MAX_BACKUP_BYTES}-byte ceiling`,
+    );
     return;
   }
 
@@ -276,10 +297,18 @@ export async function runDailyBackup(env: BackupEnv): Promise<void> {
     // Success ping LAST, after the write genuinely succeeded — a ping here
     // means "there really is a backup file for today," not just "the code
     // reached this line."
-    await pingHealthcheck(env, "", `Wrote ${key}, ${byteSize} bytes, ${BACKUP_TABLES.length} tables`);
+    await pingHealthcheck(
+      env,
+      "",
+      `Wrote ${key}, ${byteSize} bytes, ${BACKUP_TABLES.length} tables`,
+    );
   } catch (error) {
     console.error("[backup-cron] Failed to write backup to R2.", error);
-    await pingHealthcheck(env, "/fail", `Failed to write backup to R2: ${(error as Error)?.message ?? error}`);
+    await pingHealthcheck(
+      env,
+      "/fail",
+      `Failed to write backup to R2: ${(error as Error)?.message ?? error}`,
+    );
   }
 }
 
@@ -326,20 +355,30 @@ export async function runTestBackupForHousehold(
     // established pattern just above, which exists specifically because of
     // an observed real transient failure (PGRST303). Reusing the same
     // selectAllWithRetry wrapper here instead of a weaker duplicate.
-    const { data, error } = await selectAllWithRetry(admin, table, 3, { column: filterColumn, value: householdId });
+    const { data, error } = await selectAllWithRetry(admin, table, 3, {
+      column: filterColumn,
+      value: householdId,
+    });
     if (error) {
       return { ok: false, error: `Failed reading "${table}": ${error.message}` };
     }
     snapshot[table] = data ?? [];
   }
 
-  const payload = JSON.stringify({ generated_at: new Date().toISOString(), household_id: householdId, tables: snapshot });
+  const payload = JSON.stringify({
+    generated_at: new Date().toISOString(),
+    household_id: householdId,
+    tables: snapshot,
+  });
   const byteSize = new TextEncoder().encode(payload).length;
   // Same sanity ceiling as runDailyBackup above, missed on the first pass —
   // a single household should never come close to this, but there's no
   // reason to skip a check that already exists and costs nothing to reuse.
   if (byteSize > MAX_BACKUP_BYTES) {
-    return { ok: false, error: `Snapshot is ${byteSize} bytes — over the ${MAX_BACKUP_BYTES}-byte sanity ceiling. Not writing it.` };
+    return {
+      ok: false,
+      error: `Snapshot is ${byteSize} bytes — over the ${MAX_BACKUP_BYTES}-byte sanity ceiling. Not writing it.`,
+    };
   }
   const key = `test-backups/${householdId}-${Date.now()}.json`;
 
