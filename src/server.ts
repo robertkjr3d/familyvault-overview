@@ -90,6 +90,9 @@ export default {
       SUPABASE_URL?: string;
       SUPABASE_SERVICE_ROLE_KEY?: string;
       BACKUPS_BUCKET?: { put(key: string, value: string): Promise<unknown> };
+      // Sep 22 2026 — optional Healthchecks.io ping URL for the nightly backup
+      // (see backupCron.ts). Left undefined = pings are silently skipped.
+      HEALTHCHECKS_PING_URL?: string;
     },
     ctx: { waitUntil: (promise: Promise<unknown>) => void },
   ) {
