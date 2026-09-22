@@ -5,6 +5,7 @@ import { renderErrorPage } from "./lib/error-page";
 import { runFxRateFetch } from "./lib/fxRateCron";
 import { runTrashCleanup } from "./lib/trashCleanupCron";
 import { runDailyBackup } from "./lib/backupCron";
+import { reportToSentry } from "./lib/sentryReport";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -55,7 +56,7 @@ function isCatastrophicSsrErrorBody(body: string, responseStatus: number): boole
 
 // h3 swallows in-handler throws into a normal 500 Response with body
 // {"unhandled":true,"message":"HTTPError"} — try/catch alone never fires for those.
-async function normalizeCatastrophicSsrResponse(response: Response): Promise<Response> {
+async function normalizeCatastrophicSsrResponse(response: Response, sentryDsn?: string): Promise<Response> {
   if (response.status < 500) return response;
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) return response;
@@ -65,8 +66,26 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
     return response;
   }
 
-  console.error(consumeLastCapturedError() ?? new Error(`h3 swallowed SSR error: ${body}`));
+  const captured = consumeLastCapturedError();
+  console.error(captured ?? new Error(`h3 swallowed SSR error: ${body}`));
+  reportToSentry(sentryDsn, {
+    message: captured instanceof Error ? captured.message : `h3 swallowed SSR error: ${body}`,
+    stack: captured instanceof Error ? captured.stack : undefined,
+    tags: { source: "h3-swallowed-ssr-error" },
+  });
   return brandedErrorResponse();
+}
+
+// Sep 22 2026 -- pulls SENTRY_DSN out of the Worker's env without widening the
+// `unknown` type above (fetch()'s env is typed unknown deliberately, since it's
+// passed straight through to TanStack's own handler). No-op (undefined) if the
+// secret was never set in Cloudflare -- see sentryReport.ts.
+function sentryDsnFrom(env: unknown): string | undefined {
+  if (env && typeof env === "object" && "SENTRY_DSN" in env) {
+    const value = (env as { SENTRY_DSN?: unknown }).SENTRY_DSN;
+    return typeof value === "string" ? value : undefined;
+  }
+  return undefined;
 }
 
 export default {
@@ -74,9 +93,15 @@ export default {
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response);
+      return await normalizeCatastrophicSsrResponse(response, sentryDsnFrom(env));
     } catch (error) {
       console.error(error);
+      reportToSentry(sentryDsnFrom(env), {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        tags: { source: "server-fetch-catch" },
+        extra: { url: request.url },
+      });
       return brandedErrorResponse();
     }
   },
