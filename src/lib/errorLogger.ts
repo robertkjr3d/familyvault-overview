@@ -47,7 +47,9 @@ export async function logError(params: LogParams): Promise<void> {
     });
 
     // getSession() reads from the local cache — no network call.
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (!session?.user?.id) return; // RLS blocks unauthenticated inserts anyway
 
     await supabase.from("error_logs").insert({
