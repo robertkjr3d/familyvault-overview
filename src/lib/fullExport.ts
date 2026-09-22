@@ -564,7 +564,12 @@ export async function runFullExport(householdId: string, members: Member[]) {
 }
 
 async function writeWorkbook(sheets: SheetSpec[], context: "standalone" | "backup-zip" = "standalone") {
-  const mod: any = await import("https://esm.sh/exceljs@4.4.0");
+  // Sep 22 2026 -- bundled as a real dependency instead of fetched from esm.sh
+  // at click-time (see package.json). Still a dynamic import deliberately --
+  // Vite still code-splits this into its own chunk, so it is NOT added to
+  // everyone's initial page load, only downloaded (from familyhubsg.com now,
+  // not a third party) the moment someone actually exports something.
+  const mod: any = await import("exceljs");
   const ExcelJS = mod.default ?? mod;
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "FamilyHub SG";
@@ -886,7 +891,8 @@ export async function runFullBackupZip(householdId: string, members: Member[]) {
 
   const workbookBuffer = await writeWorkbook(sheets, "backup-zip");
 
-  const zipMod: any = await import("https://esm.sh/jszip@3.10.1");
+  // Sep 22 2026 -- bundled, same reasoning as the ExcelJS import above.
+  const zipMod: any = await import("jszip");
   const JSZip = zipMod.default ?? zipMod;
   const zip = new JSZip();
   zip.file(`FamilyHub Export ${new Date().toISOString().slice(0, 10)}.xlsx`, workbookBuffer);
