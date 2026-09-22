@@ -100,12 +100,17 @@ function PrivacyPage() {
         <Section title="Exporting and deleting your data">
           <p>
             You can export your household's data at any time from Settings → Data, in two ways:
-            an Excel workbook covering every record in the app (with time-limited links to your
-            photos and documents, valid for up to 10 years), or a full backup as a single .zip
-            file that includes the same spreadsheet plus the actual photo and document files
-            themselves — fully self-contained, with nothing that depends on FamilyHub SG
-            continuing to run. If you'd like your account and data permanently deleted, contact us
-            at the email below and we'll action it.
+            an Excel workbook covering your records, notes, reminders and update history (with
+            time-limited links to your photos and documents, valid for up to 10 years), or a full
+            backup as a single .zip file that includes the same spreadsheet plus the actual photo
+            and document files themselves — fully self-contained, with nothing that depends on
+            FamilyHub SG continuing to run. If you'd like your account and data permanently
+            deleted, contact us at the email below and we'll action it.
+          </p>
+          <p className="mt-3">
+            Behind the scenes, we also keep a nightly backup of your household's records (not
+            your photos or documents) for up to 30 days, so that data can be recovered if
+            something is deleted by mistake or a technical problem occurs.
           </p>
         </Section>
 
