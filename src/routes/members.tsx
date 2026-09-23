@@ -77,9 +77,15 @@ function MembersPage() {
   }, [members]);
 
   async function addMember() {
-    if (!activeHouseholdId) { toast.error("Select a household first."); return; }
+    if (!activeHouseholdId) {
+      toast.error("Select a household first.");
+      return;
+    }
     const name = newName.trim();
-    if (!name) { toast.error("Member name is required."); return; }
+    if (!name) {
+      toast.error("Member name is required.");
+      return;
+    }
     const parsedBirthYear = newBirthYear ? parseInt(newBirthYear) : null;
 
     setSavingNew(true);
@@ -95,7 +101,10 @@ function MembersPage() {
       };
       const { error } = await supabase.from("members" as any).insert(payload as any);
       if (error) throw error;
-      setNewName(""); setNewShortName(""); setNewEmoji("👤"); setNewBirthYear("");
+      setNewName("");
+      setNewShortName("");
+      setNewEmoji("👤");
+      setNewBirthYear("");
       setNewColor(MEMBER_COLORS[(nextSortOrder + 1) % MEMBER_COLORS.length]);
       toast.success("Member added.");
       void qc.invalidateQueries({ queryKey: ["members"] });
@@ -110,7 +119,10 @@ function MembersPage() {
   async function saveMember(member: MemberRow) {
     const draft = editing[member.id] ?? {};
     const name = (draft.name ?? member.name).trim();
-    if (!name) { toast.error("Member name is required."); return; }
+    if (!name) {
+      toast.error("Member name is required.");
+      return;
+    }
     const birthYearRaw = draft.birth_year ?? member.birth_year;
     const parsedBirthYear = birthYearRaw ? Number(birthYearRaw) : null;
 
@@ -131,7 +143,11 @@ function MembersPage() {
       if (error) throw error;
       if (!data) throw new Error("Nothing was saved — you may not have permission to edit this.");
       toast.success("Member updated.");
-      setEditing((prev) => { const next = { ...prev }; delete next[member.id]; return next; });
+      setEditing((prev) => {
+        const next = { ...prev };
+        delete next[member.id];
+        return next;
+      });
       void qc.invalidateQueries({ queryKey: ["members"] });
       void qc.invalidateQueries({ queryKey: ["members-manage", activeHouseholdId] });
     } catch (error: unknown) {
@@ -147,8 +163,14 @@ function MembersPage() {
     // already documented as intended for member-removal elsewhere in the
     // app. Checked here too, not just via hiding the button below, since
     // the button being hidden doesn't stop this function being callable.
-    if (currentRole !== "owner") { toast.error("Only the household owner can remove a member."); return; }
-    if (members.length <= 1) { toast.error("At least one member is required."); return; }
+    if (currentRole !== "owner") {
+      toast.error("Only the household owner can remove a member.");
+      return;
+    }
+    if (members.length <= 1) {
+      toast.error("At least one member is required.");
+      return;
+    }
     // Sep 22 2026: made the confirmation say what actually happens, verified live
     // against the database (not assumed) -- every record type keeps its data and
     // just loses its owner tag (a database-level "set null" rule on member_id),
@@ -164,9 +186,15 @@ function MembersPage() {
       return;
     setDeletingId(member.id);
     try {
-      const { data, error } = await supabase.from("members" as any).delete().eq("id", member.id).select("id").maybeSingle();
+      const { data, error } = await supabase
+        .from("members" as any)
+        .delete()
+        .eq("id", member.id)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
-      if (!data) throw new Error("Nothing was deleted — you may not have permission to remove this member.");
+      if (!data)
+        throw new Error("Nothing was deleted — you may not have permission to remove this member.");
       if (memberFilter === member.id) setMemberFilter("all");
       toast.success("Member deleted.");
       void qc.invalidateQueries({ queryKey: ["members"] });
@@ -193,32 +221,50 @@ function MembersPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label className="text-xs">Name</Label>
-                <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Alex" />
+                <Input
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="e.g. Alex"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Short name</Label>
-                <Input value={newShortName} onChange={(e) => setNewShortName(e.target.value)} placeholder="e.g. AL" />
+                <Input
+                  value={newShortName}
+                  onChange={(e) => setNewShortName(e.target.value)}
+                  placeholder="e.g. AL"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Birth year</Label>
                 <Input
-                  type="number" min="1920" max={THIS_YEAR}
+                  type="number"
+                  min="1920"
+                  max={THIS_YEAR}
                   value={newBirthYear}
                   onChange={(e) => setNewBirthYear(e.target.value)}
                   placeholder="e.g. 1985"
                 />
-                <p className="text-[10px] text-muted-foreground">Used for CPF and retirement projections</p>
+                <p className="text-[10px] text-muted-foreground">
+                  Used for CPF and retirement projections
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Emoji</Label>
-                <Input value={newEmoji} onChange={(e) => setNewEmoji(e.target.value)} placeholder="👤" />
+                <Input
+                  value={newEmoji}
+                  onChange={(e) => setNewEmoji(e.target.value)}
+                  placeholder="👤"
+                />
               </div>
               <div className="space-y-1.5 sm:col-span-2">
                 <Label className="text-xs">Color</Label>
                 <div className="flex flex-wrap items-center gap-2">
                   {MEMBER_COLORS.map((c) => (
                     <button
-                      key={c} type="button" aria-label={`Pick color ${c}`}
+                      key={c}
+                      type="button"
+                      aria-label={`Pick color ${c}`}
                       onClick={() => setNewColor(c)}
                       className={`h-7 w-7 rounded-full border ${newColor === c ? "border-foreground" : "border-border"}`}
                       style={{ background: c }}
@@ -235,7 +281,9 @@ function MembersPage() {
 
           <section className="space-y-3">
             {members.length > 0 && (
-              <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Current members</h2>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Current members
+              </h2>
             )}
             {members.length === 0 && (
               <div className="rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
@@ -245,7 +293,8 @@ function MembersPage() {
             {members.map((member) => {
               const draft = editing[member.id] ?? {};
               const currentColor = draft.color ?? member.color;
-              const currentBirthYear = draft.birth_year !== undefined ? draft.birth_year : member.birth_year;
+              const currentBirthYear =
+                draft.birth_year !== undefined ? draft.birth_year : member.birth_year;
               const currentAge = currentBirthYear ? THIS_YEAR - Number(currentBirthYear) : null;
 
               return (
@@ -256,33 +305,63 @@ function MembersPage() {
                         <Label className="text-xs">Name</Label>
                         <Input
                           value={draft.name ?? member.name}
-                          onChange={(e) => setEditing((prev) => ({ ...prev, [member.id]: { ...prev[member.id], name: e.target.value } }))}
+                          onChange={(e) =>
+                            setEditing((prev) => ({
+                              ...prev,
+                              [member.id]: { ...prev[member.id], name: e.target.value },
+                            }))
+                          }
                         />
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs">Short name</Label>
                         <Input
                           value={draft.short_name ?? member.short_name ?? ""}
-                          onChange={(e) => setEditing((prev) => ({ ...prev, [member.id]: { ...prev[member.id], short_name: e.target.value } }))}
+                          onChange={(e) =>
+                            setEditing((prev) => ({
+                              ...prev,
+                              [member.id]: { ...prev[member.id], short_name: e.target.value },
+                            }))
+                          }
                         />
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs">
-                          Birth year {currentAge !== null && <span className="text-muted-foreground">(age {currentAge})</span>}
+                          Birth year{" "}
+                          {currentAge !== null && (
+                            <span className="text-muted-foreground">(age {currentAge})</span>
+                          )}
                         </Label>
                         <Input
-                          type="number" min="1920" max={THIS_YEAR}
+                          type="number"
+                          min="1920"
+                          max={THIS_YEAR}
                           value={currentBirthYear ?? ""}
-                          onChange={(e) => setEditing((prev) => ({ ...prev, [member.id]: { ...prev[member.id], birth_year: e.target.value ? parseInt(e.target.value) : null } }))}
+                          onChange={(e) =>
+                            setEditing((prev) => ({
+                              ...prev,
+                              [member.id]: {
+                                ...prev[member.id],
+                                birth_year: e.target.value ? parseInt(e.target.value) : null,
+                              },
+                            }))
+                          }
                           placeholder="e.g. 1985"
                         />
-                        <p className="text-[10px] text-muted-foreground">Used for CPF and retirement projections</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Used for CPF and retirement projections
+                        </p>
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs">Emoji</Label>
                         <Input
                           value={draft.emoji ?? member.emoji}
-                          onChange={(e) => setEditing((prev) => ({ ...prev, [member.id]: { ...prev[member.id], emoji: e.target.value } }))}
+                          onChange={(e) =>
+                            setEditing((prev) => ({
+                              ...prev,
+                              [member.id]: { ...prev[member.id], emoji: e.target.value },
+                            }))
+                          }
                         />
                       </div>
                       <div className="space-y-1.5 sm:col-span-2">
@@ -290,8 +369,15 @@ function MembersPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           {MEMBER_COLORS.map((c) => (
                             <button
-                              key={`${member.id}-${c}`} type="button" aria-label={`Pick color ${c}`}
-                              onClick={() => setEditing((prev) => ({ ...prev, [member.id]: { ...prev[member.id], color: c } }))}
+                              key={`${member.id}-${c}`}
+                              type="button"
+                              aria-label={`Pick color ${c}`}
+                              onClick={() =>
+                                setEditing((prev) => ({
+                                  ...prev,
+                                  [member.id]: { ...prev[member.id], color: c },
+                                }))
+                              }
                               className={`h-7 w-7 rounded-full border ${currentColor === c ? "border-foreground" : "border-border"}`}
                               style={{ background: c }}
                             />
@@ -306,7 +392,8 @@ function MembersPage() {
                       </Button>
                       {currentRole === "owner" && (
                         <Button
-                          variant="outline" className="text-urgent"
+                          variant="outline"
+                          className="text-urgent"
                           onClick={() => deleteMember(member)}
                           disabled={deletingId === member.id || savingId === member.id}
                         >
