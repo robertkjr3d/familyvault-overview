@@ -51,7 +51,10 @@ function HealthPage() {
         if (conditions.length === 0) return null;
         return (
           <section key={m.id}>
-            <h2 className="mb-2 text-xs font-bold uppercase tracking-wider" style={{ color: m.color }}>
+            <h2
+              className="mb-2 text-xs font-bold uppercase tracking-wider"
+              style={{ color: m.color }}
+            >
               {m.name}
             </h2>
             <div className="space-y-3">
@@ -103,7 +106,15 @@ function HealthPage() {
   );
 }
 
-function HealthRow({ c, onStatus, onDelete }: { c: any; onStatus: (s: any) => void; onDelete: () => void }) {
+function HealthRow({
+  c,
+  onStatus,
+  onDelete,
+}: {
+  c: any;
+  onStatus: (s: any) => void;
+  onDelete: () => void;
+}) {
   const edit = useEditRecord("health_conditions", c);
   return (
     <HashHighlight id={`record-${c.id}`}>
