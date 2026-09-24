@@ -180,12 +180,25 @@ function MembersPage() {
     // show up there today, so it can look "gone" even though the row still exists.
     if (
       !confirm(
-        `Delete member "${member.name}"?\n\nTheir records (properties, loans, etc.) will be KEPT, just no longer linked to them. Health entries will still exist but won't show up on the Health page until reassigned. Any advisor-sharing access for this member will be removed.`,
+        `Delete member "${member.name}"?\n\nTheir records (properties, loans, etc.) will be KEPT, just no longer linked to them. Health entries will still exist but won't show up on the Health page until reassigned. Any advisor-sharing access for this member will be removed.\n\nYou can restore this member from Settings > Recycle Bin for 30 days — but restoring only brings the person back, it does NOT automatically re-link their old records to them again.`,
       )
     )
       return;
     setDeletingId(member.id);
     try {
+      // Snapshot the row into the Recycle Bin BEFORE deleting, same pattern
+      // as every other table. Members don't have reminders/documents of
+      // their own (nothing in this app attaches either to entity_type
+      // "member"), so there's nothing else to snapshot alongside the row.
+      const { error: trashError } = await supabase.from("deleted_records" as any).insert({
+        household_id: activeHouseholdId,
+        table_name: "members",
+        entity_type: null,
+        record_id: member.id,
+        record_data: member,
+        related_reminders: [],
+      });
+      if (trashError) throw trashError;
       const { data, error } = await supabase
         .from("members" as any)
         .delete()
@@ -196,9 +209,10 @@ function MembersPage() {
       if (!data)
         throw new Error("Nothing was deleted — you may not have permission to remove this member.");
       if (memberFilter === member.id) setMemberFilter("all");
-      toast.success("Member deleted.");
+      toast.success("Member deleted — recoverable from Settings > Recycle Bin for 30 days");
       void qc.invalidateQueries({ queryKey: ["members"] });
       void qc.invalidateQueries({ queryKey: ["members-manage", activeHouseholdId] });
+      void qc.invalidateQueries({ queryKey: ["deleted-records"] });
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Unable to delete member.");
     } finally {
