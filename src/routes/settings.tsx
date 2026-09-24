@@ -10,6 +10,7 @@ import { fmtMoney, fmtDate, convertToSgd } from "@/lib/format";
 import { isCpfAccountType } from "@/lib/options";
 import { recordConfigs } from "@/lib/recordConfigs";
 import { restoreTrashRow, purgeTrashRowStorage } from "@/lib/mutations";
+import { FEEDBACK_FORM_URL, feedbackClickHandler } from "@/lib/feedback";
 import { useFxRates } from "@/hooks/useFxRates";
 import { useToday } from "@/lib/today";
 import { isSurrenderValueVested } from "@/lib/lifetimeChartMath";
@@ -36,9 +37,8 @@ export const Route = createFileRoute("/settings")({
   head: () => ({ meta: [{ title: "Settings — FamilyHub SG" }] }),
 });
 
-// TODO: replace with the real published Google Form URL before deploying.
-const FEEDBACK_FORM_URL =
-  "https://docs.google.com/forms/d/e/1FAIpQLSf-yj_CnXgi9fCeytclhTWvLZeB_CaiyVlRrlqbbIaPSJHCoQ/viewform?usp=publish-editor";
+// FEEDBACK_FORM_URL now lives in src/lib/feedback.ts (imported above) so
+// it's shared with the new persistent FeedbackTab — both stay in sync.
 
 const ACCENT_PRESETS = [
   { name: "Gold", value: "oklch(0.72 0.13 80)" },
@@ -1564,7 +1564,7 @@ function SettingsPage() {
           href={FEEDBACK_FORM_URL}
           target="_blank"
           rel="noreferrer"
-          onClick={() => (window as any).posthog?.capture("feedback_form_opened")}
+          onClick={feedbackClickHandler("settings")}
           className="inline-block rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
         >
           Share feedback
