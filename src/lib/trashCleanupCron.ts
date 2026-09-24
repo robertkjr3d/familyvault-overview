@@ -41,7 +41,7 @@ export async function runTrashCleanup(env: TrashCleanupEnv): Promise<void> {
 
   const { data: expired, error: fetchError } = await admin
     .from("deleted_records")
-    .select("id, entity_type, record_id")
+    .select("id, table_name, entity_type, record_id, record_data")
     .lt("deleted_at", cutoff);
 
   if (fetchError) {
@@ -53,11 +53,30 @@ export async function runTrashCleanup(env: TrashCleanupEnv): Promise<void> {
     return;
   }
 
-  // Documents were deliberately never deleted at the original delete-time
-  // (see purgeDocumentsFor in mutations.ts for why) — this is where that
-  // deferred cleanup actually happens, mirroring the same logic for the
-  // admin/server-side client used here.
+  // Storage files were deliberately never deleted at the original
+  // delete-time (see purgeTrashRowStorage in mutations.ts for the full
+  // reasoning) — this is where that deferred cleanup actually happens for
+  // an EXPIRED entry, mirroring the same per-table branching logic for the
+  // admin/server-side client used here (that helper itself lives in
+  // client-side code and isn't importable in a Cloudflare Worker).
   for (const row of expired as any[]) {
+    if (row.table_name === "record_documents") {
+      const doc = row.record_data;
+      if (doc?.bucket && doc.bucket !== "external" && doc.path) {
+        await admin.storage.from("vault-docs").remove([doc.path]);
+      }
+      continue;
+    }
+    if (row.table_name === "inventory_items" || row.table_name === "inventory_folders") {
+      const photoUrl = row.record_data?.photo_url;
+      if (photoUrl) {
+        await admin.storage.from("inventory-photos").remove([photoUrl]);
+      }
+      continue;
+    }
+    if (row.table_name === "members") continue;
+    // The 8 original financial tables — unchanged behavior: their own
+    // documents live in record_documents, looked up by entity_type/id.
     if (!row.entity_type) continue;
     const { data: docs } = await admin
       .from("record_documents")
