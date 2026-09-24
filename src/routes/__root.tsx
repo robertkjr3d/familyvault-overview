@@ -13,6 +13,7 @@ import type { FormEvent } from "react";
 
 import appCss from "../styles.css?url";
 import { BottomTabs } from "@/components/BottomTabs";
+import { FeedbackTab } from "@/components/FeedbackTab";
 import { GuidedTour } from "@/components/GuidedTour";
 import { TourWelcomeScreen } from "@/components/TourWelcomeScreen";
 import { PostLoginPasskeyPrompt } from "@/components/PostLoginPasskeyPrompt";
@@ -37,7 +38,11 @@ import { setupGlobalErrorHandlers } from "@/lib/errorLogger";
 // Accounts you personally use to test the app, live or in dev — kept out of
 // PostHog analytics/session-recording entirely so your own daily usage never
 // pollutes real-user data. Add any other emails you test with yourself.
-const INTERNAL_TEST_EMAILS = ["azariahtan.piano@gmail.com", "psalm26.1@gmail.com", "impact01@gmail.com"];
+const INTERNAL_TEST_EMAILS = [
+  "azariahtan.piano@gmail.com",
+  "psalm26.1@gmail.com",
+  "impact01@gmail.com",
+];
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
@@ -315,6 +320,7 @@ function RootContent() {
           <Outlet />
         </main>
         <BottomTabs />
+        <FeedbackTab />
         <GuidedTour />
         <TourWelcomeScreen />
         <PostLoginPasskeyPrompt />
