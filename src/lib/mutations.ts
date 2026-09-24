@@ -6,7 +6,12 @@ export function useStatusMutation(table: string, queryKey: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { data, error } = await supabase.from(table as any).update({ status }).eq("id", id).select("id").maybeSingle();
+      const { data, error } = await supabase
+        .from(table as any)
+        .update({ status })
+        .eq("id", id)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
       if (!data) throw new Error("Nothing was updated — you may not have permission to edit this.");
     },
@@ -84,9 +89,15 @@ export function useDeleteMutation(table: string, queryKey: string, entityType?: 
         await supabase.from("reminders").delete().eq("entity_type", entityType).eq("entity_id", id);
       }
 
-      const { data, error } = await supabase.from(table as any).delete().eq("id", id).select("id").maybeSingle();
+      const { data, error } = await supabase
+        .from(table as any)
+        .delete()
+        .eq("id", id)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
-      if (!data) throw new Error("Nothing was deleted — you may not have permission to delete this.");
+      if (!data)
+        throw new Error("Nothing was deleted — you may not have permission to delete this.");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [queryKey] });
@@ -120,5 +131,64 @@ export async function purgeDocumentsFor(entityType: string | null, recordId: str
   if (storagePaths.length > 0) {
     await supabase.storage.from("vault-docs").remove(storagePaths);
   }
-  await supabase.from("record_documents").delete().eq("entity_type", entityType as any).eq("entity_id", recordId);
+  await supabase
+    .from("record_documents")
+    .delete()
+    .eq("entity_type", entityType as any)
+    .eq("entity_id", recordId);
+}
+
+// Restores one trashed row back into its original table, preserving its
+// original id. Returns null on success, or a message to show the user.
+// Documents/inventory photos need no extra restore step — they were never
+// actually removed from storage while sitting in the trash (see
+// purgeTrashRowStorage below), so they're already there under the same path
+// the moment the row (same id) is back.
+export async function restoreTrashRow(item: {
+  table_name: string;
+  record_data: Record<string, unknown>;
+  related_reminders: unknown;
+}): Promise<string | null> {
+  const { error: insertError } = await supabase
+    .from(item.table_name as any)
+    .insert(item.record_data as any);
+  if (insertError) return insertError.message;
+  const reminders = Array.isArray(item.related_reminders) ? item.related_reminders : [];
+  if (reminders.length > 0) {
+    const { error: reminderError } = await supabase.from("reminders").insert(reminders as any);
+    if (reminderError)
+      return `Restored, but its reminders couldn't be brought back — ${reminderError.message}`;
+  }
+  return null;
+}
+
+// Removes whatever storage file a trashed row was still holding onto,
+// branching on which table it came from — the one moment those files
+// actually get deleted, deferred from delete-time. The 8 original
+// financial tables keep using purgeDocumentsFor's entity_type/entity_id
+// lookup unchanged; the two new storage-holding shapes below (a single
+// document row snapshot, an inventory photo column) don't fit that lookup
+// so they're handled directly from the row's own snapshotted data instead.
+export async function purgeTrashRowStorage(item: {
+  table_name: string;
+  entity_type: string | null;
+  record_id: string;
+  record_data: Record<string, any>;
+}) {
+  if (item.table_name === "record_documents") {
+    const doc = item.record_data;
+    if (doc?.bucket && doc.bucket !== "external" && doc.path) {
+      await supabase.storage.from("vault-docs").remove([doc.path]);
+    }
+    return;
+  }
+  if (item.table_name === "inventory_items" || item.table_name === "inventory_folders") {
+    const photoUrl = item.record_data?.photo_url;
+    if (photoUrl) {
+      await supabase.storage.from("inventory-photos").remove([photoUrl]);
+    }
+    return;
+  }
+  if (item.table_name === "members") return;
+  await purgeDocumentsFor(item.entity_type, item.record_id);
 }
