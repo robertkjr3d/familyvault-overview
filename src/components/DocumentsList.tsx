@@ -47,7 +47,9 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
     queryFn: async () => {
       const nonExternal = docs.filter((d: any) => d.bucket !== "external");
       const entries = await Promise.all(
-        nonExternal.map(async (d: any) => [d.path, await getDisplayUrl("vault-docs", d.path)] as const),
+        nonExternal.map(
+          async (d: any) => [d.path, await getDisplayUrl("vault-docs", d.path)] as const,
+        ),
       );
       return Object.fromEntries(entries) as Record<string, string | null>;
     },
@@ -69,7 +71,11 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
       if (fileRef.current) fileRef.current.value = "";
       return;
     }
-    const quota = checkHouseholdQuota({ tier: storageTier, bytesUsed: storageBytesUsed, incomingFileBytes: file.size });
+    const quota = checkHouseholdQuota({
+      tier: storageTier,
+      bytesUsed: storageBytesUsed,
+      incomingFileBytes: file.size,
+    });
     if (!quota.ok) {
       toast.error(quota.message);
       if (fileRef.current) fileRef.current.value = "";
@@ -164,38 +170,60 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
 
   async function del(id: string, doc: any) {
     if (!confirm("Delete this document?")) return;
-    // DB row first, confirmed: if this fails, nothing else should happen.
-    // Storage cleanup happens after and stays best-effort (same reasoning
-    // as accountDeletion.ts's own storage cleanup) — a leftover file in
-    // storage is a small cost issue, but deleting the file while the DB
-    // row survives would leave a document card pointing at nothing.
-    const { data, error } = await supabase.from("record_documents").delete().eq("id", id).select("id").maybeSingle();
-    if (error) { toast.error(error.message); return; }
-    if (!data) { toast.error("Nothing was deleted — you may not have permission to remove this."); return; }
-    if (doc.bucket !== "external") {
-      await supabase.storage.from("vault-docs").remove([doc.path]);
-      const { error: rpcErr } = await (supabase.rpc as any)("increment_household_storage", {
-        p_household_id: activeHouseholdId,
-        p_delta: -(doc.size_bytes ?? 0),
-      });
-      if (rpcErr) console.error("Failed to update storage usage counter:", rpcErr.message);
-      qc.invalidateQueries({ queryKey: ["household-memberships"] });
+    // Snapshot the row into the Recycle Bin BEFORE deleting, same pattern as
+    // every other table — if this fails, nothing else should happen. Storage
+    // cleanup (for non-external, uploaded files) is deliberately deferred to
+    // permanent-delete/30-day auto-purge instead of happening here, matching
+    // how a whole record's documents already survive in storage while that
+    // record sits in the trash (see mutations.ts) — restoring this row (same
+    // id) makes the file resolvable again with zero extra code.
+    const { error: trashError } = await supabase.from("deleted_records" as any).insert({
+      household_id: activeHouseholdId,
+      table_name: "record_documents",
+      entity_type: entityType,
+      record_id: id,
+      record_data: doc,
+      related_reminders: [],
+    });
+    if (trashError) {
+      toast.error(`Could not move to Recycle Bin — ${trashError.message}`);
+      return;
     }
-    toast.success("Document removed");
+    const { data, error } = await supabase
+      .from("record_documents")
+      .delete()
+      .eq("id", id)
+      .select("id")
+      .maybeSingle();
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    if (!data) {
+      toast.error("Nothing was deleted — you may not have permission to remove this.");
+      return;
+    }
+    toast.success("Document removed — recoverable from Settings > Recycle Bin for 30 days");
     qc.invalidateQueries({ queryKey: ["docs", entityType, entityId] });
+    qc.invalidateQueries({ queryKey: ["deleted-records"] });
   }
 
   return (
     <div className="space-y-2">
       <ul className="space-y-1.5">
-       {docs.map((d: any) => {
+        {docs.map((d: any) => {
           const isExternal = d.bucket === "external";
-          const docIcon = isExternal
-            ? <Link className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            : <ExternalLink className="h-3.5 w-3.5 shrink-0" />;
+          const docIcon = isExternal ? (
+            <Link className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          ) : (
+            <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+          );
           const docLabel = d.label || d.path.split("/").pop();
           return (
-            <li key={d.id} className="group flex items-center justify-between rounded-md bg-muted/40 px-2 py-1.5 text-sm">
+            <li
+              key={d.id}
+              className="group flex items-center justify-between rounded-md bg-muted/40 px-2 py-1.5 text-sm"
+            >
               <button
                 type="button"
                 onClick={(e) => openDoc(e, d)}
@@ -245,7 +273,8 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
           </div>
 
           <p className="text-[11px] text-muted-foreground">
-            Links to uploaded files aren't password-protected — anyone with the exact link can open it. Avoid sharing it outside people you trust with this document.
+            Links to uploaded files aren't password-protected — anyone with the exact link can open
+            it. Avoid sharing it outside people you trust with this document.
           </p>
           {mode === "upload" && (
             <p className="text-[11px] text-muted-foreground">Max 10MB · JPEG, PNG, WebP or PDF</p>
@@ -285,10 +314,24 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
                 className="h-8 text-xs"
               />
               <div className="flex gap-2">
-                <Button size="sm" onClick={saveLink} disabled={savingLink} className="h-7 px-3 text-xs">
+                <Button
+                  size="sm"
+                  onClick={saveLink}
+                  disabled={savingLink}
+                  className="h-7 px-3 text-xs"
+                >
                   {savingLink ? "Saving…" : "Save Link"}
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => { setMode("upload"); setLinkUrl(""); setLinkLabel(""); }} className="h-7 px-2 text-xs">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setMode("upload");
+                    setLinkUrl("");
+                    setLinkLabel("");
+                  }}
+                  className="h-7 px-2 text-xs"
+                >
                   Cancel
                 </Button>
               </div>
