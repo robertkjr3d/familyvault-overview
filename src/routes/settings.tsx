@@ -9,7 +9,7 @@ import { Trash2 } from "lucide-react";
 import { fmtMoney, fmtDate, convertToSgd } from "@/lib/format";
 import { isCpfAccountType } from "@/lib/options";
 import { recordConfigs } from "@/lib/recordConfigs";
-import { purgeDocumentsFor } from "@/lib/mutations";
+import { restoreTrashRow, purgeTrashRowStorage } from "@/lib/mutations";
 import { useFxRates } from "@/hooks/useFxRates";
 import { useToday } from "@/lib/today";
 import { isSurrenderValueVested } from "@/lib/lifetimeChartMath";
@@ -37,7 +37,8 @@ export const Route = createFileRoute("/settings")({
 });
 
 // TODO: replace with the real published Google Form URL before deploying.
-const FEEDBACK_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSf-yj_CnXgi9fCeytclhTWvLZeB_CaiyVlRrlqbbIaPSJHCoQ/viewform?usp=publish-editor";
+const FEEDBACK_FORM_URL =
+  "https://docs.google.com/forms/d/e/1FAIpQLSf-yj_CnXgi9fCeytclhTWvLZeB_CaiyVlRrlqbbIaPSJHCoQ/viewform?usp=publish-editor";
 
 const ACCENT_PRESETS = [
   { name: "Gold", value: "oklch(0.72 0.13 80)" },
@@ -1615,7 +1616,7 @@ function SettingsPage() {
       <DismissedHistory householdId={activeHouseholdId} />
 
       {/* Recycle Bin */}
-      <RecycleBin householdId={activeHouseholdId} />
+      <RecycleBin householdId={activeHouseholdId} currentRole={currentRole} />
 
       {/* Account */}
       <section className="rounded-2xl border border-border bg-card p-4">
@@ -2114,26 +2115,66 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
 }
 
 // ── Recycle Bin ────────────────────────────────────────────────────────────
-// Every delete across the 7 tables behind useDeleteMutation (Properties,
-// Loans, Insurance, Investments, Savings, Other Assets, Health) snapshots
-// the row here first (see src/lib/mutations.ts) before actually deleting
-// it. Restoring re-inserts the exact snapshot — same id, same fields —
-// back into its original table, plus any reminders that were attached
-// (also snapshotted, in related_reminders). Documents are handled
-// differently: they're never actually deleted while something sits in
-// the trash (see mutations.ts), so they just reappear on their own once
-// restored — actual document/storage cleanup only happens on permanent
-// delete (see purgeDocumentsFor). Does NOT cover Inventory or Members
-// (their delete buttons don't go through the shared hook yet) or account/
-// household deletion (a separate, much bigger cascade — see the daily
-// snapshot backup feature for that scenario instead). Auto-expires after
-// 30 days via the Cloudflare Cron job that also fetches FX rates.
+// Every delete across the 8 tables behind useDeleteMutation (Properties,
+// Loans, Insurance, Investments, Savings, Other Assets, Health, Credit
+// Cards), plus Inventory items/folders, Members, and single Documents,
+// snapshots the row here first (see src/lib/mutations.ts) before actually
+// deleting it. Restoring re-inserts the exact snapshot — same id, same
+// fields — back into its original table, plus any reminders that were
+// attached (also snapshotted, in related_reminders). Documents and
+// inventory photos are handled the same way: never actually removed from
+// storage while something sits in the trash, so they just reappear once
+// restored — actual storage cleanup only happens on permanent delete (see
+// purgeTrashRowStorage in mutations.ts). Deleting an Inventory folder
+// snapshots the folder, its subfolders, and every item inside as one
+// group sharing a batch_id, so it shows as one entry here and restores
+// all together, folders-before-children so no foreign key is left
+// dangling. Does NOT cover account/household deletion (a separate, much
+// bigger cascade — see the daily R2 snapshot backup for that scenario
+// instead). Auto-expires after 30 days via the Cloudflare Cron job that
+// also fetches FX rates.
+// Known limitation, stated plainly in the confirm dialog at delete-time
+// too: restoring a deleted Member brings the person back, but does NOT
+// re-link their old records to them — that link was already cleared to
+// null the moment they were deleted, and isn't captured anywhere to
+// restore. Restoring only undoes the member row itself.
+
+const RECYCLE_BIN_EXTRA_LABELS: Record<string, string> = {
+  inventory_items: "Inventory item",
+  inventory_folders: "Inventory folder",
+  members: "Household member",
+  record_documents: "Document",
+};
 
 function recordLabel(row: Record<string, any>): string {
-  return row.name || row.bank || row.institution || row.provider || "Untitled record";
+  return row.name || row.bank || row.institution || row.provider || row.label || "Untitled record";
 }
 
-function RecycleBin({ householdId }: { householdId: string | null }) {
+function trashCategoryLabel(tableName: string): string {
+  return recordConfigs[tableName]?.label ?? RECYCLE_BIN_EXTRA_LABELS[tableName] ?? tableName;
+}
+
+function trashDeletedOn(deletedAt: string | null | undefined): string {
+  const d = deletedAt ? new Date(deletedAt) : null;
+  return d && !isNaN(d.getTime())
+    ? d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+    : "recently";
+}
+
+// One row in the trash list — either a single restorable entry, or a group
+// of rows that were deleted together (an Inventory folder + everything that
+// was inside it) and must be restored/purged together.
+type TrashDisplayEntry =
+  | { kind: "single"; item: any }
+  | { kind: "batch"; batchId: string; items: any[] };
+
+function RecycleBin({
+  householdId,
+  currentRole,
+}: {
+  householdId: string | null;
+  currentRole: string | null | undefined;
+}) {
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState(false);
 
@@ -2151,46 +2192,122 @@ function RecycleBin({ householdId }: { householdId: string | null }) {
     },
   });
 
-  async function restoreItem(item: any) {
-    // Re-insert the snapshotted row back into its original table, preserving
-    // its original id, then remove it from the trash. If the re-insert fails
-    // (e.g. it references a member that's since been deleted), the trash
-    // entry stays put so nothing is lost — just tell the user why.
-    const { error: insertError } = await (supabase as any)
-      .from(item.table_name)
-      .insert(item.record_data);
-    if (insertError) {
-      toast.error(`Could not restore — ${insertError.message}`);
-      return;
-    }
-    // Restore any reminders that were attached when this was deleted.
-    // Documents don't need this step — they were never actually deleted
-    // while this sat in the trash (see mutations.ts), so they're already
-    // showing again now that the record is back with the same id.
-    const reminders = Array.isArray(item.related_reminders) ? item.related_reminders : [];
-    if (reminders.length > 0) {
-      const { error: reminderError } = await (supabase as any).from("reminders").insert(reminders);
-      if (reminderError) {
-        toast.error(
-          `Restored, but its reminders couldn't be brought back — ${reminderError.message}`,
-        );
+  const displayEntries: TrashDisplayEntry[] = (() => {
+    const batches = new Map<string, any[]>();
+    const entries: TrashDisplayEntry[] = [];
+    for (const item of trash as any[]) {
+      if (item.batch_id) {
+        const list = batches.get(item.batch_id) ?? [];
+        list.push(item);
+        batches.set(item.batch_id, list);
+      } else {
+        entries.push({ kind: "single", item });
       }
     }
-    await (supabase as any).from("deleted_records").delete().eq("id", item.id);
+    for (const [batchId, items] of batches) {
+      entries.push({ kind: "batch", batchId, items });
+    }
+    entries.sort((a, b) => {
+      const aTime = a.kind === "single" ? a.item.deleted_at : a.items[0]?.deleted_at;
+      const bTime = b.kind === "single" ? b.item.deleted_at : b.items[0]?.deleted_at;
+      return new Date(bTime ?? 0).getTime() - new Date(aTime ?? 0).getTime();
+    });
+    return entries;
+  })();
+
+  async function invalidateForRestore(item: any) {
     const queryKey = recordConfigs[item.table_name]?.queryKey ?? item.table_name;
     await qc.invalidateQueries({ queryKey: ["deleted-records", householdId] });
     await qc.invalidateQueries({ queryKey: [queryKey] });
     await qc.invalidateQueries({ queryKey: [item.table_name] });
     await qc.invalidateQueries({ queryKey: ["dashboard"] });
+    if (item.table_name === "inventory_items" || item.table_name === "inventory_folders") {
+      await qc.invalidateQueries({ queryKey: ["folders"] });
+      await qc.invalidateQueries({ queryKey: ["inventory_items"] });
+    }
+    if (item.table_name === "members") {
+      await qc.invalidateQueries({ queryKey: ["members"] });
+      await qc.invalidateQueries({ queryKey: ["members-manage", householdId] });
+    }
+    if (item.table_name === "record_documents") {
+      await qc.invalidateQueries({ queryKey: ["docs", item.entity_type, item.record_id] });
+    }
+  }
+
+  async function restoreItem(item: any) {
+    const err = await restoreTrashRow(item);
+    if (err) {
+      toast.error(`Could not restore — ${err}`);
+      return;
+    }
+    await (supabase as any).from("deleted_records").delete().eq("id", item.id);
+    await invalidateForRestore(item);
     toast.success(`Restored: ${recordLabel(item.record_data)}`);
   }
 
   async function permanentlyDeleteItem(item: any) {
-    // This is the moment documents actually get removed — deferred from
-    // delete-time so they're still recoverable while the record sat in
-    // the trash. See mutations.ts's purgeDocumentsFor for why.
-    await purgeDocumentsFor(item.entity_type, item.record_id);
+    await purgeTrashRowStorage(item);
     await (supabase as any).from("deleted_records").delete().eq("id", item.id);
+    await qc.invalidateQueries({ queryKey: ["deleted-records", householdId] });
+    toast.success("Removed permanently.");
+  }
+
+  async function restoreBatch(items: any[], batchId: string) {
+    // Folders must go back before their children can safely reference them
+    // (subfolder.parent_id / item.folder_id would otherwise point at
+    // nothing). Restore in passes: whichever folders' parents are either
+    // outside this batch or already restored go first, repeated until every
+    // folder is placed — this handles any nesting depth, not just one level.
+    const folderItems = items.filter((i) => i.table_name === "inventory_folders");
+    const nonFolderItems = items.filter((i) => i.table_name !== "inventory_folders");
+    let remaining = [...folderItems];
+    const restoredIds = new Set<string>();
+    while (remaining.length > 0) {
+      const placeable = remaining.filter((f) => {
+        const parentId = f.record_data?.parent_id;
+        return (
+          !parentId ||
+          restoredIds.has(parentId) ||
+          !folderItems.some((o) => o.record_id === parentId)
+        );
+      });
+      if (placeable.length === 0) {
+        toast.error("Could not restore — the folder structure looks broken. Nothing was changed.");
+        return;
+      }
+      for (const f of placeable) {
+        const err = await restoreTrashRow(f);
+        if (err) {
+          toast.error(
+            `Could not restore "${recordLabel(f.record_data)}" — ${err}. Anything already restored stays restored — remove its now-duplicate trash entry manually if needed.`,
+          );
+          return;
+        }
+        restoredIds.add(f.record_id);
+      }
+      remaining = remaining.filter((f) => !restoredIds.has(f.record_id));
+    }
+    for (const it of nonFolderItems) {
+      const err = await restoreTrashRow(it);
+      if (err) {
+        toast.error(
+          `Could not restore an item — ${err}. Anything already restored stays restored — remove its now-duplicate trash entry manually if needed.`,
+        );
+        return;
+      }
+    }
+    await (supabase as any).from("deleted_records").delete().eq("batch_id", batchId);
+    await qc.invalidateQueries({ queryKey: ["deleted-records", householdId] });
+    await qc.invalidateQueries({ queryKey: ["folders"] });
+    await qc.invalidateQueries({ queryKey: ["inventory_items"] });
+    toast.success("Restored the whole folder.");
+  }
+
+  async function permanentlyDeleteBatch(items: any[], batchId: string) {
+    for (const it of items) {
+      await purgeTrashRowStorage(it);
+    }
+    await (supabase as any).from("deleted_records").delete().eq("batch_id", batchId);
     await qc.invalidateQueries({ queryKey: ["deleted-records", householdId] });
     toast.success("Removed permanently.");
   }
@@ -2199,8 +2316,8 @@ function RecycleBin({ householdId }: { householdId: string | null }) {
     if (!householdId) return;
     if (!confirm("Permanently empty the Recycle Bin? Nothing in it can be restored after this."))
       return;
-    for (const item of trash) {
-      await purgeDocumentsFor((item as any).entity_type, (item as any).record_id);
+    for (const item of trash as any[]) {
+      await purgeTrashRowStorage(item);
     }
     const { error } = await (supabase as any)
       .from("deleted_records")
@@ -2214,7 +2331,8 @@ function RecycleBin({ householdId }: { householdId: string | null }) {
     toast.success("Recycle Bin emptied.");
   }
 
-  const trashCount = trash.length;
+  const trashCount = displayEntries.length;
+  const isOwner = currentRole === "owner";
 
   return (
     <section className="rounded-2xl border border-border bg-card p-4">
@@ -2236,8 +2354,9 @@ function RecycleBin({ householdId }: { householdId: string | null }) {
         <div className="mt-3">
           <p className="mb-3 text-xs text-muted-foreground">
             Deleted entries stay here for 30 days before being permanently removed. Restoring brings
-            back the entry, its documents, and its reminders. Doesn't cover Inventory, Members, or
-            account deletion.
+            back the entry, its documents/photos, and its reminders. Covers financial records,
+            Inventory, Members, and single documents — not account deletion. Restoring a Member does
+            not re-link their old records to them.
           </p>
           {trashCount === 0 ? (
             <p className="py-4 text-center text-sm text-muted-foreground">
@@ -2246,36 +2365,81 @@ function RecycleBin({ householdId }: { householdId: string | null }) {
           ) : (
             <>
               <ul className="divide-y divide-border">
-                {trash.map((item: any) => {
-                  const deletedAtDate = item.deleted_at ? new Date(item.deleted_at) : null;
-                  const deletedOn =
-                    deletedAtDate && !isNaN(deletedAtDate.getTime())
-                      ? deletedAtDate.toLocaleDateString("en-GB", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })
-                      : "recently";
-                  const categoryLabel = recordConfigs[item.table_name]?.label ?? item.table_name;
+                {displayEntries.map((entry) => {
+                  if (entry.kind === "single") {
+                    const item = entry.item;
+                    const isMember = item.table_name === "members";
+                    const canActOnThis = !isMember || isOwner;
+                    return (
+                      <li key={item.id} className="flex items-start justify-between gap-2 py-2.5">
+                        <div className="flex-1 min-w-0">
+                          <p className="truncate text-sm font-medium">
+                            {recordLabel(item.record_data)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {trashCategoryLabel(item.table_name)} · Deleted{" "}
+                            {trashDeletedOn(item.deleted_at)}
+                          </p>
+                          {isMember && !isOwner && (
+                            <p className="text-xs text-muted-foreground">
+                              Only the household owner can restore a deleted member.
+                            </p>
+                          )}
+                        </div>
+                        {canActOnThis && (
+                          <div className="flex shrink-0 gap-1.5 pt-0.5">
+                            <button
+                              onPointerDown={() => restoreItem(item)}
+                              className="rounded px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/10"
+                            >
+                              Restore
+                            </button>
+                            <button
+                              onPointerDown={() => permanentlyDeleteItem(item)}
+                              className="rounded px-2 py-1 text-xs font-semibold text-urgent hover:bg-urgent/10"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  }
+                  // Grouped folder-delete batch.
+                  const folderItems = entry.items.filter(
+                    (i) => i.table_name === "inventory_folders",
+                  );
+                  const itemItems = entry.items.filter((i) => i.table_name === "inventory_items");
+                  const rootFolder =
+                    folderItems.find(
+                      (f) => !folderItems.some((o) => o.record_id === f.record_data?.parent_id),
+                    ) ?? folderItems[0];
+                  const subfolderCount = Math.max(folderItems.length - 1, 0);
+                  const parts = [`${itemItems.length} item(s)`];
+                  if (subfolderCount > 0) parts.push(`${subfolderCount} subfolder(s)`);
                   return (
-                    <li key={item.id} className="flex items-start justify-between gap-2 py-2.5">
+                    <li
+                      key={entry.batchId}
+                      className="flex items-start justify-between gap-2 py-2.5"
+                    >
                       <div className="flex-1 min-w-0">
                         <p className="truncate text-sm font-medium">
-                          {recordLabel(item.record_data)}
+                          {rootFolder ? recordLabel(rootFolder.record_data) : "Deleted folder"}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {categoryLabel} · Deleted {deletedOn}
+                          Inventory folder · {parts.join(", ")} · Deleted{" "}
+                          {trashDeletedOn(entry.items[0]?.deleted_at)}
                         </p>
                       </div>
                       <div className="flex shrink-0 gap-1.5 pt-0.5">
                         <button
-                          onPointerDown={() => restoreItem(item)}
+                          onPointerDown={() => restoreBatch(entry.items, entry.batchId)}
                           className="rounded px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/10"
                         >
-                          Restore
+                          Restore all
                         </button>
                         <button
-                          onPointerDown={() => permanentlyDeleteItem(item)}
+                          onPointerDown={() => permanentlyDeleteBatch(entry.items, entry.batchId)}
                           className="rounded px-2 py-1 text-xs font-semibold text-urgent hover:bg-urgent/10"
                         >
                           Delete
