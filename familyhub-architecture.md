@@ -1,96 +1,172 @@
 # FamilyHub SG — Architecture Reference
 
-*Written 21 Sep 2026. This is a living reference, not a one-time report — bring it back into a new chat and ask Claude to update it after future sessions, rather than starting over. Where something hasn't been checked on the live system, it's marked "unverified."*
+Plain-English reference doc, written for a non-technical reader. Read this
+FIRST in a new chat before touching anything — it saves re-deriving the
+whole schema/security model from scratch every session.
 
-## Quick summary — read this first
-*One paragraph your dad, or anyone with zero tech knowledge, can read and understand.*
+**Last refreshed: 2026-09-25, from a real live `information_schema.columns`
++ `pg_policies` dump the user ran and pasted in** (not derived from code or
+migration files — see "Keeping this current" at the bottom for how this
+was done and how to do it again).
 
-FamilyHub SG stores each family's financial data in a database (Supabase, Singapore), with a copy of that data automatically saved every night to a separate backup service (Cloudflare R2) in case something is deleted by mistake or the main database has a problem. That nightly backup covers all the data itself (properties, loans, notes, reminders, etc.) but **not** uploaded photos/documents and **not** login accounts — those aren't currently backed up elsewhere, though every household can download their own copy any time from Settings. The app currently runs entirely on free hosting plans. The one part that could need a paid plan as more families join is the nightly backup, and even then the cost is a predictable $5/month, not a surprise bill — see §5 below for the trigger point.
+## What this app is
+TanStack Start + React + Vite + Tailwind + Bun, Supabase (Postgres + Auth +
+Storage) on the Singapore region, deployed to Cloudflare Workers. Repo
+`robertkjr3d/familyvault-overview`, branch `azariah`, auto-deploys on push.
 
-**Status as of 23 Sep 2026:** live, in private family/friend testing, not yet charging anyone. Real database migration (Seoul → Singapore) is complete. Security basics (passkey login, encrypted storage, audit trail, rate limiting) are built and confirmed working, including the two adviser views above. A single-record restore from backup has been tested successfully. The nightly backup now emails on failure (Healthchecks.io). Error alerts (Sentry) added Sep 22 2026 but NOT yet confirmed actually reporting events — see the open Sentry troubleshooting note below. Export tools (Excel/ZIP/Word/PDF) no longer depend on a third-party website at the moment of use.
+## The golden rule about this repo's migrations folder
+`supabase/migrations/` is **documentation only — not the live source of
+truth.** Confirmed repeatedly, most recently 2026-09-25: the migration
+history shows storage.objects' SELECT policy as still open/unscoped
+("vault-docs public read", no household check), but a live query the same
+day showed the REAL policy (`fv storage household read`) already properly
+scoped — someone fixed this live without ever committing a matching
+migration. **Never assume the migrations folder reflects what's actually
+live, and never write "fix" SQL from migration history alone — always ask
+for a live, targeted check first, even when a fix seems obviously needed.**
 
-**Current data (checked 21 Sep 2026):** the real database already has 10 households — 1 real family household ("Tan Family") plus 9 dev/test accounts made while building. This matters for reading §5's cost-scaling estimate correctly: that estimate scales the WHOLE current file (already ~10 households' worth of data, mostly small/sparse test accounts), not a single household — so "10x today" is closer to "100 similar-sized households," not "10 real families." A handful of real, fully-used families could carry more data each than these sparse test accounts do, so treat the estimate as rough in either direction, not a hard number.
+## Tables — real, live list as of 2026-09-25 (supersedes the generated types.ts, which is missing several of these)
+Core financial records (all go through the shared `useDeleteMutation` →
+Recycle Bin pattern): `properties`, `loans`, `insurance_policies`,
+`investments`, `savings_accounts`, `other_assets`, `health_conditions`,
+`credit_cards`.
 
-## 0. A real mistake, fixed (22 Sep 2026)
-A deploy failed with a "lockfile" error after adding 4 new code libraries. Plain explanation: this app tracks two files together — one saying "we use these tools," and a second, generated file that pins the exact version of every tool for reliability. Cloudflare refuses to build unless those two agree exactly. Claude updated the first file (Sep 21) but never regenerated the second, and since you have no way to run that regeneration step yourself, the app was left unbuildable through no fault of yours. Fixed by actually installing the same tool this repo uses and generating a real, correct second file — not guessed. Going forward, the rule is: any time a new library is added, both files are always handed over together, and the whole app is fully rebuilt end-to-end in a sandbox before anything is called "done" — not just checked for typos.
+Household/people: `households`, `household_users`, `household_invites`,
+`members`.
 
-## 1. What this is
-A Singapore-focused family financial management web app. Households track properties, loans, insurance, investments, savings/CPF, other assets, credit cards, health, a "go-bag" list, travel checklist, and an inventory of belongings — one shared "household" per family, with individual members inside it. A separate financial-adviser (FA) dashboard lets a household selectively share some of this with a real financial adviser.
+Inventory: `inventory_items`, `inventory_folders`. (`inventory_locations`
+was dropped live weeks ago but still shows in the generated `types.ts` —
+confirmed gone for real this time, absent from the live column dump too.)
 
-## 2. Stack
-- **Frontend:** React, deployed as a Cloudflare Worker (`app.familyhubsg.com`). Built with TanStack Start/Router.
-- **Database:** Supabase (Postgres), Singapore region, project ref `aowvotxddrlfnpzhejvc`. Free plan.
-- **File storage:** Supabase Storage — `vault-docs` (10MB/file cap) and `inventory-photos` (5MB/file cap) buckets, both private.
-- **Backups:** Cloudflare R2 (`familyhub-backups` bucket), written nightly by a Cloudflare Cron Trigger.
-- **Repo:** GitHub, `robertkjr3d/familyvault-overview`, `azariah` branch. Robert owns the repo and infrastructure; the user codes exclusively via Claude + the GitHub web editor (no CLI) plus the Supabase SQL Editor.
-- **Cloudflare plan:** Free (confirmed by user Sep 21 2026) — this caps CPU time and outside-request count per Worker invocation; see §6.
+Supporting: `reminders`, `record_documents`, `record_history` (manual
+notes/timeline entries a user adds — NOT the audit trail), `audit_log`
+(the REAL audit trail — old_data/new_data/changed_fields, trigger-driven,
+no direct client INSERT/UPDATE/DELETE policy exists for it — confirms
+writes happen via a trigger running as table owner, not from the browser;
+only a household-scoped SELECT policy exists), `deleted_records` (the
+Recycle Bin, has `batch_id` for grouped folder-delete restores),
+`dismissed_dashboard_items`, `app_settings`, `user_profiles`, `error_logs`
+(INSERT-only from the client — own-row-only, `auth.uid() = user_id`; no
+SELECT policy, so users can't read error logs back, only the admin/service
+role can — by design), `fx_rates` (SELECT open to any authenticated user,
+`qual: true` — correct, exchange rates aren't household-specific; no
+client-facing write policies, only a service-role cron writes these).
 
-## 3. Data model & multi-tenancy
-- Every table that holds real data has a `household_id`. A row belongs to exactly one household.
-- `household_users` links a login (`auth.users`) to a household with a role (owner/editor/viewer).
-- `members` are people inside a household (not logins) — e.g. "Dad", "Mum" — and most record tables point at a `member_id` (who owns this) and sometimes a separate `action_member_id` (who's responsible for following up).
-- **Row-level security (RLS)** is the real access barrier: every table's policies check `is_household_member()` / `is_household_editor()` / `current_household_id()`. The `anon` database role has broad grants at the table level, but RLS is what actually stops cross-household access — this is normal Supabase practice, not a gap by itself (see §6 for the one caveat).
-- **Deleting a member** (checked live, Sep 21 2026): every record they own is kept — it just loses its owner tag. The one exception is `advisor_link_members`, which cascades (an adviser-sharing link tied to that member is removed). **Known display gap:** the Health page (`health.tsx`) only lists records grouped under a member's name — an ownerless Health record currently has no place to show up in that page's UI. Not yet fixed.
-- **Entity types:** reminders, documents, history entries and the Recycle Bin all key off an `entity_type` enum (`property`, `loan`, `insurance`, …) plus an `entity_id`. Adding a new record type (e.g. Credit Cards) requires adding a new enum value or every reminder/document/history action on it fails at the database level.
+Planning/checklists: `estate_checklist`, `travel_checklist_items`,
+`gobag_items`, `planned_cashflow_events`, `loan_rate_schedule`,
+`property_rate_schedule`.
 
-## 4. Security
-- **Sign-in:** passkeys (primary, deployed and working), Google OAuth, and email 6-digit code (`verifyOtp`) as the reliable fallback. Magic-link "click here" buttons in emails are known to fail after the Sep 2026 PKCE fix (see below) — the 6-digit code is unaffected and always works. **Recommended, not yet done:** edit the Supabase email templates to foreground the 6-digit code over the click-through button.
-- **Passkey RP ID** is permanently set to `familyhubsg.com` (not the `app.` subdomain) — changing this later would invalidate every enrolled passkey. Do not suggest changing it.
-- **Auth flow type:** `pkce` on the browser client (`client.ts`), left as `implicit`-default on the server client (`client.server.ts`) deliberately, because server-generated invite/magic-links are opened on a different device than the one that requested them, which PKCE can't support.
-- **Encryption:** AES-256 at rest + TLS in transit, via Supabase's own infrastructure — no custom encryption layer. End-to-end/"zero-knowledge" encryption was deliberately rejected (would make lost-credential data unrecoverable, breaks server-side calculations, and multi-person key-sharing is a hard problem). The audit log (below) is the chosen trust mechanism instead.
-- **Audit log:** a database trigger (not app code) logs every change to the 6 core financial tables (insurance, investments, savings, loans, properties, other assets) — who changed what, old value → new value. Shown as an "Audit Trail" section inside each record's expanded card (no longer a collapsed-card icon, per the user's Sep 21 2026 request). Known limitation: writes made by the service role (e.g. an admin script) show no user, since `auth.uid()` is null for those.
-- **Rate limiting:** household invites are capped via a Cloudflare `ratelimits` binding (5 per 60s per inviter). Other server actions (e.g. the adviser policy-chart tool) aren't rate-limited yet.
-- **Consent:** the sign-in screen already has a standing notice ("By continuing, you agree to our Terms of Service and Privacy Policy", linking both pages) — no separate checkbox exists, and per Singapore PDPA guidance this notice-based approach is acceptable; a tick-box is optional, not required.
-- **Two database functions worth knowing:**
-  - `current_household_id()` — reads a JWT claim that nothing in this app currently sets, so it always falls back to a normal membership lookup. Not a security issue. Possibly unused by any policy (a check was pending as of Sep 21).
-  - `increment_household_storage()` — used to trust a caller-supplied byte count; fixed Sep 21 2026 to recompute the true total from `storage.objects` instead (see handed-over SQL file from that session).
-- **Not implemented:** 2FA/TOTP (skipped — passwordless + passkeys already cover this well), session idle-timeout (deliberately rejected — trusted personal devices, convenience prioritized).
-- **Error visibility:** the app already logged frontend crashes into a Supabase `error_logs` table (silent, nobody reads it). As of Sep 22 2026, that same pipeline also emails an alert via Sentry (a plain HTTP call, not the full Sentry SDK — see §5a) whenever `VITE_SENTRY_DSN` (frontend) / `SENTRY_DSN` (Worker secret) is set. No-op, zero cost, and zero behavior change if left unset.
-- **Cleaned up Sep 21 2026:** the unused `inventory_locations` table (had an effectively-no-RLS policy) and the empty public `documents` storage bucket were both dropped/deleted after confirming zero rows/objects.
+Advisor sub-system: `advisor_household_links`, `advisor_invites`,
+`advisor_link_members` (the one CASCADE-on-member-delete exception — every
+other table SET NULLs a deleted member's records instead),
+`advisor_policy_charts`, `advisor_record_notes`, plus two VIEWs
+(`advisor_client_summary_view`, `advisor_networth_components_view` — views
+don't carry their own RLS policies, they inherit from underlying tables).
 
-## 5a. Error alerts (Sentry) & scheduled-job alerts (Healthchecks.io)
-- **Sentry** — free plan, 5,000 errors/month. Deliberately NOT the official `@sentry/cloudflare` SDK (that requires turning on Cloudflare's `nodejs_compat` flag, a broad runtime change not worth making just for error alerts). Instead, a small shared file (`src/lib/sentryReport.ts`) makes one plain HTTP call to Sentry's documented ingest API — same "optional secret, silent no-op if unset" pattern as Healthchecks below. Wired into: the existing frontend error logger (so this piggybacks on error-catching code that already existed, rather than adding a second system) and the two places the Worker already catches unexpected errors.
-- **Healthchecks.io** — free plan, 20 checks (this app uses 1). Pings after the nightly backup starts, succeeds, or fails; an alert fires only if a night is missed entirely or the backup explicitly fails. By default it also sends a one-line "recovered" email once a failure resolves — no confirmed way to disable just that email through Healthchecks' own settings, so if only-failure-emails matters, filter it with an email rule (e.g. "if subject contains 'is UP', skip inbox").
+**`household_invites` and `advisor_invites` deliberately have NO client-facing
+RLS policies at all** — confirmed by their total absence from the live
+`pg_policies` dump (not a truncation artifact — checked, the gap falls in
+the middle of the alphabetical list where a LIMIT-100 cutoff couldn't
+explain it) AND confirmed in the actual code: both are only ever queried
+via `supabaseAdmin`, dynamically imported from
+`@/integrations/supabase/client.server` (a server-only module, never
+shipped to the browser) — never from the regular RLS-bound client. This
+makes sense structurally: accepting an invite requires reading a token
+BEFORE the person is a household member, so `is_household_member()` could
+never work for them anyway. **One thing not yet confirmed live (should be,
+for full certainty rather than "very likely"):** whether RLS is actually
+*enabled* at the table level on these two (with zero policies, meaning
+fully blocked for any direct client request) versus RLS being *disabled*
+(meaning a direct REST API call with just the anon key could read them,
+bypassing the app entirely even though the app itself never does this).
+Check with:
+```sql
+select relname, relrowsecurity from pg_class where relname in ('household_invites','advisor_invites');
+```
+`relrowsecurity = true` for both confirms this is fully fine as designed.
 
-## 5. Backups & disaster recovery
-Three layers — see `backups-feature-list.md` (a companion document, written Sep 21 2026) for the full detail. In short:
-1. **Recycle Bin** (in-app, 30 days) — covers accidental deletion of the main record types, self-service restore. Does NOT cover inventory items/folders, members, or single documents.
-2. **Exports** — an Excel workbook and a full .zip (workbook + actual files) that any household can download any time from Settings → Data. As of Sep 21 2026 the Excel export also includes each record's detailed Notes, who a follow-up action is assigned to, and Reminders/Updates sheets (previously missing — found and fixed after the user flagged it).
-3. **Nightly database snapshot to R2** — all 32 real data tables, kept 30 days, with row-count verification so a partial/truncated day is never silently saved. Does NOT cover files/photos, login accounts, or the database's structure/security rules. A real single-record restore was rehearsed and confirmed working (Sep 21 2026).
-- **Known scaling risk (Free Cloudflare plan):** a laptop benchmark suggests the nightly backup could start silently failing somewhere around 2-4× today's data volume, because Free Workers get only 10ms of processing time per run. Not yet redesigned — current plan is to add a free failure-alert (Healthchecks.io) and watch trend, then move to Cloudflare's $5/month Workers Paid plan if/when it's actually needed, rather than a risky rewrite now.
-- **Guiding principle (user's words, Sep 21 2026):** if anything goes wrong, people should have an easy, reasonable way to get their data back — while keeping the app's own running costs as close to $0 as possible.
+## Storage
+Two real buckets: `vault-docs` (documents) and `inventory-photos`
+(photos). A third, `documents`, was confirmed empty and deleted 2026-09-21.
 
-## 6. Known backlog (security-audit-derived, none urgent)
-From a third-party read-only audit run after the Seoul→Singapore migration — all pre-existing (not migration-caused):
-- `anon` role has broad table-level grants; RLS is the real barrier so this isn't automatically exploitable, but is broader than ideal. Don't revoke blindly — needs a check of what the app legitimately needs anon for first.
-- **Two adviser-facing views (`advisor_client_summary_view`, `advisor_networth_components_view`) — Supabase flags both red/"Unrestricted." CHECKED AND RESOLVED 23 Sep 2026: safe today.** Both grant SELECT to every role including unauthenticated visitors, but the actual function they depend on (`has_advisor_access`) correctly returns "no data" for anyone not genuinely logged in as a real, linked adviser — confirmed by reading its exact logic. A real adviser querying it directly only ever sees their own actual clients, same as the app already shows them. **Still worth tidying eventually, not urgently:** this safety depends on one function alone, with no second layer backing it up if it's ever edited carelessly in the future — real database-level rules (like the rest of the app uses) would add that backup layer. Supabase's red warning icon is a generic one that doesn't understand this view's specific (working) protection method — expect it to keep showing even though this is fine.
-- `other_assets` has two redundant delete triggers doing the same cleanup — harmless, low priority.
+**Path convention:** `<household_id>/<subfolder>/<timestamp>-<filename>`.
 
-## 7. The onboarding product tour
-Built with `driver.js` + React (`GuidedTour.tsx`, `tourSteps.ts`). Runs on both desktop and mobile, including inside bottom Sheets on phones. Several real, confirmed-fixed mobile bugs (Sep 2026), kept here so the same class of bug is recognized faster next time:
-- **A native date picker reopening itself after being dismissed** (iPhone only) — caused by a Radix Sheet's focus trap fighting with the tour's own popover focus; fixed by making the Sheet non-modal only while a tour is running.
-- **The highlight landing on the wrong field** after the on-screen keyboard opened/closed, or after scrolling a long form — fixed by re-measuring on keyboard events (touch devices only) and by scrolling instantly instead of relying on driver.js's own animated scroll.
-- **The first step of a tour appearing with no highlight, only fixed by a page refresh** — caused by the tour measuring its target before a newly-navigated-to page had finished laying out; fixed by waiting for the target to exist, stop moving, and be on-screen before starting.
+**Confirmed fully fixed and secure, live, 2026-09-25:** both buckets are
+`public = false`, AND all four operations on `storage.objects`
+(`fv storage household read/insert/update/delete`) correctly scope by
+parsing the household_id out of the path and checking
+`is_household_member()` (read) / editor-equivalent for writes, with a
+sensible `owner = auth.uid()` fallback on update/delete so whoever
+literally uploaded a file can also manage it. The open "public read"
+policies that used to exist (per migration history) are gone from the live
+database. **No outstanding storage security issue as of this refresh.**
 
-## 7a. Known display gap, now fixed (health.tsx)
-A Health record whose owning family member was later deleted had no section to appear under and was effectively invisible on the Health page, even though the row still existed everywhere else (exports, backups). Fixed Sep 22 2026 with a plain "Unassigned" section for exactly this case.
+App code itself only ever uses `getDisplayUrl`/`getExportUrl` (signed
+URLs) — confirmed via repo-wide grep, `getPublicUrl` is never called.
 
-## 8. Advisor (FA) dashboard — separate sub-project
-Full detail in a dedicated reference (`advisor-dashboard.md`) — summary: a financial adviser can be given selective, per-category, per-member access to a household's data (insurance, investments, property, loans), with a household-side toggle to hide individual items regardless. Includes adviser notes, a policy-illustration chart tool, and per-member net worth. Built and deployed; still evolving.
+## RLS pattern
+Two functions gate almost everything: `is_household_member()` (read) and
+`is_household_editor()` (write) — the overwhelming majority of tables
+follow the exact same four-policy shape (`tenant_select` /
+`tenant_insert` / `tenant_update` / `tenant_delete`, or an
+equivalently-named set). `current_household_id()` exists but appears
+unused by any live policy — flagged as safe to drop, not yet dropped.
 
-## 9. Exports
-As of Sep 22 2026, the Excel, ZIP, Word (.docx) and PDF export/import tools (ExcelJS, JSZip, docx, pdf-lib) are real dependencies of the app, downloaded from the app's own server the first time someone taps an export button — not fetched from a third-party website (`esm.sh`) at that moment, as they were before. Each library still only loads when its specific feature is used, so this didn't make the app's normal first load any bigger.
+Advisor read access additionally goes through `has_advisor_access(household_id,
+member_id, category)`, and insurance/investments respect a per-record
+`hidden_from_advisors` flag even when advisor access is otherwise granted
+— confirmed real, checked directly in the advisor SELECT policy's `qual`.
 
-## 9a. Sentry — not yet confirmed working (open, 23 Sep 2026)
-DSN added in both Cloudflare locations, files deployed, but a test using the browser's Developer Tools console showed 0 events reaching Sentry after 15+ minutes. In plain terms: typing an error directly into that console box doesn't count as a "real" page error, the same way talking to a mirror isn't the same as being heard — so this may not mean anything is actually broken, just that the test didn't count. Full retest instructions and a second possible cause are recorded in memory. Not yet resolved.
+## Storage quota
+`households.storage_tier` / `storage_bytes_used`, via
+`increment_household_storage(household_id, delta)` — hardened 2026-09-21 to
+recompute the true total from `storage.objects` directly, ignoring
+whatever delta the caller passed.
 
-## 10. Where things are decided vs. still open
-This document summarizes decisions and status as of 21 Sep 2026. For the day-to-day working notes, open decisions, and exact file lists behind each of the above, the fuller working files are:
-- Security/auth tasks and status
-- The Seoul→Singapore database migration (complete) and R2 backup detail
-- The advisor dashboard sub-project
-- Individual features as they're built (e.g. the Credit Cards tab)
+## Net worth calculation — KNOWN BUG, not yet fixed
+See Claude's memory file `networth-calc-bug` for the full report and fix
+plan (not duplicated here since it's implementation-detail-heavy and this
+doc is meant to stay a stable overview). Summary: loan/mortgage principal
+repayment is currently treated as a full net-worth loss instead of being
+roughly neutral — only interest should count. Not yet fixed as of
+2026-09-25.
 
-Ask to have this document refreshed after a session that changes any of the above, rather than letting it go stale.
+## Known safe-to-clean housekeeping (not yet done, low priority)
+- Regenerate `types.ts` from the live schema (stale — was missing several
+  real tables like `audit_log`/`fx_rates`/the advisor tables, and still
+  lists the already-dropped `inventory_locations`).
+- Drop `current_household_id()` (confirmed unused by any policy).
+- `other_assets` has two DELETE triggers doing the same reminder-cleanup —
+  redundant, not dangerous, worth deduplicating.
+- 9 GitHub Actions secrets from the Seoul→Singapore migration remain by the
+  user's own deliberate choice (Seoul holds only family data) — revisit
+  before onboarding non-family households, not before.
 
-**Where to keep this file:** either works — save it in Google Drive/Notion for easy personal reference, AND/OR commit it into the repo at `docs/ARCHITECTURE.md` so it's included automatically every time the repo is uploaded to a new chat (meaning a future Claude session can read it directly, without you re-explaining anything). The repo copy doesn't replace memory — keep both in sync by asking for a refresh of both after a session that changes something.
+## Checklist: everything a new record-type/tab must be wired into
+See `familyhub-sg.md` in Claude's memory for the full 14-point checklist —
+kept there rather than duplicated here since it changes more often than
+this doc should.
+
+## Keeping this current
+This doc is a snapshot, not a live connection. To refresh it accurately,
+run these two read-only queries in the Supabase SQL Editor (use "No limit"
+if the editor offers it — the default 100-row cap can silently truncate
+the policy list) and paste both results into a new chat:
+
+```sql
+select table_name, column_name, data_type, udt_name, is_nullable
+from information_schema.columns
+where table_schema = 'public'
+order by table_name, ordinal_position;
+```
+
+```sql
+select tablename, policyname, cmd, roles, qual, with_check
+from pg_policies
+where schemaname in ('public', 'storage')
+order by tablename, policyname;
+```
+
+Ask Claude to refresh this file from the pasted results — much faster and
+more reliable than re-deriving the schema from application code, and the
+only way to catch a live-vs-migration divergence like the one found today.
