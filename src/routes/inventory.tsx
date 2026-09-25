@@ -1423,8 +1423,9 @@ function AddFolderSheet({
                       setPreview(null);
                       setPhotoFile(null);
                     }}
-                    className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white"
+                    className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/75"
                     aria-label="Remove photo"
+                    title="Remove photo"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -2428,8 +2429,9 @@ function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => voi
                 setPhotoFile(null);
                 if (fileRef.current) fileRef.current.value = "";
               }}
-              className="absolute -right-2 -top-2 rounded-full bg-destructive p-0.5 text-white shadow"
+              className="absolute -right-2 -top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-white shadow transition-colors hover:brightness-110"
               aria-label="Remove photo"
+              title="Remove photo"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -2605,7 +2607,7 @@ function EditItemForm({ item, onDone }: { item: Item; onDone: () => void }) {
 
   const photoSection = item.photo_url ? (
     <div className="space-y-1.5">
-      <Label className="text-xs">Photo</Label>
+      <Label className="block text-xs">Photo</Label>
       <div className="relative w-full">
         <SignedImg
           bucket="inventory-photos"
@@ -2613,20 +2615,22 @@ function EditItemForm({ item, onDone }: { item: Item; onDone: () => void }) {
           alt=""
           className="w-full h-auto max-h-40 rounded-md object-contain"
         />
-        <div className="absolute right-2 top-2 flex gap-1">
+        <div className="absolute right-2 top-2 flex gap-1.5">
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            className="rounded-full bg-black/60 p-1 text-white text-xs leading-none"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/75"
             aria-label="Change photo"
+            title="Change photo"
           >
             <Camera className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={removePhoto}
-            className="rounded-full bg-black/60 p-1 text-white"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/75"
             aria-label="Remove photo"
+            title="Remove photo"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -2635,7 +2639,7 @@ function EditItemForm({ item, onDone }: { item: Item; onDone: () => void }) {
     </div>
   ) : (
     <div className="space-y-1.5">
-      <Label className="text-xs">Photo</Label>
+      <Label className="block text-xs">Photo</Label>
       <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
         <Camera className="mr-1 h-3.5 w-3.5" /> Add photo
       </Button>
