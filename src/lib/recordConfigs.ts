@@ -635,7 +635,12 @@ export const recordConfigs: Record<string, RecordConfig> = {
         options: SAVINGS_ACCOUNT_TYPES,
         required: true,
       },
-      { key: "account_number", label: "Account number", type: "text" },
+      {
+        key: "account_number",
+        label: "Last 4 digits of account number",
+        type: "text",
+        placeholder: "e.g. 1234",
+      },
       { key: "currency", label: "Currency", type: "select", options: CURRENCIES, default: "SGD" },
       { key: "balance", label: "Balance", type: "number", money: true, currencyFrom: "currency" },
       { key: "interest_rate", label: "Interest rate %", type: "number" },
