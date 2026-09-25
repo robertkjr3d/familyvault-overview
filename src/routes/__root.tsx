@@ -42,6 +42,8 @@ const INTERNAL_TEST_EMAILS = [
   "azariahtan.piano@gmail.com",
   "psalm26.1@gmail.com",
   "impact01@gmail.com",
+  "aza_tan@yahoo.com.sg",
+  "azatan@umich.edu",
 ];
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
