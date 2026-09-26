@@ -1962,19 +1962,40 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
   }
 
   async function permanentlyDeleteItem(item: any) {
-    // Manually-created reminders only exist because the user made them — once permanently
-    // deleted, the reminder itself should be gone too (it will never regenerate on its own).
-    // Recurring/computed alerts (insurance renewal, loan reprice, etc.) are derived from a
-    // real ongoing record, so only the suppression flag is set — the underlying record and
-    // its future occurrences must stay untouched.
+    // Manually-created ONE-OFF reminders only exist because the user made them —
+    // once permanently deleted, the reminder itself should be gone too (it will
+    // never regenerate on its own). Recurring/computed alerts (insurance renewal,
+    // loan reprice, etc.) are derived from a real ongoing record, so only the
+    // suppression flag is set — the underlying record and its future occurrences
+    // must stay untouched.
+    //
+    // Bug fix (Sep 26 2026, added alongside recurring reminders): a RECURRING
+    // reminder must be treated the same as a computed alert here, not like a
+    // one-off — this dismiss entry only represents the one occurrence the user
+    // dismissed from the dashboard; the reminder row is still live and due to
+    // advance to its next date the next time it's marked done on its record
+    // page. Deleting it outright would have silently wiped out every future
+    // occurrence of the series, not just this one. One extra lookup to check
+    // before deciding.
     if (item.source_type === "reminder" && item.reminder_id) {
-      const { error: reminderError } = await (supabase as any)
+      const { data: reminderRow, error: reminderLookupError } = await (supabase as any)
         .from("reminders")
-        .delete()
-        .eq("id", item.reminder_id);
-      if (reminderError) {
-        toast.error("Could not delete the reminder.");
+        .select("recurrence")
+        .eq("id", item.reminder_id)
+        .maybeSingle();
+      if (reminderLookupError) {
+        toast.error("Could not check the reminder.");
         return;
+      }
+      if (reminderRow && !reminderRow.recurrence) {
+        const { error: reminderError } = await (supabase as any)
+          .from("reminders")
+          .delete()
+          .eq("id", item.reminder_id);
+        if (reminderError) {
+          toast.error("Could not delete the reminder.");
+          return;
+        }
       }
     }
     const { data, error } = await (supabase as any)
@@ -2007,19 +2028,37 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
     )
       return;
 
-    // Same rule as single-item delete: manually-created reminders must be deleted outright,
-    // not just suppressed, or they'd keep regenerating on the dashboard after "Clear all."
+    // Same rule as single-item delete: manually-created ONE-OFF reminders must be
+    // deleted outright, not just suppressed, or they'd keep hanging around
+    // (Restore would bring back a dead one-off with nothing left to advance it).
+    // RECURRING reminders must NOT be bulk-deleted here (bug fix, Sep 26 2026,
+    // alongside single-item delete above) — that would wipe out every future
+    // occurrence of a series just because one past occurrence was cleared from
+    // this list, so they're looked up and excluded first.
     const reminderIds = history
       .filter((h: any) => h.source_type === "reminder" && h.reminder_id)
       .map((h: any) => h.reminder_id);
     if (reminderIds.length > 0) {
-      const { error: reminderError } = await (supabase as any)
+      const { data: reminderRows, error: reminderLookupError } = await (supabase as any)
         .from("reminders")
-        .delete()
+        .select("id, recurrence")
         .in("id", reminderIds);
-      if (reminderError) {
-        toast.error("Could not delete some reminders.");
+      if (reminderLookupError) {
+        toast.error("Could not check reminders.");
         return;
+      }
+      const oneOffReminderIds = (reminderRows ?? [])
+        .filter((r: any) => !r.recurrence)
+        .map((r: any) => r.id);
+      if (oneOffReminderIds.length > 0) {
+        const { error: reminderError } = await (supabase as any)
+          .from("reminders")
+          .delete()
+          .in("id", oneOffReminderIds);
+        if (reminderError) {
+          toast.error("Could not delete some reminders.");
+          return;
+        }
       }
     }
 
