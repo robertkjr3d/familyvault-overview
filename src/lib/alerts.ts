@@ -1,5 +1,15 @@
 import { addDays, isBefore, parseISO } from "date-fns";
-import { Building2, Shield, Landmark, TrendingUp, PiggyBank, Bell, Package, CreditCard } from "lucide-react";
+import {
+  Building2,
+  Shield,
+  Landmark,
+  TrendingUp,
+  PiggyBank,
+  Bell,
+  Package,
+  CreditCard,
+} from "lucide-react";
+import { computeNextReminderDate } from "./reminderRecurrence";
 
 export type UpcomingItem = {
   date: string;
@@ -38,17 +48,27 @@ export type AlertSourceData = {
 
 export function reminderHref(entityType: string | null | undefined): string {
   switch (entityType) {
-    case "loan": return "/loans";
-    case "property": return "/property";
-    case "insurance": return "/insurance";
-    case "savings": return "/savings";
-    case "investment": return "/investments";
-    case "health": return "/health";
-    case "inventory": return "/inventory";
+    case "loan":
+      return "/loans";
+    case "property":
+      return "/property";
+    case "insurance":
+      return "/insurance";
+    case "savings":
+      return "/savings";
+    case "investment":
+      return "/investments";
+    case "health":
+      return "/health";
+    case "inventory":
+      return "/inventory";
     case "other_assets":
-    case "other_asset": return "/other-assets";
-    case "credit_card": return "/cards";
-    default: return "/";
+    case "other_asset":
+      return "/other-assets";
+    case "credit_card":
+      return "/cards";
+    default:
+      return "/";
   }
 }
 
@@ -100,7 +120,7 @@ export function computeNextOccurrence(
   startDateStr: string | null | undefined,
   frequency: string | null | undefined,
   endDateStr: string | null | undefined,
-  today: Date
+  today: Date,
 ): string | null {
   if (!startDateStr) return null;
   const freq = (frequency || "annual").toLowerCase();
@@ -167,7 +187,7 @@ export function computeRecurringAlerts(
   endDateStr: string | null | undefined,
   today: Date,
   horizonDays: number,
-  isGiro: boolean
+  isGiro: boolean,
 ): RecurringOccurrence[] {
   if (!startDateStr) return [];
   const freq = (frequency || "annual").toLowerCase();
@@ -252,7 +272,7 @@ export function buildUpcomingItems(
   data: AlertSourceData,
   today: Date,
   horizonDays: number,
-  categoryDays?: AlertCategoryDays
+  categoryDays?: AlertCategoryDays,
 ): UpcomingItem[] {
   function daysUntil(dateStr: string) {
     const d = parseISO(dateStr);
@@ -277,7 +297,14 @@ export function buildUpcomingItems(
   const items: UpcomingItem[] = [];
 
   for (const p of data.insurance) {
-    const occurrences = computeRecurringAlerts(p.start_date, p.frequency, p.end_date, today, insuranceHorizon, !!p.is_giro);
+    const occurrences = computeRecurringAlerts(
+      p.start_date,
+      p.frequency,
+      p.end_date,
+      today,
+      insuranceHorizon,
+      !!p.is_giro,
+    );
     for (const occ of occurrences) {
       items.push({
         date: occ.date,
@@ -295,29 +322,81 @@ export function buildUpcomingItems(
       });
     }
     if (within(p.end_date, insuranceHorizon)) {
-      items.push({ date: p.end_date, label: `${p.name} — policy ends`, amount: null, member_id: p.member_id, href: "/insurance", recordId: p.id, sourceType: "insurance_end", daysLeft: daysUntil(p.end_date), icon: Shield, kind: "Insurance" });
+      items.push({
+        date: p.end_date,
+        label: `${p.name} — policy ends`,
+        amount: null,
+        member_id: p.member_id,
+        href: "/insurance",
+        recordId: p.id,
+        sourceType: "insurance_end",
+        daysLeft: daysUntil(p.end_date),
+        icon: Shield,
+        kind: "Insurance",
+      });
     }
   }
 
   for (const p of data.properties) {
     if (within(p.fixed_rate_end, mortgageHorizon)) {
-      items.push({ date: p.fixed_rate_end, label: `${p.name} — fixed rate ends`, amount: null, member_id: p.member_id, href: "/property", recordId: p.id, sourceType: "property_fixed_rate", daysLeft: daysUntil(p.fixed_rate_end), icon: Building2, kind: "Property" });
+      items.push({
+        date: p.fixed_rate_end,
+        label: `${p.name} — fixed rate ends`,
+        amount: null,
+        member_id: p.member_id,
+        href: "/property",
+        recordId: p.id,
+        sourceType: "property_fixed_rate",
+        daysLeft: daysUntil(p.fixed_rate_end),
+        icon: Building2,
+        kind: "Property",
+      });
     }
   }
 
   for (const l of data.loans) {
     if (within(l.reprice_date, mortgageHorizon)) {
-      items.push({ date: l.reprice_date, label: `${l.bank} loan — reprice`, amount: null, member_id: l.member_id, href: "/loans", recordId: l.id, sourceType: "loan_reprice", daysLeft: daysUntil(l.reprice_date), icon: Landmark, kind: "Loan" });
+      items.push({
+        date: l.reprice_date,
+        label: `${l.bank} loan — reprice`,
+        amount: null,
+        member_id: l.member_id,
+        href: "/loans",
+        recordId: l.id,
+        sourceType: "loan_reprice",
+        daysLeft: daysUntil(l.reprice_date),
+        icon: Landmark,
+        kind: "Loan",
+      });
     }
     if (within(l.loan_end_date, mortgageHorizon)) {
-      items.push({ date: l.loan_end_date, label: `${l.bank} loan — fully repaid`, amount: null, member_id: l.member_id, href: "/loans", recordId: l.id, sourceType: "loan_end", daysLeft: daysUntil(l.loan_end_date), icon: Landmark, kind: "Loan" });
+      items.push({
+        date: l.loan_end_date,
+        label: `${l.bank} loan — fully repaid`,
+        amount: null,
+        member_id: l.member_id,
+        href: "/loans",
+        recordId: l.id,
+        sourceType: "loan_end",
+        daysLeft: daysUntil(l.loan_end_date),
+        icon: Landmark,
+        kind: "Loan",
+      });
     }
   }
 
   for (const inv of data.investments) {
-    const isILP = inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
+    const isILP =
+      inv.group_name === "ILP (Investment-Linked Policy)" || inv.group_name === "Endowment";
     if (!isILP) continue;
-    const occurrences = computeRecurringAlerts(inv.premium_start_date, inv.premium_frequency, inv.premium_end_date, today, horizonDays, !!inv.is_giro);
+    const occurrences = computeRecurringAlerts(
+      inv.premium_start_date,
+      inv.premium_frequency,
+      inv.premium_end_date,
+      today,
+      horizonDays,
+      !!inv.is_giro,
+    );
     for (const occ of occurrences) {
       items.push({
         date: occ.date,
@@ -335,19 +414,52 @@ export function buildUpcomingItems(
       });
     }
     if (within(inv.premium_end_date)) {
-      items.push({ date: inv.premium_end_date, label: `${inv.name} — premiums end`, amount: null, member_id: inv.member_id, href: "/investments", recordId: inv.id, sourceType: "investment_premium_end", daysLeft: daysUntil(inv.premium_end_date), icon: TrendingUp, kind: "Invest" });
+      items.push({
+        date: inv.premium_end_date,
+        label: `${inv.name} — premiums end`,
+        amount: null,
+        member_id: inv.member_id,
+        href: "/investments",
+        recordId: inv.id,
+        sourceType: "investment_premium_end",
+        daysLeft: daysUntil(inv.premium_end_date),
+        icon: TrendingUp,
+        kind: "Invest",
+      });
     }
   }
 
   for (const s of data.savings) {
     if (within(s.maturity_date, fdHorizon)) {
-      items.push({ date: s.maturity_date, label: `${s.institution ?? "FD"} matures`, amount: s.balance, member_id: s.member_id, href: "/savings", recordId: s.id, sourceType: "savings_maturity", daysLeft: daysUntil(s.maturity_date), icon: PiggyBank, kind: "Savings" });
+      items.push({
+        date: s.maturity_date,
+        label: `${s.institution ?? "FD"} matures`,
+        amount: s.balance,
+        member_id: s.member_id,
+        href: "/savings",
+        recordId: s.id,
+        sourceType: "savings_maturity",
+        daysLeft: daysUntil(s.maturity_date),
+        icon: PiggyBank,
+        kind: "Savings",
+      });
     }
   }
 
   for (const it of data.inventoryItems) {
     if (within(it.warranty_date, warrantyHorizon)) {
-      items.push({ date: it.warranty_date, label: `${it.name} — warranty/expiry`, amount: null, member_id: it.member_id, href: "/inventory", recordId: it.id, sourceType: "inventory_warranty", daysLeft: daysUntil(it.warranty_date), icon: Package, kind: "Inventory" });
+      items.push({
+        date: it.warranty_date,
+        label: `${it.name} — warranty/expiry`,
+        amount: null,
+        member_id: it.member_id,
+        href: "/inventory",
+        recordId: it.id,
+        sourceType: "inventory_warranty",
+        daysLeft: daysUntil(it.warranty_date),
+        icon: Package,
+        kind: "Inventory",
+      });
     }
   }
 
@@ -355,27 +467,47 @@ export function buildUpcomingItems(
   // no recurring frequency logic needed (unlike insurance/investment premiums).
   for (const c of data.creditCards ?? []) {
     if (within(c.points_expiry_date)) {
-      items.push({ date: c.points_expiry_date, label: `${c.name} — points/rewards expire`, amount: null, member_id: c.member_id, href: "/cards", recordId: c.id, sourceType: "card_points_expiry", daysLeft: daysUntil(c.points_expiry_date), icon: CreditCard, kind: "Card" });
+      items.push({
+        date: c.points_expiry_date,
+        label: `${c.name} — points/rewards expire`,
+        amount: null,
+        member_id: c.member_id,
+        href: "/cards",
+        recordId: c.id,
+        sourceType: "card_points_expiry",
+        daysLeft: daysUntil(c.points_expiry_date),
+        icon: CreditCard,
+        kind: "Card",
+      });
     }
   }
 
   // Map entity_type values to the already-loaded data arrays so we can look up
   // the entity's display name and member without an extra DB query.
   const entityLookup: Record<string, any[]> = {
-    property:   data.properties,
-    loan:       data.loans,
-    insurance:  data.insurance,
+    property: data.properties,
+    loan: data.loans,
+    insurance: data.insurance,
     investment: data.investments,
-    savings:    data.savings,
-    inventory:  data.inventoryItems,
+    savings: data.savings,
+    inventory: data.inventoryItems,
     other_asset: data.otherAssets ?? [],
     other_assets: data.otherAssets ?? [],
     credit_card: data.creditCards ?? [],
   };
 
   for (const r of data.reminders) {
-    const dateStr = r.remind_at.slice(0, 10);
-    if (within(dateStr)) {
+    // Recurring reminders (recurrence set): GIRO-style — remind_at is a fixed
+    // anchor, never overdue, always show the nearest computed occurrence.
+    // Circular import note: reminderRecurrence.ts imports computeNextOccurrence/
+    // formatDateOnly from THIS file, and this file imports computeNextReminderDate
+    // from it. Safe here — neither call happens at module-eval time, only inside
+    // function bodies invoked later (buildUpcomingItems here, whatever calls it
+    // there), so there's no temporal-dead-zone issue. Verified via the full build.
+    const dateStr = r.recurrence
+      ? computeNextReminderDate(r.remind_at, r.recurrence, r.recurrence_end_of_month, today)
+      : r.remind_at.slice(0, 10);
+    if (dateStr && within(dateStr)) {
       const href = reminderHref(r.entity_type);
       const recordId = r.entity_id ?? r.id;
 
@@ -384,16 +516,26 @@ export function buildUpcomingItems(
       const list = entityLookup[r.entity_type ?? ""] ?? [];
       const entity = r.entity_id ? list.find((e: any) => e.id === r.entity_id) : null;
       const entityName: string | null = entity
-        ? (entity.name || entity.bank || entity.institution || null)
+        ? entity.name || entity.bank || entity.institution || null
         : null;
       const entityMemberId: string | null = entity?.member_id ?? null;
 
       // Show "Policy Name — what you typed" so the card is immediately identifiable.
-      const label = entityName
-        ? `${entityName} — ${r.what ?? "Reminder"}`
-        : (r.what ?? "Reminder");
+      const label = entityName ? `${entityName} — ${r.what ?? "Reminder"}` : (r.what ?? "Reminder");
 
-      items.push({ date: dateStr, label, amount: null, member_id: entityMemberId, href, recordId, sourceType: "reminder", daysLeft: daysUntil(dateStr), icon: Bell, kind: "Reminder", reminderId: r.id });
+      items.push({
+        date: dateStr,
+        label,
+        amount: null,
+        member_id: entityMemberId,
+        href,
+        recordId,
+        sourceType: "reminder",
+        daysLeft: daysUntil(dateStr),
+        icon: Bell,
+        kind: "Reminder",
+        reminderId: r.id,
+      });
     }
   }
 
