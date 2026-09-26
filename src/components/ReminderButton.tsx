@@ -5,17 +5,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentRole } from "@/lib/useCurrentRole";
 import { useAppStore } from "@/lib/store";
+import { RECURRENCE_OPTIONS } from "@/lib/reminderRecurrence";
 
 export function ReminderButton({ entityType, entityId }: { entityType: string; entityId: string }) {
   const { canEdit } = useCurrentRole();
   const [open, setOpen] = useState(false);
   const [what, setWhat] = useState("");
   const [date, setDate] = useState("");
+  // "" = one-off, matching the reminders table's `recurrence` column (null = one-off).
+  // Kept a plain string here rather than "" | ReminderRecurrence — the native <select>'s
+  // onChange always hands back a string, so this avoids a cast on every keystroke.
+  const [recurrence, setRecurrence] = useState("");
+  const [endOfMonth, setEndOfMonth] = useState(false);
   const [saving, setSaving] = useState(false);
   const qc = useQueryClient();
   // Reactive on purpose (unlike the getState() read in save() below): the Sheet's
@@ -28,12 +36,22 @@ export function ReminderButton({ entityType, entityId }: { entityType: string; e
     if (!what || !date) return toast.error("What and date are required");
     setSaving(true);
     const remindAt = new Date(`${date}T12:00:00`).toISOString();
+    // "as any" on the insert object (not the whole .from(...) call, unlike some other
+    // tables in this app): the generated types.ts is stale and doesn't know about the
+    // recurrence/recurrence_end_of_month columns yet (added Sep 26 2026, see
+    // reminderRecurrence.ts). Same pattern used elsewhere in this app for columns
+    // added after the last type regeneration.
     const { error } = await supabase.from("reminders").insert({
       entity_type: entityType,
       entity_id: entityId,
       what,
       remind_at: remindAt,
-    });
+      // recurrence: "" (one-off, the default) is sent as null so it matches the
+      // column's own "no recurrence" value — same convention computeNextReminderDate
+      // and every other reader of this column expect.
+      recurrence: recurrence || null,
+      recurrence_end_of_month: recurrence === "monthly" ? endOfMonth : false,
+    } as any);
     setSaving(false);
     if (error) return toast.error(error.message);
     // Suppressed during a guided tour on purpose (Aug 28, 2026): the tour is
@@ -59,6 +77,8 @@ export function ReminderButton({ entityType, entityId }: { entityType: string; e
     setOpen(false);
     setWhat("");
     setDate("");
+    setRecurrence("");
+    setEndOfMonth(false);
   }
 
   return (
@@ -105,15 +125,48 @@ export function ReminderButton({ entityType, entityId }: { entityType: string; e
                 separate field markup (not RecordFormSheet's), so the
                 earlier fix there never applied here. */}
             <Label className="text-xs">What</Label>
-            <Input value={what} onChange={(e) => setWhat(e.target.value)} placeholder="e.g. Reprice loan" />
+            <Input
+              value={what}
+              onChange={(e) => setWhat(e.target.value)}
+              placeholder="e.g. Reprice loan"
+            />
           </div>
           <div className="space-y-1.5 p-1" data-tour="field-reminder-date">
             <Label className="text-xs">Date</Label>
             <DateInput value={date} onChange={setDate} className="h-9 w-full" />
           </div>
+          {/* Not a tour target on purpose — defaults to One-off, so Tour 2's four
+              existing stops (above and the Save button below) work exactly as
+              before with zero taps needed here. */}
+          <div className="space-y-1.5 p-1">
+            <Label className="text-xs">Repeat</Label>
+            <NativeSelect
+              value={recurrence}
+              onChange={(e) => {
+                setRecurrence(e.target.value);
+                if (e.target.value !== "monthly") setEndOfMonth(false);
+              }}
+            >
+              {RECURRENCE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </NativeSelect>
+            {recurrence === "monthly" && (
+              <label className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
+                <Checkbox checked={endOfMonth} onCheckedChange={(v) => setEndOfMonth(!!v)} />
+                Always the last day of the month
+              </label>
+            )}
+          </div>
           <div className="flex gap-2 pt-2">
-            <Button variant="outline" className="flex-1" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button className="flex-1" disabled={saving} onClick={save} data-tour="reminder-save">{saving ? "Saving…" : "Save Reminder"}</Button>
+            <Button variant="outline" className="flex-1" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button className="flex-1" disabled={saving} onClick={save} data-tour="reminder-save">
+              {saving ? "Saving…" : "Save Reminder"}
+            </Button>
           </div>
         </div>
       </SheetContent>
