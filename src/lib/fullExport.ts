@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { recordConfigs, type FieldDef, type SelectOption } from "@/lib/recordConfigs";
 import type { Member } from "@/hooks/useMembers";
 import { getDisplayUrl, getExportUrl } from "@/lib/storageUrls";
+import { recurrenceLabel } from "@/lib/reminderRecurrence";
 
 // Full household data export — one Excel sheet per record type (Properties,
 // Loans, Insurance, Investments, Savings & CPF, Other Assets, Health, Go-Bag,
@@ -405,12 +406,14 @@ function buildActivitySheets(args: {
         { header: "Item", key: "item", width: 30 },
         { header: "Reminder", key: "what", width: 40, wrap: true },
         { header: "Remind on", key: "remind_on", width: 14, numFmt: "dd mmm yyyy" },
+        { header: "Repeats", key: "repeats", width: 16 },
         { header: "Dismissed", key: "dismissed", width: 10 },
       ],
       rows: reminders.map((r) => ({
         ...describe(r.entity_type, r.entity_id),
         what: r.what ?? "",
         remind_on: singaporeDate(r.remind_at),
+        repeats: recurrenceLabel(r.recurrence, r.recurrence_end_of_month),
         dismissed: r.dismissed ? "Yes" : "No",
       })),
     },
