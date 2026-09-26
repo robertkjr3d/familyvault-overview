@@ -1,24 +1,26 @@
-import { formatDateOnly } from "./alerts";
+import { computeNextOccurrence, formatDateOnly } from "./alerts";
 
-// Recurring reminders (added Sep 26 2026). Deliberately a SEPARATE, much simpler
-// mechanism from the GIRO/insurance-premium recurring system in alerts.ts
-// (computeNextOccurrence/computeRecurringAlerts):
+// Recurring reminders (added Sep 26 2026, redesigned same day after real-world use).
 //
-// - GIRO/premiums are fully DERIVED — every upcoming occurrence within the
-//   dashboard's horizon is computed fresh from start_date/frequency each time,
-//   nothing is ever written back to the row.
-// - A recurring reminder instead ADVANCES IN PLACE, like Apple/Google Reminders:
-//   the same row's own remind_at is updated to the next date the moment the
-//   user marks it done. Only ONE future occurrence is ever visible at a time.
+// FIRST design tried was "advance in place": marking a recurring reminder done
+// updated its own remind_at forward to the next date. Replaced because it left
+// no way to actually delete a recurring reminder you no longer want — "Done"
+// was the only button, and it never removed the row, just kept moving it.
 //
-// This was a deliberate choice over copying the GIRO model outright: this app's
-// dashboard "mark done" table (dismissed_dashboard_items) uniquely keys a
-// reminder-sourced dismissal by the reminder's own id alone (not id+date) —
-// see index.tsx's dismissItem. Showing several future occurrences of the same
-// recurring reminder at once, GIRO-style, would make two different occurrences'
-// dismissals collide and overwrite each other under that key. Advancing a single
-// row in place sidesteps that entirely and needed zero changes to alerts.ts,
-// AlertsSheet.tsx, the dashboard's dismiss logic, or any RLS policy.
+// This version instead mirrors the GIRO-tagged insurance/investment premiums in
+// alerts.ts exactly: remind_at is a fixed ANCHOR date (like a premium's
+// start_date) that's never rewritten. The dashboard/entity page always shows
+// the nearest computed occurrence on/after today — same as computeNextOccurrence
+// — and it never goes "overdue"; a missed cycle just quietly rolls to the next
+// one, nothing for the user to act on. Marking "Done" on a reminder's own
+// record page (RemindersList.tsx) now always means "delete this reminder
+// entirely" — the ONLY way to remove one, recurring or not, matching how a
+// one-off reminder already worked. Dismissing a single occurrence from the
+// Dashboard's "X" (unchanged code, index.tsx's dismissItem) still just
+// suppresses that one date — since only one occurrence is ever shown at a
+// time for a reminder, next cycle's date won't match the old dismissal's key
+// and reappears on its own, with no schema change needed for this to work
+// correctly.
 
 export const RECURRENCE_OPTIONS: { value: "" | "weekly" | "monthly" | "yearly"; label: string }[] =
   [
@@ -40,27 +42,24 @@ export function recurrenceLabel(
 }
 
 /**
- * Given a recurring reminder's CURRENT remind_at, returns the date its "Done"
- * button should advance it to. Returns null for a one-off reminder (no
- * recurrence set) — callers should dismiss those the old way (dismissed = true)
- * instead of calling this.
+ * Given a recurring reminder's fixed anchor date (remind_at, never rewritten),
+ * returns the nearest occurrence ON OR AFTER today — GIRO-style: if the anchor
+ * itself is still in the future, returns it unchanged; if it's already passed,
+ * steps forward in whole intervals (skipping any number of missed cycles)
+ * until landing on/after today. Never returns a date in the past — a recurring
+ * reminder is never "overdue", the same rule computeRecurringAlerts uses for a
+ * GIRO-tagged premium (see alerts.ts).
  *
- * Always moves forward by AT LEAST one full interval from remind_at, even if
- * remind_at is already in the future (a reminder can be marked done early on
- * this app — RemindersList shows all of a record's reminders, not just due
- * ones) — this is why it does NOT reuse alerts.ts's computeNextOccurrence
- * directly: that function can return the SAME date unchanged when the start
- * date is already on/after today, which would make "Done" silently do
- * nothing for a not-yet-due recurring reminder. If several intervals have
- * been missed (the reminder was neglected), it keeps stepping forward until
- * landing on the next occurrence on or after today, so it never reappears
- * already overdue in the past — same rule computeNextOccurrence uses.
+ * Reuses alerts.ts's own computeNextOccurrence for the "monthly, same day of
+ * month" and "yearly" cases — that function already has exactly this
+ * on-or-after-today, re-derive-from-the-original-day-each-step behaviour, so
+ * there's no reason to duplicate it. Only "weekly" (not a supported frequency
+ * there) and "monthly + end of month" (no such option there) get their own
+ * small loops below.
  *
- * Monthly/yearly re-derive each candidate from the ORIGINAL remind_at day each
- * step (not by compounding off the previous step), clamped to each target
- * month's real length — e.g. a remind_at of Jan 31 with monthly recurrence
- * correctly lands on Feb 28 then Mar 31, not Feb 28 then Mar 28. Mirrors the
- * same clamping rule as computeNextOccurrence, for the same reason.
+ * Returns null for a one-off reminder (no recurrence set) — callers should
+ * just use remind_at directly in that case, exactly as before recurring
+ * reminders existed.
  */
 export function computeNextReminderDate(
   remindAt: string,
@@ -73,7 +72,7 @@ export function computeNextReminderDate(
   if (isNaN(start.getTime())) return null;
 
   if (recurrence === "weekly") {
-    let occurrence = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7);
+    let occurrence = new Date(start);
     let guard = 0;
     while (occurrence.getTime() < today.getTime() && guard < 1000) {
       occurrence = new Date(
@@ -86,34 +85,25 @@ export function computeNextReminderDate(
     return formatDateOnly(occurrence);
   }
 
-  if (recurrence === "monthly" || recurrence === "yearly") {
-    const intervalMonths = recurrence === "yearly" ? 12 : 1;
-
-    function occurrenceAt(monthsAdded: number): Date {
-      if (endOfMonth) {
-        // Last day of (start's month + monthsAdded) — day 0 of the month after rolls back one day.
-        return new Date(start.getFullYear(), start.getMonth() + monthsAdded + 1, 0);
-      }
-      const targetMonthIndex = start.getMonth() + monthsAdded;
-      const result = new Date(start.getFullYear(), targetMonthIndex, 1);
-      const lastDayOfTargetMonth = new Date(
-        result.getFullYear(),
-        result.getMonth() + 1,
-        0,
-      ).getDate();
-      result.setDate(Math.min(start.getDate(), lastDayOfTargetMonth));
-      return result;
-    }
-
-    let monthsAdded = intervalMonths; // always at least one full interval forward
-    let occurrence = occurrenceAt(monthsAdded);
+  if (recurrence === "monthly" && endOfMonth) {
+    let monthsAdded = 0;
+    // Last day of (start's month + monthsAdded) — day 0 of the month after rolls back one day.
+    let occurrence = new Date(start.getFullYear(), start.getMonth() + monthsAdded + 1, 0);
     let guard = 0;
     while (occurrence.getTime() < today.getTime() && guard < 1000) {
-      monthsAdded += intervalMonths;
-      occurrence = occurrenceAt(monthsAdded);
+      monthsAdded += 1;
+      occurrence = new Date(start.getFullYear(), start.getMonth() + monthsAdded + 1, 0);
       guard++;
     }
     return formatDateOnly(occurrence);
+  }
+
+  if (recurrence === "monthly") {
+    return computeNextOccurrence(remindAt, "monthly", null, today);
+  }
+
+  if (recurrence === "yearly") {
+    return computeNextOccurrence(remindAt, "annual", null, today);
   }
 
   return null; // one-off, or unrecognised recurrence value
