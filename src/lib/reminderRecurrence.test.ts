@@ -14,48 +14,50 @@ describe("computeNextReminderDate", () => {
     expect(computeNextReminderDate("not-a-date", "monthly", false, today)).toBeNull();
   });
 
-  it("weekly: steps forward exactly 7 days when already overdue", () => {
+  it("returns the anchor date itself, unchanged, when it's still in the future (GIRO-style — no forced advance)", () => {
+    expect(computeNextReminderDate("2026-07-05", "weekly", false, today)).toBe("2026-07-05");
+    expect(computeNextReminderDate("2026-07-05", "monthly", false, today)).toBe("2026-07-05");
+    expect(computeNextReminderDate("2026-07-05", "yearly", false, today)).toBe("2026-07-05");
+  });
+
+  it("monthly + end of month never returns the anchor's own day unchanged — it always resolves to that month's last day, even when the anchor is still in the future", () => {
+    expect(computeNextReminderDate("2026-07-05", "monthly", true, today)).toBe("2026-07-31");
+  });
+
+  it("returns the anchor date itself when it falls exactly on today", () => {
+    expect(computeNextReminderDate("2026-06-18", "weekly", false, today)).toBe("2026-06-18");
+  });
+
+  it("weekly: steps forward exactly 7 days at a time once the anchor is overdue", () => {
     expect(computeNextReminderDate("2026-06-15", "weekly", false, today)).toBe("2026-06-22");
   });
 
-  it("weekly: keeps stepping 7 days at a time past several missed weeks, landing on/after today", () => {
-    // Last occurrence was 2026-05-01 — many weeks ago.
+  it("weekly: neglected for months still lands on the nearest on/after today, not a pile of past ones", () => {
     expect(computeNextReminderDate("2026-05-01", "weekly", false, today)).toBe("2026-06-19");
   });
 
-  it("weekly: still advances a full 7 days even when remind_at is already in the future (marked done early)", () => {
-    expect(computeNextReminderDate("2026-07-01", "weekly", false, today)).toBe("2026-07-08");
+  it("monthly: clamps Jan 31 to Feb 28 in a non-leap year, then correctly back to Mar 31 (re-derives from the original day, doesn't compound)", () => {
+    expect(computeNextReminderDate("2026-01-31", "monthly", false, new Date(2026, 1, 1))).toBe(
+      "2026-02-28",
+    );
+    expect(computeNextReminderDate("2026-01-31", "monthly", false, new Date(2026, 2, 1))).toBe(
+      "2026-03-31",
+    );
   });
 
-  it("monthly: advances one month, same day of month", () => {
-    expect(computeNextReminderDate("2026-06-05", "monthly", false, today)).toBe("2026-07-05");
+  it("monthly + end of month: always lands on the last day of whichever month is next, regardless of the anchor's own day", () => {
+    expect(computeNextReminderDate("2026-06-05", "monthly", true, new Date(2026, 6, 1))).toBe(
+      "2026-07-31",
+    );
   });
 
-  it("monthly: clamps Jan 31 to Feb 28 in a non-leap year, then back to Mar 31 (re-derives from the original day, doesn't compound)", () => {
-    const jan31 = "2026-01-31";
-    const afterJan = computeNextReminderDate(jan31, "monthly", false, new Date(2026, 0, 31));
-    expect(afterJan).toBe("2026-02-28"); // 2026 is not a leap year
-    const afterFeb = computeNextReminderDate(jan31, "monthly", false, new Date(2026, 2, 1));
-    expect(afterFeb).toBe("2026-03-31"); // not dragged down to the 28th
-  });
-
-  it("monthly: still advances a full month even when remind_at is already in the future", () => {
-    expect(computeNextReminderDate("2026-07-05", "monthly", false, today)).toBe("2026-08-05");
-  });
-
-  it("monthly + end of month: always lands on the last day of the month, regardless of the original day", () => {
-    expect(computeNextReminderDate("2026-06-05", "monthly", true, today)).toBe("2026-07-31");
-  });
-
-  it("monthly + end of month: Jan 31 end-of-month reminder correctly lands on Feb 28, then Mar 31", () => {
-    const afterJan = computeNextReminderDate("2026-01-31", "monthly", true, new Date(2026, 0, 31));
-    expect(afterJan).toBe("2026-02-28");
-    const afterFeb = computeNextReminderDate("2026-01-31", "monthly", true, new Date(2026, 2, 1));
-    expect(afterFeb).toBe("2026-03-31");
-  });
-
-  it("yearly: advances one year, same month and day", () => {
-    expect(computeNextReminderDate("2026-06-05", "yearly", false, today)).toBe("2027-06-05");
+  it("monthly + end of month: Jan 31 end-of-month anchor correctly lands on Feb 28, then Mar 31", () => {
+    expect(computeNextReminderDate("2026-01-31", "monthly", true, new Date(2026, 1, 1))).toBe(
+      "2026-02-28",
+    );
+    expect(computeNextReminderDate("2026-01-31", "monthly", true, new Date(2026, 2, 1))).toBe(
+      "2026-03-31",
+    );
   });
 
   it("yearly: clamps Feb 29 (leap year) to Feb 28 the following year", () => {
