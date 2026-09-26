@@ -365,6 +365,40 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
     loans.filter((l: any) => l.property_id).map((l: any) => l.property_id)
   );
 
+  // Bug fix (Sep 26 2026): loan/mortgage principal repayment used to be
+  // treated as a 100% net-worth loss every year (the full monthly_payment,
+  // principal + interest, was subtracted from runningNetWorth via annualOut
+  // with no tracking of the loan's own shrinking balance). That's wrong —
+  // paying down principal moves money from cash to reduced debt, which is
+  // roughly net-worth-neutral; only the INTEREST portion of a payment is a
+  // real loss. Over a multi-decade projection with a real mortgage this made
+  // projected net worth look meaningfully worse than reality.
+  //
+  // Deliberately does NOT touch annualOut/outflowItems — those are real cash
+  // leaving the bank account (a mortgage payment IS real cash out, principal
+  // and interest both) and are read directly by YearDetailPanel.tsx to show
+  // "what went out this year". Changing what they mean would silently break
+  // that display. Instead, a separate `principalRepaidThisYear` amount is
+  // computed below and added back into runningNetWorth on top of annualNet,
+  // so the net-worth line only actually feels the interest portion.
+  //
+  // Per-loan/mortgage balance tracking (mirrors propValues/invValues/savValues
+  // above) — seeded from each loan's own `balance` field, or a mortgaged
+  // property's own `mortgage_balance` field. Only loans/mortgages with a rate
+  // present are tracked this way; ones with no rate keep today's exact
+  // behaviour (full payment counted as a net-worth loss) rather than guessing
+  // a rate — same "never guess" principle used elsewhere in this app.
+  const loanValues: Record<string, number> = {};
+  for (const l of loans) {
+    if (l.rate != null && l.rate !== "") loanValues[l.id] = Number(l.balance) || 0;
+  }
+  for (const p of properties) {
+    const isMortgagedViaLoan = mortgagedPropertyIds.has(p.id);
+    if (!isMortgagedViaLoan && p.interest_rate != null && p.interest_rate !== "") {
+      loanValues[`prop-${p.id}`] = Number(p.mortgage_balance) || 0;
+    }
+  }
+
   const years: ChartPoint[] = [];
 
   for (let i = 0; i < horizonYears; i++) {
@@ -374,6 +408,12 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
     const inflowItems: LineItem[] = [];
     const outflowItems: LineItem[] = [];
     const events: EventItem[] = [];
+    // Net-worth-neutral portion of this year's loan/mortgage payments (the
+    // principal portion, for loans/mortgages with a rate tracked above) —
+    // added back on top of annualNet below so only the interest portion of
+    // a payment actually reduces runningNetWorth. See the loanValues comment
+    // above for why this is separate from annualOut/outflowItems.
+    let principalRepaidThisYear = 0;
 
     // Salary — stops at retirement year
     const salaryActive = retirementYear === null || y < retirementYear;
@@ -422,6 +462,17 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
           const mortgage = Number(p.monthly_payment) * 12;
           annualOut += mortgage;
           outflowItems.push({ label: `${p.name || "Property"} mortgage`, amount: mortgage, href: propHref, timesPerYear: 12, member_id: p.member_id });
+
+          // Principal/interest split — only for mortgages with a tracked balance (rate present)
+          const mortgageKey = `prop-${p.id}`;
+          if (mortgageKey in loanValues) {
+            const openingBalance = loanValues[mortgageKey];
+            const interestForYear = openingBalance * (Number(p.interest_rate) / 100);
+            const principalPortion = Math.max(mortgage - interestForYear, 0);
+            const actualPrincipalPaid = Math.min(principalPortion, openingBalance);
+            loanValues[mortgageKey] = Math.max(openingBalance - actualPrincipalPaid, 0);
+            principalRepaidThisYear += actualPrincipalPaid;
+          }
         }
       }
 
@@ -441,6 +492,16 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
         const repayment = Number(l.monthly_payment) * 12;
         annualOut += repayment;
         outflowItems.push({ label: `${l.bank || "Loan"} repayment`, amount: repayment, href: `/loans#record-${l.id}`, timesPerYear: 12, member_id: l.member_id });
+
+        // Principal/interest split — only for loans with a tracked balance (rate present)
+        if (l.id in loanValues) {
+          const openingBalance = loanValues[l.id];
+          const interestForYear = openingBalance * (Number(l.rate) / 100);
+          const principalPortion = Math.max(repayment - interestForYear, 0);
+          const actualPrincipalPaid = Math.min(principalPortion, openingBalance);
+          loanValues[l.id] = Math.max(openingBalance - actualPrincipalPaid, 0);
+          principalRepaidThisYear += actualPrincipalPaid;
+        }
       }
       if (loanEndYear === y) {
         events.push({ label: `${l.bank || "Loan"} paid off`, href: `/loans#record-${l.id}`, member_id: l.member_id });
@@ -628,8 +689,11 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
     // Cash flow net (excludes property appreciation; includes investment/savings growth)
     const annualNet = annualIn - annualOut;
 
-    // Net worth: cash flow (which now includes investment growth) + property appreciation
-    runningNetWorth += annualNet + yearPropertyAppreciation;
+    // Net worth: cash flow (which now includes investment growth) + property
+    // appreciation + principal repaid this year (added back so only the
+    // interest portion of a loan/mortgage payment — already inside annualNet
+    // via annualOut — actually reduces net worth; see loanValues comment above)
+    runningNetWorth += annualNet + yearPropertyAppreciation + principalRepaidThisYear;
 
     // Dev-time sanity check: itemized lists must sum to the same totals
     // used for netWorth. If this ever warns, an item was missed or
