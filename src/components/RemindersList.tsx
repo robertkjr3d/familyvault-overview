@@ -26,52 +26,31 @@ export function RemindersList({ entityType, entityId }: { entityType: string; en
     },
   });
 
-  async function markDone(r: any) {
-    // Recurring reminders (recurrence set): ADVANCE the same row to its next
-    // occurrence instead of dismissing it — see reminderRecurrence.ts for why
-    // this app uses that model rather than showing several future occurrences
-    // at once. One-off reminders (recurrence null, the original/default
-    // behaviour) are unaffected — still dismissed outright, same as always.
-    const nextDate = r.recurrence
-      ? computeNextReminderDate(r.remind_at, r.recurrence, r.recurrence_end_of_month, new Date())
-      : null;
-
-    if (nextDate) {
-      // remind_at is always stored at local noon (see ReminderButton.tsx) — built
-      // the same way here so a recurring reminder's time-of-day stays consistent.
-      const nextRemindAt = new Date(`${nextDate}T12:00:00`).toISOString();
-      const { data, error } = await supabase
-        .from("reminders")
-        .update({ remind_at: nextRemindAt })
-        .eq("id", r.id)
-        .select("id")
-        .maybeSingle();
-      if (error) {
-        toast.error(error.message);
-        return;
-      }
-      if (!data) {
-        toast.error("Nothing was updated — you may not have permission to edit this.");
-        return;
-      }
-      toast.success(`Done — repeats, next on ${fmtDate(nextRemindAt)}`);
-    } else {
-      const { data, error } = await supabase
-        .from("reminders")
-        .update({ dismissed: true })
-        .eq("id", r.id)
-        .select("id")
-        .maybeSingle();
-      if (error) {
-        toast.error(error.message);
-        return;
-      }
-      if (!data) {
-        toast.error("Nothing was updated — you may not have permission to edit this.");
-        return;
-      }
-      toast.success("Reminder marked as done");
+  // "Done" always means "delete this reminder" — one-off or recurring. This is
+  // the ONLY way to remove a reminder from its record page, so it has to be a
+  // real delete, not a per-cycle "advance" (that was tried first and reverted
+  // Sep 26 2026 — see reminderRecurrence.ts for the full story — because it
+  // left no way to actually get rid of a recurring reminder you no longer
+  // want). A recurring reminder's own "next due date" is never edited here;
+  // it's computed fresh each render from its fixed anchor date, GIRO-style —
+  // dismissing THIS occurrence without deleting the series happens from the
+  // Dashboard's "X" button instead (unchanged code, index.tsx's dismissItem).
+  async function markDone(id: string) {
+    const { data, error } = await supabase
+      .from("reminders")
+      .update({ dismissed: true })
+      .eq("id", id)
+      .select("id")
+      .maybeSingle();
+    if (error) {
+      toast.error(error.message);
+      return;
     }
+    if (!data) {
+      toast.error("Nothing was updated — you may not have permission to edit this.");
+      return;
+    }
+    toast.success("Reminder removed");
     qc.invalidateQueries({ queryKey: ["reminders", entityType, entityId] });
     qc.invalidateQueries({ queryKey: ["alert-count"] });
     qc.invalidateQueries({ queryKey: ["alert-count-extras"] }); // alert-count itself no longer exists as a query (see householdRecordQueries.ts) - this is the key that actually needs invalidating now
@@ -91,7 +70,19 @@ export function RemindersList({ entityType, entityId }: { entityType: string; en
   return (
     <div className="space-y-1.5 pt-1">
       {reminders.map((r: any) => {
-        const isOverdue = new Date(r.remind_at) < new Date();
+        // Recurring reminders show their next computed occurrence (GIRO-style,
+        // never overdue) instead of the raw anchor date — same date the
+        // Dashboard shows, via alerts.ts's identical computation. One-off
+        // reminders are unchanged: raw remind_at, can show Overdue.
+        const displayDate = r.recurrence
+          ? (computeNextReminderDate(
+              r.remind_at,
+              r.recurrence,
+              r.recurrence_end_of_month,
+              new Date(),
+            ) ?? r.remind_at)
+          : r.remind_at;
+        const isOverdue = !r.recurrence && new Date(r.remind_at) < new Date();
         return (
           <div
             key={r.id}
@@ -108,7 +99,7 @@ export function RemindersList({ entityType, entityId }: { entityType: string; en
                 className={`text-[10px] ${isOverdue ? "text-yellow-600 dark:text-yellow-400 font-semibold" : "text-muted-foreground"}`}
               >
                 {isOverdue ? "Overdue · " : ""}
-                {fmtDate(r.remind_at)}
+                {fmtDate(displayDate)}
                 {r.recurrence
                   ? ` · ↻ ${recurrenceLabel(r.recurrence, r.recurrence_end_of_month)}`
                   : ""}
@@ -119,7 +110,7 @@ export function RemindersList({ entityType, entityId }: { entityType: string; en
                 size="sm"
                 variant="outline"
                 className="h-7 px-2 text-xs shrink-0"
-                onClick={() => markDone(r)}
+                onClick={() => markDone(r.id)}
               >
                 <Check className="h-3 w-3 mr-1" /> Done
               </Button>
