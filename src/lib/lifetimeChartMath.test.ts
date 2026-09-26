@@ -445,6 +445,98 @@ describe("projectLifetimeChart", () => {
     result.forEach((d) => expect(d.annualOut).toBe(12_000));
   });
 
+  // ── Loan/mortgage principal vs interest (bug fix, Sep 26 2026) ───────────
+  // A loan/mortgage payment is only PARTLY a real net-worth loss (the
+  // interest) — the principal portion just moves money from cash to
+  // reduced debt, roughly net-worth-neutral. annualOut/outflowItems must
+  // keep showing the FULL payment throughout (real cash out, unchanged),
+  // while netWorth should only actually drop by the interest portion, for
+  // any loan/mortgage that has a rate set.
+
+  it("with a loan balance+rate set, netWorth only drops by the interest portion while annualOut still shows the full payment", () => {
+    // $100k balance, 5% rate, $1,000/month ($12k/yr) payment.
+    // Year 1 interest = 100,000 * 0.05 = 5,000. Principal = 12,000 - 5,000 = 7,000.
+    const result = projectLifetimeChart({
+      ...base,
+      horizonYears: 1,
+      loans: [{ id: "l1", bank: "DBS", monthly_payment: 1_000, balance: 100_000, rate: 5 }],
+    });
+    expect(result[0].annualOut).toBe(12_000); // full payment, unchanged
+    expect(result[0].netWorth).toBe(-5_000); // only the interest portion
+  });
+
+  it("with a property's own mortgage balance+interest_rate set (not via a loans row), netWorth only drops by the interest portion", () => {
+    // $200k mortgage balance, 4% rate, $1,500/month ($18k/yr) payment.
+    // Year 1 interest = 200,000 * 0.04 = 8,000. Principal = 18,000 - 8,000 = 10,000.
+    const result = projectLifetimeChart({
+      ...base,
+      horizonYears: 1,
+      properties: [
+        {
+          id: "p1",
+          name: "Condo",
+          current_value: 0,
+          monthly_payment: 1_500,
+          mortgage_balance: 200_000,
+          interest_rate: 4,
+        },
+      ],
+    });
+    expect(result[0].annualOut).toBe(18_000); // full mortgage payment, unchanged
+    expect(result[0].netWorth).toBe(-8_000); // only the interest portion
+  });
+
+  it("does not let a loan's tracked balance go negative when scheduled principal would overpay it in its final year", () => {
+    // $5,000 balance, 5% rate, $2,000/month ($24k/yr) payment — the
+    // scheduled principal portion (~$23,750) vastly exceeds the $5,000
+    // balance remaining, so only $5,000 of principal can actually apply.
+    // Year 1: interest = 5,000 * 0.05 = 250; principal capped at the
+    // remaining $5,000 balance → netWorth drops by (24,000 - 5,000) = 19,000,
+    // NOT the full theoretical interest-only figure of 250.
+    // Year 2: balance is already 0, so nothing is tracked to repay anymore —
+    // the full payment counts as a loss that year (same as an untracked loan).
+    const result = projectLifetimeChart({
+      ...base,
+      horizonYears: 2,
+      loans: [{ id: "l1", bank: "DBS", monthly_payment: 2_000, balance: 5_000, rate: 5 }],
+    });
+    expect(result[0].netWorth).toBe(-19_000);
+    expect(result[1].netWorth).toBe(-19_000 - 24_000); // balance exhausted, full payment is now a loss
+    expect(result[0].annualOut).toBe(24_000);
+    expect(result[1].annualOut).toBe(24_000); // annualOut is never affected by balance tracking
+  });
+
+  it("respects loan_end_date for a loan that also has balance+rate set (both stop conditions still apply)", () => {
+    const result = projectLifetimeChart({
+      ...base,
+      horizonYears: 3,
+      loans: [
+        {
+          id: "l1",
+          bank: "DBS",
+          monthly_payment: 1_000,
+          balance: 100_000,
+          rate: 5,
+          loan_end_date: "2031-12-31",
+        },
+      ],
+    });
+    // 2030, 2031: active. 2032: loan_end_date passed → both annualOut AND
+    // the net-worth impact stop, same as the untracked-loan behaviour above.
+    expect(result[2].annualOut).toBe(0);
+    expect(result[2].netWorth).toBe(result[1].netWorth); // no further net-worth change once the loan ends
+  });
+
+  it("a loan with monthly_payment but no rate keeps today's exact behaviour — full payment counted as a net-worth loss", () => {
+    const result = projectLifetimeChart({
+      ...base,
+      horizonYears: 1,
+      loans: [{ id: "l1", bank: "DBS", monthly_payment: 1_000 }], // no balance, no rate
+    });
+    expect(result[0].annualOut).toBe(12_000);
+    expect(result[0].netWorth).toBe(-12_000); // unchanged regression guard — full payment still a loss
+  });
+
   // ── Insurance premiums ───────────────────────────────────────────────────
 
   it("deducts insurance premium only within its active date range", () => {
