@@ -5,6 +5,7 @@ import { Bell, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useCurrentRole } from "@/lib/useCurrentRole";
+import { computeNextReminderDate, recurrenceLabel } from "@/lib/reminderRecurrence";
 
 export function RemindersList({ entityType, entityId }: { entityType: string; entityId: string }) {
   const { canEdit } = useCurrentRole();
@@ -25,16 +26,52 @@ export function RemindersList({ entityType, entityId }: { entityType: string; en
     },
   });
 
-  async function markDone(id: string) {
-    const { data, error } = await supabase
-      .from("reminders")
-      .update({ dismissed: true })
-      .eq("id", id)
-      .select("id")
-      .maybeSingle();
-    if (error) { toast.error(error.message); return; }
-    if (!data) { toast.error("Nothing was updated — you may not have permission to edit this."); return; }
-    toast.success("Reminder marked as done");
+  async function markDone(r: any) {
+    // Recurring reminders (recurrence set): ADVANCE the same row to its next
+    // occurrence instead of dismissing it — see reminderRecurrence.ts for why
+    // this app uses that model rather than showing several future occurrences
+    // at once. One-off reminders (recurrence null, the original/default
+    // behaviour) are unaffected — still dismissed outright, same as always.
+    const nextDate = r.recurrence
+      ? computeNextReminderDate(r.remind_at, r.recurrence, r.recurrence_end_of_month, new Date())
+      : null;
+
+    if (nextDate) {
+      // remind_at is always stored at local noon (see ReminderButton.tsx) — built
+      // the same way here so a recurring reminder's time-of-day stays consistent.
+      const nextRemindAt = new Date(`${nextDate}T12:00:00`).toISOString();
+      const { data, error } = await supabase
+        .from("reminders")
+        .update({ remind_at: nextRemindAt })
+        .eq("id", r.id)
+        .select("id")
+        .maybeSingle();
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      if (!data) {
+        toast.error("Nothing was updated — you may not have permission to edit this.");
+        return;
+      }
+      toast.success(`Done — repeats, next on ${fmtDate(nextRemindAt)}`);
+    } else {
+      const { data, error } = await supabase
+        .from("reminders")
+        .update({ dismissed: true })
+        .eq("id", r.id)
+        .select("id")
+        .maybeSingle();
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      if (!data) {
+        toast.error("Nothing was updated — you may not have permission to edit this.");
+        return;
+      }
+      toast.success("Reminder marked as done");
+    }
     qc.invalidateQueries({ queryKey: ["reminders", entityType, entityId] });
     qc.invalidateQueries({ queryKey: ["alert-count"] });
     qc.invalidateQueries({ queryKey: ["alert-count-extras"] }); // alert-count itself no longer exists as a query (see householdRecordQueries.ts) - this is the key that actually needs invalidating now
@@ -59,14 +96,22 @@ export function RemindersList({ entityType, entityId }: { entityType: string; en
           <div
             key={r.id}
             className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${
-              isOverdue ? "border-yellow-400/40 bg-yellow-50/60 dark:bg-yellow-900/10" : "border-border bg-muted/40"
+              isOverdue
+                ? "border-yellow-400/40 bg-yellow-50/60 dark:bg-yellow-900/10"
+                : "border-border bg-muted/40"
             }`}
           >
             <Bell className={`h-3.5 w-3.5 shrink-0 fill-yellow-500 text-yellow-500`} />
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium truncate">{r.what}</p>
-              <p className={`text-[10px] ${isOverdue ? "text-yellow-600 dark:text-yellow-400 font-semibold" : "text-muted-foreground"}`}>
-                {isOverdue ? "Overdue · " : ""}{fmtDate(r.remind_at)}
+              <p
+                className={`text-[10px] ${isOverdue ? "text-yellow-600 dark:text-yellow-400 font-semibold" : "text-muted-foreground"}`}
+              >
+                {isOverdue ? "Overdue · " : ""}
+                {fmtDate(r.remind_at)}
+                {r.recurrence
+                  ? ` · ↻ ${recurrenceLabel(r.recurrence, r.recurrence_end_of_month)}`
+                  : ""}
               </p>
             </div>
             {canEdit && (
@@ -74,7 +119,7 @@ export function RemindersList({ entityType, entityId }: { entityType: string; en
                 size="sm"
                 variant="outline"
                 className="h-7 px-2 text-xs shrink-0"
-                onClick={() => markDone(r.id)}
+                onClick={() => markDone(r)}
               >
                 <Check className="h-3 w-3 mr-1" /> Done
               </Button>
