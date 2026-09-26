@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { computeNextOccurrence, computeRecurringAlerts, buildUpcomingItems, reminderHref } from "./alerts";
+import {
+  computeNextOccurrence,
+  computeRecurringAlerts,
+  buildUpcomingItems,
+  reminderHref,
+} from "./alerts";
 
 describe("computeNextOccurrence", () => {
   const today = new Date(2026, 5, 18); // 18 Jun 2026
@@ -52,7 +57,12 @@ describe("computeNextOccurrence", () => {
   it("clamps correctly into a leap-year February", () => {
     const next = computeNextOccurrence("2026-01-31", "monthly", null, new Date(2028, 0, 30)); // late Jan 2028 (leap year)
     expect(next).toBe("2028-01-31");
-    const nextAfterThat = computeNextOccurrence("2026-01-31", "monthly", null, new Date(2028, 1, 1)); // 1 Feb 2028
+    const nextAfterThat = computeNextOccurrence(
+      "2026-01-31",
+      "monthly",
+      null,
+      new Date(2028, 1, 1),
+    ); // 1 Feb 2028
     expect(nextAfterThat).toBe("2028-02-29");
   });
 
@@ -116,7 +126,9 @@ describe("computeRecurringAlerts", () => {
   });
 
   it("respects the end date — no occurrences at all once the schedule has fully ended", () => {
-    expect(computeRecurringAlerts("2020-01-01", "annual", "2025-01-01", today, 90, false)).toEqual([]);
+    expect(computeRecurringAlerts("2020-01-01", "annual", "2025-01-01", today, 90, false)).toEqual(
+      [],
+    );
   });
 
   it("respects the end date mid-schedule — stops generating occurrences past it, even for upcoming ones", () => {
@@ -150,8 +162,13 @@ describe("reminderHref", () => {
 describe("buildUpcomingItems", () => {
   const today = new Date(2026, 5, 18); // 18 Jun 2026
   const emptyData = {
-    properties: [], loans: [], insurance: [], investments: [],
-    savings: [], inventoryItems: [], reminders: [],
+    properties: [],
+    loans: [],
+    insurance: [],
+    investments: [],
+    savings: [],
+    inventoryItems: [],
+    reminders: [],
   };
 
   it("returns an empty array when there is no data", () => {
@@ -161,10 +178,22 @@ describe("buildUpcomingItems", () => {
   it("includes an insurance premium due within the horizon", () => {
     const data = {
       ...emptyData,
-      insurance: [{ id: "i1", name: "Term Life", start_date: "2025-07-01", frequency: "annual", end_date: null, premium: 1200, member_id: "m1" }],
+      insurance: [
+        {
+          id: "i1",
+          name: "Term Life",
+          start_date: "2025-07-01",
+          frequency: "annual",
+          end_date: null,
+          premium: 1200,
+          member_id: "m1",
+        },
+      ],
     };
     const items = buildUpcomingItems(data, today, 90);
-    expect(items.some((i) => i.sourceType === "insurance_next_due" && i.recordId === "i1")).toBe(true);
+    expect(items.some((i) => i.sourceType === "insurance_next_due" && i.recordId === "i1")).toBe(
+      true,
+    );
   });
 
   it("a non-GIRO insurance premium that's overdue by months stays visible as overdue, instead of being silently hidden (this was the actual production bug — see computeRecurringAlerts)", () => {
@@ -172,10 +201,22 @@ describe("buildUpcomingItems", () => {
       ...emptyData,
       // last occurrence was 2026-01-01 — over 5 months overdue relative to today (18 Jun 2026),
       // and the next occurrence (2027-01-01) is far outside a 90-day horizon
-      insurance: [{ id: "i1", name: "Term Life", start_date: "2025-01-01", frequency: "annual", end_date: null, premium: 1200, member_id: "m1" }],
+      insurance: [
+        {
+          id: "i1",
+          name: "Term Life",
+          start_date: "2025-01-01",
+          frequency: "annual",
+          end_date: null,
+          premium: 1200,
+          member_id: "m1",
+        },
+      ],
     };
     const items = buildUpcomingItems(data, today, 90);
-    const overdueItem = items.find((i) => i.sourceType === "insurance_next_due" && i.recordId === "i1");
+    const overdueItem = items.find(
+      (i) => i.sourceType === "insurance_next_due" && i.recordId === "i1",
+    );
     expect(overdueItem).toBeDefined();
     expect(overdueItem?.overdue).toBe(true);
     expect(overdueItem?.date).toBe("2026-01-01");
@@ -186,8 +227,26 @@ describe("buildUpcomingItems", () => {
     const data = {
       ...emptyData,
       investments: [
-        { id: "v1", name: "ILP Plan", group_name: "ILP (Investment-Linked Policy)", premium_start_date: "2025-07-01", premium_frequency: "annual", premium_end_date: null, premium_amount: 500, member_id: "m1" },
-        { id: "v2", name: "Index Fund", group_name: "Stocks", premium_start_date: "2025-07-01", premium_frequency: "annual", premium_end_date: null, premium_amount: 500, member_id: "m1" },
+        {
+          id: "v1",
+          name: "ILP Plan",
+          group_name: "ILP (Investment-Linked Policy)",
+          premium_start_date: "2025-07-01",
+          premium_frequency: "annual",
+          premium_end_date: null,
+          premium_amount: 500,
+          member_id: "m1",
+        },
+        {
+          id: "v2",
+          name: "Index Fund",
+          group_name: "Stocks",
+          premium_start_date: "2025-07-01",
+          premium_frequency: "annual",
+          premium_end_date: null,
+          premium_amount: 500,
+          member_id: "m1",
+        },
       ],
     };
     const items = buildUpcomingItems(data, today, 90);
@@ -199,7 +258,15 @@ describe("buildUpcomingItems", () => {
     const data = {
       ...emptyData,
       loans: [{ id: "l1", bank: "DBS", reprice_date: "2026-08-01", member_id: "m1" }],
-      savings: [{ id: "s1", institution: "OCBC", maturity_date: "2026-07-01", member_id: "m1", balance: 1000 }],
+      savings: [
+        {
+          id: "s1",
+          institution: "OCBC",
+          maturity_date: "2026-07-01",
+          member_id: "m1",
+          balance: 1000,
+        },
+      ],
     };
     const items = buildUpcomingItems(data, today, 90);
     const dates = items.map((i) => i.date);
@@ -209,25 +276,105 @@ describe("buildUpcomingItems", () => {
   it("maps a reminder's entity_type to the correct tab href", () => {
     const data = {
       ...emptyData,
-      reminders: [{ id: "r1", what: "Renew passport", remind_at: "2026-07-01T00:00:00Z", entity_type: "property", entity_id: "p1" }],
+      reminders: [
+        {
+          id: "r1",
+          what: "Renew passport",
+          remind_at: "2026-07-01T00:00:00Z",
+          entity_type: "property",
+          entity_id: "p1",
+        },
+      ],
     };
     const items = buildUpcomingItems(data, today, 90);
     const item = items.find((i) => i.sourceType === "reminder");
     expect(item?.href).toBe("/property");
+  });
+
+  it("a recurring reminder shows its NEXT computed occurrence, not its raw (possibly long-past) anchor date", () => {
+    const data = {
+      ...emptyData,
+      reminders: [
+        {
+          id: "r1",
+          what: "Pay condo maintenance",
+          entity_type: "property",
+          entity_id: "p1",
+          remind_at: "2026-01-15T00:00:00Z",
+          recurrence: "monthly",
+          recurrence_end_of_month: false,
+        },
+      ],
+    };
+    const items = buildUpcomingItems(data, today, 90);
+    const item = items.find((i) => i.sourceType === "reminder");
+    // Anchor is 15 Jan — long past relative to today (18 Jun) — next occurrence is 15 Jul, not 15 Jan.
+    expect(item?.date).toBe("2026-07-15");
+  });
+
+  it("a recurring reminder that's overdue by many cycles never appears as far in the past — it always shows the nearest on/after today (used a wide horizon here purely to make that date visible; a real 90-day dashboard view would correctly exclude something over 6 months out)", () => {
+    const data = {
+      ...emptyData,
+      reminders: [
+        {
+          id: "r1",
+          what: "Water the plants",
+          entity_type: "property",
+          entity_id: "p1",
+          remind_at: "2020-01-01T00:00:00Z",
+          recurrence: "yearly",
+          recurrence_end_of_month: false,
+        },
+      ],
+    };
+    const items = buildUpcomingItems(data, today, 400);
+    const item = items.find((i) => i.sourceType === "reminder");
+    expect(item?.date).toBe("2027-01-01");
+  });
+
+  it("a one-off reminder (no recurrence) still uses its own raw remind_at, unaffected by the recurring logic — even when overdue, it keeps showing at its original date (unchanged pre-existing behaviour)", () => {
+    const data = {
+      ...emptyData,
+      reminders: [
+        {
+          id: "r1",
+          what: "Call the plumber",
+          entity_type: "property",
+          entity_id: "p1",
+          remind_at: "2026-01-15T00:00:00Z",
+        },
+      ],
+    };
+    const items = buildUpcomingItems(data, today, 90);
+    const item = items.find((i) => i.sourceType === "reminder");
+    expect(item?.date).toBe("2026-01-15");
   });
 });
 
 describe("buildUpcomingItems — per-category day thresholds", () => {
   const today = new Date(2026, 5, 18); // 18 Jun 2026
   const emptyData = {
-    properties: [], loans: [], insurance: [], investments: [],
-    savings: [], inventoryItems: [], reminders: [],
+    properties: [],
+    loans: [],
+    insurance: [],
+    investments: [],
+    savings: [],
+    inventoryItems: [],
+    reminders: [],
   };
 
   it("omitting categoryDays entirely behaves exactly like before (no 4th arg)", () => {
     const data = {
       ...emptyData,
-      savings: [{ id: "s1", institution: "OCBC", maturity_date: "2026-08-15", member_id: "m1", balance: 1000 }],
+      savings: [
+        {
+          id: "s1",
+          institution: "OCBC",
+          maturity_date: "2026-08-15",
+          member_id: "m1",
+          balance: 1000,
+        },
+      ],
     };
     expect(buildUpcomingItems(data, today, 90).some((i) => i.recordId === "s1")).toBe(true);
   });
@@ -235,7 +382,15 @@ describe("buildUpcomingItems — per-category day thresholds", () => {
   it("a category threshold narrows the window — an FD maturing in 80 days is excluded once fd_days is set to 30", () => {
     const data = {
       ...emptyData,
-      savings: [{ id: "s1", institution: "OCBC", maturity_date: "2026-09-06", member_id: "m1", balance: 1000 }], // 80 days out
+      savings: [
+        {
+          id: "s1",
+          institution: "OCBC",
+          maturity_date: "2026-09-06",
+          member_id: "m1",
+          balance: 1000,
+        },
+      ], // 80 days out
     };
     const withoutThreshold = buildUpcomingItems(data, today, 90);
     expect(withoutThreshold.some((i) => i.recordId === "s1")).toBe(true);
@@ -247,7 +402,17 @@ describe("buildUpcomingItems — per-category day thresholds", () => {
   it("a category threshold cannot widen a view's horizon beyond what the view itself allows (e.g. the 30-day bell stays 30 days even if insurance_days is set to 90)", () => {
     const data = {
       ...emptyData,
-      insurance: [{ id: "i1", name: "Term Life", start_date: "2026-08-01", frequency: "annual", end_date: null, premium: 1200, member_id: "m1" }], // ~44 days out
+      insurance: [
+        {
+          id: "i1",
+          name: "Term Life",
+          start_date: "2026-08-01",
+          frequency: "annual",
+          end_date: null,
+          premium: 1200,
+          member_id: "m1",
+        },
+      ], // ~44 days out
     };
     const items = buildUpcomingItems(data, today, 30, { insurance_days: 90 });
     expect(items.some((i) => i.recordId === "i1")).toBe(false);
@@ -256,8 +421,26 @@ describe("buildUpcomingItems — per-category day thresholds", () => {
   it("category thresholds only affect their own category — a tight fd_days does not also hide insurance", () => {
     const data = {
       ...emptyData,
-      savings: [{ id: "s1", institution: "OCBC", maturity_date: "2026-09-06", member_id: "m1", balance: 1000 }], // 80 days out
-      insurance: [{ id: "i1", name: "Term Life", start_date: "2026-08-01", frequency: "annual", end_date: null, premium: 1200, member_id: "m1" }], // ~44 days out
+      savings: [
+        {
+          id: "s1",
+          institution: "OCBC",
+          maturity_date: "2026-09-06",
+          member_id: "m1",
+          balance: 1000,
+        },
+      ], // 80 days out
+      insurance: [
+        {
+          id: "i1",
+          name: "Term Life",
+          start_date: "2026-08-01",
+          frequency: "annual",
+          end_date: null,
+          premium: 1200,
+          member_id: "m1",
+        },
+      ], // ~44 days out
     };
     const items = buildUpcomingItems(data, today, 90, { fd_days: 14 });
     expect(items.some((i) => i.recordId === "s1")).toBe(false);
@@ -267,16 +450,40 @@ describe("buildUpcomingItems — per-category day thresholds", () => {
   it("categories without a configurable setting (investments, reminders) always use the base horizonDays, unaffected by other category overrides", () => {
     const data = {
       ...emptyData,
-      investments: [{ id: "v1", name: "ILP Plan", group_name: "ILP (Investment-Linked Policy)", premium_start_date: "2026-08-01", premium_frequency: "annual", premium_end_date: null, premium_amount: 500, member_id: "m1" }],
+      investments: [
+        {
+          id: "v1",
+          name: "ILP Plan",
+          group_name: "ILP (Investment-Linked Policy)",
+          premium_start_date: "2026-08-01",
+          premium_frequency: "annual",
+          premium_end_date: null,
+          premium_amount: 500,
+          member_id: "m1",
+        },
+      ],
     };
-    const items = buildUpcomingItems(data, today, 90, { fd_days: 7, insurance_days: 7, mortgage_days: 7, warranty_days: 7 });
+    const items = buildUpcomingItems(data, today, 90, {
+      fd_days: 7,
+      insurance_days: 7,
+      mortgage_days: 7,
+      warranty_days: 7,
+    });
     expect(items.some((i) => i.recordId === "v1")).toBe(true);
   });
 
   it("a null category override is treated the same as not providing one", () => {
     const data = {
       ...emptyData,
-      savings: [{ id: "s1", institution: "OCBC", maturity_date: "2026-08-15", member_id: "m1", balance: 1000 }],
+      savings: [
+        {
+          id: "s1",
+          institution: "OCBC",
+          maturity_date: "2026-08-15",
+          member_id: "m1",
+          balance: 1000,
+        },
+      ],
     };
     const items = buildUpcomingItems(data, today, 90, { fd_days: null });
     expect(items.some((i) => i.recordId === "s1")).toBe(true);
