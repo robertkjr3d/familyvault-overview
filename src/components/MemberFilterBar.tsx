@@ -171,10 +171,17 @@ export function MemberInitialDot({ memberId }: { memberId: string | null | undef
   // observed rather than what the contrast math technically prefers.
   const textColor = isDark ? "#000000" : "#ffffff";
   const letter = (m.short_name || m.name || "?").trim().charAt(0).toUpperCase();
+  // Centering fix (Sep 27 2026): flex `items-center justify-center` alone left
+  // the letter looking a hair left-of-center for some letters, on iOS Safari
+  // in particular — a known quirk where flex-centering a single small/bold
+  // text node doesn't always match its actual glyph bounds. Adding explicit
+  // `text-center` plus a fixed `lineHeight` (replacing `leading-none`, which
+  // can render asymmetrically top/bottom at this font size) makes the
+  // centering deterministic regardless of which letter it is.
   return (
     <span
-      className="mr-1.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none"
-      style={{ background: c, color: textColor }}
+      className="mr-1.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-center text-[9px] font-bold"
+      style={{ background: c, color: textColor, lineHeight: 1 }}
       title={m.short_name || m.name}
     >
       {letter}
