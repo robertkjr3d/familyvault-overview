@@ -53,9 +53,12 @@ export function CashflowOverYearsChart({
   const retirementYear = appSettings?.retirement_year != null ? Number(appSettings.retirement_year) : null;
   const cpfPayoutAge = appSettings?.cpf_payout_age != null ? Number(appSettings.cpf_payout_age) : 65;
   const cpfMonthlyPayout = appSettings?.cpf_monthly_payout != null ? Number(appSettings.cpf_monthly_payout) : 0;
-  const investmentGrowthRate = (appSettings?.investment_growth_rate != null ? Number(appSettings.investment_growth_rate) : 4) / 100;
-  const propertyAppreciationRate = (appSettings?.property_appreciation_rate != null ? Number(appSettings.property_appreciation_rate) : 2) / 100;
-  const inflationRate = (appSettings?.inflation_rate != null ? Number(appSettings.inflation_rate) : 2) / 100;
+  // Fallback of 0 (Sep 27 2026, was 4/2/2) — kept in sync with the identical
+  // fallback in LifetimeChart.tsx and with settings.tsx's own defaults, see
+  // that file's comment for why.
+  const investmentGrowthRate = (appSettings?.investment_growth_rate != null ? Number(appSettings.investment_growth_rate) : 0) / 100;
+  const propertyAppreciationRate = (appSettings?.property_appreciation_rate != null ? Number(appSettings.property_appreciation_rate) : 0) / 100;
+  const inflationRate = (appSettings?.inflation_rate != null ? Number(appSettings.inflation_rate) : 0) / 100;
   const planningHorizonAge = appSettings?.planning_horizon_age != null ? Number(appSettings.planning_horizon_age) : 85;
 
   const membersWithAge = members.filter((m) => m.birth_year);
