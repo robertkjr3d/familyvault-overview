@@ -127,9 +127,9 @@ function SettingsPage() {
   const [retirementYear, setRetirementYear] = useState<string>("");
   const [cpfPayoutAge, setCpfPayoutAge] = useState<string>("65");
   const [cpfMonthlyPayout, setCpfMonthlyPayout] = useState<string>("");
-  const [investmentGrowthRate, setInvestmentGrowthRate] = useState<string>("4");
-  const [propertyAppreciationRate, setPropertyAppreciationRate] = useState<string>("2");
-  const [inflationRate, setInflationRate] = useState<string>("2");
+  const [investmentGrowthRate, setInvestmentGrowthRate] = useState<string>("0");
+  const [propertyAppreciationRate, setPropertyAppreciationRate] = useState<string>("0");
+  const [inflationRate, setInflationRate] = useState<string>("0");
   const [planningHorizonAge, setPlanningHorizonAge] = useState<string>("85");
 
   const [theme, setTheme] = useState<"light" | "dark">(() =>
@@ -1258,7 +1258,7 @@ function SettingsPage() {
           </div>
           <div className="grid grid-cols-3 items-start gap-3">
             <div>
-              <label className="block text-xs font-medium text-muted-foreground">
+              <label className="block min-h-[2rem] text-xs font-medium text-muted-foreground">
                 Investment growth (%)
               </label>
               <input
@@ -1267,13 +1267,13 @@ function SettingsPage() {
                 max="30"
                 step="0.5"
                 className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                placeholder="4"
+                placeholder="0"
                 value={investmentGrowthRate}
                 onChange={(e) => setInvestmentGrowthRate(e.target.value)}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground">
+              <label className="block min-h-[2rem] text-xs font-medium text-muted-foreground">
                 Property growth (%)
               </label>
               <input
@@ -1282,13 +1282,13 @@ function SettingsPage() {
                 max="20"
                 step="0.5"
                 className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                placeholder="2"
+                placeholder="0"
                 value={propertyAppreciationRate}
                 onChange={(e) => setPropertyAppreciationRate(e.target.value)}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground">
+              <label className="block min-h-[2rem] text-xs font-medium text-muted-foreground">
                 Inflation (%)
               </label>
               <input
@@ -1297,13 +1297,12 @@ function SettingsPage() {
                 max="20"
                 step="0.5"
                 className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                placeholder="2"
+                placeholder="0"
                 value={inflationRate}
                 onChange={(e) => setInflationRate(e.target.value)}
               />
               <p className="mt-0.5 text-[10px] text-muted-foreground">
-                Grows living expenses &amp; property running costs only — not loan repayments,
-                insurance/ILP premiums, or planned events
+                Grows living expenses &amp; property running costs only
               </p>
             </div>
           </div>
@@ -1316,10 +1315,10 @@ function SettingsPage() {
               cpf_payout_age: parseInt(cpfPayoutAge) || 65,
               cpf_monthly_payout: parseFloat(cpfMonthlyPayout) || 0,
               investment_growth_rate:
-                investmentGrowthRate === "" ? 4 : parseFloat(investmentGrowthRate),
+                investmentGrowthRate === "" ? 0 : parseFloat(investmentGrowthRate),
               property_appreciation_rate:
-                propertyAppreciationRate === "" ? 2 : parseFloat(propertyAppreciationRate),
-              inflation_rate: inflationRate === "" ? 2 : parseFloat(inflationRate),
+                propertyAppreciationRate === "" ? 0 : parseFloat(propertyAppreciationRate),
+              inflation_rate: inflationRate === "" ? 0 : parseFloat(inflationRate),
               planning_horizon_age: parseInt(planningHorizonAge) || 85,
             })
           }
