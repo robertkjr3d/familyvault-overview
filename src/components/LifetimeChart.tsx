@@ -54,9 +54,14 @@ export function LifetimeChart({
   const retirementYear = appSettings?.retirement_year != null ? Number(appSettings.retirement_year) : null;
   const cpfPayoutAge = appSettings?.cpf_payout_age != null ? Number(appSettings.cpf_payout_age) : 65;
   const cpfMonthlyPayout = appSettings?.cpf_monthly_payout != null ? Number(appSettings.cpf_monthly_payout) : 0;
-  const investmentGrowthRate = (appSettings?.investment_growth_rate != null ? Number(appSettings.investment_growth_rate) : 4) / 100;
-  const propertyAppreciationRate = (appSettings?.property_appreciation_rate != null ? Number(appSettings.property_appreciation_rate) : 2) / 100;
-  const inflationRate = (appSettings?.inflation_rate != null ? Number(appSettings.inflation_rate) : 2) / 100;
+  // Fallback of 0 (Sep 27 2026, was 4/2/2) — a household that's never opened Settings
+  // and saved these should see the chart make NO growth/inflation assumptions by
+  // default, matching what Settings itself now shows for an unset value. Kept in
+  // sync with the identical fallback in CashflowOverYearsChart.tsx and with
+  // settings.tsx's own defaults — all three read/write the same 3 columns.
+  const investmentGrowthRate = (appSettings?.investment_growth_rate != null ? Number(appSettings.investment_growth_rate) : 0) / 100;
+  const propertyAppreciationRate = (appSettings?.property_appreciation_rate != null ? Number(appSettings.property_appreciation_rate) : 0) / 100;
+  const inflationRate = (appSettings?.inflation_rate != null ? Number(appSettings.inflation_rate) : 0) / 100;
   const planningHorizonAge = appSettings?.planning_horizon_age != null ? Number(appSettings.planning_horizon_age) : 85;
 
   // Derive oldest member's birth year for accurate horizon and CPF calculation
