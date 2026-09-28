@@ -7,6 +7,7 @@ import { useMembers } from "@/hooks/useMembers";
 import { useAppStore } from "@/lib/store";
 import { Trash2 } from "lucide-react";
 import { fmtMoney, fmtDate, convertToSgd } from "@/lib/format";
+import { unlinkedMortgageProperties } from "@/lib/netWorthMath";
 import { isCpfAccountType } from "@/lib/options";
 import { recordConfigs } from "@/lib/recordConfigs";
 import { restoreTrashRow, purgeTrashRowStorage } from "@/lib/mutations";
@@ -559,11 +560,24 @@ function SettingsPage() {
               : 0),
           0,
         );
-      const totalLiabilitiesVal = loans.reduce(
-        (s: number, l: any) =>
-          s + toSgd(l.balance, l.currency, `${ownerLabel(l.member_id)} — ${l.bank ?? "Loan"}`),
-        0,
-      );
+      // Loans-tab balances PLUS any property's own mortgage_balance that has no
+      // linked Loans-tab row (same rule as the dashboard — see netWorthMath.ts).
+      const totalLiabilitiesVal =
+        loans.reduce(
+          (s: number, l: any) =>
+            s + toSgd(l.balance, l.currency, `${ownerLabel(l.member_id)} — ${l.bank ?? "Loan"}`),
+          0,
+        ) +
+        unlinkedMortgageProperties(properties, loans).reduce(
+          (s: number, p: any) =>
+            s +
+            toSgd(
+              p.mortgage_balance,
+              p.currency,
+              `${ownerLabel(p.member_id)} — ${p.name ?? "Property"} (mortgage)`,
+            ),
+          0,
+        );
 
       children.push(new Paragraph({ text: "Household Summary", heading: HeadingLevel.HEADING_1 }));
       children.push(
@@ -630,10 +644,22 @@ function SettingsPage() {
                 : 0),
             0,
           );
-        const ownLiabilitiesSgd = ownLoans.reduce(
-          (s: number, l: any) => s + toSgd(l.balance, l.currency, `${label} — ${l.bank ?? "Loan"}`),
-          0,
-        );
+        const ownLiabilitiesSgd =
+          ownLoans.reduce(
+            (s: number, l: any) =>
+              s + toSgd(l.balance, l.currency, `${label} — ${l.bank ?? "Loan"}`),
+            0,
+          ) +
+          unlinkedMortgageProperties(ownProps, loans).reduce(
+            (s: number, p: any) =>
+              s +
+              toSgd(
+                p.mortgage_balance,
+                p.currency,
+                `${label} — ${p.name ?? "Property"} (mortgage)`,
+              ),
+            0,
+          );
         children.push(
           makeTable(
             ["", "Amount (SGD)"],
