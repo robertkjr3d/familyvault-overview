@@ -538,9 +538,11 @@ export const listAdvisorsForHousehold = createServerFn({ method: "POST" })
 // totalWithFx functions and replicates its exact formula (traced directly
 // from src/routes/index.tsx, not re-derived) so an advisor's figure can
 // never silently drift from what the family sees on their own dashboard.
-// Mortgage debt is NOT subtracted from property value here, on purpose —
-// the family's own formula doesn't do that either; it's captured entirely
-// via the separate loans total.
+// Liabilities = the loans total PLUS the mortgage_balance of any property
+// that has no linked loans row (source_type "property_mortgage", emitted by
+// the view). Matches the family dashboard's own formula, which was corrected
+// Sep 28 2026 — before that, a mortgage entered only on the Property tab was
+// never subtracted anywhere, for the family or the adviser.
 export const getAdvisorNetworthSummary = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(networthPayloadSchema)
@@ -615,10 +617,15 @@ export const getAdvisorNetworthSummary = createServerFn({ method: "POST" })
         savingsValue +
         otherAssetsValue +
         insuranceSurrenderValue;
-      const totalLiabilities = totalWithFx(
-        groupByCurrency(byType("loan"), (r) => r.amount),
-        fxRates,
-      );
+      const totalLiabilities =
+        totalWithFx(
+          groupByCurrency(byType("loan"), (r) => r.amount),
+          fxRates,
+        ) +
+        totalWithFx(
+          groupByCurrency(byType("property_mortgage"), (r) => r.amount),
+          fxRates,
+        );
       const netWorth = totalAssets - totalLiabilities;
 
       return {
