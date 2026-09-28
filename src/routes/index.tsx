@@ -1017,6 +1017,13 @@ function Dashboard() {
                 className="text-urgent"
               />
             )}
+            {propertyMortgageValue > 0 && loans.some((l: any) => !l.property_id) && (
+              <p className="text-[10px] text-muted-foreground">
+                Property mortgages come from each property's own Mortgage balance (no loan is linked
+                to it). If you also entered the same mortgage in Loans, link that loan to the
+                property so it isn't counted twice.
+              </p>
+            )}
             <BreakdownRow
               label="Total Liabilities"
               value={`−${fmtMoney(totalLiabilities)}`}
