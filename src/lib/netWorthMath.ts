@@ -9,7 +9,7 @@
 // when no Loans-tab row is linked to that property, so one debt is never
 // counted twice and a debt entered only on the Property tab is never missed.
 // (The adviser dashboard applies the same rule in SQL: see
-// supabase/migrations/20260928120000_advisor_networth_property_mortgage.sql.)
+// supabase/schema.sql: view advisor_networth_components_view.)
 
 type PropertyLike = { id?: string | null; mortgage_balance?: number | string | null };
 type LoanLike = { property_id?: string | null };
