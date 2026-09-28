@@ -53,6 +53,33 @@ export type ChartPoint = {
 // fields) to how many times per year it occurs, for the Year Detail frequency
 // column and the dashboard's "÷12" cash-flow annotation. Defaults to 1
 // (annual / single occurrence) for unrecognised or one-off values.
+/**
+ * Principal repaid over one 12-month year on an amortizing loan, computed
+ * month by month (interest each month = remaining balance x annual rate / 12).
+ * Previously the projection charged a whole year's interest on the OPENING
+ * balance, which slightly overstated interest (and understated principal
+ * repaid) because the balance actually shrinks every month. Never repays more
+ * than the remaining balance; a payment smaller than the monthly interest
+ * repays no principal (same "never below zero" behaviour as before).
+ */
+export function principalPaidOverYear(
+  openingBalance: number,
+  annualRatePct: number,
+  monthlyPayment: number,
+): number {
+  let balance = Math.max(Number(openingBalance) || 0, 0);
+  const monthlyRate = (Number(annualRatePct) || 0) / 100 / 12;
+  const payment = Number(monthlyPayment) || 0;
+  let paid = 0;
+  for (let m = 0; m < 12 && balance > 0; m++) {
+    const interest = balance * monthlyRate;
+    const principal = Math.min(Math.max(payment - interest, 0), balance);
+    balance -= principal;
+    paid += principal;
+  }
+  return paid;
+}
+
 export function freqTimesPerYear(freq: string | null | undefined): number {
   const f = (freq || "annual").toLowerCase();
   if (f.includes("month")) return 12;
@@ -467,9 +494,11 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
           const mortgageKey = `prop-${p.id}`;
           if (mortgageKey in loanValues) {
             const openingBalance = loanValues[mortgageKey];
-            const interestForYear = openingBalance * (Number(p.interest_rate) / 100);
-            const principalPortion = Math.max(mortgage - interestForYear, 0);
-            const actualPrincipalPaid = Math.min(principalPortion, openingBalance);
+            const actualPrincipalPaid = principalPaidOverYear(
+              openingBalance,
+              Number(p.interest_rate),
+              Number(p.monthly_payment),
+            );
             loanValues[mortgageKey] = Math.max(openingBalance - actualPrincipalPaid, 0);
             principalRepaidThisYear += actualPrincipalPaid;
           }
@@ -496,9 +525,11 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
         // Principal/interest split — only for loans with a tracked balance (rate present)
         if (l.id in loanValues) {
           const openingBalance = loanValues[l.id];
-          const interestForYear = openingBalance * (Number(l.rate) / 100);
-          const principalPortion = Math.max(repayment - interestForYear, 0);
-          const actualPrincipalPaid = Math.min(principalPortion, openingBalance);
+          const actualPrincipalPaid = principalPaidOverYear(
+            openingBalance,
+            Number(l.rate),
+            Number(l.monthly_payment),
+          );
           loanValues[l.id] = Math.max(openingBalance - actualPrincipalPaid, 0);
           principalRepaidThisYear += actualPrincipalPaid;
         }
