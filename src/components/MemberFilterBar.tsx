@@ -171,20 +171,38 @@ export function MemberInitialDot({ memberId }: { memberId: string | null | undef
   // observed rather than what the contrast math technically prefers.
   const textColor = isDark ? "#000000" : "#ffffff";
   const letter = (m.short_name || m.name || "?").trim().charAt(0).toUpperCase();
-  // Centering fix (Sep 27 2026): flex `items-center justify-center` alone left
-  // the letter looking a hair left-of-center for some letters, on iOS Safari
-  // in particular — a known quirk where flex-centering a single small/bold
-  // text node doesn't always match its actual glyph bounds. Adding explicit
-  // `text-center` plus a fixed `lineHeight` (replacing `leading-none`, which
-  // can render asymmetrically top/bottom at this font size) makes the
-  // centering deterministic regardless of which letter it is.
+  // Centering fix v2 (Sep 27 2026): the first attempt (text-align + fixed
+  // line-height on a flex-centered <span>) didn't actually fix it — user
+  // confirmed the letter was still off-center after that deploy. The real
+  // cause is more fundamental: CSS box-model centering (flexbox or
+  // text-align) centers a text glyph's ADVANCE WIDTH, which bakes in each
+  // font's own left/right side-bearings — those differ per letter, so no
+  // amount of box-centering CSS can make every single letter look visually
+  // centered at once, no matter how it's tuned. Switched to SVG instead:
+  // `text-anchor="middle"` + `dominant-baseline="central"` center the text
+  // node directly around a fixed coordinate, which is how the letter's
+  // actual rendered glyph is measured, not its box — the standard, reliable
+  // fix for this exact "avatar initial looks off-center" problem.
   return (
-    <span
-      className="mr-1.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-center text-[9px] font-bold"
-      style={{ background: c, color: textColor, lineHeight: 1 }}
-      title={m.short_name || m.name}
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      className="mr-1.5 inline-block shrink-0 align-middle"
     >
-      {letter}
-    </span>
+      <title>{m.short_name || m.name}</title>
+      <circle cx="8" cy="8" r="8" fill={c} />
+      <text
+        x="8"
+        y="8"
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontSize="9"
+        fontWeight="bold"
+        fill={textColor}
+      >
+        {letter}
+      </text>
+    </svg>
   );
 }
