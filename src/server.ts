@@ -6,6 +6,7 @@ import { runFxRateFetch } from "./lib/fxRateCron";
 import { runTrashCleanup } from "./lib/trashCleanupCron";
 import { runDailyBackup } from "./lib/backupCron";
 import { reportToSentry } from "./lib/sentryReport";
+import { jobsForCron } from "./lib/scheduledJobs";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -113,7 +114,7 @@ export default {
   // the same SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY already configured for
   // the Worker — no new Cloudflare-side config needed.
   async scheduled(
-    _event: unknown,
+    event: { cron?: string },
     env: {
       SUPABASE_URL?: string;
       SUPABASE_SERVICE_ROLE_KEY?: string;
@@ -124,12 +125,14 @@ export default {
     },
     ctx: { waitUntil: (promise: Promise<unknown>) => void },
   ) {
-    // All three functions catch their own errors internally and never
-    // throw, so one failing (e.g. Frankfurter is down) never prevents the
-    // others from running. Deliberately sharing this one trigger rather
-    // than adding more — see trashCleanupCron.ts for why.
-    ctx.waitUntil(runFxRateFetch(env));
-    ctx.waitUntil(runTrashCleanup(env));
-    ctx.waitUntil(runDailyBackup(env));
+    // Each job catches its own errors internally and never throws. Which jobs
+    // run depends on which Cron Trigger fired (see src/lib/scheduledJobs.ts):
+    // the backup gets an invocation to itself so it has its own budget of 50
+    // outside requests on Cloudflare's free plan (Sep 28 2026 fix — it was
+    // failing with "Too many subrequests" when sharing one with the others).
+    const jobs = jobsForCron(event?.cron);
+    if (jobs.includes("fx")) ctx.waitUntil(runFxRateFetch(env));
+    if (jobs.includes("trash")) ctx.waitUntil(runTrashCleanup(env));
+    if (jobs.includes("backup")) ctx.waitUntil(runDailyBackup(env));
   },
 };
