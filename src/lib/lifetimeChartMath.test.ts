@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   freqTimesPerYear,
+  principalPaidOverYear,
   fmt,
   computeCashflowDomain,
   insuranceAnnual,
@@ -462,7 +463,7 @@ describe("projectLifetimeChart", () => {
       loans: [{ id: "l1", bank: "DBS", monthly_payment: 1_000, balance: 100_000, rate: 5 }],
     });
     expect(result[0].annualOut).toBe(12_000); // full payment, unchanged
-    expect(result[0].netWorth).toBe(-5_000); // only the interest portion
+    expect(result[0].netWorth).toBeCloseTo(-4_837, 0); // only the interest portion
   });
 
   it("with a property's own mortgage balance+interest_rate set (not via a loans row), netWorth only drops by the interest portion", () => {
@@ -483,7 +484,7 @@ describe("projectLifetimeChart", () => {
       ],
     });
     expect(result[0].annualOut).toBe(18_000); // full mortgage payment, unchanged
-    expect(result[0].netWorth).toBe(-8_000); // only the interest portion
+    expect(result[0].netWorth).toBeCloseTo(-7_815, 0); // only the interest portion
   });
 
   it("does not let a loan's tracked balance go negative when scheduled principal would overpay it in its final year", () => {
@@ -1202,5 +1203,21 @@ describe("computeCashflowDomain", () => {
     const { min, max } = computeCashflowDomain([50_000, 80_000, 30_000]);
     expect(max).toBeGreaterThanOrEqual(80_000);
     expect(min).toBeLessThanOrEqual(0);
+  });
+});
+
+describe("principalPaidOverYear (monthly amortization)", () => {
+  it("matches a hand-checked year: $100k at 5%, $1,000/month repays about $7,163 of principal", () => {
+    expect(principalPaidOverYear(100_000, 5, 1_000)).toBeCloseTo(7_163, 0);
+  });
+  it("never repays more than the remaining balance", () => {
+    expect(principalPaidOverYear(500, 5, 1_000)).toBeCloseTo(500, 6);
+  });
+  it("repays no principal when the payment does not cover the monthly interest", () => {
+    expect(principalPaidOverYear(1_000_000, 6, 1_000)).toBe(0);
+  });
+  it("handles a zero balance or missing inputs safely", () => {
+    expect(principalPaidOverYear(0, 5, 1_000)).toBe(0);
+    expect(principalPaidOverYear(100_000, 0, 1_000)).toBeCloseTo(12_000, 6);
   });
 });
