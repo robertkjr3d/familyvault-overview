@@ -2,7 +2,15 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToday } from "@/lib/today";
-import { fmtMoney, fmtDate, fmtMonth, groupByCurrency, totalWithFx, convertToSgd, type FxRates } from "@/lib/format";
+import {
+  fmtMoney,
+  fmtDate,
+  fmtMonth,
+  groupByCurrency,
+  totalWithFx,
+  convertToSgd,
+  type FxRates,
+} from "@/lib/format";
 import { useFxRates } from "@/hooks/useFxRates";
 import { FxInfoNote } from "@/components/FxInfoNote";
 import { isCpfAccountType } from "@/lib/options";
@@ -24,7 +32,21 @@ import {
   creditCardMonthlyFee,
 } from "@/lib/lifetimeChartMath";
 import type { LineItem } from "@/lib/lifetimeChartMath";
-import { ChevronRight, Building2, Shield, Landmark, TrendingUp, ChevronDown, Check, Info, Gem, Heart, Wallet, Package, CreditCard } from "lucide-react";
+import {
+  ChevronRight,
+  Building2,
+  Shield,
+  Landmark,
+  TrendingUp,
+  ChevronDown,
+  Check,
+  Info,
+  Gem,
+  Heart,
+  Wallet,
+  Package,
+  CreditCard,
+} from "lucide-react";
 import { useState, useRef, useEffect, lazy, Suspense, type ReactNode } from "react";
 import { fmtPct } from "@/lib/format";
 import { HashHighlight } from "@/components/HashHighlight";
@@ -50,1414 +72,1952 @@ import { useCurrentRole } from "@/lib/useCurrentRole";
 // dashboard (KPI cards, due-soon list, cash flow) paints and becomes
 // interactive without waiting on recharts to download and parse first.
 const LifetimeChart = lazy(() =>
-import("@/components/LifetimeChart").then((m) => ({ default: m.LifetimeChart }))
+  import("@/components/LifetimeChart").then((m) => ({ default: m.LifetimeChart })),
 );
 // Same reasoning as LifetimeChart above — this also pulls in recharts, so
 // it needs the same lazy-loading treatment or the whole point of deferring
 // recharts is defeated (Aug 29, 2026).
 const CashflowOverYearsChart = lazy(() =>
-import("@/components/CashflowOverYearsChart").then((m) => ({ default: m.CashflowOverYearsChart }))
+  import("@/components/CashflowOverYearsChart").then((m) => ({
+    default: m.CashflowOverYearsChart,
+  })),
 );
 
 export const Route = createFileRoute("/")({
-component: Dashboard,
-head: () => ({ meta: [{ title: "Home — FamilyHub SG" }] }),
+  component: Dashboard,
+  head: () => ({ meta: [{ title: "Home — FamilyHub SG" }] }),
 });
 
 function Dashboard() {
-const { today } = useToday();
-const memberFilter = useAppStore((s) => s.memberFilter);
-const setMemberFilter = useAppStore((s) => s.setMemberFilter);
-const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
-const { canEdit } = useCurrentRole();
-const { data: members = [] } = useMembers();
-const [breakdownOpen, setBreakdownOpen] = useState(false);
-const [cashFlowDetailOpen, setCashFlowDetailOpen] = useState(false);
-const [editMode, setEditMode] = useState(false);
-const [dismissing, setDismissing] = useState<string | null>(null);
-const [showAllUpcoming, setShowAllUpcoming] = useState(false);
-const queryClient = useQueryClient();
-const cashFlowRef = useRef<any>(null);
-const needsAttentionRef = useRef<any>(null);
-const lifetimeChartRef = useRef<any>(null);
-const netWorthBreakdownRef = useRef<any>(null);
-const [highlight, setHighlight] = useState<string | null>(null);
-const [onboardingOpen, setOnboardingOpen] = useState(false);
-const [chartInfoOpen, setChartInfoOpen] = useState(false);
-const onboardingSoftDismissed = useAppStore((s) => s.onboardingSoftDismissed);
-const setOnboardingSoftDismissed = useAppStore((s) => s.setOnboardingSoftDismissed);
-const setWizardOpen = useAppStore((s) => s.setWizardOpen);
+  const { today } = useToday();
+  const memberFilter = useAppStore((s) => s.memberFilter);
+  const setMemberFilter = useAppStore((s) => s.setMemberFilter);
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
+  const { canEdit } = useCurrentRole();
+  const { data: members = [] } = useMembers();
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [cashFlowDetailOpen, setCashFlowDetailOpen] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [dismissing, setDismissing] = useState<string | null>(null);
+  const [showAllUpcoming, setShowAllUpcoming] = useState(false);
+  const queryClient = useQueryClient();
+  const cashFlowRef = useRef<any>(null);
+  const needsAttentionRef = useRef<any>(null);
+  const lifetimeChartRef = useRef<any>(null);
+  const netWorthBreakdownRef = useRef<any>(null);
+  const [highlight, setHighlight] = useState<string | null>(null);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [chartInfoOpen, setChartInfoOpen] = useState(false);
+  const onboardingSoftDismissed = useAppStore((s) => s.onboardingSoftDismissed);
+  const setOnboardingSoftDismissed = useAppStore((s) => s.setOnboardingSoftDismissed);
+  const setWizardOpen = useAppStore((s) => s.setWizardOpen);
 
-// Keeps the globally-mounted tour welcome popup (TourWelcomeScreen, in
-// __root.tsx) aware of the wizard's real open state, regardless of which
-// of the several places below actually changes it — single source of
-// truth instead of remembering to call setWizardOpen at every call site.
-useEffect(() => {
-  setWizardOpen(onboardingOpen);
-  return () => setWizardOpen(false);
-}, [onboardingOpen, setWizardOpen]);
+  // Keeps the globally-mounted tour welcome popup (TourWelcomeScreen, in
+  // __root.tsx) aware of the wizard's real open state, regardless of which
+  // of the several places below actually changes it — single source of
+  // truth instead of remembering to call setWizardOpen at every call site.
+  useEffect(() => {
+    setWizardOpen(onboardingOpen);
+    return () => setWizardOpen(false);
+  }, [onboardingOpen, setWizardOpen]);
 
-function scrollTo(ref: any, key: string) {
-if (!ref.current) return;
-ref.current.scrollIntoView({ behavior: "smooth", block: "start" });
-setHighlight(key);
-setTimeout(() => setHighlight((h) => (h === key ? null : h)), 1800);
-}
+  function scrollTo(ref: any, key: string) {
+    if (!ref.current) return;
+    ref.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    setHighlight(key);
+    setTimeout(() => setHighlight((h) => (h === key ? null : h)), 1800);
+  }
 
-// Opens the (collapsible, closed-by-default) Net Worth Breakdown card and
-// scrolls to it. Opening first is safe: the card's ref sits on its outer
-// header, so revealing the rows below doesn't move that anchor point.
-function openNetWorthBreakdown() {
-setBreakdownOpen(true);
-scrollTo(netWorthBreakdownRef, "net-worth-breakdown");
-}
+  // Opens the (collapsible, closed-by-default) Net Worth Breakdown card and
+  // scrolls to it. Opening first is safe: the card's ref sits on its outer
+  // header, so revealing the rows below doesn't move that anchor point.
+  function openNetWorthBreakdown() {
+    setBreakdownOpen(true);
+    scrollTo(netWorthBreakdownRef, "net-worth-breakdown");
+  }
 
-// Shared per-table data — same query keys AppHeader and the alerts bell use,
-// so this reuses whatever's already cached instead of the dashboard doing
-// its own separate 8-table fetch. See householdRecordQueries.ts.
-//
-// These hooks always fetch the FULL household's rows (unfiltered by member),
-// because that's what AppHeader/AlertsSheet need too and sharing the cache
-// only works if every consumer asks for the same thing. The old query used
-// to apply the member filter server-side (.eq("member_id", memberFilter));
-// scopeByMember() below reproduces that exact filtering, just client-side,
-// on the same shared data — same end result, one less table-specific fetch.
-const gate = !!activeHouseholdId;
-const propertiesQ = useProperties(activeHouseholdId, gate);
-const loansQ = useLoans(activeHouseholdId, gate);
-const insuranceQ = useInsurancePolicies(activeHouseholdId, gate);
-const investmentsQ = useInvestments(activeHouseholdId, gate);
-const savingsQ = useSavingsAccounts(activeHouseholdId, gate);
-const { data: fxRates } = useFxRates();
-const healthQ = useHealthConditions(activeHouseholdId, gate);
-const otherAssetsQ = useOtherAssets(activeHouseholdId, gate);
-const inventoryQ = useInventoryItems(activeHouseholdId, gate);
-const creditCardsQ = useCreditCards(activeHouseholdId, gate);
+  // Shared per-table data — same query keys AppHeader and the alerts bell use,
+  // so this reuses whatever's already cached instead of the dashboard doing
+  // its own separate 8-table fetch. See householdRecordQueries.ts.
+  //
+  // These hooks always fetch the FULL household's rows (unfiltered by member),
+  // because that's what AppHeader/AlertsSheet need too and sharing the cache
+  // only works if every consumer asks for the same thing. The old query used
+  // to apply the member filter server-side (.eq("member_id", memberFilter));
+  // scopeByMember() below reproduces that exact filtering, just client-side,
+  // on the same shared data — same end result, one less table-specific fetch.
+  const gate = !!activeHouseholdId;
+  const propertiesQ = useProperties(activeHouseholdId, gate);
+  const loansQ = useLoans(activeHouseholdId, gate);
+  const insuranceQ = useInsurancePolicies(activeHouseholdId, gate);
+  const investmentsQ = useInvestments(activeHouseholdId, gate);
+  const savingsQ = useSavingsAccounts(activeHouseholdId, gate);
+  const { data: fxRates } = useFxRates();
+  const healthQ = useHealthConditions(activeHouseholdId, gate);
+  const otherAssetsQ = useOtherAssets(activeHouseholdId, gate);
+  const inventoryQ = useInventoryItems(activeHouseholdId, gate);
+  const creditCardsQ = useCreditCards(activeHouseholdId, gate);
 
-const tablesLoaded = [propertiesQ, loansQ, insuranceQ, investmentsQ, savingsQ, healthQ, otherAssetsQ, inventoryQ, creditCardsQ].every(
-  (q) => q.data !== undefined
-);
+  const tablesLoaded = [
+    propertiesQ,
+    loansQ,
+    insuranceQ,
+    investmentsQ,
+    savingsQ,
+    healthQ,
+    otherAssetsQ,
+    inventoryQ,
+    creditCardsQ,
+  ].every((q) => q.data !== undefined);
 
-function scopeByMember(rows: any[]): any[] {
-if (memberFilter === "all") return rows;
-return rows.filter((r) => r.member_id === memberFilter);
-}
+  function scopeByMember(rows: any[]): any[] {
+    if (memberFilter === "all") return rows;
+    return rows.filter((r) => r.member_id === memberFilter);
+  }
 
-const { data: appSettings } = useQuery({
-queryKey: ["app_settings", activeHouseholdId],
-enabled: !!activeHouseholdId,
-queryFn: async () => {
-if (!activeHouseholdId) return null;
-const { data } = await (supabase as any)
-.from("app_settings")
-.select("monthly_income, monthly_expenses, currency, mortgage_days, insurance_days, fd_days, warranty_days, onboarding_dismissed")
-.eq("household_id", activeHouseholdId)
-.maybeSingle();
-return data;
-},
-});
-
-const { data: remindersData } = useQuery({
-queryKey: ["reminders-dashboard", memberFilter, activeHouseholdId],
-enabled: !!activeHouseholdId,
-queryFn: async () => {
-if (!activeHouseholdId) return [];
-const horizonStr = addDays(new Date(), 90).toISOString().slice(0, 10);
-const { data } = await (supabase as any)
-.from("reminders")
-.select("*")
-.eq("household_id", activeHouseholdId)
-.eq("dismissed", false)
-.lte("remind_at", horizonStr);
-return data ?? [];
-},
-});
-
-const { data: dismissedData } = useQuery({
-queryKey: ["dismissed-dashboard", activeHouseholdId],
-enabled: !!activeHouseholdId,
-queryFn: async () => {
-if (!activeHouseholdId) return [];
-const { data } = await (supabase as any)
-.from("dismissed_dashboard_items")
-.select("id, record_id, source_type, dismissed_date")
-.eq("household_id", activeHouseholdId);
-return data ?? [];
-},
-});
-
-const dismissedKeys = new Set(
-(dismissedData ?? []).map((d: any) => `${d.source_type}::${d.record_id}::${d.dismissed_date}`)
-);
-
-const properties = scopeByMember(propertiesQ.data ?? []);
-const loans = scopeByMember(loansQ.data ?? []);
-const insurance = scopeByMember(insuranceQ.data ?? []);
-const investments = scopeByMember(investmentsQ.data ?? []);
-const savings = scopeByMember(savingsQ.data ?? []);
-// inventory_items has no member_id column — never scoped by member, same as before.
-const inventoryItems = inventoryQ.data ?? [];
-const otherAssets = scopeByMember(otherAssetsQ.data ?? []);
-const healthConditions = scopeByMember(healthQ.data ?? []);
-const creditCards = scopeByMember(creditCardsQ.data ?? []);
-
-// Foreign-currency records are no longer excluded from dashboard money
-// totals — see toSgdAmount() and the groupByCurrency()/totalWithFx() calls
-// below, which convert each one via the cached daily rate instead. Raw
-// arrays above (properties, loans, etc.) are untouched either way — alerts/
-// reminders/member counts always included foreign-currency records normally.
-
-// Bug fix (July 2026): a reminder set on another member's card (e.g. a
-// loan under Dad's tag) was showing on the dashboard with NO member tag at
-// all, and clicking through didn't land on anything because the current
-// member filter hid it. Root cause: buildUpcomingItems() resolves a
-// reminder's member by looking up its entity (the loan/policy/etc it's
-// attached to) in these SAME arrays above — but those are already
-// filtered to the CURRENTLY SELECTED member, so another member's entity
-// simply isn't in the list to find, and the lookup silently returns null.
-// The bell (AppHeader/AlertsSheet) never filters by member at all, so it
-// was never affected — confirmed by checking both files before writing
-// this fix, not assumed. Give buildUpcomingItems the FULL, unfiltered
-// lists for its entity lookups so a reminder always resolves the correct
-// member regardless of which member is currently selected; member-scoped
-// visibility is then applied once, uniformly, on the assembled alert
-// items below — the same real behavior as before for loans/insurance/etc
-// (their own member_id was already correct), now correctly extended to
-// reminders too instead of reminders leaking through untagged for every
-// filter state.
-const allPropertiesUnfiltered = propertiesQ.data ?? [];
-const allLoansUnfiltered = loansQ.data ?? [];
-const allInsuranceUnfiltered = insuranceQ.data ?? [];
-const allInvestmentsUnfiltered = investmentsQ.data ?? [];
-const allSavingsUnfiltered = savingsQ.data ?? [];
-const allOtherAssetsUnfiltered = otherAssetsQ.data ?? [];
-const allHealthConditionsUnfiltered = healthQ.data ?? [];
-const allCreditCardsUnfiltered = creditCardsQ.data ?? [];
-
-// Household has zero records of any kind — used to gate the onboarding
-// wizard's auto-show so it only ever appears unprompted for a genuinely
-// fresh household, never for an existing populated one (regardless of the
-// onboarding_dismissed default value on app_settings).
-const isEmptyHousehold =
-tablesLoaded &&
-properties.length === 0 &&
-loans.length === 0 &&
-insurance.length === 0 &&
-investments.length === 0 &&
-savings.length === 0 &&
-inventoryItems.length === 0 &&
-otherAssets.length === 0 &&
-creditCards.length === 0;
-
-// Auto-show once per browser for a fresh, not-yet-dismissed household —
-// the soft-dismiss flag (not a ref) is what stops this from re-firing
-// every time the tour navigates back to "/".
-useEffect(() => {
-if (onboardingSoftDismissed) return;
-if (appSettings === undefined || !tablesLoaded) return; // still loading
-if (!appSettings?.onboarding_dismissed && isEmptyHousehold) {
-setOnboardingOpen(true);
-}
-}, [appSettings, isEmptyHousehold, tablesLoaded, onboardingSoftDismissed]);
-
-// Manual re-open from Settings → About → "Quick Start Guide" (links to /#onboarding),
-// same hash-link pattern HashHighlight already uses elsewhere in this app.
-useEffect(() => {
-const check = () => {
-if (window.location.hash === "#onboarding") setOnboardingOpen(true);
-};
-check();
-window.addEventListener("hashchange", check);
-return () => window.removeEventListener("hashchange", check);
-}, []);
-
-async function dismissOnboardingForever() {
-setOnboardingOpen(false);
-setOnboardingSoftDismissed(true);
-if (!activeHouseholdId) return;
-// upsert, not update — a fresh household (the exact case this wizard
-// targets) often has no app_settings row yet, and a plain update would
-// silently affect 0 rows, leaving the dismissal unpersisted.
-await (supabase as any)
-.from("app_settings")
-.upsert({ household_id: activeHouseholdId, onboarding_dismissed: true }, { onConflict: "household_id" });
-queryClient.invalidateQueries({ queryKey: ["app_settings", activeHouseholdId] });
-}
-
-// Net Worth is FX-inclusive: computed from the FULL arrays (not the sgd*
-// arrays above, which stay SGD-only and are still used for Monthly Cash
-// Flow, deliberately left untouched — see governing notes). Each category
-// uses groupByCurrency + totalWithFx, same pattern as every tab total in
-// the app: foreign amounts are converted using the cached daily rate, and
-// any currency with no cached rate yet contributes $0 rather than being
-// counted at face value in the wrong currency — never silently wrong.
-const propertyTotals = groupByCurrency(properties, (p: any) => p.current_value);
-const investmentTotals = groupByCurrency(investments, (i: any) => i.current_value);
-const otherAssetsTotals = groupByCurrency(otherAssets, (a: any) => a.estimated_value);
-// Only counts a policy's surrender value once it's actually vested/accessible
-// (isSurrenderValueVested — no date set behaves exactly as before, always
-// counted). A policy with e.g. a 3-year premium-paying period whose capital
-// only becomes guaranteed at the end of year 3 correctly contributes $0 here
-// until that date, instead of being counted as liquid net worth it doesn't
-// actually have access to yet.
-const insuranceSurrenderTotals = groupByCurrency(insurance, (p: any) =>
-  isSurrenderValueVested(p, today) ? p.surrender_value : 0,
-);
-const loanTotals = groupByCurrency(loans, (l: any) => l.balance);
-// Liquid savings and CPF are split from the full savings array so both
-// are independently FX-inclusive — this is also what the Emergency Fund
-// check below reads (liquidSavingsValue), so a foreign-currency liquid
-// savings account now correctly counts toward it, while CPF (in any
-// currency) still correctly never does.
-const liquidSavingsTotals = groupByCurrency(
-  savings.filter((a: any) => !isCpfAccountType(a.account_type)),
-  (a: any) => a.balance,
-);
-const cpfTotals = groupByCurrency(
-  savings.filter((a: any) => isCpfAccountType(a.account_type)),
-  (a: any) => a.balance,
-);
-
-const propertyValue = totalWithFx(propertyTotals, fxRates);
-const investmentsValue = totalWithFx(investmentTotals, fxRates);
-const liquidSavingsValue = totalWithFx(liquidSavingsTotals, fxRates);
-const cpfValue = totalWithFx(cpfTotals, fxRates);
-const savingsValue = liquidSavingsValue + cpfValue;
-const otherAssetsValue = totalWithFx(otherAssetsTotals, fxRates);
-// Surrender value of insurance policies (e.g. savings/endowment plans) — treated as a
-// static asset value, same convention as savings balances. Not grown over time in the
-// lifetime chart since modelling actual surrender value growth would require inputs
-// this app doesn't collect; kept simple and accurate to what's recorded today.
-const insuranceSurrenderValue = totalWithFx(insuranceSurrenderTotals, fxRates);
-const totalAssets = propertyValue + investmentsValue + savingsValue + otherAssetsValue + insuranceSurrenderValue;
-const totalLiabilities = totalWithFx(loanTotals, fxRates);
-const netWorth = totalAssets - totalLiabilities;
-// Whether the Net Worth KPI's info note (explaining the FX conversion)
-// should show at all — only when at least one category actually has a
-// foreign-currency entry somewhere in the household.
-const netWorthHasForeign =
-  propertyTotals.foreign.length > 0 ||
-  investmentTotals.foreign.length > 0 ||
-  otherAssetsTotals.foreign.length > 0 ||
-  insuranceSurrenderTotals.foreign.length > 0 ||
-  loanTotals.foreign.length > 0 ||
-  liquidSavingsTotals.foreign.length > 0 ||
-  cpfTotals.foreign.length > 0;
-const netWorthSub = netWorthHasForeign ? (
-  <span>
-    Includes foreign currency, converted at today's rate
-    <FxInfoNote fx={fxRates} />
-  </span>
-) : undefined;
-
-// Converts one record's monthly cash-flow amount to SGD using its own
-// currency field — same safety rule as every other total on this page: a
-// currency with no cached rate yet contributes $0, never counted at face
-// value in the wrong currency.
-function toSgdAmount(amount: number | null | undefined, currency: string | null | undefined): number {
-  return convertToSgd(Number(amount) || 0, currency || "SGD", fxRates) ?? 0;
-}
-
-const salaryIncome = Number(appSettings?.monthly_income) || 0;
-const rentalIncome = properties.reduce((s: number, p: any) => s + toSgdAmount(p.monthly_rent, p.currency), 0);
-const insurancePayoutIn = insurance.reduce((s: number, p: any) => s + toSgdAmount(insurancePayoutMonthly(p, today), p.currency), 0);
-const investmentPayoutIn = investments.reduce((s: number, inv: any) => s + toSgdAmount(investmentPayoutMonthly(inv, today), inv.currency), 0);
-const monthlyIn = salaryIncome + rentalIncome + insurancePayoutIn + investmentPayoutIn;
-
-// Properties with a linked mortgage loan should not double-count monthly_payment
-// (uses the full loans array, not just SGD ones — a foreign-currency loan can
-// still be linked to a property and should still suppress the fallback figure)
-const mortgagedPropertyIds = new Set(
-loans.filter((l: any) => l.property_id).map((l: any) => l.property_id)
-);
-const propertyOut = properties.reduce((s: number, p: any) => {
-const costs = toSgdAmount(propertyTotalCosts(p), p.currency);
-const mortgage = mortgagedPropertyIds.has(p.id) ? 0 : toSgdAmount(p.monthly_payment, p.currency);
-return s + costs + mortgage;
-}, 0);
-const loanOut = loans.reduce((s: number, l: any) => s + toSgdAmount(l.monthly_payment, l.currency), 0);
-const insuranceOut = insurance.reduce((s: number, p: any) => s + toSgdAmount(insuranceMonthly(p), p.currency), 0);
-const investmentPremiumOut = investments.reduce((s: number, inv: any) => s + toSgdAmount(investmentPremiumMonthly(inv, today), inv.currency), 0);
-const creditCardFeeOut = creditCards.reduce((s: number, c: any) => s + creditCardMonthlyFee(c), 0);
-const baseExpenses = Number(appSettings?.monthly_expenses) || 0;
-const monthlyOut = propertyOut + loanOut + insuranceOut + investmentPremiumOut + creditCardFeeOut + baseExpenses;
-const netCashFlow = monthlyIn - monthlyOut;
-const cashFlowHasForeign =
-  properties.some((p: any) => p.currency && p.currency !== "SGD") ||
-  loans.some((l: any) => l.currency && l.currency !== "SGD") ||
-  insurance.some((p: any) => p.currency && p.currency !== "SGD") ||
-  investments.some((inv: any) => inv.currency && inv.currency !== "SGD");
-
-// Per-record cash flow detail — same "what's adding/subtracting and from where"
-// pattern as the Lifetime Chart's Year Detail panel, but for this month's actual figures.
-// Built from the FULL arrays with each amount converted via toSgdAmount, so a
-// foreign-currency record now appears here already converted to SGD — matching
-// monthlyIn/monthlyOut above it exactly, never a mismatch between a total and
-// its own breakdown (see the July 2026 bug note in memory this replaced).
-const inflowDetailItems: LineItem[] = [
-...(salaryIncome > 0 ? [{ label: "Salary / income", amount: salaryIncome, href: "/settings" }] : []),
-...properties
-.filter((p: any) => toSgdAmount(p.monthly_rent, p.currency) > 0)
-.map((p: any) => ({ label: `${p.name ?? "Property"} rental`, amount: toSgdAmount(p.monthly_rent, p.currency), href: `/property#record-${p.id}`, member_id: p.member_id })),
-...insurance
-.filter((p: any) => toSgdAmount(insurancePayoutMonthly(p, today), p.currency) > 0)
-.map((p: any) => ({ label: `${p.name ?? "Insurance"} payout`, amount: toSgdAmount(insurancePayoutMonthly(p, today), p.currency), href: `/insurance#record-${p.id}`, timesPerYear: freqTimesPerYear(p.payout_frequency), member_id: p.member_id })),
-...investments
-.filter((inv: any) => toSgdAmount(investmentPayoutMonthly(inv, today), inv.currency) > 0)
-.map((inv: any) => ({ label: `${inv.name ?? "ILP"} payout`, amount: toSgdAmount(investmentPayoutMonthly(inv, today), inv.currency), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.payout_frequency), member_id: inv.member_id })),
-// Biggest first — same convention YearDetailPanel already uses for its own
-// money in/out lists, applied here too for consistency.
-].sort((a, b) => b.amount - a.amount);
-
-const outflowDetailItems: LineItem[] = [
-...properties.flatMap((p: any) => {
-const items: LineItem[] = [];
-const propHref = `/property#record-${p.id}`;
-const costs = toSgdAmount(propertyTotalCosts(p), p.currency);
-if (costs > 0) items.push({ label: `${p.name ?? "Property"} costs`, amount: costs, href: propHref, member_id: p.member_id });
-const mortgage = mortgagedPropertyIds.has(p.id) ? 0 : toSgdAmount(p.monthly_payment, p.currency);
-if (mortgage > 0) items.push({ label: `${p.name ?? "Property"} mortgage`, amount: mortgage, href: propHref, member_id: p.member_id });
-return items;
-}),
-...loans
-.filter((l: any) => toSgdAmount(l.monthly_payment, l.currency) > 0)
-.map((l: any) => ({ label: `${l.bank ?? "Loan"} repayment`, amount: toSgdAmount(l.monthly_payment, l.currency), href: `/loans#record-${l.id}`, member_id: l.member_id })),
-...insurance
-.filter((p: any) => toSgdAmount(insuranceMonthly(p), p.currency) > 0)
-.map((p: any) => ({ label: `${p.name ?? "Insurance"} premium`, amount: toSgdAmount(insuranceMonthly(p), p.currency), href: `/insurance#record-${p.id}`, timesPerYear: freqTimesPerYear(p.frequency), member_id: p.member_id })),
-...investments
-.filter((inv: any) => toSgdAmount(investmentPremiumMonthly(inv, today), inv.currency) > 0)
-.map((inv: any) => ({ label: `${inv.name ?? "ILP"} premium`, amount: toSgdAmount(investmentPremiumMonthly(inv, today), inv.currency), href: `/investments#record-${inv.id}`, timesPerYear: freqTimesPerYear(inv.premium_frequency), member_id: inv.member_id })),
-...creditCards
-.filter((c: any) => creditCardMonthlyFee(c) > 0)
-.map((c: any) => ({ label: `${c.name ?? "Card"} annual fee`, amount: creditCardMonthlyFee(c), href: `/cards#record-${c.id}`, timesPerYear: 1, member_id: c.member_id })),
-...(baseExpenses > 0 ? [{ label: "Other expenses (Settings)", amount: baseExpenses, href: "/settings" }] : []),
-].sort((a, b) => b.amount - a.amount);
-
-const showSettingsNudge = salaryIncome === 0 && baseExpenses === 0;
-
-const horizon90 = 90;
-
-const allUpcoming = buildUpcomingItems(
-{
-  properties: allPropertiesUnfiltered,
-  loans: allLoansUnfiltered,
-  insurance: allInsuranceUnfiltered,
-  investments: allInvestmentsUnfiltered,
-  savings: allSavingsUnfiltered,
-  inventoryItems,
-  reminders: remindersData ?? [],
-  otherAssets: allOtherAssetsUnfiltered,
-  healthConditions: allHealthConditionsUnfiltered,
-  creditCards: allCreditCardsUnfiltered,
-},
-today,
-horizon90,
-{
-mortgage_days: appSettings?.mortgage_days,
-insurance_days: appSettings?.insurance_days,
-fd_days: appSettings?.fd_days,
-warranty_days: appSettings?.warranty_days,
-}
-).filter((u) => memberFilter === "all" || u.member_id === memberFilter);
-
-const upcoming = allUpcoming.filter(
-(u) => !dismissedKeys.has(`${u.sourceType}::${u.recordId}::${u.date}`)
-);
-
-async function invalidateAll() {
-await Promise.all([
-queryClient.invalidateQueries({ queryKey: ["dismissed-dashboard", activeHouseholdId] }),
-queryClient.invalidateQueries({ queryKey: ["reminders-dashboard", memberFilter, activeHouseholdId] }),
-// Was "alert-count" - that combined query no longer exists as of the
-// AppHeader migration (see householdRecordQueries.ts). The badge count is
-// now a useMemo derived from the shared per-table caches (already covered
-// by RecordFormSheet/etc's existing invalidation) plus this extras query,
-// which is what actually needs invalidating here for the dismiss to reflect.
-queryClient.invalidateQueries({ queryKey: ["alert-count-extras", activeHouseholdId] }),
-]);
-}
-
-async function dismissItem(u: UpcomingItem) {
-if (!activeHouseholdId) return;
-const key = `${u.sourceType}::${u.recordId}`;
-if (dismissing === key) return;
-setDismissing(key);
-
-const isReminder = u.sourceType === "reminder" && !!u.reminderId;
-const { data: inserted, error } = await (supabase as any)
-  .from("dismissed_dashboard_items")
-  .upsert(
-    {
-      household_id: activeHouseholdId,
-      source_type: u.sourceType,
-      record_id: u.recordId,
-      reminder_id: u.reminderId ?? null,
-      label: u.label,
-      dismissed_date: u.date,
-      permanently_deleted: false,
+  const { data: appSettings } = useQuery({
+    queryKey: ["app_settings", activeHouseholdId],
+    enabled: !!activeHouseholdId,
+    queryFn: async () => {
+      if (!activeHouseholdId) return null;
+      const { data } = await (supabase as any)
+        .from("app_settings")
+        .select(
+          "monthly_income, monthly_expenses, currency, mortgage_days, insurance_days, fd_days, warranty_days, onboarding_dismissed",
+        )
+        .eq("household_id", activeHouseholdId)
+        .maybeSingle();
+      return data;
     },
-    // Reminders use a dedicated conflict target keyed on the reminder's own id, since
-    // multiple reminders can share the same entity_id (record_id) and even the same
-    // date — the original target would collide and silently overwrite between them.
-    { onConflict: isReminder ? "household_id,reminder_id" : "household_id,source_type,record_id,dismissed_date" }
-  )
-  .select("id")
-  .single();
+  });
 
-setDismissing(null);
+  const { data: remindersData } = useQuery({
+    queryKey: ["reminders-dashboard", memberFilter, activeHouseholdId],
+    enabled: !!activeHouseholdId,
+    queryFn: async () => {
+      if (!activeHouseholdId) return [];
+      const horizonStr = addDays(new Date(), 90).toISOString().slice(0, 10);
+      const { data } = await (supabase as any)
+        .from("reminders")
+        .select("*")
+        .eq("household_id", activeHouseholdId)
+        .eq("dismissed", false)
+        .lte("remind_at", horizonStr);
+      return data ?? [];
+    },
+  });
 
-if (error || !inserted) {
-  console.error("dismissItem upsert failed:", error);
-  toast.error(error?.message ? `Could not mark as done: ${error.message}` : "Could not mark as done.");
-  return;
-}
+  const { data: dismissedData } = useQuery({
+    queryKey: ["dismissed-dashboard", activeHouseholdId],
+    enabled: !!activeHouseholdId,
+    queryFn: async () => {
+      if (!activeHouseholdId) return [];
+      const { data } = await (supabase as any)
+        .from("dismissed_dashboard_items")
+        .select("id, record_id, source_type, dismissed_date")
+        .eq("household_id", activeHouseholdId);
+      return data ?? [];
+    },
+  });
 
-const insertedId = inserted.id;
-await invalidateAll();
+  const dismissedKeys = new Set(
+    (dismissedData ?? []).map((d: any) => `${d.source_type}::${d.record_id}::${d.dismissed_date}`),
+  );
 
-toast.success("Marked as done.", {
+  const properties = scopeByMember(propertiesQ.data ?? []);
+  const loans = scopeByMember(loansQ.data ?? []);
+  const insurance = scopeByMember(insuranceQ.data ?? []);
+  const investments = scopeByMember(investmentsQ.data ?? []);
+  const savings = scopeByMember(savingsQ.data ?? []);
+  // inventory_items has no member_id column — never scoped by member, same as before.
+  const inventoryItems = inventoryQ.data ?? [];
+  const otherAssets = scopeByMember(otherAssetsQ.data ?? []);
+  const healthConditions = scopeByMember(healthQ.data ?? []);
+  const creditCards = scopeByMember(creditCardsQ.data ?? []);
 
-duration: 5000,
-action: {
-label: "Undo",
-onClick: async () => {
-await (supabase as any)
-.from("dismissed_dashboard_items")
-.delete()
-.eq("id", insertedId);
-await invalidateAll();
-},
-},
-});
-}
+  // Foreign-currency records are no longer excluded from dashboard money
+  // totals — see toSgdAmount() and the groupByCurrency()/totalWithFx() calls
+  // below, which convert each one via the cached daily rate instead. Raw
+  // arrays above (properties, loans, etc.) are untouched either way — alerts/
+  // reminders/member counts always included foreign-currency records normally.
 
-const all: Array<{ kind: string; row: any; href: string; icon: any }> = [
-...properties.map((r: any) => ({ kind: "Property", row: r, href: "/property", icon: Building2 })),
-...loans.map((r: any) => ({ kind: "Loan", row: r, href: "/loans", icon: Landmark })),
-...insurance.map((r: any) => ({ kind: "Insurance", row: r, href: "/insurance", icon: Shield })),
-...investments.map((r: any) => ({ kind: "Invest", row: r, href: "/investments", icon: TrendingUp })),
-...otherAssets.map((r: any) => ({ kind: "Asset", row: r, href: "/other-assets", icon: Gem })),
-...healthConditions.map((r: any) => ({ kind: "Health", row: r, href: "/health", icon: Heart })),
-...savings.map((r: any) => ({ kind: "Savings", row: r, href: "/savings", icon: Wallet })),
-...inventoryItems.map((r: any) => ({ kind: "Item", row: r, href: "/inventory", icon: Package })),
-...creditCards.map((r: any) => ({ kind: "Card", row: r, href: "/cards", icon: CreditCard })),
-];
+  // Bug fix (July 2026): a reminder set on another member's card (e.g. a
+  // loan under Dad's tag) was showing on the dashboard with NO member tag at
+  // all, and clicking through didn't land on anything because the current
+  // member filter hid it. Root cause: buildUpcomingItems() resolves a
+  // reminder's member by looking up its entity (the loan/policy/etc it's
+  // attached to) in these SAME arrays above — but those are already
+  // filtered to the CURRENTLY SELECTED member, so another member's entity
+  // simply isn't in the list to find, and the lookup silently returns null.
+  // The bell (AppHeader/AlertsSheet) never filters by member at all, so it
+  // was never affected — confirmed by checking both files before writing
+  // this fix, not assumed. Give buildUpcomingItems the FULL, unfiltered
+  // lists for its entity lookups so a reminder always resolves the correct
+  // member regardless of which member is currently selected; member-scoped
+  // visibility is then applied once, uniformly, on the assembled alert
+  // items below — the same real behavior as before for loans/insurance/etc
+  // (their own member_id was already correct), now correctly extended to
+  // reminders too instead of reminders leaking through untagged for every
+  // filter state.
+  const allPropertiesUnfiltered = propertiesQ.data ?? [];
+  const allLoansUnfiltered = loansQ.data ?? [];
+  const allInsuranceUnfiltered = insuranceQ.data ?? [];
+  const allInvestmentsUnfiltered = investmentsQ.data ?? [];
+  const allSavingsUnfiltered = savingsQ.data ?? [];
+  const allOtherAssetsUnfiltered = otherAssetsQ.data ?? [];
+  const allHealthConditionsUnfiltered = healthQ.data ?? [];
+  const allCreditCardsUnfiltered = creditCardsQ.data ?? [];
 
-const urgent = all.filter((x) => x.row.status === "urgent");
-const review = all.filter((x) => x.row.status === "review");
+  // Household has zero records of any kind — used to gate the onboarding
+  // wizard's auto-show so it only ever appears unprompted for a genuinely
+  // fresh household, never for an existing populated one (regardless of the
+  // onboarding_dismissed default value on app_settings).
+  const isEmptyHousehold =
+    tablesLoaded &&
+    properties.length === 0 &&
+    loans.length === 0 &&
+    insurance.length === 0 &&
+    investments.length === 0 &&
+    savings.length === 0 &&
+    inventoryItems.length === 0 &&
+    otherAssets.length === 0 &&
+    creditCards.length === 0;
 
-const upcomingAlerts = upcoming.filter((u) => u.daysLeft <= 30);
-const alertCount = urgent.length + review.length + upcomingAlerts.length;
+  // Auto-show once per browser for a fresh, not-yet-dismissed household —
+  // the soft-dismiss flag (not a ref) is what stops this from re-firing
+  // every time the tour navigates back to "/".
+  useEffect(() => {
+    if (onboardingSoftDismissed) return;
+    if (appSettings === undefined || !tablesLoaded) return; // still loading
+    if (!appSettings?.onboarding_dismissed && isEmptyHousehold) {
+      setOnboardingOpen(true);
+    }
+  }, [appSettings, isEmptyHousehold, tablesLoaded, onboardingSoftDismissed]);
 
-const dueToday = upcoming.find((u) => u.date === today.toISOString().slice(0, 10));
+  // Manual re-open from Settings → About → "Quick Start Guide" (links to /#onboarding),
+  // same hash-link pattern HashHighlight already uses elsewhere in this app.
+  useEffect(() => {
+    const check = () => {
+      if (window.location.hash === "#onboarding") setOnboardingOpen(true);
+    };
+    check();
+    window.addEventListener("hashchange", check);
+    return () => window.removeEventListener("hashchange", check);
+  }, []);
 
-// Asset allocation — same FX-inclusive figures as the Net Worth Breakdown
-// above (allocInsurance was already an alias of insuranceSurrenderValue;
-// these three now follow the same pattern instead of separately
-// re-summing the SGD-only arrays).
-const allocProperty = propertyValue;
-const allocInvestments = investmentsValue;
-const allocCash = savingsValue;
-const allocInsurance = insuranceSurrenderValue;
-const allocTotal = allocProperty + allocInvestments + allocCash + allocInsurance;
-const allocPctProperty = allocTotal > 0 ? (allocProperty / allocTotal) * 100 : 0;
-const allocPctInvestments = allocTotal > 0 ? (allocInvestments / allocTotal) * 100 : 0;
-const allocPctCash = allocTotal > 0 ? (allocCash / allocTotal) * 100 : 0;
-const allocPctInsurance = allocTotal > 0 ? (allocInsurance / allocTotal) * 100 : 0;
-const allocHasForeign =
-  propertyTotals.foreign.length > 0 ||
-  investmentTotals.foreign.length > 0 ||
-  liquidSavingsTotals.foreign.length > 0 ||
-  cpfTotals.foreign.length > 0 ||
-  insuranceSurrenderTotals.foreign.length > 0;
+  async function dismissOnboardingForever() {
+    setOnboardingOpen(false);
+    setOnboardingSoftDismissed(true);
+    if (!activeHouseholdId) return;
+    // upsert, not update — a fresh household (the exact case this wizard
+    // targets) often has no app_settings row yet, and a plain update would
+    // silently affect 0 rows, leaving the dismissal unpersisted.
+    await (supabase as any)
+      .from("app_settings")
+      .upsert(
+        { household_id: activeHouseholdId, onboarding_dismissed: true },
+        { onConflict: "household_id" },
+      );
+    queryClient.invalidateQueries({ queryKey: ["app_settings", activeHouseholdId] });
+  }
 
-// Insurance adequacy — uses the full insurance array, not a currency-filtered
-// subset, so a foreign-currency policy still counts toward "active policies"
-// and its completeness check, and its sum assured is converted via the same
-// FX-inclusive pattern as every other total on this page. Previously this
-// excluded foreign policies entirely, which could understate someone's
-// real coverage and wrongly show "not adequately covered."
-const activeInsurance = insurance.filter((p: any) => p.status !== "inactive");
-const sumAssuredTotals = groupByCurrency(activeInsurance, (p: any) => p.sum_assured);
-const totalSumAssured = totalWithFx(sumAssuredTotals, fxRates);
-const policiesWithNoSumAssured = activeInsurance.filter((p: any) => !p.sum_assured).length;
-const incomeReplacementNeed = salaryIncome * 120;
-const coverageRatio = incomeReplacementNeed > 0 ? totalSumAssured / incomeReplacementNeed : null;
-const adequacyStatus =
-incomeReplacementNeed === 0 ? "unset" :
-totalSumAssured === 0 ? "none" :
-coverageRatio !== null && coverageRatio >= 1 ? "covered" : "partial";
+  // Net Worth is FX-inclusive: computed from the FULL arrays (not the sgd*
+  // arrays above, which stay SGD-only and are still used for Monthly Cash
+  // Flow, deliberately left untouched — see governing notes). Each category
+  // uses groupByCurrency + totalWithFx, same pattern as every tab total in
+  // the app: foreign amounts are converted using the cached daily rate, and
+  // any currency with no cached rate yet contributes $0 rather than being
+  // counted at face value in the wrong currency — never silently wrong.
+  // Properties with a linked mortgage loan (a `loans` row with matching
+  // property_id) already have that debt counted via loanTotals below — this
+  // set says which properties those are, so a property's OWN mortgage_balance
+  // field is only added as a liability when there's no linked loan row,
+  // preventing double-counting one debt twice. Computed once, up here, and
+  // reused everywhere else in this file that needs it (was previously
+  // duplicated further down for Monthly Cash Flow only — same Set now shared).
+  const mortgagedPropertyIds = new Set(
+    loans.filter((l: any) => l.property_id).map((l: any) => l.property_id),
+  );
+  const propertyTotals = groupByCurrency(properties, (p: any) => p.current_value);
+  const investmentTotals = groupByCurrency(investments, (i: any) => i.current_value);
+  const otherAssetsTotals = groupByCurrency(otherAssets, (a: any) => a.estimated_value);
+  // Only counts a policy's surrender value once it's actually vested/accessible
+  // (isSurrenderValueVested — no date set behaves exactly as before, always
+  // counted). A policy with e.g. a 3-year premium-paying period whose capital
+  // only becomes guaranteed at the end of year 3 correctly contributes $0 here
+  // until that date, instead of being counted as liquid net worth it doesn't
+  // actually have access to yet.
+  const insuranceSurrenderTotals = groupByCurrency(insurance, (p: any) =>
+    isSurrenderValueVested(p, today) ? p.surrender_value : 0,
+  );
+  const loanTotals = groupByCurrency(loans, (l: any) => l.balance);
+  // A property's own mortgage — entered directly on the Property tab
+  // (mortgage_balance) rather than as a separate Loans-tab row — was
+  // previously never subtracted anywhere in Net Worth, only in this one
+  // property's own "net of mortgage" figure on the Property page. A property
+  // financed this way (no linked `loans` row) had its FULL current_value
+  // counted as an asset with no offsetting liability. Only properties NOT
+  // already covered by a linked loan are included here, so a property with
+  // BOTH a mortgage_balance and a linked loans row still counts its debt once
+  // (via loanTotals), matching how lifetimeChartMath.ts already treats this
+  // same situation for the projection chart.
+  const propertyMortgageTotals = groupByCurrency(
+    properties.filter((p: any) => !mortgagedPropertyIds.has(p.id)),
+    (p: any) => p.mortgage_balance,
+  );
+  // Liquid savings and CPF are split from the full savings array so both
+  // are independently FX-inclusive — this is also what the Emergency Fund
+  // check below reads (liquidSavingsValue), so a foreign-currency liquid
+  // savings account now correctly counts toward it, while CPF (in any
+  // currency) still correctly never does.
+  const liquidSavingsTotals = groupByCurrency(
+    savings.filter((a: any) => !isCpfAccountType(a.account_type)),
+    (a: any) => a.balance,
+  );
+  const cpfTotals = groupByCurrency(
+    savings.filter((a: any) => isCpfAccountType(a.account_type)),
+    (a: any) => a.balance,
+  );
 
-// Financial health checks
-const healthChecks = [
-(() => {
-if (salaryIncome === 0 && baseExpenses === 0) return { label: "Cash flow", status: "incomplete", detail: "Set income and expenses in Settings", href: "/settings" };
-if (netCashFlow > 0) return { label: "Cash flow", status: "pass", detail: `+${fmtMoney(netCashFlow)} monthly surplus`, href: "cash-flow" };
-if (netCashFlow >= -(monthlyOut * 0.1)) return { label: "Cash flow", status: "warning", detail: "Near break-even — monitor closely", href: "cash-flow" };
-return { label: "Cash flow", status: "fail", detail: `${fmtMoney(netCashFlow)} monthly deficit`, href: "cash-flow" };
-})(),
-(() => {
-if (baseExpenses === 0) return { label: "Emergency fund", status: "incomplete", detail: "Set monthly expenses in Settings to calculate", href: "/settings" };
-// Deliberately excludes CPF — it isn't freely withdrawable for an actual
-// emergency, unlike liquidSavingsValue. Stated in the detail text so this
-// exclusion is visible in the app, not just in a code comment.
-if (liquidSavingsValue >= monthlyOut * 3) return { label: "Emergency fund", status: "pass", detail: `${(liquidSavingsValue / monthlyOut).toFixed(1)} months of expenses covered (excl. CPF)`, href: "/savings" };
-if (liquidSavingsValue >= monthlyOut) return { label: "Emergency fund", status: "warning", detail: `Only ${(liquidSavingsValue / monthlyOut).toFixed(1)} months covered (excl. CPF) — aim for 3+`, href: "/savings" };
-return { label: "Emergency fund", status: "fail", detail: "Less than 1 month of expenses in savings (excl. CPF)", href: "/savings" };
-})(),
-(() => {
-if (adequacyStatus === "unset") return { label: "Insurance coverage", status: "incomplete", detail: "Set monthly income in Settings to calculate", href: "/settings" };
-if (adequacyStatus === "none") return { label: "Insurance coverage", status: "incomplete", detail: "No sum assured entered on policies", href: "/insurance" };
-if (adequacyStatus === "covered") return { label: "Insurance coverage", status: "pass", detail: `${Math.round((coverageRatio ?? 0) * 100)}% of 10-year income need covered`, href: "/insurance" };
-return { label: "Insurance coverage", status: "warning", detail: `Only ${Math.round((coverageRatio ?? 0) * 100)}% of 10-year income need covered`, href: "/insurance" };
-})(),
-(() => {
-if (totalAssets === 0) return { label: "Debt ratio", status: "incomplete", detail: "No asset values recorded yet", href: "/property" };
-const ratio = totalLiabilities / totalAssets;
-const pct = Math.round(ratio * 100);
-if (ratio < 0.4) return { label: "Debt ratio", status: "pass", detail: `${pct}% of assets — healthy`, href: "/loans" };
-if (ratio < 0.6) return { label: "Debt ratio", status: "warning", detail: `${pct}% of assets — monitor debt levels`, href: "/loans" };
-return { label: "Debt ratio", status: "fail", detail: `${pct}% of assets — high debt load`, href: "/loans" };
-})(),
-(() => {
-if (urgent.length === 0) return { label: "Urgent alerts", status: "pass", detail: "No urgent items", href: "" };
-return { label: "Urgent alerts", status: "fail", detail: `${urgent.length} item${urgent.length === 1 ? "" : "s"} need attention`, href: "needs-attention" };
-})(),
-] as { label: string; status: "pass" | "warning" | "fail" | "incomplete"; detail: string; href: string }[];
+  const propertyValue = totalWithFx(propertyTotals, fxRates);
+  const investmentsValue = totalWithFx(investmentTotals, fxRates);
+  const liquidSavingsValue = totalWithFx(liquidSavingsTotals, fxRates);
+  const cpfValue = totalWithFx(cpfTotals, fxRates);
+  const savingsValue = liquidSavingsValue + cpfValue;
+  const otherAssetsValue = totalWithFx(otherAssetsTotals, fxRates);
+  // Surrender value of insurance policies (e.g. savings/endowment plans) — treated as a
+  // static asset value, same convention as savings balances. Not grown over time in the
+  // lifetime chart since modelling actual surrender value growth would require inputs
+  // this app doesn't collect; kept simple and accurate to what's recorded today.
+  const insuranceSurrenderValue = totalWithFx(insuranceSurrenderTotals, fxRates);
+  const totalAssets =
+    propertyValue + investmentsValue + savingsValue + otherAssetsValue + insuranceSurrenderValue;
+  const loansValue = totalWithFx(loanTotals, fxRates);
+  const propertyMortgageValue = totalWithFx(propertyMortgageTotals, fxRates);
+  const totalLiabilities = loansValue + propertyMortgageValue;
+  const netWorth = totalAssets - totalLiabilities;
+  // Whether the Net Worth KPI's info note (explaining the FX conversion)
+  // should show at all — only when at least one category actually has a
+  // foreign-currency entry somewhere in the household.
+  const netWorthHasForeign =
+    propertyTotals.foreign.length > 0 ||
+    investmentTotals.foreign.length > 0 ||
+    otherAssetsTotals.foreign.length > 0 ||
+    insuranceSurrenderTotals.foreign.length > 0 ||
+    loanTotals.foreign.length > 0 ||
+    propertyMortgageTotals.foreign.length > 0 ||
+    liquidSavingsTotals.foreign.length > 0 ||
+    cpfTotals.foreign.length > 0;
+  const netWorthSub = netWorthHasForeign ? (
+    <span>
+      Includes foreign currency, converted at today's rate
+      <FxInfoNote fx={fxRates} />
+    </span>
+  ) : undefined;
 
-const passCount = healthChecks.filter((c) => c.status === "pass").length;
-const totalScored = healthChecks.filter((c) => c.status !== "incomplete").length;
+  // Converts one record's monthly cash-flow amount to SGD using its own
+  // currency field — same safety rule as every other total on this page: a
+  // currency with no cached rate yet contributes $0, never counted at face
+  // value in the wrong currency.
+  function toSgdAmount(
+    amount: number | null | undefined,
+    currency: string | null | undefined,
+  ): number {
+    return convertToSgd(Number(amount) || 0, currency || "SGD", fxRates) ?? 0;
+  }
 
-return (
-<div className="space-y-5">
-<MemberFilterBar />
+  const salaryIncome = Number(appSettings?.monthly_income) || 0;
+  const rentalIncome = properties.reduce(
+    (s: number, p: any) => s + toSgdAmount(p.monthly_rent, p.currency),
+    0,
+  );
+  const insurancePayoutIn = insurance.reduce(
+    (s: number, p: any) => s + toSgdAmount(insurancePayoutMonthly(p, today), p.currency),
+    0,
+  );
+  const investmentPayoutIn = investments.reduce(
+    (s: number, inv: any) => s + toSgdAmount(investmentPayoutMonthly(inv, today), inv.currency),
+    0,
+  );
+  const monthlyIn = salaryIncome + rentalIncome + insurancePayoutIn + investmentPayoutIn;
 
-  {dueToday && (
-    <Link
-      to={dueToday.href as any}
-      hash={`record-${dueToday.recordId}`}
-      onClick={() => setMemberFilter(dueToday.member_id ?? "all")}
-      className="block rounded-2xl bg-review p-4 text-review-foreground"
-    >
-      <div className="text-xs font-semibold uppercase">Due today</div>
-      <div className="mt-1 text-base font-bold">{dueToday.label} {dueToday.amount ? `· ${fmtMoney(dueToday.amount)}` : ""}</div>
-    </Link>
-  )}
+  // Properties with a linked mortgage loan should not double-count monthly_payment
+  // (uses the full loans array, not just SGD ones — a foreign-currency loan can
+  // still be linked to a property and should still suppress the fallback figure).
+  // mortgagedPropertyIds itself is now computed once, earlier in this file
+  // (next to the Net Worth calc), and reused here.
+  const propertyOut = properties.reduce((s: number, p: any) => {
+    const costs = toSgdAmount(propertyTotalCosts(p), p.currency);
+    const mortgage = mortgagedPropertyIds.has(p.id)
+      ? 0
+      : toSgdAmount(p.monthly_payment, p.currency);
+    return s + costs + mortgage;
+  }, 0);
+  const loanOut = loans.reduce(
+    (s: number, l: any) => s + toSgdAmount(l.monthly_payment, l.currency),
+    0,
+  );
+  const insuranceOut = insurance.reduce(
+    (s: number, p: any) => s + toSgdAmount(insuranceMonthly(p), p.currency),
+    0,
+  );
+  const investmentPremiumOut = investments.reduce(
+    (s: number, inv: any) => s + toSgdAmount(investmentPremiumMonthly(inv, today), inv.currency),
+    0,
+  );
+  const creditCardFeeOut = creditCards.reduce(
+    (s: number, c: any) => s + creditCardMonthlyFee(c),
+    0,
+  );
+  const baseExpenses = Number(appSettings?.monthly_expenses) || 0;
+  const monthlyOut =
+    propertyOut + loanOut + insuranceOut + investmentPremiumOut + creditCardFeeOut + baseExpenses;
+  const netCashFlow = monthlyIn - monthlyOut;
+  const cashFlowHasForeign =
+    properties.some((p: any) => p.currency && p.currency !== "SGD") ||
+    loans.some((l: any) => l.currency && l.currency !== "SGD") ||
+    insurance.some((p: any) => p.currency && p.currency !== "SGD") ||
+    investments.some((inv: any) => inv.currency && inv.currency !== "SGD");
 
-  {/* KPI ROW — Net Worth is the headline number, so it leads, with Active
+  // Per-record cash flow detail — same "what's adding/subtracting and from where"
+  // pattern as the Lifetime Chart's Year Detail panel, but for this month's actual figures.
+  // Built from the FULL arrays with each amount converted via toSgdAmount, so a
+  // foreign-currency record now appears here already converted to SGD — matching
+  // monthlyIn/monthlyOut above it exactly, never a mismatch between a total and
+  // its own breakdown (see the July 2026 bug note in memory this replaced).
+  const inflowDetailItems: LineItem[] = [
+    ...(salaryIncome > 0
+      ? [{ label: "Salary / income", amount: salaryIncome, href: "/settings" }]
+      : []),
+    ...properties
+      .filter((p: any) => toSgdAmount(p.monthly_rent, p.currency) > 0)
+      .map((p: any) => ({
+        label: `${p.name ?? "Property"} rental`,
+        amount: toSgdAmount(p.monthly_rent, p.currency),
+        href: `/property#record-${p.id}`,
+        member_id: p.member_id,
+      })),
+    ...insurance
+      .filter((p: any) => toSgdAmount(insurancePayoutMonthly(p, today), p.currency) > 0)
+      .map((p: any) => ({
+        label: `${p.name ?? "Insurance"} payout`,
+        amount: toSgdAmount(insurancePayoutMonthly(p, today), p.currency),
+        href: `/insurance#record-${p.id}`,
+        timesPerYear: freqTimesPerYear(p.payout_frequency),
+        member_id: p.member_id,
+      })),
+    ...investments
+      .filter((inv: any) => toSgdAmount(investmentPayoutMonthly(inv, today), inv.currency) > 0)
+      .map((inv: any) => ({
+        label: `${inv.name ?? "ILP"} payout`,
+        amount: toSgdAmount(investmentPayoutMonthly(inv, today), inv.currency),
+        href: `/investments#record-${inv.id}`,
+        timesPerYear: freqTimesPerYear(inv.payout_frequency),
+        member_id: inv.member_id,
+      })),
+    // Biggest first — same convention YearDetailPanel already uses for its own
+    // money in/out lists, applied here too for consistency.
+  ].sort((a, b) => b.amount - a.amount);
+
+  const outflowDetailItems: LineItem[] = [
+    ...properties.flatMap((p: any) => {
+      const items: LineItem[] = [];
+      const propHref = `/property#record-${p.id}`;
+      const costs = toSgdAmount(propertyTotalCosts(p), p.currency);
+      if (costs > 0)
+        items.push({
+          label: `${p.name ?? "Property"} costs`,
+          amount: costs,
+          href: propHref,
+          member_id: p.member_id,
+        });
+      const mortgage = mortgagedPropertyIds.has(p.id)
+        ? 0
+        : toSgdAmount(p.monthly_payment, p.currency);
+      if (mortgage > 0)
+        items.push({
+          label: `${p.name ?? "Property"} mortgage`,
+          amount: mortgage,
+          href: propHref,
+          member_id: p.member_id,
+        });
+      return items;
+    }),
+    ...loans
+      .filter((l: any) => toSgdAmount(l.monthly_payment, l.currency) > 0)
+      .map((l: any) => ({
+        label: `${l.bank ?? "Loan"} repayment`,
+        amount: toSgdAmount(l.monthly_payment, l.currency),
+        href: `/loans#record-${l.id}`,
+        member_id: l.member_id,
+      })),
+    ...insurance
+      .filter((p: any) => toSgdAmount(insuranceMonthly(p), p.currency) > 0)
+      .map((p: any) => ({
+        label: `${p.name ?? "Insurance"} premium`,
+        amount: toSgdAmount(insuranceMonthly(p), p.currency),
+        href: `/insurance#record-${p.id}`,
+        timesPerYear: freqTimesPerYear(p.frequency),
+        member_id: p.member_id,
+      })),
+    ...investments
+      .filter((inv: any) => toSgdAmount(investmentPremiumMonthly(inv, today), inv.currency) > 0)
+      .map((inv: any) => ({
+        label: `${inv.name ?? "ILP"} premium`,
+        amount: toSgdAmount(investmentPremiumMonthly(inv, today), inv.currency),
+        href: `/investments#record-${inv.id}`,
+        timesPerYear: freqTimesPerYear(inv.premium_frequency),
+        member_id: inv.member_id,
+      })),
+    ...creditCards
+      .filter((c: any) => creditCardMonthlyFee(c) > 0)
+      .map((c: any) => ({
+        label: `${c.name ?? "Card"} annual fee`,
+        amount: creditCardMonthlyFee(c),
+        href: `/cards#record-${c.id}`,
+        timesPerYear: 1,
+        member_id: c.member_id,
+      })),
+    ...(baseExpenses > 0
+      ? [{ label: "Other expenses (Settings)", amount: baseExpenses, href: "/settings" }]
+      : []),
+  ].sort((a, b) => b.amount - a.amount);
+
+  const showSettingsNudge = salaryIncome === 0 && baseExpenses === 0;
+
+  const horizon90 = 90;
+
+  const allUpcoming = buildUpcomingItems(
+    {
+      properties: allPropertiesUnfiltered,
+      loans: allLoansUnfiltered,
+      insurance: allInsuranceUnfiltered,
+      investments: allInvestmentsUnfiltered,
+      savings: allSavingsUnfiltered,
+      inventoryItems,
+      reminders: remindersData ?? [],
+      otherAssets: allOtherAssetsUnfiltered,
+      healthConditions: allHealthConditionsUnfiltered,
+      creditCards: allCreditCardsUnfiltered,
+    },
+    today,
+    horizon90,
+    {
+      mortgage_days: appSettings?.mortgage_days,
+      insurance_days: appSettings?.insurance_days,
+      fd_days: appSettings?.fd_days,
+      warranty_days: appSettings?.warranty_days,
+    },
+  ).filter((u) => memberFilter === "all" || u.member_id === memberFilter);
+
+  const upcoming = allUpcoming.filter(
+    (u) => !dismissedKeys.has(`${u.sourceType}::${u.recordId}::${u.date}`),
+  );
+
+  async function invalidateAll() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["dismissed-dashboard", activeHouseholdId] }),
+      queryClient.invalidateQueries({
+        queryKey: ["reminders-dashboard", memberFilter, activeHouseholdId],
+      }),
+      // Was "alert-count" - that combined query no longer exists as of the
+      // AppHeader migration (see householdRecordQueries.ts). The badge count is
+      // now a useMemo derived from the shared per-table caches (already covered
+      // by RecordFormSheet/etc's existing invalidation) plus this extras query,
+      // which is what actually needs invalidating here for the dismiss to reflect.
+      queryClient.invalidateQueries({ queryKey: ["alert-count-extras", activeHouseholdId] }),
+    ]);
+  }
+
+  async function dismissItem(u: UpcomingItem) {
+    if (!activeHouseholdId) return;
+    const key = `${u.sourceType}::${u.recordId}`;
+    if (dismissing === key) return;
+    setDismissing(key);
+
+    const isReminder = u.sourceType === "reminder" && !!u.reminderId;
+    const { data: inserted, error } = await (supabase as any)
+      .from("dismissed_dashboard_items")
+      .upsert(
+        {
+          household_id: activeHouseholdId,
+          source_type: u.sourceType,
+          record_id: u.recordId,
+          reminder_id: u.reminderId ?? null,
+          label: u.label,
+          dismissed_date: u.date,
+          permanently_deleted: false,
+        },
+        // Reminders use a dedicated conflict target keyed on the reminder's own id, since
+        // multiple reminders can share the same entity_id (record_id) and even the same
+        // date — the original target would collide and silently overwrite between them.
+        {
+          onConflict: isReminder
+            ? "household_id,reminder_id"
+            : "household_id,source_type,record_id,dismissed_date",
+        },
+      )
+      .select("id")
+      .single();
+
+    setDismissing(null);
+
+    if (error || !inserted) {
+      console.error("dismissItem upsert failed:", error);
+      toast.error(
+        error?.message ? `Could not mark as done: ${error.message}` : "Could not mark as done.",
+      );
+      return;
+    }
+
+    const insertedId = inserted.id;
+    await invalidateAll();
+
+    toast.success("Marked as done.", {
+      duration: 5000,
+      action: {
+        label: "Undo",
+        onClick: async () => {
+          await (supabase as any).from("dismissed_dashboard_items").delete().eq("id", insertedId);
+          await invalidateAll();
+        },
+      },
+    });
+  }
+
+  const all: Array<{ kind: string; row: any; href: string; icon: any }> = [
+    ...properties.map((r: any) => ({
+      kind: "Property",
+      row: r,
+      href: "/property",
+      icon: Building2,
+    })),
+    ...loans.map((r: any) => ({ kind: "Loan", row: r, href: "/loans", icon: Landmark })),
+    ...insurance.map((r: any) => ({ kind: "Insurance", row: r, href: "/insurance", icon: Shield })),
+    ...investments.map((r: any) => ({
+      kind: "Invest",
+      row: r,
+      href: "/investments",
+      icon: TrendingUp,
+    })),
+    ...otherAssets.map((r: any) => ({ kind: "Asset", row: r, href: "/other-assets", icon: Gem })),
+    ...healthConditions.map((r: any) => ({ kind: "Health", row: r, href: "/health", icon: Heart })),
+    ...savings.map((r: any) => ({ kind: "Savings", row: r, href: "/savings", icon: Wallet })),
+    ...inventoryItems.map((r: any) => ({
+      kind: "Item",
+      row: r,
+      href: "/inventory",
+      icon: Package,
+    })),
+    ...creditCards.map((r: any) => ({ kind: "Card", row: r, href: "/cards", icon: CreditCard })),
+  ];
+
+  const urgent = all.filter((x) => x.row.status === "urgent");
+  const review = all.filter((x) => x.row.status === "review");
+
+  const upcomingAlerts = upcoming.filter((u) => u.daysLeft <= 30);
+  const alertCount = urgent.length + review.length + upcomingAlerts.length;
+
+  const dueToday = upcoming.find((u) => u.date === today.toISOString().slice(0, 10));
+
+  // Asset allocation — same FX-inclusive figures as the Net Worth Breakdown
+  // above (allocInsurance was already an alias of insuranceSurrenderValue;
+  // these three now follow the same pattern instead of separately
+  // re-summing the SGD-only arrays).
+  const allocProperty = propertyValue;
+  const allocInvestments = investmentsValue;
+  const allocCash = savingsValue;
+  const allocInsurance = insuranceSurrenderValue;
+  const allocTotal = allocProperty + allocInvestments + allocCash + allocInsurance;
+  const allocPctProperty = allocTotal > 0 ? (allocProperty / allocTotal) * 100 : 0;
+  const allocPctInvestments = allocTotal > 0 ? (allocInvestments / allocTotal) * 100 : 0;
+  const allocPctCash = allocTotal > 0 ? (allocCash / allocTotal) * 100 : 0;
+  const allocPctInsurance = allocTotal > 0 ? (allocInsurance / allocTotal) * 100 : 0;
+  const allocHasForeign =
+    propertyTotals.foreign.length > 0 ||
+    investmentTotals.foreign.length > 0 ||
+    liquidSavingsTotals.foreign.length > 0 ||
+    cpfTotals.foreign.length > 0 ||
+    insuranceSurrenderTotals.foreign.length > 0;
+
+  // Insurance adequacy — uses the full insurance array, not a currency-filtered
+  // subset, so a foreign-currency policy still counts toward "active policies"
+  // and its completeness check, and its sum assured is converted via the same
+  // FX-inclusive pattern as every other total on this page. Previously this
+  // excluded foreign policies entirely, which could understate someone's
+  // real coverage and wrongly show "not adequately covered."
+  const activeInsurance = insurance.filter((p: any) => p.status !== "inactive");
+  const sumAssuredTotals = groupByCurrency(activeInsurance, (p: any) => p.sum_assured);
+  const totalSumAssured = totalWithFx(sumAssuredTotals, fxRates);
+  const policiesWithNoSumAssured = activeInsurance.filter((p: any) => !p.sum_assured).length;
+  const incomeReplacementNeed = salaryIncome * 120;
+  const coverageRatio = incomeReplacementNeed > 0 ? totalSumAssured / incomeReplacementNeed : null;
+  const adequacyStatus =
+    incomeReplacementNeed === 0
+      ? "unset"
+      : totalSumAssured === 0
+        ? "none"
+        : coverageRatio !== null && coverageRatio >= 1
+          ? "covered"
+          : "partial";
+
+  // Financial health checks
+  const healthChecks = [
+    (() => {
+      if (salaryIncome === 0 && baseExpenses === 0)
+        return {
+          label: "Cash flow",
+          status: "incomplete",
+          detail: "Set income and expenses in Settings",
+          href: "/settings",
+        };
+      if (netCashFlow > 0)
+        return {
+          label: "Cash flow",
+          status: "pass",
+          detail: `+${fmtMoney(netCashFlow)} monthly surplus`,
+          href: "cash-flow",
+        };
+      if (netCashFlow >= -(monthlyOut * 0.1))
+        return {
+          label: "Cash flow",
+          status: "warning",
+          detail: "Near break-even — monitor closely",
+          href: "cash-flow",
+        };
+      return {
+        label: "Cash flow",
+        status: "fail",
+        detail: `${fmtMoney(netCashFlow)} monthly deficit`,
+        href: "cash-flow",
+      };
+    })(),
+    (() => {
+      if (baseExpenses === 0)
+        return {
+          label: "Emergency fund",
+          status: "incomplete",
+          detail: "Set monthly expenses in Settings to calculate",
+          href: "/settings",
+        };
+      // Deliberately excludes CPF — it isn't freely withdrawable for an actual
+      // emergency, unlike liquidSavingsValue. Stated in the detail text so this
+      // exclusion is visible in the app, not just in a code comment.
+      if (liquidSavingsValue >= monthlyOut * 3)
+        return {
+          label: "Emergency fund",
+          status: "pass",
+          detail: `${(liquidSavingsValue / monthlyOut).toFixed(1)} months of expenses covered (excl. CPF)`,
+          href: "/savings",
+        };
+      if (liquidSavingsValue >= monthlyOut)
+        return {
+          label: "Emergency fund",
+          status: "warning",
+          detail: `Only ${(liquidSavingsValue / monthlyOut).toFixed(1)} months covered (excl. CPF) — aim for 3+`,
+          href: "/savings",
+        };
+      return {
+        label: "Emergency fund",
+        status: "fail",
+        detail: "Less than 1 month of expenses in savings (excl. CPF)",
+        href: "/savings",
+      };
+    })(),
+    (() => {
+      if (adequacyStatus === "unset")
+        return {
+          label: "Insurance coverage",
+          status: "incomplete",
+          detail: "Set monthly income in Settings to calculate",
+          href: "/settings",
+        };
+      if (adequacyStatus === "none")
+        return {
+          label: "Insurance coverage",
+          status: "incomplete",
+          detail: "No sum assured entered on policies",
+          href: "/insurance",
+        };
+      if (adequacyStatus === "covered")
+        return {
+          label: "Insurance coverage",
+          status: "pass",
+          detail: `${Math.round((coverageRatio ?? 0) * 100)}% of 10-year income need covered`,
+          href: "/insurance",
+        };
+      return {
+        label: "Insurance coverage",
+        status: "warning",
+        detail: `Only ${Math.round((coverageRatio ?? 0) * 100)}% of 10-year income need covered`,
+        href: "/insurance",
+      };
+    })(),
+    (() => {
+      if (totalAssets === 0)
+        return {
+          label: "Debt ratio",
+          status: "incomplete",
+          detail: "No asset values recorded yet",
+          href: "/property",
+        };
+      const ratio = totalLiabilities / totalAssets;
+      const pct = Math.round(ratio * 100);
+      if (ratio < 0.4)
+        return {
+          label: "Debt ratio",
+          status: "pass",
+          detail: `${pct}% of assets — healthy`,
+          href: "/loans",
+        };
+      if (ratio < 0.6)
+        return {
+          label: "Debt ratio",
+          status: "warning",
+          detail: `${pct}% of assets — monitor debt levels`,
+          href: "/loans",
+        };
+      return {
+        label: "Debt ratio",
+        status: "fail",
+        detail: `${pct}% of assets — high debt load`,
+        href: "/loans",
+      };
+    })(),
+    (() => {
+      if (urgent.length === 0)
+        return { label: "Urgent alerts", status: "pass", detail: "No urgent items", href: "" };
+      return {
+        label: "Urgent alerts",
+        status: "fail",
+        detail: `${urgent.length} item${urgent.length === 1 ? "" : "s"} need attention`,
+        href: "needs-attention",
+      };
+    })(),
+  ] as {
+    label: string;
+    status: "pass" | "warning" | "fail" | "incomplete";
+    detail: string;
+    href: string;
+  }[];
+
+  const passCount = healthChecks.filter((c) => c.status === "pass").length;
+  const totalScored = healthChecks.filter((c) => c.status !== "incomplete").length;
+
+  return (
+    <div className="space-y-5">
+      <MemberFilterBar />
+
+      {dueToday && (
+        <Link
+          to={dueToday.href as any}
+          hash={`record-${dueToday.recordId}`}
+          onClick={() => setMemberFilter(dueToday.member_id ?? "all")}
+          className="block rounded-2xl bg-review p-4 text-review-foreground"
+        >
+          <div className="text-xs font-semibold uppercase">Due today</div>
+          <div className="mt-1 text-base font-bold">
+            {dueToday.label} {dueToday.amount ? `· ${fmtMoney(dueToday.amount)}` : ""}
+          </div>
+        </Link>
+      )}
+
+      {/* KPI ROW — Net Worth is the headline number, so it leads, with Active
       Alerts beside it; Assets/Liabilities follow below, same card style. */}
-  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-    {/* Not a <button>: netWorthSub can render FxInfoNote's own "ⓘ" button,
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {/* Not a <button>: netWorthSub can render FxInfoNote's own "ⓘ" button,
         and nesting <button> inside <button> is invalid HTML that this SSR
         app can't safely rely on browsers to fix up. div+role="button" gets
         the same tap behavior and keyboard access without the nesting. */}
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={openNetWorthBreakdown}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openNetWorthBreakdown(); }
-      }}
-      className="text-left w-full h-full cursor-pointer"
-    >
-      <Kpi label="Net Worth" value={fmtMoney(netWorth)} accent="gold" big sub={netWorthSub} />
-    </div>
-    <button
-      type="button"
-      onClick={() => window.dispatchEvent(new CustomEvent("fh:open-alerts"))}
-      className="text-left w-full h-full"
-    >
-      <Kpi
-        label="Active Alerts"
-        value={String(alertCount)}
-        accent={alertCount > 0 ? "bad" : "neutral"}
-        sub={`${urgent.length} urgent · ${review.length} to review`}
-      />
-    </button>
-    <button type="button" onClick={openNetWorthBreakdown} className="text-left w-full h-full">
-      <Kpi label="Total Assets" value={fmtMoney(totalAssets)} />
-    </button>
-    <button type="button" onClick={openNetWorthBreakdown} className="text-left w-full h-full">
-      <Kpi label="Total Liabilities" value={fmtMoney(totalLiabilities)} />
-    </button>
-  </div>
-
-  {/* MONTHLY CASH FLOW LINE — tapping scrolls to the full breakdown below */}
-  <button
-    type="button"
-    onClick={() => scrollTo(cashFlowRef, "cash-flow")}
-    className="w-full text-center text-sm font-semibold transition-opacity hover:opacity-75"
-  >
-    <span className="text-muted-foreground">Monthly Cash Flow: </span>
-    <span className={netCashFlow >= 0 ? "text-settled" : "text-urgent"}>
-      {netCashFlow >= 0 ? "+" : ""}{fmtMoney(netCashFlow)}
-    </span>
-    <span className="ml-1 text-[10px] text-muted-foreground">↓</span>
-  </button>
-
-  {/* NET WORTH BREAKDOWN */}
-  <section
-    ref={netWorthBreakdownRef}
-    className={`scroll-mt-28 rounded-2xl border border-border bg-card transition-all ${highlight === "net-worth-breakdown" ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
-  >
-    <button
-      onClick={() => setBreakdownOpen((v) => !v)}
-      className="flex w-full items-center justify-between p-4 text-left"
-    >
-      <h2 className="text-sm font-bold">
-        Net Worth Breakdown{netWorthHasForeign && <FxInfoNote fx={fxRates} />}
-      </h2>
-      <ChevronDown className={`h-4 w-4 transition ${breakdownOpen ? "rotate-180" : ""}`} />
-    </button>
-    {breakdownOpen && (
-      <div className="space-y-1 border-t border-border/40 px-4 pb-4 pt-3 text-sm">
-        <BreakdownRow label="Properties" value={fmtMoney(propertyValue)} />
-        <BreakdownRow label="Investments" value={fmtMoney(investmentsValue)} />
-        <BreakdownRow label="Savings" value={fmtMoney(liquidSavingsValue)} />
-        <BreakdownRow label="CPF" value={fmtMoney(cpfValue)} />
-        <BreakdownRow label="Insurance (surrender value)" value={fmtMoney(insuranceSurrenderValue)} />
-        <BreakdownRow label="Other Assets" value={fmtMoney(otherAssetsValue)} />
-        <div className="my-2 border-t border-dashed border-border" />
-        <BreakdownRow label="Total Assets" value={fmtMoney(totalAssets)} bold />
-        <div className="my-2 border-t border-border" />
-        <BreakdownRow label="Loans" value={`−${fmtMoney(totalLiabilities)}`} className="text-urgent" />
-        <BreakdownRow label="Total Liabilities" value={`−${fmtMoney(totalLiabilities)}`} className="text-urgent" bold />
-        <div className="my-2 border-t-2 border-double border-foreground/40" />
-        <div className="flex items-center justify-between pt-1">
-          <span className="text-base font-bold">NET WORTH</span>
-          <span className="text-2xl font-bold text-primary">{fmtMoney(netWorth)}</span>
-        </div>
-        <div className="mt-2 border-t border-border/40 pt-2 text-center text-[11px] text-muted-foreground">
-          For a full itemized list of assets and liabilities,{" "}
-          <Link to="/settings" hash="export-summary" className="font-semibold text-primary underline">
-            tap Export in Settings
-          </Link>.
-        </div>
-      </div>
-    )}
-  </section>
-
-  {/* NEEDS ATTENTION */}
-  <div ref={needsAttentionRef} className={`scroll-mt-28 rounded-2xl transition-all ${highlight === "needs-attention" ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}>
-    {urgent.length > 0 && <PrioritySection title="Needs Attention" items={urgent} />}
-  </div>
-
-  {/* DUE IN NEXT 90 DAYS */}
-  <section className="rounded-2xl border border-border bg-card p-4" data-tour="upcoming-section">
-    <div className="mb-3 flex items-center justify-between">
-      <h2 className="text-sm font-bold tracking-tight">Due in the Next 90 Days</h2>
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">{upcoming.length} item{upcoming.length === 1 ? "" : "s"}</span>
-        {upcoming.length > 0 && canEdit && (
-          <button
-            onClick={() => setEditMode((v) => !v)}
-            className="text-xs font-semibold text-primary"
-          >
-            {editMode ? "Done" : "Edit"}
-          </button>
-        )}
-      </div>
-    </div>
-    {editMode && (
-      <p className="mb-2 text-xs text-muted-foreground">Tap ✓ to mark an item as done and remove it from this list.</p>
-    )}
-    {upcoming.length === 0 ? (
-      <p className="py-6 text-center text-sm text-muted-foreground">Nothing due soon ✓</p>
-    ) : (
-      <>
-      <ul className="divide-y divide-border">
-        {(showAllUpcoming ? upcoming : upcoming.slice(0, 8)).map((u, i) => {
-          const isUrgent = u.daysLeft <= 7;
-          const itemKey = `${u.sourceType}::${u.recordId}`;
-          const isDismissing = dismissing === itemKey;
-          const dateClass = u.daysLeft < 0 ? "text-urgent" : isUrgent ? "text-urgent" : "text-primary";
-          const dateLabel = u.daysLeft < 0 ? `${Math.abs(u.daysLeft)}d overdue` : isUrgent ? `${u.daysLeft}d left` : format(parseISO(u.date), "d MMM");
-          return (
-           <li key={i} className="flex min-w-0 items-start gap-2 py-2.5 -mx-2 px-2 overflow-hidden">
-              {editMode ? (
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <div className="flex w-full min-w-0 items-center gap-2">
-                    <span className={`w-12 shrink-0 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
-                    <u.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    <span className="hidden min-w-0 flex-1 line-clamp-1 text-sm md:block">
-                      {u.isGiro && <b>[GIRO] </b>}
-                      {u.label}
-                    </span>
-                    <span className="flex-1 md:hidden" aria-hidden="true" />
-                    <MemberTag memberId={u.member_id} />
-                    {u.amount != null && <span className="shrink-0 text-xs font-semibold">{fmtMoney(u.amount)}</span>}
-                    <button
-                      onClick={() => dismissItem(u)}
-                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${isDismissing ? "border-muted text-muted-foreground" : "border-settled text-settled"}`}
-                    >
-                      <Check className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <span className="min-w-0 break-words text-sm md:hidden">
-                    {u.isGiro && <b>[GIRO] </b>}
-                    {u.label}
-                  </span>
-                </div>
-              ) : (
-                <Link
-                  to={u.href as any}
-                  hash={`record-${u.recordId}`}
-                  onClick={() => setMemberFilter(u.member_id ?? "all")}
-                  className="flex min-w-0 flex-1 flex-col gap-0.5 hover:bg-accent/40 rounded overflow-hidden"
-                >
-                  <div className="flex w-full min-w-0 items-center gap-2">
-                    <span className={`w-12 shrink-0 text-xs font-bold ${dateClass}`}>{dateLabel}</span>
-                    <u.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    <span className="hidden min-w-0 flex-1 line-clamp-1 text-sm md:block">
-                      {u.isGiro && <b>[GIRO] </b>}
-                      {u.label}
-                    </span>
-                    <span className="flex-1 md:hidden" aria-hidden="true" />
-                    <MemberTag memberId={u.member_id} />
-                    {u.amount != null && <span className="shrink-0 text-xs font-semibold">{fmtMoney(u.amount)}</span>}
-                    <ChevronRight className="h-4 w-4 shrink-0 text-primary" />
-                  </div>
-                  <span className="min-w-0 break-words text-sm md:hidden">
-                    {u.isGiro && <b>[GIRO] </b>}
-                    {u.label}
-                  </span>
-                </Link>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-      {upcoming.length > 8 && (
-        <button
-          onClick={() => setShowAllUpcoming((v) => !v)}
-          className="mt-2 flex w-full items-center justify-center gap-1 py-2 text-xs font-semibold text-primary"
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={openNetWorthBreakdown}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              openNetWorthBreakdown();
+            }
+          }}
+          className="text-left w-full h-full cursor-pointer"
         >
-          {showAllUpcoming ? "Show less ↑" : `Show ${upcoming.length - 8} more ↓`}
+          <Kpi label="Net Worth" value={fmtMoney(netWorth)} accent="gold" big sub={netWorthSub} />
+        </div>
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent("fh:open-alerts"))}
+          className="text-left w-full h-full"
+        >
+          <Kpi
+            label="Active Alerts"
+            value={String(alertCount)}
+            accent={alertCount > 0 ? "bad" : "neutral"}
+            sub={`${urgent.length} urgent · ${review.length} to review`}
+          />
         </button>
-      )}
-      </>
-    )}
-  </section>
-
-  {/* REVIEW NEEDED */}
-  {review.length > 0 && <PrioritySection title="Review Needed" items={review} muted showDate />}
-
-  {/* MONTHLY CASH FLOW BARS */}
- <section ref={cashFlowRef} className={`scroll-mt-28 rounded-2xl border border-border bg-card p-4 transition-all ${highlight === "cash-flow" ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}>
-    <div className="mb-3 flex items-center justify-between">
-      <h2 className="text-sm font-bold">
-        Monthly Cash Flow{cashFlowHasForeign && <FxInfoNote fx={fxRates} />}
-      </h2>
-    </div>
-    <CashFlowBars
-      inflow={monthlyIn}
-      outflow={monthlyOut}
-      inflowBreakdown={[
-        { label: "Salary / income", value: salaryIncome },
-        { label: "Rental income", value: rentalIncome },
-        { label: "Insurance payouts", value: insurancePayoutIn },
-        { label: "ILP / Endowment payouts", value: investmentPayoutIn },
-      ]}
-      outflowBreakdown={[
-        { label: "Property costs", value: propertyOut },
-        { label: "Loan repayments", value: loanOut },
-        { label: "Insurance premiums", value: insuranceOut },
-        { label: "ILP / Endowment premiums", value: investmentPremiumOut },
-        { label: "Other expenses", value: baseExpenses },
-      ]}
-    />
-    <div className="mt-3 text-center">
-      <div className="text-xs text-muted-foreground">Net</div>
-      <div className={`text-2xl font-bold ${netCashFlow >= 0 ? "text-settled" : "text-urgent"}`}>
-        {fmtMoney(netCashFlow)}
-      </div>
-      {showSettingsNudge && (
-        <p className="mt-1 text-xs text-muted-foreground">
-          Add income &amp; expenses in <a href="/settings" className="font-semibold text-primary underline">Settings</a> for a complete picture.
-        </p>
-      )}
-    </div>
-    <Suspense fallback={<div className="mt-3 h-40 w-full animate-pulse rounded-xl bg-muted/40" />}>
-      <div className="mt-3">
-        <CashflowOverYearsChart
-          properties={properties}
-          loans={loans}
-          insurance={insurance}
-          savings={savings}
-          investments={investments}
-          creditCards={creditCards}
-          members={members}
-          startingNetWorth={netWorth}
-          monthlyIncome={salaryIncome}
-          monthlyExpenses={baseExpenses}
-          appSettings={appSettings}
-        />
-      </div>
-    </Suspense>
-    {cashFlowDetailOpen && (
-      <div className="mt-3 space-y-3 border-t border-border/40 pt-3 text-xs">
-        {inflowDetailItems.length > 0 && (
-          <div>
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Money in
-            </div>
-            {inflowDetailItems.map((it, i) => (
-              <CashFlowItemRow key={i} it={it} color="settled" showMember={memberFilter === "all"} />
-            ))}
-          </div>
-        )}
-        {outflowDetailItems.length > 0 && (
-          <div>
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Money out
-            </div>
-            {outflowDetailItems.map((it, i) => (
-              <CashFlowItemRow key={i} it={it} color="urgent" showMember={memberFilter === "all"} />
-            ))}
-          </div>
-        )}
-        {/* Sep 6 2026: matches Net Worth Breakdown's own pattern of ending an
-            itemized list with a bold total — same double-border treatment. */}
-        <div className="border-t-2 border-double border-foreground/40 pt-2 text-sm">
-          <div className="flex items-center justify-between">
-            <span className="font-semibold text-muted-foreground">Total In</span>
-            <span className="font-semibold text-settled">+{fmtMoney(monthlyIn)}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="font-semibold text-muted-foreground">Total Out</span>
-            <span className="font-semibold text-urgent">−{fmtMoney(monthlyOut)}</span>
-          </div>
-          <div className="mt-1 flex items-center justify-between border-t border-border/40 pt-1">
-            <span className="text-base font-bold">Net Cash Flow</span>
-            <span className={`text-lg font-bold ${monthlyIn - monthlyOut >= 0 ? "text-settled" : "text-urgent"}`}>
-              {monthlyIn - monthlyOut >= 0 ? "+" : "−"}{fmtMoney(Math.abs(monthlyIn - monthlyOut))}
-            </span>
-          </div>
-        </div>
-      </div>
-    )}
-    {(inflowDetailItems.length > 0 || outflowDetailItems.length > 0) && (
-      <div className="mt-2 flex justify-end">
-        <button
-          onClick={() => setCashFlowDetailOpen((v) => !v)}
-          className="flex items-center gap-1 text-xs font-semibold text-primary"
-        >
-          {cashFlowDetailOpen ? "Hide breakdown" : "Show breakdown"}
-          <ChevronDown className={`h-3.5 w-3.5 transition ${cashFlowDetailOpen ? "rotate-180" : ""}`} />
+        <button type="button" onClick={openNetWorthBreakdown} className="text-left w-full h-full">
+          <Kpi label="Total Assets" value={fmtMoney(totalAssets)} />
+        </button>
+        <button type="button" onClick={openNetWorthBreakdown} className="text-left w-full h-full">
+          <Kpi label="Total Liabilities" value={fmtMoney(totalLiabilities)} />
         </button>
       </div>
-    )}
-  </section>
 
-  {/* ASSET ALLOCATION */}
-  <AssetAllocationCard
-    allocProperty={allocProperty}
-    allocInvestments={allocInvestments}
-    allocCash={allocCash}
-    allocInsurance={allocInsurance}
-    allocTotal={allocTotal}
-    allocPctProperty={allocPctProperty}
-    allocPctInvestments={allocPctInvestments}
-    allocPctCash={allocPctCash}
-    allocPctInsurance={allocPctInsurance}
-    hasForeign={allocHasForeign}
-    fx={fxRates}
-  />
-
-  {/* INSURANCE ADEQUACY */}
-  <InsuranceAdequacyCard
-    totalSumAssured={totalSumAssured}
-    incomeReplacementNeed={incomeReplacementNeed}
-    coverageRatio={coverageRatio}
-    adequacyStatus={adequacyStatus}
-    policiesWithNoSumAssured={policiesWithNoSumAssured}
-    activePolicyCount={activeInsurance.length}
-    hasForeign={sumAssuredTotals.foreign.length > 0}
-    fx={fxRates}
-  />
-
-  {/* FINANCIAL HEALTH */}
-  <FinancialHealthCard
-    checks={healthChecks}
-    passCount={passCount}
-    totalScored={totalScored}
-    onScroll={(target) => {
-      if (target === "cash-flow") scrollTo(cashFlowRef, "cash-flow");
-      if (target === "needs-attention") scrollTo(needsAttentionRef, "needs-attention");
-    }}
-  />
-
-  {/* LIFETIME CHART */}
-  <section ref={lifetimeChartRef} className={`scroll-mt-28 rounded-2xl border border-border bg-card p-4 transition-all ${highlight === "lifetime-chart" ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}>
-    <div className="mb-1 flex items-center gap-1.5">
-      <h2 className="text-sm font-bold">Lifetime Net Worth</h2>
+      {/* MONTHLY CASH FLOW LINE — tapping scrolls to the full breakdown below */}
       <button
         type="button"
-        onPointerDown={() => setChartInfoOpen((v) => !v)}
-        className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
-        aria-label="What this chart does not account for"
+        onClick={() => scrollTo(cashFlowRef, "cash-flow")}
+        className="w-full text-center text-sm font-semibold transition-opacity hover:opacity-75"
       >
-        <Info className="h-3 w-3" />
+        <span className="text-muted-foreground">Monthly Cash Flow: </span>
+        <span className={netCashFlow >= 0 ? "text-settled" : "text-urgent"}>
+          {netCashFlow >= 0 ? "+" : ""}
+          {fmtMoney(netCashFlow)}
+        </span>
+        <span className="ml-1 text-[10px] text-muted-foreground">↓</span>
       </button>
-    </div>
-    <p className="mb-3 text-xs text-muted-foreground">Projected trajectory based on your current records. Tap the year detail below for a full breakdown of what's driving each year's change.</p>
-    {chartInfoOpen && (
-      <div className="mb-3 space-y-1.5 rounded-lg border border-border bg-muted/30 p-3 text-[11px] text-muted-foreground">
-        <p className="font-semibold text-foreground">What this chart simplifies:</p>
-        <p>• Investment growth uses one global rate set in Settings → Projection Assumptions — not each investment's own "Projected return %" field.</p>
-        <p>• Insurance sum assured/value does not decrease as premiums are paid over time.</p>
-        <p>• Insurance surrender values are treated as static — they don't grow or shrink year to year in this projection.</p>
-        <p>• Insurance/ILP payout amounts are added as income but don't reduce the policy's compounding value.</p>
+
+      {/* NET WORTH BREAKDOWN */}
+      <section
+        ref={netWorthBreakdownRef}
+        className={`scroll-mt-28 rounded-2xl border border-border bg-card transition-all ${highlight === "net-worth-breakdown" ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
+      >
+        <button
+          onClick={() => setBreakdownOpen((v) => !v)}
+          className="flex w-full items-center justify-between p-4 text-left"
+        >
+          <h2 className="text-sm font-bold">
+            Net Worth Breakdown{netWorthHasForeign && <FxInfoNote fx={fxRates} />}
+          </h2>
+          <ChevronDown className={`h-4 w-4 transition ${breakdownOpen ? "rotate-180" : ""}`} />
+        </button>
+        {breakdownOpen && (
+          <div className="space-y-1 border-t border-border/40 px-4 pb-4 pt-3 text-sm">
+            <BreakdownRow label="Properties" value={fmtMoney(propertyValue)} />
+            <BreakdownRow label="Investments" value={fmtMoney(investmentsValue)} />
+            <BreakdownRow label="Savings" value={fmtMoney(liquidSavingsValue)} />
+            <BreakdownRow label="CPF" value={fmtMoney(cpfValue)} />
+            <BreakdownRow
+              label="Insurance (surrender value)"
+              value={fmtMoney(insuranceSurrenderValue)}
+            />
+            <BreakdownRow label="Other Assets" value={fmtMoney(otherAssetsValue)} />
+            <div className="my-2 border-t border-dashed border-border" />
+            <BreakdownRow label="Total Assets" value={fmtMoney(totalAssets)} bold />
+            <div className="my-2 border-t border-border" />
+            <BreakdownRow
+              label="Loans"
+              value={`−${fmtMoney(loansValue)}`}
+              className="text-urgent"
+            />
+            {propertyMortgageValue > 0 && (
+              <BreakdownRow
+                label="Property mortgages"
+                value={`−${fmtMoney(propertyMortgageValue)}`}
+                className="text-urgent"
+              />
+            )}
+            <BreakdownRow
+              label="Total Liabilities"
+              value={`−${fmtMoney(totalLiabilities)}`}
+              className="text-urgent"
+              bold
+            />
+            <div className="my-2 border-t-2 border-double border-foreground/40" />
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-base font-bold">NET WORTH</span>
+              <span className="text-2xl font-bold text-primary">{fmtMoney(netWorth)}</span>
+            </div>
+            <div className="mt-2 border-t border-border/40 pt-2 text-center text-[11px] text-muted-foreground">
+              For a full itemized list of assets and liabilities,{" "}
+              <Link
+                to="/settings"
+                hash="export-summary"
+                className="font-semibold text-primary underline"
+              >
+                tap Export in Settings
+              </Link>
+              .
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* NEEDS ATTENTION */}
+      <div
+        ref={needsAttentionRef}
+        className={`scroll-mt-28 rounded-2xl transition-all ${highlight === "needs-attention" ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
+      >
+        {urgent.length > 0 && <PrioritySection title="Needs Attention" items={urgent} />}
       </div>
-    )}
-    <Suspense fallback={<div className="h-64 w-full animate-pulse rounded-xl bg-muted/40" />}>
-      <LifetimeChart
-        properties={properties}
-        loans={loans}
-        insurance={insurance}
-        savings={savings}
-        investments={investments}
-        creditCards={creditCards}
-        members={members}
-        startingNetWorth={netWorth}
-        monthlyIncome={salaryIncome}
-        monthlyExpenses={baseExpenses}
-        appSettings={appSettings}
+
+      {/* DUE IN NEXT 90 DAYS */}
+      <section
+        className="rounded-2xl border border-border bg-card p-4"
+        data-tour="upcoming-section"
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-bold tracking-tight">Due in the Next 90 Days</h2>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              {upcoming.length} item{upcoming.length === 1 ? "" : "s"}
+            </span>
+            {upcoming.length > 0 && canEdit && (
+              <button
+                onClick={() => setEditMode((v) => !v)}
+                className="text-xs font-semibold text-primary"
+              >
+                {editMode ? "Done" : "Edit"}
+              </button>
+            )}
+          </div>
+        </div>
+        {editMode && (
+          <p className="mb-2 text-xs text-muted-foreground">
+            Tap ✓ to mark an item as done and remove it from this list.
+          </p>
+        )}
+        {upcoming.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">Nothing due soon ✓</p>
+        ) : (
+          <>
+            <ul className="divide-y divide-border">
+              {(showAllUpcoming ? upcoming : upcoming.slice(0, 8)).map((u, i) => {
+                const isUrgent = u.daysLeft <= 7;
+                const itemKey = `${u.sourceType}::${u.recordId}`;
+                const isDismissing = dismissing === itemKey;
+                const dateClass =
+                  u.daysLeft < 0 ? "text-urgent" : isUrgent ? "text-urgent" : "text-primary";
+                const dateLabel =
+                  u.daysLeft < 0
+                    ? `${Math.abs(u.daysLeft)}d overdue`
+                    : isUrgent
+                      ? `${u.daysLeft}d left`
+                      : format(parseISO(u.date), "d MMM");
+                return (
+                  <li
+                    key={i}
+                    className="flex min-w-0 items-start gap-2 py-2.5 -mx-2 px-2 overflow-hidden"
+                  >
+                    {editMode ? (
+                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <div className="flex w-full min-w-0 items-center gap-2">
+                          <span className={`w-12 shrink-0 text-xs font-bold ${dateClass}`}>
+                            {dateLabel}
+                          </span>
+                          <u.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span className="hidden min-w-0 flex-1 line-clamp-1 text-sm md:block">
+                            {u.isGiro && <b>[GIRO] </b>}
+                            {u.label}
+                          </span>
+                          <span className="flex-1 md:hidden" aria-hidden="true" />
+                          <MemberTag memberId={u.member_id} />
+                          {u.amount != null && (
+                            <span className="shrink-0 text-xs font-semibold">
+                              {fmtMoney(u.amount)}
+                            </span>
+                          )}
+                          <button
+                            onClick={() => dismissItem(u)}
+                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${isDismissing ? "border-muted text-muted-foreground" : "border-settled text-settled"}`}
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <span className="min-w-0 break-words text-sm md:hidden">
+                          {u.isGiro && <b>[GIRO] </b>}
+                          {u.label}
+                        </span>
+                      </div>
+                    ) : (
+                      <Link
+                        to={u.href as any}
+                        hash={`record-${u.recordId}`}
+                        onClick={() => setMemberFilter(u.member_id ?? "all")}
+                        className="flex min-w-0 flex-1 flex-col gap-0.5 hover:bg-accent/40 rounded overflow-hidden"
+                      >
+                        <div className="flex w-full min-w-0 items-center gap-2">
+                          <span className={`w-12 shrink-0 text-xs font-bold ${dateClass}`}>
+                            {dateLabel}
+                          </span>
+                          <u.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span className="hidden min-w-0 flex-1 line-clamp-1 text-sm md:block">
+                            {u.isGiro && <b>[GIRO] </b>}
+                            {u.label}
+                          </span>
+                          <span className="flex-1 md:hidden" aria-hidden="true" />
+                          <MemberTag memberId={u.member_id} />
+                          {u.amount != null && (
+                            <span className="shrink-0 text-xs font-semibold">
+                              {fmtMoney(u.amount)}
+                            </span>
+                          )}
+                          <ChevronRight className="h-4 w-4 shrink-0 text-primary" />
+                        </div>
+                        <span className="min-w-0 break-words text-sm md:hidden">
+                          {u.isGiro && <b>[GIRO] </b>}
+                          {u.label}
+                        </span>
+                      </Link>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            {upcoming.length > 8 && (
+              <button
+                onClick={() => setShowAllUpcoming((v) => !v)}
+                className="mt-2 flex w-full items-center justify-center gap-1 py-2 text-xs font-semibold text-primary"
+              >
+                {showAllUpcoming ? "Show less ↑" : `Show ${upcoming.length - 8} more ↓`}
+              </button>
+            )}
+          </>
+        )}
+      </section>
+
+      {/* REVIEW NEEDED */}
+      {review.length > 0 && <PrioritySection title="Review Needed" items={review} muted showDate />}
+
+      {/* MONTHLY CASH FLOW BARS */}
+      <section
+        ref={cashFlowRef}
+        className={`scroll-mt-28 rounded-2xl border border-border bg-card p-4 transition-all ${highlight === "cash-flow" ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-bold">
+            Monthly Cash Flow{cashFlowHasForeign && <FxInfoNote fx={fxRates} />}
+          </h2>
+        </div>
+        <CashFlowBars
+          inflow={monthlyIn}
+          outflow={monthlyOut}
+          inflowBreakdown={[
+            { label: "Salary / income", value: salaryIncome },
+            { label: "Rental income", value: rentalIncome },
+            { label: "Insurance payouts", value: insurancePayoutIn },
+            { label: "ILP / Endowment payouts", value: investmentPayoutIn },
+          ]}
+          outflowBreakdown={[
+            { label: "Property costs", value: propertyOut },
+            { label: "Loan repayments", value: loanOut },
+            { label: "Insurance premiums", value: insuranceOut },
+            { label: "ILP / Endowment premiums", value: investmentPremiumOut },
+            { label: "Other expenses", value: baseExpenses },
+          ]}
+        />
+        <div className="mt-3 text-center">
+          <div className="text-xs text-muted-foreground">Net</div>
+          <div
+            className={`text-2xl font-bold ${netCashFlow >= 0 ? "text-settled" : "text-urgent"}`}
+          >
+            {fmtMoney(netCashFlow)}
+          </div>
+          {showSettingsNudge && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Add income &amp; expenses in{" "}
+              <a href="/settings" className="font-semibold text-primary underline">
+                Settings
+              </a>{" "}
+              for a complete picture.
+            </p>
+          )}
+        </div>
+        <Suspense
+          fallback={<div className="mt-3 h-40 w-full animate-pulse rounded-xl bg-muted/40" />}
+        >
+          <div className="mt-3">
+            <CashflowOverYearsChart
+              properties={properties}
+              loans={loans}
+              insurance={insurance}
+              savings={savings}
+              investments={investments}
+              creditCards={creditCards}
+              members={members}
+              startingNetWorth={netWorth}
+              monthlyIncome={salaryIncome}
+              monthlyExpenses={baseExpenses}
+              appSettings={appSettings}
+            />
+          </div>
+        </Suspense>
+        {cashFlowDetailOpen && (
+          <div className="mt-3 space-y-3 border-t border-border/40 pt-3 text-xs">
+            {inflowDetailItems.length > 0 && (
+              <div>
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Money in
+                </div>
+                {inflowDetailItems.map((it, i) => (
+                  <CashFlowItemRow
+                    key={i}
+                    it={it}
+                    color="settled"
+                    showMember={memberFilter === "all"}
+                  />
+                ))}
+              </div>
+            )}
+            {outflowDetailItems.length > 0 && (
+              <div>
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Money out
+                </div>
+                {outflowDetailItems.map((it, i) => (
+                  <CashFlowItemRow
+                    key={i}
+                    it={it}
+                    color="urgent"
+                    showMember={memberFilter === "all"}
+                  />
+                ))}
+              </div>
+            )}
+            {/* Sep 6 2026: matches Net Worth Breakdown's own pattern of ending an
+            itemized list with a bold total — same double-border treatment. */}
+            <div className="border-t-2 border-double border-foreground/40 pt-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-muted-foreground">Total In</span>
+                <span className="font-semibold text-settled">+{fmtMoney(monthlyIn)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-muted-foreground">Total Out</span>
+                <span className="font-semibold text-urgent">−{fmtMoney(monthlyOut)}</span>
+              </div>
+              <div className="mt-1 flex items-center justify-between border-t border-border/40 pt-1">
+                <span className="text-base font-bold">Net Cash Flow</span>
+                <span
+                  className={`text-lg font-bold ${monthlyIn - monthlyOut >= 0 ? "text-settled" : "text-urgent"}`}
+                >
+                  {monthlyIn - monthlyOut >= 0 ? "+" : "−"}
+                  {fmtMoney(Math.abs(monthlyIn - monthlyOut))}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+        {(inflowDetailItems.length > 0 || outflowDetailItems.length > 0) && (
+          <div className="mt-2 flex justify-end">
+            <button
+              onClick={() => setCashFlowDetailOpen((v) => !v)}
+              className="flex items-center gap-1 text-xs font-semibold text-primary"
+            >
+              {cashFlowDetailOpen ? "Hide breakdown" : "Show breakdown"}
+              <ChevronDown
+                className={`h-3.5 w-3.5 transition ${cashFlowDetailOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+          </div>
+        )}
+      </section>
+
+      {/* ASSET ALLOCATION */}
+      <AssetAllocationCard
+        allocProperty={allocProperty}
+        allocInvestments={allocInvestments}
+        allocCash={allocCash}
+        allocInsurance={allocInsurance}
+        allocTotal={allocTotal}
+        allocPctProperty={allocPctProperty}
+        allocPctInvestments={allocPctInvestments}
+        allocPctCash={allocPctCash}
+        allocPctInsurance={allocPctInsurance}
+        hasForeign={allocHasForeign}
+        fx={fxRates}
       />
-    </Suspense>
-  </section>
 
-  <EstatePlanningCard />
+      {/* INSURANCE ADEQUACY */}
+      <InsuranceAdequacyCard
+        totalSumAssured={totalSumAssured}
+        incomeReplacementNeed={incomeReplacementNeed}
+        coverageRatio={coverageRatio}
+        adequacyStatus={adequacyStatus}
+        policiesWithNoSumAssured={policiesWithNoSumAssured}
+        activePolicyCount={activeInsurance.length}
+        hasForeign={sumAssuredTotals.foreign.length > 0}
+        fx={fxRates}
+      />
 
-  <OnboardingWizard
-    open={onboardingOpen}
-    onOpenChange={(v) => {
-      setOnboardingOpen(v);
-      if (!v) setOnboardingSoftDismissed(true);
-    }}
-    hasProperty={properties.length > 0}
-    hasInsurance={insurance.length > 0}
-    hasInventoryItem={inventoryItems.length > 0}
-    onDismissForever={dismissOnboardingForever}
-    onScrollToLifetimeChart={() => scrollTo(lifetimeChartRef, "lifetime-chart")}
-  />
-</div>
+      {/* FINANCIAL HEALTH */}
+      <FinancialHealthCard
+        checks={healthChecks}
+        passCount={passCount}
+        totalScored={totalScored}
+        onScroll={(target) => {
+          if (target === "cash-flow") scrollTo(cashFlowRef, "cash-flow");
+          if (target === "needs-attention") scrollTo(needsAttentionRef, "needs-attention");
+        }}
+      />
 
-);
+      {/* LIFETIME CHART */}
+      <section
+        ref={lifetimeChartRef}
+        className={`scroll-mt-28 rounded-2xl border border-border bg-card p-4 transition-all ${highlight === "lifetime-chart" ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
+      >
+        <div className="mb-1 flex items-center gap-1.5">
+          <h2 className="text-sm font-bold">Lifetime Net Worth</h2>
+          <button
+            type="button"
+            onPointerDown={() => setChartInfoOpen((v) => !v)}
+            className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+            aria-label="What this chart does not account for"
+          >
+            <Info className="h-3 w-3" />
+          </button>
+        </div>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Projected trajectory based on your current records. Tap the year detail below for a full
+          breakdown of what's driving each year's change.
+        </p>
+        {chartInfoOpen && (
+          <div className="mb-3 space-y-1.5 rounded-lg border border-border bg-muted/30 p-3 text-[11px] text-muted-foreground">
+            <p className="font-semibold text-foreground">What this chart simplifies:</p>
+            <p>
+              • Investment growth uses one global rate set in Settings → Projection Assumptions —
+              not each investment's own "Projected return %" field.
+            </p>
+            <p>• Insurance sum assured/value does not decrease as premiums are paid over time.</p>
+            <p>
+              • Insurance surrender values are treated as static — they don't grow or shrink year to
+              year in this projection.
+            </p>
+            <p>
+              • Insurance/ILP payout amounts are added as income but don't reduce the policy's
+              compounding value.
+            </p>
+          </div>
+        )}
+        <Suspense fallback={<div className="h-64 w-full animate-pulse rounded-xl bg-muted/40" />}>
+          <LifetimeChart
+            properties={properties}
+            loans={loans}
+            insurance={insurance}
+            savings={savings}
+            investments={investments}
+            creditCards={creditCards}
+            members={members}
+            startingNetWorth={netWorth}
+            monthlyIncome={salaryIncome}
+            monthlyExpenses={baseExpenses}
+            appSettings={appSettings}
+          />
+        </Suspense>
+      </section>
+
+      <EstatePlanningCard />
+
+      <OnboardingWizard
+        open={onboardingOpen}
+        onOpenChange={(v) => {
+          setOnboardingOpen(v);
+          if (!v) setOnboardingSoftDismissed(true);
+        }}
+        hasProperty={properties.length > 0}
+        hasInsurance={insurance.length > 0}
+        hasInventoryItem={inventoryItems.length > 0}
+        onDismissForever={dismissOnboardingForever}
+        onScrollToLifetimeChart={() => scrollTo(lifetimeChartRef, "lifetime-chart")}
+      />
+    </div>
+  );
 }
 
-function Kpi({ label, value, accent, big, sub }: { label: string; value: string; accent?: "good" | "bad" | "neutral" | "gold"; big?: boolean; sub?: ReactNode }) {
-const valueColor = accent === "good" ? "text-settled" : accent === "bad" ? "text-urgent" : accent === "gold" ? "text-primary" : "";
-const borderTop = accent === "bad" ? "bg-urgent-soft/30 border-urgent/30" : accent === "gold" ? "border-primary/40" : "";
-return (
-<div className={`rounded-2xl border border-border bg-card p-3 h-full ${borderTop}`}>
-<div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
-<div className={`mt-1 ${big ? "text-2xl" : "text-xl"} font-bold ${valueColor}`}>{value}</div>
-{sub && <div className="mt-0.5 text-[10px] text-muted-foreground">{sub}</div>}
-</div>
-);
+function Kpi({
+  label,
+  value,
+  accent,
+  big,
+  sub,
+}: {
+  label: string;
+  value: string;
+  accent?: "good" | "bad" | "neutral" | "gold";
+  big?: boolean;
+  sub?: ReactNode;
+}) {
+  const valueColor =
+    accent === "good"
+      ? "text-settled"
+      : accent === "bad"
+        ? "text-urgent"
+        : accent === "gold"
+          ? "text-primary"
+          : "";
+  const borderTop =
+    accent === "bad"
+      ? "bg-urgent-soft/30 border-urgent/30"
+      : accent === "gold"
+        ? "border-primary/40"
+        : "";
+  return (
+    <div className={`rounded-2xl border border-border bg-card p-3 h-full ${borderTop}`}>
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div className={`mt-1 ${big ? "text-2xl" : "text-xl"} font-bold ${valueColor}`}>{value}</div>
+      {sub && <div className="mt-0.5 text-[10px] text-muted-foreground">{sub}</div>}
+    </div>
+  );
 }
 
-function BreakdownRow({ label, value, bold, className }: { label: string; value: string; bold?: boolean; className?: string }) {
-return (
-<div className={`flex items-center justify-between py-0.5 ${bold ? "font-bold" : ""} ${className ?? ""}`}>
-<span>{label}</span>
-<span>{value}</span>
-</div>
-);
+function BreakdownRow({
+  label,
+  value,
+  bold,
+  className,
+}: {
+  label: string;
+  value: string;
+  bold?: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`flex items-center justify-between py-0.5 ${bold ? "font-bold" : ""} ${className ?? ""}`}
+    >
+      <span>{label}</span>
+      <span>{value}</span>
+    </div>
+  );
 }
 
-function CashFlowItemRow({ it, color, showMember }: { it: LineItem; color: "settled" | "urgent"; showMember?: boolean }) {
-const sign = color === "settled" ? "+" : "−";
-const textClass = color === "settled" ? "font-medium text-settled" : "font-medium text-urgent";
-// it.amount is already the monthly figure. If the source record's actual
-// frequency isn't monthly (timesPerYear !== 12), that monthly figure was
-// derived by dividing the annual total by 12 — show that conversion,
-// same convention as the ×N / per-occurrence breakdown in Year Detail.
-const showAnnualConversion = it.timesPerYear !== undefined && it.timesPerYear !== 12;
-const inner = (
-<div className="flex justify-between gap-2 py-0.5">
-<span className="flex items-center text-muted-foreground">
-{showMember && <MemberInitialDot memberId={it.member_id} />}
-{it.label}
-</span>
-<span className="text-right">
-<span className={textClass}>{sign}{fmtMoney(it.amount)}</span>
-{showAnnualConversion && (
-<span className="block text-[9px] font-normal text-muted-foreground/70">
-{fmtMoney(it.amount * 12)}/yr ÷ 12
-</span>
-)}
-</span>
-</div>
-);
-if (it.href) {
-return (
-<a href={it.href} className="block rounded hover:bg-accent/40 -mx-1 px-1 transition-colors">
-{inner}
-</a>
-);
-}
-return inner;
+function CashFlowItemRow({
+  it,
+  color,
+  showMember,
+}: {
+  it: LineItem;
+  color: "settled" | "urgent";
+  showMember?: boolean;
+}) {
+  const sign = color === "settled" ? "+" : "−";
+  const textClass = color === "settled" ? "font-medium text-settled" : "font-medium text-urgent";
+  // it.amount is already the monthly figure. If the source record's actual
+  // frequency isn't monthly (timesPerYear !== 12), that monthly figure was
+  // derived by dividing the annual total by 12 — show that conversion,
+  // same convention as the ×N / per-occurrence breakdown in Year Detail.
+  const showAnnualConversion = it.timesPerYear !== undefined && it.timesPerYear !== 12;
+  const inner = (
+    <div className="flex justify-between gap-2 py-0.5">
+      <span className="flex items-center text-muted-foreground">
+        {showMember && <MemberInitialDot memberId={it.member_id} />}
+        {it.label}
+      </span>
+      <span className="text-right">
+        <span className={textClass}>
+          {sign}
+          {fmtMoney(it.amount)}
+        </span>
+        {showAnnualConversion && (
+          <span className="block text-[9px] font-normal text-muted-foreground/70">
+            {fmtMoney(it.amount * 12)}/yr ÷ 12
+          </span>
+        )}
+      </span>
+    </div>
+  );
+  if (it.href) {
+    return (
+      <a href={it.href} className="block rounded hover:bg-accent/40 -mx-1 px-1 transition-colors">
+        {inner}
+      </a>
+    );
+  }
+  return inner;
 }
 
 type BreakdownItem = { label: string; value: number };
 
 function CashFlowBars({
-inflow,
-outflow,
-inflowBreakdown = [],
-outflowBreakdown = [],
+  inflow,
+  outflow,
+  inflowBreakdown = [],
+  outflowBreakdown = [],
 }: {
-inflow: number;
-outflow: number;
-inflowBreakdown?: BreakdownItem[];
-outflowBreakdown?: BreakdownItem[];
+  inflow: number;
+  outflow: number;
+  inflowBreakdown?: BreakdownItem[];
+  outflowBreakdown?: BreakdownItem[];
 }) {
-const max = Math.max(inflow, outflow, 1);
-const activeInflow = inflowBreakdown.filter((i) => i.value > 0);
-const activeOutflow = outflowBreakdown.filter((i) => i.value > 0);
-return (
-<div className="space-y-3">
-<div>
-<div className="flex justify-between text-xs">
-<span className="text-muted-foreground">Income</span>
-<span className="font-semibold">{fmtMoney(inflow)}</span>
-</div>
-<div className="mt-1 h-3 overflow-hidden rounded-full bg-muted">
-<div className="h-full bg-settled" style={{ width: `${(inflow / max) * 100}%` }} />
-</div>
-{activeInflow.length > 0 && (
-<div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-{activeInflow.map((item) => (
-<span key={item.label} className="text-[10px] text-muted-foreground">
-{item.label}: <span className="font-medium text-foreground">{fmtMoney(item.value)}</span>
-</span>
-))}
-</div>
-)}
-</div>
-<div>
-<div className="flex justify-between text-xs">
-<span className="text-muted-foreground">Expenses</span>
-<span className="font-semibold">{fmtMoney(outflow)}</span>
-</div>
-<div className="mt-1 h-3 overflow-hidden rounded-full bg-muted">
-<div className="h-full bg-urgent" style={{ width: `${(outflow / max) * 100}%` }} />
-</div>
-{activeOutflow.length > 0 && (
-<div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-{activeOutflow.map((item) => (
-<span key={item.label} className="text-[10px] text-muted-foreground">
-{item.label}: <span className="font-medium text-foreground">{fmtMoney(item.value)}</span>
-</span>
-))}
-</div>
-)}
-</div>
-</div>
-);
+  const max = Math.max(inflow, outflow, 1);
+  const activeInflow = inflowBreakdown.filter((i) => i.value > 0);
+  const activeOutflow = outflowBreakdown.filter((i) => i.value > 0);
+  return (
+    <div className="space-y-3">
+      <div>
+        <div className="flex justify-between text-xs">
+          <span className="text-muted-foreground">Income</span>
+          <span className="font-semibold">{fmtMoney(inflow)}</span>
+        </div>
+        <div className="mt-1 h-3 overflow-hidden rounded-full bg-muted">
+          <div className="h-full bg-settled" style={{ width: `${(inflow / max) * 100}%` }} />
+        </div>
+        {activeInflow.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+            {activeInflow.map((item) => (
+              <span key={item.label} className="text-[10px] text-muted-foreground">
+                {item.label}:{" "}
+                <span className="font-medium text-foreground">{fmtMoney(item.value)}</span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      <div>
+        <div className="flex justify-between text-xs">
+          <span className="text-muted-foreground">Expenses</span>
+          <span className="font-semibold">{fmtMoney(outflow)}</span>
+        </div>
+        <div className="mt-1 h-3 overflow-hidden rounded-full bg-muted">
+          <div className="h-full bg-urgent" style={{ width: `${(outflow / max) * 100}%` }} />
+        </div>
+        {activeOutflow.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+            {activeOutflow.map((item) => (
+              <span key={item.label} className="text-[10px] text-muted-foreground">
+                {item.label}:{" "}
+                <span className="font-medium text-foreground">{fmtMoney(item.value)}</span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function reviewDateInfo(kind: string, row: any): { prefix: string; date: string } | null {
-if (kind === "Property" && row.fixed_rate_end) return { prefix: "Reprice by", date: fmtMonth(row.fixed_rate_end) };
-if (kind === "Loan" && row.reprice_date) return { prefix: "Reprice by", date: fmtMonth(row.reprice_date) };
-if (kind === "Insurance") {
-// Derived from start_date + frequency, same as everywhere else alerts are computed —
-// not the dead next_due_date field, which no longer gets kept in sync with reality.
-const nextDue = computeNextOccurrence(row.start_date, row.frequency, row.end_date, new Date());
-if (nextDue) return { prefix: "Renew by", date: fmtMonth(nextDue) };
-}
-return null;
+  if (kind === "Property" && row.fixed_rate_end)
+    return { prefix: "Reprice by", date: fmtMonth(row.fixed_rate_end) };
+  if (kind === "Loan" && row.reprice_date)
+    return { prefix: "Reprice by", date: fmtMonth(row.reprice_date) };
+  if (kind === "Insurance") {
+    // Derived from start_date + frequency, same as everywhere else alerts are computed —
+    // not the dead next_due_date field, which no longer gets kept in sync with reality.
+    const nextDue = computeNextOccurrence(row.start_date, row.frequency, row.end_date, new Date());
+    if (nextDue) return { prefix: "Renew by", date: fmtMonth(nextDue) };
+  }
+  return null;
 }
 
 function AssetAllocationCard({
-allocProperty, allocInvestments, allocCash, allocInsurance, allocTotal,
-allocPctProperty, allocPctInvestments, allocPctCash, allocPctInsurance,
-hasForeign, fx,
+  allocProperty,
+  allocInvestments,
+  allocCash,
+  allocInsurance,
+  allocTotal,
+  allocPctProperty,
+  allocPctInvestments,
+  allocPctCash,
+  allocPctInsurance,
+  hasForeign,
+  fx,
 }: {
-allocProperty: number; allocInvestments: number; allocCash: number; allocInsurance: number; allocTotal: number;
-allocPctProperty: number; allocPctInvestments: number; allocPctCash: number; allocPctInsurance: number;
-hasForeign: boolean; fx?: FxRates | null;
+  allocProperty: number;
+  allocInvestments: number;
+  allocCash: number;
+  allocInsurance: number;
+  allocTotal: number;
+  allocPctProperty: number;
+  allocPctInvestments: number;
+  allocPctCash: number;
+  allocPctInsurance: number;
+  hasForeign: boolean;
+  fx?: FxRates | null;
 }) {
-const isEmpty = allocTotal === 0;
-const segments = [
-{ label: "Property", value: allocProperty, pct: allocPctProperty, color: "bg-primary" },
-{ label: "Investments", value: allocInvestments, pct: allocPctInvestments, color: "bg-settled" },
-{ label: "Cash & Savings", value: allocCash, pct: allocPctCash, color: "bg-review" },
-{ label: "Insurance (surrender)", value: allocInsurance, pct: allocPctInsurance, color: "bg-primary/50" },
-];
-const activeSegments = segments.filter((s) => s.value > 0);
+  const isEmpty = allocTotal === 0;
+  const segments = [
+    { label: "Property", value: allocProperty, pct: allocPctProperty, color: "bg-primary" },
+    {
+      label: "Investments",
+      value: allocInvestments,
+      pct: allocPctInvestments,
+      color: "bg-settled",
+    },
+    { label: "Cash & Savings", value: allocCash, pct: allocPctCash, color: "bg-review" },
+    {
+      label: "Insurance (surrender)",
+      value: allocInsurance,
+      pct: allocPctInsurance,
+      color: "bg-primary/50",
+    },
+  ];
+  const activeSegments = segments.filter((s) => s.value > 0);
 
-return (
-<section className="rounded-2xl border border-border bg-card p-4">
-<div className="mb-3 flex items-center justify-between">
-<h2 className="text-sm font-bold">Asset Allocation</h2>
-<span className="flex items-center text-xs text-muted-foreground">
-  {hasForeign ? (
-    <>
-      Includes converted foreign currency
-      <FxInfoNote fx={fx} />
-    </>
-  ) : (
-    "SGD"
-  )}
-</span>
-</div>
-{isEmpty ? (
-<p className="py-2 text-xs text-muted-foreground">No asset values recorded yet. Add properties, investments, or savings to see your allocation.</p>
-) : (
-<div className="space-y-3">
-<div className="flex h-4 w-full overflow-hidden rounded-full">
-{segments.map((s) => {
-const width = s.pct.toFixed(1);
-const isActive = s.value > 0;
-return isActive ? (
-<div
-key={s.label}
-className={`h-full ${s.color} transition-all`}
-style={{ width: `${width}%` }}
-/>
-) : null;
-})}
-</div>
-<div className="grid grid-cols-2 gap-3">
-{segments.map((s) => {
-const pctDisplay = s.pct > 0 ? `${Math.round(s.pct)}%` : "—";
-return (
-<div key={s.label} className="space-y-0.5">
-<div className="flex items-center gap-1">
-<span className={`inline-block h-2 w-2 shrink-0 rounded-full ${s.color}`} />
-<span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground truncate">{s.label}</span>
-</div>
-<div className="text-sm font-bold">{pctDisplay}</div>
-<div className="text-[10px] text-muted-foreground">{fmtMoney(s.value)}</div>
-</div>
-);
-})}
-</div>
-{activeSegments.length === 1 && (
-<p className="text-[10px] text-muted-foreground">Only one asset class recorded — add investments or savings for a complete picture.</p>
-)}
-</div>
-)}
-</section>
-);
+  return (
+    <section className="rounded-2xl border border-border bg-card p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-bold">Asset Allocation</h2>
+        <span className="flex items-center text-xs text-muted-foreground">
+          {hasForeign ? (
+            <>
+              Includes converted foreign currency
+              <FxInfoNote fx={fx} />
+            </>
+          ) : (
+            "SGD"
+          )}
+        </span>
+      </div>
+      {isEmpty ? (
+        <p className="py-2 text-xs text-muted-foreground">
+          No asset values recorded yet. Add properties, investments, or savings to see your
+          allocation.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex h-4 w-full overflow-hidden rounded-full">
+            {segments.map((s) => {
+              const width = s.pct.toFixed(1);
+              const isActive = s.value > 0;
+              return isActive ? (
+                <div
+                  key={s.label}
+                  className={`h-full ${s.color} transition-all`}
+                  style={{ width: `${width}%` }}
+                />
+              ) : null;
+            })}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {segments.map((s) => {
+              const pctDisplay = s.pct > 0 ? `${Math.round(s.pct)}%` : "—";
+              return (
+                <div key={s.label} className="space-y-0.5">
+                  <div className="flex items-center gap-1">
+                    <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${s.color}`} />
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground truncate">
+                      {s.label}
+                    </span>
+                  </div>
+                  <div className="text-sm font-bold">{pctDisplay}</div>
+                  <div className="text-[10px] text-muted-foreground">{fmtMoney(s.value)}</div>
+                </div>
+              );
+            })}
+          </div>
+          {activeSegments.length === 1 && (
+            <p className="text-[10px] text-muted-foreground">
+              Only one asset class recorded — add investments or savings for a complete picture.
+            </p>
+          )}
+        </div>
+      )}
+    </section>
+  );
 }
 
 function InsuranceAdequacyCard({
-totalSumAssured,
-incomeReplacementNeed,
-coverageRatio,
-adequacyStatus,
-policiesWithNoSumAssured,
-activePolicyCount,
-hasForeign,
-fx,
+  totalSumAssured,
+  incomeReplacementNeed,
+  coverageRatio,
+  adequacyStatus,
+  policiesWithNoSumAssured,
+  activePolicyCount,
+  hasForeign,
+  fx,
 }: {
-totalSumAssured: number;
-incomeReplacementNeed: number;
-coverageRatio: number | null;
-adequacyStatus: "covered" | "partial" | "none" | "unset";
-policiesWithNoSumAssured: number;
-activePolicyCount: number;
-hasForeign: boolean;
-fx?: FxRates | null;
+  totalSumAssured: number;
+  incomeReplacementNeed: number;
+  coverageRatio: number | null;
+  adequacyStatus: "covered" | "partial" | "none" | "unset";
+  policiesWithNoSumAssured: number;
+  activePolicyCount: number;
+  hasForeign: boolean;
+  fx?: FxRates | null;
 }) {
-const statusConfig = {
-covered:  { label: "Adequately covered",  bar: "bg-settled",  text: "text-settled",  border: "border-settled/30  bg-settled/5" },
-partial:  { label: "Partially covered",   bar: "bg-review",   text: "text-review",   border: "border-review/30   bg-review/5" },
-none:     { label: "No cover recorded",   bar: "bg-urgent",   text: "text-urgent",   border: "border-urgent/30   bg-urgent-soft/20" },
-unset:    { label: "Income not set",      bar: "bg-muted",    text: "text-muted-foreground", border: "border-border bg-card" },
-};
-const cfg = statusConfig[adequacyStatus];
-const pct = coverageRatio != null ? Math.min(coverageRatio * 100, 100) : 0;
+  const statusConfig = {
+    covered: {
+      label: "Meets 10-year benchmark",
+      bar: "bg-settled",
+      text: "text-settled",
+      border: "border-settled/30  bg-settled/5",
+    },
+    partial: {
+      label: "Below 10-year benchmark",
+      bar: "bg-review",
+      text: "text-review",
+      border: "border-review/30   bg-review/5",
+    },
+    none: {
+      label: "No cover recorded",
+      bar: "bg-urgent",
+      text: "text-urgent",
+      border: "border-urgent/30   bg-urgent-soft/20",
+    },
+    unset: {
+      label: "Income not set",
+      bar: "bg-muted",
+      text: "text-muted-foreground",
+      border: "border-border bg-card",
+    },
+  };
+  const cfg = statusConfig[adequacyStatus];
+  const pct = coverageRatio != null ? Math.min(coverageRatio * 100, 100) : 0;
 
-return (
-<section className={`rounded-2xl border p-4 ${cfg.border}`}>
-<div className="mb-3 flex items-center justify-between">
-<h2 className="text-sm font-bold">Insurance Adequacy</h2>
-<Link to="/insurance" className="text-xs font-semibold text-primary">View policies →</Link>
-</div>
+  return (
+    <section className={`rounded-2xl border p-4 ${cfg.border}`}>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-bold">Insurance Coverage Snapshot</h2>
+        <Link to="/insurance" className="text-xs font-semibold text-primary">
+          View policies →
+        </Link>
+      </div>
 
-  {adequacyStatus === "unset" ? (
-    <p className="text-xs text-muted-foreground">
-      Set your monthly income in{" "}
-      <a href="/settings" className="font-semibold text-primary underline">Settings</a>{" "}
-      to calculate coverage need.
-    </p>
-  ) : (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Sum Assured{hasForeign && <FxInfoNote fx={fx} />}
+      {adequacyStatus === "unset" ? (
+        <p className="text-xs text-muted-foreground">
+          Set your monthly income in{" "}
+          <a href="/settings" className="font-semibold text-primary underline">
+            Settings
+          </a>{" "}
+          to calculate coverage need.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Sum Assured{hasForeign && <FxInfoNote fx={fx} />}
+              </div>
+              <div className="mt-0.5 text-lg font-bold">{fmtMoney(totalSumAssured)}</div>
+              {policiesWithNoSumAssured > 0 && (
+                <div className="text-[10px] text-muted-foreground">
+                  {policiesWithNoSumAssured} polic{policiesWithNoSumAssured === 1 ? "y" : "ies"}{" "}
+                  missing sum assured
+                </div>
+              )}
+            </div>
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                10-Year Income Need
+              </div>
+              <div className="mt-0.5 text-lg font-bold">{fmtMoney(incomeReplacementNeed)}</div>
+              <div className="text-[10px] text-muted-foreground">Monthly income × 120</div>
+            </div>
           </div>
-          <div className="mt-0.5 text-lg font-bold">{fmtMoney(totalSumAssured)}</div>
-          {policiesWithNoSumAssured > 0 && (
-            <div className="text-[10px] text-muted-foreground">{policiesWithNoSumAssured} polic{policiesWithNoSumAssured === 1 ? "y" : "ies"} missing sum assured</div>
-          )}
-        </div>
-        <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">10-Year Income Need</div>
-          <div className="mt-0.5 text-lg font-bold">{fmtMoney(incomeReplacementNeed)}</div>
-          <div className="text-[10px] text-muted-foreground">Monthly income × 120</div>
-        </div>
-      </div>
 
-      <div>
-        <div className="mb-1 flex items-center justify-between text-xs">
-          <span className={`font-semibold ${cfg.text}`}>{cfg.label}</span>
-          {coverageRatio != null && (
-            <span className="text-muted-foreground">{Math.round(coverageRatio * 100)}% covered</span>
-          )}
-        </div>
-        <div className="h-2.5 overflow-hidden rounded-full bg-muted">
-          <div className={`h-full rounded-full transition-all ${cfg.bar}`} style={{ width: `${pct}%` }} />
-        </div>
-      </div>
+          <div>
+            <div className="mb-1 flex items-center justify-between text-xs">
+              <span className={`font-semibold ${cfg.text}`}>{cfg.label}</span>
+              {coverageRatio != null && (
+                <span className="text-muted-foreground">
+                  {Math.round(coverageRatio * 100)}% covered
+                </span>
+              )}
+            </div>
+            <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+              <div
+                className={`h-full rounded-full transition-all ${cfg.bar}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
 
-      <p className="text-[10px] text-muted-foreground">
-        Based on {activePolicyCount} active polic{activePolicyCount === 1 ? "y" : "ies"}. Estimate only — excludes savings, CPF, and debt obligations.
-        <Link to="/insurance" className="ml-1 font-semibold text-primary">Add sum assured →</Link>
-      </p>
-    </div>
-  )}
-</section>
-
-);
+          <p className="text-[10px] text-muted-foreground">
+            Based on {activePolicyCount} active polic{activePolicyCount === 1 ? "y" : "ies"}.
+            Estimate only — excludes savings, CPF, and debt obligations.
+            <Link to="/insurance" className="ml-1 font-semibold text-primary">
+              Add sum assured →
+            </Link>
+          </p>
+        </div>
+      )}
+    </section>
+  );
 }
 
-function FinancialHealthCard({ checks, passCount, totalScored, onScroll }: {
-checks: { label: string; status: "pass" | "warning" | "fail" | "incomplete"; detail: string; href: string }[];
-passCount: number;
-totalScored: number;
-onScroll: (target: string) => void;
+function FinancialHealthCard({
+  checks,
+  passCount,
+  totalScored,
+  onScroll,
+}: {
+  checks: {
+    label: string;
+    status: "pass" | "warning" | "fail" | "incomplete";
+    detail: string;
+    href: string;
+  }[];
+  passCount: number;
+  totalScored: number;
+  onScroll: (target: string) => void;
 }) {
-const statusIcon = { pass: "✓", warning: "⚠", fail: "✗", incomplete: "—" };
-const statusColor = {
-pass: "text-settled",
-warning: "text-review",
-fail: "text-urgent",
-incomplete: "text-muted-foreground",
-};
-const rowBorder = {
-pass: "border-settled/20",
-warning: "border-review/30",
-fail: "border-urgent/30",
-incomplete: "border-border",
-};
-const summaryColor = totalScored === 0 ? "text-muted-foreground" : passCount === totalScored ? "text-settled" : passCount >= totalScored * 0.6 ? "text-review" : "text-urgent";
+  const statusIcon = { pass: "✓", warning: "⚠", fail: "✗", incomplete: "—" };
+  const statusColor = {
+    pass: "text-settled",
+    warning: "text-review",
+    fail: "text-urgent",
+    incomplete: "text-muted-foreground",
+  };
+  const rowBorder = {
+    pass: "border-settled/20",
+    warning: "border-review/30",
+    fail: "border-urgent/30",
+    incomplete: "border-border",
+  };
+  const summaryColor =
+    totalScored === 0
+      ? "text-muted-foreground"
+      : passCount === totalScored
+        ? "text-settled"
+        : passCount >= totalScored * 0.6
+          ? "text-review"
+          : "text-urgent";
 
-return (
-<section className="rounded-2xl border border-border bg-card p-4">
-<div className="mb-1 flex items-center justify-between">
-<h2 className="text-sm font-bold">Financial Health</h2>
-{totalScored > 0 && (
-<span className={`text-xs font-bold ${summaryColor}`}>{passCount}/{totalScored} passed</span>
-)}
-</div>
-{checks.length - totalScored > 0 && (
-<p className="mb-3 text-[11px] text-muted-foreground">
-{checks.length - totalScored} check{checks.length - totalScored === 1 ? "" : "s"} not set up yet
-</p>
-)}
-<div className={checks.length - totalScored > 0 ? "space-y-2" : "mt-3 space-y-2"}>
-{checks.map((c) => {
-const icon = statusIcon[c.status];
-const color = statusColor[c.status];
-const border = rowBorder[c.status];
-if (c.href === "") {
-return (
-<div key={c.label} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${border}`}>
-<span className={`w-4 shrink-0 text-center text-sm font-bold ${color}`}>{icon}</span>
-<div className="min-w-0 flex-1">
-<div className="text-xs font-semibold">{c.label}</div>
-<div className="text-[10px] text-muted-foreground">{c.detail}</div>
-</div>
-</div>
-);
-}
-return c.href === "cash-flow" || c.href === "needs-attention" ? (
-<button key={c.label} onClick={() => onScroll(c.href)} className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 hover:bg-accent/30 ${border}`}>
-<span className={`w-4 shrink-0 text-center text-sm font-bold ${color}`}>{icon}</span>
-<div className="min-w-0 flex-1 text-left">
-<div className="text-xs font-semibold">{c.label}</div>
-<div className="text-[10px] text-muted-foreground">{c.detail}</div>
-</div>
-<ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-</button>
-) : (
-<Link key={c.label} to={c.href as any} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 hover:bg-accent/30 ${border}`}>
-<span className={`w-4 shrink-0 text-center text-sm font-bold ${color}`}>{icon}</span>
-<div className="min-w-0 flex-1">
-<div className="text-xs font-semibold">{c.label}</div>
-<div className="text-[10px] text-muted-foreground">{c.detail}</div>
-</div>
-<ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-</Link>
-);
-})}
-</div>
-<p className="mt-3 text-[10px] text-muted-foreground">Indicative only. Based on data entered. Not financial advice.</p>
-</section>
-);
+  return (
+    <section className="rounded-2xl border border-border bg-card p-4">
+      <div className="mb-1 flex items-center justify-between">
+        <h2 className="text-sm font-bold">Financial Health</h2>
+        {totalScored > 0 && (
+          <span className={`text-xs font-bold ${summaryColor}`}>
+            {passCount}/{totalScored} passed
+          </span>
+        )}
+      </div>
+      {checks.length - totalScored > 0 && (
+        <p className="mb-3 text-[11px] text-muted-foreground">
+          {checks.length - totalScored} check{checks.length - totalScored === 1 ? "" : "s"} not set
+          up yet
+        </p>
+      )}
+      <div className={checks.length - totalScored > 0 ? "space-y-2" : "mt-3 space-y-2"}>
+        {checks.map((c) => {
+          const icon = statusIcon[c.status];
+          const color = statusColor[c.status];
+          const border = rowBorder[c.status];
+          if (c.href === "") {
+            return (
+              <div
+                key={c.label}
+                className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${border}`}
+              >
+                <span className={`w-4 shrink-0 text-center text-sm font-bold ${color}`}>
+                  {icon}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold">{c.label}</div>
+                  <div className="text-[10px] text-muted-foreground">{c.detail}</div>
+                </div>
+              </div>
+            );
+          }
+          return c.href === "cash-flow" || c.href === "needs-attention" ? (
+            <button
+              key={c.label}
+              onClick={() => onScroll(c.href)}
+              className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 hover:bg-accent/30 ${border}`}
+            >
+              <span className={`w-4 shrink-0 text-center text-sm font-bold ${color}`}>{icon}</span>
+              <div className="min-w-0 flex-1 text-left">
+                <div className="text-xs font-semibold">{c.label}</div>
+                <div className="text-[10px] text-muted-foreground">{c.detail}</div>
+              </div>
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            </button>
+          ) : (
+            <Link
+              key={c.label}
+              to={c.href as any}
+              className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 hover:bg-accent/30 ${border}`}
+            >
+              <span className={`w-4 shrink-0 text-center text-sm font-bold ${color}`}>{icon}</span>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-semibold">{c.label}</div>
+                <div className="text-[10px] text-muted-foreground">{c.detail}</div>
+              </div>
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            </Link>
+          );
+        })}
+      </div>
+      <p className="mt-3 text-[10px] text-muted-foreground">
+        Indicative only. Based on data entered. Not financial advice.
+      </p>
+    </section>
+  );
 }
 
-function PrioritySection({ title, items, muted, showDate }: { title: string; items: any[]; muted?: boolean; showDate?: boolean }) {
-const [showAll, setShowAll] = useState(false);
-const setMemberFilter = useAppStore((s) => s.setMemberFilter);
-const visible = showAll ? items : items.slice(0, 8);
-return (
-<section className={`rounded-2xl border p-4 ${muted ? "border-review/40 bg-review-soft/40" : "border-urgent/40 bg-urgent-soft/30"}`}>
-<div className="mb-3 flex items-center justify-between">
-<h2 className="text-sm font-bold">{title}</h2>
-<span className="text-xs text-muted-foreground">{items.length} item{items.length === 1 ? "" : "s"}</span>
-</div>
-<ul className="space-y-2">
-{visible.map(({ kind, row, href, icon: Icon }, i) => {
-const dateInfo = showDate ? reviewDateInfo(kind, row) : null;
-return (
-<li key={i}>
-<Link
-  to={href as any}
-  hash={`record-${row.id}`}
-  onClick={() => setMemberFilter(row.member_id ?? "all")}
-  className="flex items-start gap-3 rounded-xl bg-card/80 p-3 hover:bg-card"
->
-<Icon className="mt-0.5 h-4 w-4 text-muted-foreground" />
-<div className="flex-1 min-w-0">
-<div className="flex flex-wrap items-center gap-2">
-<span className="text-[10px] font-semibold uppercase text-muted-foreground">{kind}</span>
-<span className="text-sm font-semibold truncate">{row.name || row.bank}</span>
-<MemberTag memberId={row.member_id} />
-</div>
-{dateInfo && (
-<p className="mt-1 text-xs text-muted-foreground">
-{dateInfo.prefix} <span className="font-bold text-primary">{dateInfo.date}</span>
-</p>
-)}
-{(row.action_note || row.action || row.strategy || row.note || row.actions?.length > 0) && (
-  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{row.action_note || row.action || row.strategy || row.note || row.actions?.join(", ")}</p>
-)}
-</div>
-<StatusBadge status={row.status} />
-</Link>
-</li>
-);
-})}
-</ul>
-{items.length > 8 && (
-<button
-onClick={() => setShowAll((v) => !v)}
-className="mt-2 flex w-full items-center justify-center gap-1 py-2 text-xs font-semibold text-primary"
->
-{showAll ? "Show less ↑" : `Show ${items.length - 8} more ↓`}
-</button>
-)}
-</section>
-);
+function PrioritySection({
+  title,
+  items,
+  muted,
+  showDate,
+}: {
+  title: string;
+  items: any[];
+  muted?: boolean;
+  showDate?: boolean;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const setMemberFilter = useAppStore((s) => s.setMemberFilter);
+  const visible = showAll ? items : items.slice(0, 8);
+  return (
+    <section
+      className={`rounded-2xl border p-4 ${muted ? "border-review/40 bg-review-soft/40" : "border-urgent/40 bg-urgent-soft/30"}`}
+    >
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-bold">{title}</h2>
+        <span className="text-xs text-muted-foreground">
+          {items.length} item{items.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      <ul className="space-y-2">
+        {visible.map(({ kind, row, href, icon: Icon }, i) => {
+          const dateInfo = showDate ? reviewDateInfo(kind, row) : null;
+          return (
+            <li key={i}>
+              <Link
+                to={href as any}
+                hash={`record-${row.id}`}
+                onClick={() => setMemberFilter(row.member_id ?? "all")}
+                className="flex items-start gap-3 rounded-xl bg-card/80 p-3 hover:bg-card"
+              >
+                <Icon className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">
+                      {kind}
+                    </span>
+                    <span className="text-sm font-semibold truncate">{row.name || row.bank}</span>
+                    <MemberTag memberId={row.member_id} />
+                  </div>
+                  {dateInfo && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {dateInfo.prefix}{" "}
+                      <span className="font-bold text-primary">{dateInfo.date}</span>
+                    </p>
+                  )}
+                  {(row.action_note ||
+                    row.action ||
+                    row.strategy ||
+                    row.note ||
+                    row.actions?.length > 0) && (
+                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                      {row.action_note ||
+                        row.action ||
+                        row.strategy ||
+                        row.note ||
+                        row.actions?.join(", ")}
+                    </p>
+                  )}
+                </div>
+                <StatusBadge status={row.status} />
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+      {items.length > 8 && (
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          className="mt-2 flex w-full items-center justify-center gap-1 py-2 text-xs font-semibold text-primary"
+        >
+          {showAll ? "Show less ↑" : `Show ${items.length - 8} more ↓`}
+        </button>
+      )}
+    </section>
+  );
 }
 
 // ── Estate Planning Card ───────────────────────────────────────────────────────
@@ -1482,7 +2042,10 @@ function EstatePlanningCard() {
   }
 
   async function saveEditing(itemId: string) {
-    await saveDetails(itemId, { external_url: urlDraft.trim() || null, notes: notesDraft.trim() || null });
+    await saveDetails(itemId, {
+      external_url: urlDraft.trim() || null,
+      notes: notesDraft.trim() || null,
+    });
     setEditingId(null);
   }
 
@@ -1491,7 +2054,9 @@ function EstatePlanningCard() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-sm font-bold">📜 Estate Planning</h2>
-          <p className="text-[10px] text-muted-foreground mt-0.5">{doneCount}/{total} completed</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            {doneCount}/{total} completed
+          </p>
         </div>
         <button
           type="button"
@@ -1517,24 +2082,35 @@ function EstatePlanningCard() {
             const row = rowByItemId.get(item.id);
             const isEditing = editingId === item.id;
             return (
-              <li key={item.id} className={`rounded-xl border p-3 ${item.urgent && !done ? "border-urgent/30 bg-urgent-soft/20" : "border-border/60 bg-background/50"}`}>
+              <li
+                key={item.id}
+                className={`rounded-xl border p-3 ${item.urgent && !done ? "border-urgent/30 bg-urgent-soft/20" : "border-border/60 bg-background/50"}`}
+              >
                 <button
                   type="button"
                   onPointerDown={() => toggle(item.id)}
                   className="flex w-full items-start gap-3 text-left"
                 >
-                  <span className={`mt-0.5 text-base leading-none shrink-0 ${done ? "text-settled" : "text-muted-foreground"}`}>
+                  <span
+                    className={`mt-0.5 text-base leading-none shrink-0 ${done ? "text-settled" : "text-muted-foreground"}`}
+                  >
                     {done ? "✓" : "○"}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className={`text-sm font-semibold ${done ? "line-through text-muted-foreground" : ""}`}>
+                    <p
+                      className={`text-sm font-semibold ${done ? "line-through text-muted-foreground" : ""}`}
+                    >
                       {item.label}
                       {item.urgent && !done && (
-                        <span className="ml-2 text-[10px] font-bold text-urgent">DO THIS FIRST</span>
+                        <span className="ml-2 text-[10px] font-bold text-urgent">
+                          DO THIS FIRST
+                        </span>
                       )}
                     </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">{item.description}</p>
-                    <p className="mt-0.5 text-[10px] font-medium text-muted-foreground">👤 {item.who}</p>
+                    <p className="mt-0.5 text-[10px] font-medium text-muted-foreground">
+                      👤 {item.who}
+                    </p>
                   </div>
                 </button>
 
@@ -1559,7 +2135,10 @@ function EstatePlanningCard() {
                 {!isEditing && (
                   <button
                     type="button"
-                    onPointerDown={(e) => { e.stopPropagation(); startEditing(item.id); }}
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      startEditing(item.id);
+                    }}
                     className="ml-7 mt-2 text-[10px] font-semibold text-primary"
                   >
                     {row?.external_url || row?.notes ? "Edit link / notes" : "+ Add link or notes"}
@@ -1567,7 +2146,10 @@ function EstatePlanningCard() {
                 )}
 
                 {isEditing && (
-                  <div className="ml-7 mt-2 space-y-2 border-t border-border/40 pt-2" onPointerDown={(e) => e.stopPropagation()}>
+                  <div
+                    className="ml-7 mt-2 space-y-2 border-t border-border/40 pt-2"
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
                     <input
                       type="text"
                       value={urlDraft}
