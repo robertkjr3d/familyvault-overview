@@ -1,1 +1,0 @@
-ALTER TABLE public.health_conditions ADD COLUMN IF NOT EXISTS notes text;
