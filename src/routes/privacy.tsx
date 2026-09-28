@@ -5,7 +5,7 @@ export const Route = createFileRoute("/privacy")({
   head: () => ({ meta: [{ title: "Privacy Policy — FamilyHub SG" }] }),
 });
 
-const LAST_UPDATED = "6 July 2026";
+const LAST_UPDATED = "28 September 2026";
 // Placeholder — replace with a real, monitored inbox. See chat for details.
 const CONTACT_EMAIL = "support@familyhubsg.com";
 
@@ -34,14 +34,14 @@ function PrivacyPage() {
         <Section title="Information we collect">
           <p>We collect information you choose to enter into the app, which may include:</p>
           <ul className="list-disc space-y-1 pl-5">
-            <li>Your email address, used solely to send you a secure sign-in link</li>
+            <li>Your email address, used to sign you in (by emailed link, passkey, or your Google account) and to send you a secure sign-in link</li>
             <li>Household and family member details you add (names, relationships)</li>
             <li>Financial information you enter — properties, loans, insurance policies, investments, savings and CPF balances, and other assets</li>
             <li>Health-related notes you choose to add for yourself or family members</li>
             <li>Inventory items and any photos or documents you upload</li>
             <li>Notes, reminders, and history you add against any record</li>
           </ul>
-          <p>We do not ask for or store payment card numbers, passwords (sign-in is passwordless via emailed link), or government ID numbers.</p>
+          <p>We do not ask for or store payment card numbers, passwords (sign-in is passwordless: emailed link, passkey, or Google sign-in), or government ID numbers.</p>
         </Section>
 
         <Section title="How your data is stored and protected">
@@ -72,8 +72,10 @@ function PrivacyPage() {
 
         <Section title="Who can see your data">
           <p>
-            Only people you've explicitly invited into your household, plus FamilyHub SG's
-            operator for the limited purpose of running and maintaining the service. We do not
+            Only people you've explicitly invited into your household, any financial adviser you
+            choose to link (who sees only the categories and family members you allow, and only
+            while you keep that link active), plus FamilyHub SG's operator for the limited
+            purpose of running and maintaining the service. We do not
             sell your data, and we do not share it with advertisers.
           </p>
           <p>
@@ -83,7 +85,9 @@ function PrivacyPage() {
             is never sold or shared with advertisers.
           </p>
           <p>
-            We use Supabase and Cloudflare as infrastructure providers to operate the service;
+            We use Sentry to receive technical error reports (for example, that a page failed to
+            load) so we can fix problems, and Google only if you choose to sign in with your
+            Google account. We use Supabase and Cloudflare as infrastructure providers to operate the service;
             they process data on our behalf under their own data protection commitments, and
             don't use your data for their own purposes.
           </p>
