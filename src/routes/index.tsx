@@ -11,6 +11,7 @@ import {
   convertToSgd,
   type FxRates,
 } from "@/lib/format";
+import { linkedPropertyIds, unlinkedMortgageProperties } from "@/lib/netWorthMath";
 import { useFxRates } from "@/hooks/useFxRates";
 import { FxInfoNote } from "@/components/FxInfoNote";
 import { isCpfAccountType } from "@/lib/options";
@@ -335,9 +336,7 @@ function Dashboard() {
   // preventing double-counting one debt twice. Computed once, up here, and
   // reused everywhere else in this file that needs it (was previously
   // duplicated further down for Monthly Cash Flow only — same Set now shared).
-  const mortgagedPropertyIds = new Set(
-    loans.filter((l: any) => l.property_id).map((l: any) => l.property_id),
-  );
+  const mortgagedPropertyIds = linkedPropertyIds(loans);
   const propertyTotals = groupByCurrency(properties, (p: any) => p.current_value);
   const investmentTotals = groupByCurrency(investments, (i: any) => i.current_value);
   const otherAssetsTotals = groupByCurrency(otherAssets, (a: any) => a.estimated_value);
@@ -362,7 +361,7 @@ function Dashboard() {
   // (via loanTotals), matching how lifetimeChartMath.ts already treats this
   // same situation for the projection chart.
   const propertyMortgageTotals = groupByCurrency(
-    properties.filter((p: any) => !mortgagedPropertyIds.has(p.id)),
+    unlinkedMortgageProperties(properties, loans),
     (p: any) => p.mortgage_balance,
   );
   // Liquid savings and CPF are split from the full savings array so both
