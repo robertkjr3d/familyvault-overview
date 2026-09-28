@@ -24,7 +24,7 @@
 | Backup failure alerts (new) | 🟢 8 | — | Unproven in real production yet (just added) | **Keep, re-confirm in a few weeks.** |
 | Photos & documents backup | 🟡 5 | Sync files to backup storage too | Needs a paid tier or extra infrastructure | **Fine for now** — users can already download everything themselves anytime. Revisit before this matters to real irreplaceable documents. |
 | Self-service full export (Excel + ZIP, notes/reminders included, no longer CDN-dependent) | 🟢 9 | — | None | **Keep — this is genuinely strong and safe to advertise.** |
-| Recycle Bin (30-day undo) | 🟡 7 | Extend to inventory, members, single documents | More code paths to maintain | **Fine as-is.** Don't claim "everything is undoable" publicly — it isn't, yet. |
+| Recycle Bin (30-day undo) | 🟢 8 | — (now covers core records, inventory items/folders, members, single documents) | Free-text entries on some small lists (checklists, reminders) are not restorable | **Good.** Say "most things can be restored within 30 days", not "everything". |
 | Storage limits enforced honestly (can't be tricked into using more than paid for) | 🟢 9 | — | None | **Keep.** |
 | Free-tier cost headroom as the app grows | 🟡 7 | Move to Cloudflare's paid tier ($5/month) when needed | A real but predictable, small, planned cost — not a surprise | **Not urgent.** Being watched via the failure-alert system above. |
 
@@ -56,4 +56,4 @@ Use these as starting points, not final copy — adjust tone to match your site:
 - *"Is my family's data mixed up with anyone else's? No — every family's data is kept completely separate at the database level, the same approach professional finance apps use."*
 - *"Can I control exactly what my adviser sees?"* — hold this one until the "Unrestricted" item below is resolved.
 
-**Don't yet claim publicly** (not false, just not fully true today): "everything is backed up" (photos/documents aren't yet), "every action is undoable" (only the main records are), "SOC 2 / bank-grade" or similar formal compliance language (no such certification exists or is warranted at this size).
+**Don't yet claim publicly** (not false, just not fully true today): "everything is backed up" (photos/documents aren't yet), "every action is undoable" (records, inventory, members and documents are; small checklists and reminders are not), "SOC 2 / bank-grade" or similar formal compliance language (no such certification exists or is warranted at this size).
