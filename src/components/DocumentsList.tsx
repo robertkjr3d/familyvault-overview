@@ -281,6 +281,13 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
           )}
 
           {mode === "upload" && (
+            <p className="text-[11px] text-muted-foreground">
+              Tip: keep a backup copy of your files somewhere else too, especially important
+              documents.
+            </p>
+          )}
+
+          {mode === "upload" && (
             <>
               <input
                 ref={fileRef}
