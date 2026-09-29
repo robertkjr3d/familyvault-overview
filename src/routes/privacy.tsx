@@ -5,7 +5,7 @@ export const Route = createFileRoute("/privacy")({
   head: () => ({ meta: [{ title: "Privacy Policy — FamilyHub SG" }] }),
 });
 
-const LAST_UPDATED = "28 September 2026";
+const LAST_UPDATED = "29 September 2026";
 // Placeholder — replace with a real, monitored inbox. See chat for details.
 const CONTACT_EMAIL = "support@familyhubsg.com";
 
@@ -115,6 +115,13 @@ function PrivacyPage() {
             Behind the scenes, we also keep a nightly backup of your household's records (not
             your photos or documents) for up to 30 days, so that data can be recovered if
             something is deleted by mistake or a technical problem occurs.
+          </p>
+          <p className="mt-3">
+            Deleted inventory items and documents (with their photos and files) stay in your Recycle
+            Bin for 30 days, then are permanently deleted. Replacing or removing a photo on an
+            existing item deletes the old photo immediately. We recommend keeping your own extra
+            copy of your files somewhere else, especially important documents; the full backup in
+            Settings → Data makes this easy.
           </p>
         </Section>
 
