@@ -100,6 +100,8 @@ function InventoryPage() {
   const { canEdit } = useCurrentRole();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [openFolderId, setOpenFolderId] = useState<string | null>(null);
   const [openSubfolderId, setOpenSubfolderId] = useState<string | null>(null);
   const [showAddFolder, setShowAddFolder] = useState(false);
@@ -667,13 +669,68 @@ function InventoryPage() {
   }
 
   const q = search.trim().toLowerCase();
+
+  // Category is free text, so "Electronics" / "electronics " count as one chip.
+  const categoryChips = useMemo(() => {
+    const groups = new Map<string, { count: number; variants: Map<string, number> }>();
+    for (const i of allItems) {
+      const raw = (i.category ?? "").trim();
+      if (!raw) continue;
+      const key = raw.toLowerCase();
+      const g = groups.get(key) ?? { count: 0, variants: new Map<string, number>() };
+      g.count += 1;
+      g.variants.set(raw, (g.variants.get(raw) ?? 0) + 1);
+      groups.set(key, g);
+    }
+    return Array.from(groups.entries())
+      .map(([key, g]) => {
+        const label = Array.from(g.variants.entries()).sort((a, b) => b[1] - a[1])[0][0];
+        return { key, label, count: g.count };
+      })
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }, [allItems]);
+
+  // If the last item in a category is edited or deleted, the filter quietly drops.
+  const activeCategory = categoryChips.find((c) => c.key === categoryFilter) ?? null;
+
+  function locationPath(folderId: string) {
+    const f = folderById.get(folderId);
+    if (!f) return "Unknown";
+    const parent = f.parent_id ? folderById.get(f.parent_id) : null;
+    return parent ? `${parent.name} › ${f.name}` : f.name;
+  }
+
+  function openItemLocation(item: Item) {
+    const f = folderById.get(item.folder_id);
+    if (!f) return;
+    if (f.parent_id) {
+      setOpenFolderId(f.parent_id);
+      setOpenSubfolderId(f.id);
+    } else {
+      setOpenFolderId(f.id);
+      setOpenSubfolderId(null);
+    }
+  }
+
+  const categoryItems = useMemo(() => {
+    if (!activeCategory) return [];
+    return allItems
+      .filter((i) => (i.category ?? "").trim().toLowerCase() === activeCategory.key)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [activeCategory, allItems]);
+
   const searchResults = useMemo(() => {
     if (!q) return [];
     return allItems
-      .filter((i) => i.name.toLowerCase().includes(q))
+      .filter((i) => {
+        const cat = (i.category ?? "").trim().toLowerCase();
+        if (activeCategory && cat !== activeCategory.key) return false;
+        return i.name.toLowerCase().includes(q) || cat.includes(q);
+      })
       .slice(0, 20)
-      .map((i) => ({ item: i, path: folderById.get(i.folder_id)?.name ?? "Unknown" }));
-  }, [q, allItems, folderById]);
+      .map((i) => ({ item: i, path: locationPath(i.folder_id) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, allItems, folderById, activeCategory]);
 
   return (
     <div className="space-y-5 pb-24">
@@ -683,12 +740,26 @@ function InventoryPage() {
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
+          ref={searchInputRef}
           placeholder="Search all items..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="pl-9 h-11 text-base border-2 bg-white dark:bg-card focus:border-primary"
+          className="pl-9 pr-10 h-11 text-base border-2 bg-white dark:bg-card focus:border-primary"
           autoComplete="off"
         />
+        {search && (
+          <button
+            type="button"
+            aria-label="Clear search"
+            onClick={() => {
+              setSearch("");
+              searchInputRef.current?.focus();
+            }}
+            className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-accent"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
         {q && (
           <div className="absolute left-0 right-0 top-full z-30 mt-2 space-y-1 rounded-xl border border-border bg-card p-2 shadow-lg">
             {searchResults.length === 0 && (
@@ -700,16 +771,7 @@ function InventoryPage() {
               <button
                 key={item.id}
                 onClick={() => {
-                  const f = folderById.get(item.folder_id);
-                  if (f) {
-                    if (f.parent_id) {
-                      setOpenFolderId(f.parent_id);
-                      setOpenSubfolderId(f.id);
-                    } else {
-                      setOpenFolderId(f.id);
-                      setOpenSubfolderId(null);
-                    }
-                  }
+                  openItemLocation(item);
                   setSearch("");
                 }}
                 className="block w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
@@ -723,6 +785,67 @@ function InventoryPage() {
           </div>
         )}
       </div>
+
+      {/* Category filter chips */}
+      {categoryChips.length > 0 && (
+        <div
+          className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
+          role="group"
+          aria-label="Filter by category"
+        >
+          {categoryChips.map((c) => {
+            const active = activeCategory?.key === c.key;
+            const chipClass = active
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border bg-card text-foreground hover:bg-accent";
+            return (
+              <button
+                key={c.key}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setCategoryFilter(active ? null : c.key)}
+                className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${chipClass}`}
+              >
+                {c.label} <span className="opacity-70">{c.count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Items in the selected category, across all locations */}
+      {activeCategory && (
+        <section>
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-bold">
+              {activeCategory.label} ({categoryItems.length})
+            </h2>
+            <button
+              type="button"
+              onClick={() => setCategoryFilter(null)}
+              className="text-xs text-muted-foreground underline"
+            >
+              Clear filter
+            </button>
+          </div>
+          <ul className="space-y-2">
+            {categoryItems.map((item) => (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  onClick={() => openItemLocation(item)}
+                  className="block w-full rounded-lg border border-border bg-card p-3 text-left hover:bg-accent"
+                >
+                  <div className="text-sm font-semibold">{item.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {locationPath(item.folder_id)}
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* My Locations grid */}
       <section>
@@ -2295,6 +2418,15 @@ function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => voi
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // The form opens at the bottom of a long list, off-screen. Bring it into view.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
+    return () => clearTimeout(t);
+  }, []);
 
   async function save() {
     if (!name.trim()) {
@@ -2359,7 +2491,7 @@ function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => voi
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-border bg-background p-3">
+    <div ref={rootRef} className="space-y-3 rounded-xl border border-border bg-background p-3">
       <div className="space-y-1.5">
         <Label className="text-xs">Item name *</Label>
         <Input
