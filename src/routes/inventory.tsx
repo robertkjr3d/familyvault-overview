@@ -902,6 +902,11 @@ function InventoryPage() {
         items={gobag}
       />
 
+      <p className="px-1 pr-16 text-[11px] text-muted-foreground">
+        Tip: from time to time, download a backup copy of your inventory and photos (Settings → Data
+        → Download full backup).
+      </p>
+
       {/* FAB */}
       {canEdit && (
         <button
