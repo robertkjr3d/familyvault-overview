@@ -11,6 +11,11 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { reportToSentry, stripUrlSecrets } from "@/lib/sentryReport";
+
+// Browser-side Sentry DSN -- a Cloudflare BUILD variable (VITE_*), so it is
+// baked in at build time. Undefined means Sentry reporting quietly does nothing.
+const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN as string | undefined;
 
 // Session-level deduplication — key: errorMessage, value: count logged
 const _seen = new Map<string, number>();
@@ -29,6 +34,9 @@ interface LogParams {
 
 export async function logError(params: LogParams): Promise<void> {
   try {
+    // Invite / sign-in links carry tokens and emails in ?query and #hash --
+    // never send those to Sentry or store them in error_logs.
+    const pageUrl = stripUrlSecrets(params.pageUrl);
     const key = params.errorMessage.slice(0, 200);
     const count = _seen.get(key) ?? 0;
     if (count >= MAX_PER_SESSION) return;
@@ -43,7 +51,7 @@ export async function logError(params: LogParams): Promise<void> {
       message: params.errorMessage,
       stack: params.errorStack,
       tags: { error_type: params.errorType, component: params.componentName ?? "" },
-      extra: { pageUrl: params.pageUrl, ...params.metadata },
+      extra: { pageUrl, ...params.metadata },
     });
 
     // getSession() reads from the local cache — no network call.
@@ -57,7 +65,7 @@ export async function logError(params: LogParams): Promise<void> {
       error_type: params.errorType,
       error_message: params.errorMessage.slice(0, 2000),
       error_stack: params.errorStack?.slice(0, 5000) ?? null,
-      page_url: params.pageUrl.slice(0, 500),
+      page_url: pageUrl.slice(0, 500),
       component_name: params.componentName?.slice(0, 200) ?? null,
       metadata: params.metadata ?? null,
     });

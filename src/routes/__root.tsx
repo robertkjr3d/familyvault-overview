@@ -5,6 +5,7 @@ import {
   HeadContent,
   Scripts,
   useRouterState,
+  useNavigate,
   Link,
 } from "@tanstack/react-router";
 import { Toaster } from "sonner";
@@ -100,6 +101,42 @@ function RootShell({ children }: { children: React.ReactNode }) {
                   maskAllInputs: true,
                   maskTextSelector: '*',
                 },
+                // Invite and sign-in links carry tokens and emails in the ?query
+                // and #hash. Strip both from every URL before it leaves the browser.
+                before_send: function (ev) {
+                  function clean(v, d) {
+                    if (typeof v === 'string') {
+                      if (v.indexOf('http://') !== 0 && v.indexOf('https://') !== 0) return v;
+                      var q = v.indexOf('?');
+                      var h = v.indexOf('#');
+                      var cut = q === -1 ? h : (h === -1 ? q : Math.min(q, h));
+                      return cut === -1 ? v : v.slice(0, cut);
+                    }
+                    if (d > 4 || v === null || typeof v !== 'object') return v;
+                    for (var k in v) {
+                      if (k === '$snapshot_data') continue;
+                      v[k] = clean(v[k], d + 1);
+                    }
+                    return v;
+                  }
+                  try {
+                    if (ev) {
+                      clean(ev.properties, 0);
+                      clean(ev.$set, 0);
+                      clean(ev.$set_once, 0);
+                    }
+                  } catch (e) {}
+                  return ev;
+                },
+                loaded: function (ph) {
+                  // No session replay for a page load that arrived with a ?query or
+                  // #hash (invite links, sign-in links): replay records the raw URL.
+                  try {
+                    if (location.search.length > 1 || location.hash.length > 1) {
+                      ph.stopSessionRecording();
+                    }
+                  } catch (e) {}
+                },
               });
             `,
           }}
@@ -125,6 +162,9 @@ function RootComponent() {
 function RootContent() {
   const { initialized, session, authRedirectError } = useAuthSession();
   const setActiveHouseholdId = useAppStore((s) => s.setActiveHouseholdId);
+  const claimUiForUser = useAppStore((s) => s.claimUiForUser);
+  const endTour = useAppStore((s) => s.endTour);
+  const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const queryClient = useQueryClient();
   // Legal pages must be readable before signing in — that's the whole point
@@ -135,6 +175,34 @@ function RootContent() {
   useEffect(() => {
     setupGlobalErrorHandlers();
   }, []);
+
+  // Selected household, member filter, tour and onboarding-dismissal are saved
+  // in the browser. Stamp them with the signed-in user so a different person
+  // signing in on the same browser starts clean instead of inheriting the last
+  // person's state (see claimUiForUser in store.ts). Declared BEFORE the invite
+  // effect below so this reset always happens first.
+  useEffect(() => {
+    if (session?.user?.id) claimUiForUser(session.user.id);
+  }, [session?.user?.id, claimUiForUser]);
+
+  // When someone who WAS signed in becomes signed out (Sign out button,
+  // expired session, deleted account): forget the last person's cached data,
+  // end any running tour, and go back to "/". Without the last step, signing
+  // out from Settings left the address on /settings, so the next email-code or
+  // passkey sign-in landed on Settings (Google always returns to "/").
+  const signedInUserIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const userId = session?.user?.id ?? null;
+    if (userId) {
+      signedInUserIdRef.current = userId;
+      return;
+    }
+    if (!initialized || !signedInUserIdRef.current) return;
+    signedInUserIdRef.current = null;
+    queryClient.clear();
+    endTour();
+    if (!isPublicRoute && pathname !== "/") void navigate({ to: "/", replace: true });
+  }, [session?.user?.id, initialized, isPublicRoute, pathname, queryClient, endTour, navigate]);
 
   // Keep your own testing sessions out of PostHog entirely — this is the
   // actual fix for "which replays are mine vs a real user's": nothing about

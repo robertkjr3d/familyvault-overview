@@ -1,6 +1,6 @@
 # Audit ledger — read first when reviewing FamilyHub SG
 
-Short on purpose: what is already verified, what is deliberate, what is still open. Update it when something changes. Last updated: 2026-09-28.
+Short on purpose: what is already verified, what is deliberate, what is still open. Update it when something changes. Last updated: 2026-09-30.
 
 **Where the truth lives**
 - Database structure and security: `supabase/schema.sql` (generated from the live database; see `supabase/README.md`).
@@ -20,6 +20,18 @@ Short on purpose: what is already verified, what is deliberate, what is still op
 - Nightly backup was exceeding Cloudflare's free 50-request limit; backup now has its own cron trigger.
 - Storage file writes/deletes limited to editors; unused broad adviser read rules removed from 6 tables (SQL run status: see chat/`schema.sql`).
 
+**Fixed 2026-09-30**
+- Signing out from Settings left the address on `/settings`, so the next email-code or passkey sign-in landed on Settings (Google always returns to `/`). Sign-out now clears cached data, ends any tour and returns to `/` (`src/routes/__root.tsx`).
+- Saved browser state (selected household, member filter, "wizard dismissed", a running tour) leaked between accounts on one browser; a saved running tour started by itself for the next person. Saved state is now stamped with the signed-in user and reset when another user signs in (`claimUiForUser` in `src/lib/store.ts`, tested); a running tour, tour step and share sheet are no longer saved.
+- The onboarding wizard no longer opens on top of a running tour (`src/routes/index.tsx`).
+- The Worker's crash report to Sentry now sends the path only (`src/server.ts`, owner approved).
+
+**Fixed 2026-09-29**
+- Lifetime chart kept charging a loan's or mortgage's full payment after its balance reached zero (and, with no end date, forever). Loans and mortgages with a rate AND a balance now pay only what is owed in the final year, then nothing (`loanYearRepayment` in `src/lib/lifetimeChartMath.ts`, tested). A `loan_end_date` still stops payments earlier.
+- Browser error reporting was broken in the code: `src/lib/errorLogger.ts` used `reportToSentry`/`SENTRY_DSN` without importing or defining them (two of the old type errors), so the call would throw inside its try/catch before the `error_logs` insert. Fixed; needs `VITE_SENTRY_DSN` as a Cloudflare Build variable to reach Sentry.
+- Invite/sign-in URLs (tokens, invited email in `?query`/`#hash`) no longer go to third parties: PostHog events are cleaned in `before_send` and session replay is skipped for page loads that arrive with a query or hash (`src/routes/__root.tsx`); `error_logs.page_url` and browser-side Sentry reports get the path only (`stripUrlSecrets` in `src/lib/sentryReport.ts`).
+- In-app tips and privacy page now say: deleted items/documents stay in the Recycle Bin for 30 days; replacing or removing a photo on an existing item deletes it immediately; keep your own copy of important files.
+
 **Deliberate / accepted**
 - Adviser views are "Unrestricted" in Supabase's linter; rows are filtered inside by `has_advisor_access()`. Single-layer protection.
 - `households` INSERT is open to any signed-in user (the sign-up trigger relies on the same table; empty households are harmless).
@@ -27,6 +39,8 @@ Short on purpose: what is already verified, what is deliberate, what is still op
 - Sharing by email tells an owner whether an account exists (minor account-enumeration).
 
 **Open**
-- Photos/documents are not backed up (only data tables). Backup headroom on the free plan is thin (~35 of 50 requests).
-- Confirm Sentry actually reports events.
+- Photos/documents have no automatic backup (only data tables); users are told to keep their own copy, and Settings > Data has a full ZIP download. Backup headroom on the free plan is thin (~35 of 50 requests) and grows with table row counts (1 request per 1,000 rows).
+- Confirm Sentry actually reports events (test after the 2026-09-29 deploy). The Sentry `/store/` endpoint used by `sentryReport.ts` is documented as legacy; switch to the envelope endpoint if events do not arrive.
+- Unexplained, not yet reproduced: an invited person's tour and onboarding wizard appeared together after several idle minutes, with the tour's first step skipped. Retest in a clean browser after the 2026-09-30 deploy; do not touch Driver.js until then.
+- Lifetime chart does not use `loan_rate_schedule` (rates held constant); a loan with a rate but no balance recorded, or no rate, cannot be paid off in the projection and keeps charging until its end date.
 - Mortgage can still be entered in two places (Property tab and Loans tab); a dashboard note warns of double entry.

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   freqTimesPerYear,
   principalPaidOverYear,
+  loanYearRepayment,
   fmt,
   computeCashflowDomain,
   insuranceAnnual,
@@ -487,24 +488,111 @@ describe("projectLifetimeChart", () => {
     expect(result[0].netWorth).toBeCloseTo(-7_815, 0); // only the interest portion
   });
 
-  it("does not let a loan's tracked balance go negative when scheduled principal would overpay it in its final year", () => {
-    // $5,000 balance, 5% rate, $2,000/month ($24k/yr) payment — the
-    // scheduled principal portion (~$23,750) vastly exceeds the $5,000
-    // balance remaining, so only $5,000 of principal can actually apply.
-    // Year 1: interest = 5,000 * 0.05 = 250; principal capped at the
-    // remaining $5,000 balance → netWorth drops by (24,000 - 5,000) = 19,000,
-    // NOT the full theoretical interest-only figure of 250.
-    // Year 2: balance is already 0, so nothing is tracked to repay anymore —
-    // the full payment counts as a loss that year (same as an untracked loan).
+  it("stops charging a loan once its tracked balance is cleared, paying only what is owed in the final year", () => {
+    // $5,000 balance, 5% rate, $2,000/month. The balance clears in month 3:
+    // 1,979.17 + 1,987.41 principal and interest of 20.83 + 12.59 on the first
+    // two months, then only 1,033.42 + 4.31 interest in month 3 (not a full
+    // $2,000 instalment). Total paid = 5,000 + about 37.73 interest.
+    // Year 2: the loan no longer exists, so nothing is paid and net worth
+    // does not move (the payoff fix, Sep 29 2026 -- this used to keep
+    // charging the full $24,000 every year).
     const result = projectLifetimeChart({
       ...base,
       horizonYears: 2,
       loans: [{ id: "l1", bank: "DBS", monthly_payment: 2_000, balance: 5_000, rate: 5 }],
     });
-    expect(result[0].netWorth).toBe(-19_000);
-    expect(result[1].netWorth).toBe(-19_000 - 24_000); // balance exhausted, full payment is now a loss
-    expect(result[0].annualOut).toBe(24_000);
-    expect(result[1].annualOut).toBe(24_000); // annualOut is never affected by balance tracking
+    // (the projection rounds to whole dollars)
+    expect(result[0].annualOut).toBe(5_038);
+    expect(result[0].netWorth).toBe(-38); // only the interest is a real loss
+    expect(result[1].annualOut).toBe(0);
+    expect(result[1].netWorth).toBe(-38); // nothing more is paid, so net worth does not move
+  });
+
+  // ── Loan payoff (fix, Sep 29 2026) ───────────────────────────────────────
+  it("a loan paid off exactly at year-end pays the full year, then zero", () => {
+    const result = projectLifetimeChart({
+      ...base,
+      horizonYears: 3,
+      loans: [{ id: "l1", bank: "DBS", monthly_payment: 1_000, balance: 12_000, rate: 0 }],
+    });
+    expect(result.map((d) => d.annualOut)).toEqual([12_000, 0, 0]);
+    result.forEach((d) => expect(d.netWorth).toBeCloseTo(0, 6)); // 0% interest: net-worth neutral
+  });
+
+  it("a loan paid off halfway through a year pays only the months needed, then zero", () => {
+    const result = projectLifetimeChart({
+      ...base,
+      horizonYears: 3,
+      loans: [{ id: "l1", bank: "DBS", monthly_payment: 1_000, balance: 6_000, rate: 0 }],
+    });
+    expect(result.map((d) => d.annualOut)).toEqual([6_000, 0, 0]);
+    const item = result[0].outflowItems.find((it) => it.label.includes("repayment"))!;
+    expect(item.amount).toBe(6_000);
+    expect(item.timesPerYear).toBe(6); // six payments that year, not twelve
+    expect(result[1].outflowItems.some((it) => it.label.includes("repayment"))).toBe(false);
+  });
+
+  it("the year after payoff shows zero loan payments even with interest", () => {
+    const result = projectLifetimeChart({
+      ...base,
+      horizonYears: 4,
+      loans: [{ id: "l1", bank: "DBS", monthly_payment: 1_000, balance: 6_000, rate: 5 }],
+    });
+    expect(result[0].annualOut).toBeGreaterThan(6_000);
+    expect(result[0].annualOut).toBeLessThan(6_100); // 6,000 principal + a little interest
+    expect(result[1].annualOut).toBe(0);
+    expect(result[2].annualOut).toBe(0);
+    expect(result[3].netWorth).toBeCloseTo(result[0].netWorth, 6);
+  });
+
+  it("a realistic amortizing loan leaves no phantom zero-dollar payment line after payoff", () => {
+    // $10,000 at 6% over 24 months has a payment of about $443.2061. Real
+    // payments never clear to the exact cent; a leftover fraction of a cent
+    // must not create an "x1 -$0" line in the year after payoff.
+    const result = projectLifetimeChart({
+      ...base,
+      horizonYears: 4,
+      loans: [{ id: "l1", bank: "DBS", monthly_payment: 443.2061, balance: 10_000, rate: 6 }],
+    });
+    expect(result.map((d) => d.annualOut)).toEqual([5_318, 5_318, 0, 0]);
+    expect(result[2].outflowItems.some((it) => it.label.includes("repayment"))).toBe(false);
+    expect(result[3].outflowItems.some((it) => it.label.includes("repayment"))).toBe(false);
+  });
+
+  it("a normal loan that is not yet paid off keeps its full payment every year", () => {
+    const result = projectLifetimeChart({
+      ...base,
+      horizonYears: 3,
+      loans: [{ id: "l1", bank: "DBS", monthly_payment: 1_000, balance: 100_000, rate: 5 }],
+    });
+    result.forEach((d) => expect(d.annualOut).toBe(12_000));
+  });
+
+  it("a loan with a rate but no balance recorded keeps charging the full payment (nothing to pay off is known)", () => {
+    const result = projectLifetimeChart({
+      ...base,
+      horizonYears: 3,
+      loans: [{ id: "l1", bank: "DBS", monthly_payment: 1_000, balance: 0, rate: 5 }],
+    });
+    result.forEach((d) => expect(d.annualOut).toBe(12_000));
+  });
+
+  it("a property mortgage with balance+rate also stops once paid off", () => {
+    const result = projectLifetimeChart({
+      ...base,
+      horizonYears: 3,
+      properties: [
+        {
+          id: "p1",
+          name: "Condo",
+          current_value: 0,
+          monthly_payment: 1_000,
+          mortgage_balance: 6_000,
+          interest_rate: 0,
+        },
+      ],
+    });
+    expect(result.map((d) => d.annualOut)).toEqual([6_000, 0, 0]);
   });
 
   it("respects loan_end_date for a loan that also has balance+rate set (both stop conditions still apply)", () => {
@@ -1219,5 +1307,37 @@ describe("principalPaidOverYear (monthly amortization)", () => {
   it("handles a zero balance or missing inputs safely", () => {
     expect(principalPaidOverYear(0, 5, 1_000)).toBe(0);
     expect(principalPaidOverYear(100_000, 0, 1_000)).toBeCloseTo(12_000, 6);
+  });
+});
+
+describe("loanYearRepayment (what is actually paid in a year)", () => {
+  it("pays 12 instalments when the balance outlasts the year", () => {
+    const r = loanYearRepayment(100_000, 5, 1_000);
+    expect(r.months).toBe(12);
+    expect(r.total).toBeCloseTo(12_000, 6);
+    expect(r.principal + r.interest).toBeCloseTo(r.total, 6);
+  });
+  it("pays only the months needed when the balance clears mid-year", () => {
+    const r = loanYearRepayment(6_000, 0, 1_000);
+    expect(r).toEqual({ principal: 6_000, interest: 0, total: 6_000, months: 6 });
+  });
+  it("pays exactly a full year when the balance clears in month 12", () => {
+    const r = loanYearRepayment(12_000, 0, 1_000);
+    expect(r.months).toBe(12);
+    expect(r.total).toBeCloseTo(12_000, 6);
+  });
+  it("pays nothing once the loan is already cleared", () => {
+    expect(loanYearRepayment(0, 5, 1_000)).toEqual({
+      principal: 0,
+      interest: 0,
+      total: 0,
+      months: 0,
+    });
+  });
+  it("counts the whole payment as interest when it does not cover the monthly interest", () => {
+    const r = loanYearRepayment(1_000_000, 6, 1_000);
+    expect(r.principal).toBe(0);
+    expect(r.total).toBeCloseTo(12_000, 6);
+    expect(r.months).toBe(12);
   });
 });

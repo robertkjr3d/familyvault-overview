@@ -319,7 +319,7 @@ export function LifetimeChart({
         showMember={memberFilter === "all"}
       />
       <p className="text-[10px] text-muted-foreground">
-        Projection only · inflation-adjusted expenses · property &amp; investment growth modelled at assumed rates · foreign currency included at today's converted rate, not modelled to grow · not financial advice
+        Projection only · inflation-adjusted expenses · property &amp; investment growth modelled at assumed rates · loan and mortgage rates held constant (future rate changes not modelled) · foreign currency included at today's converted rate, not modelled to grow · not financial advice
       </p>
     </div>
   );

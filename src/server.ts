@@ -5,7 +5,7 @@ import { renderErrorPage } from "./lib/error-page";
 import { runFxRateFetch } from "./lib/fxRateCron";
 import { runTrashCleanup } from "./lib/trashCleanupCron";
 import { runDailyBackup } from "./lib/backupCron";
-import { reportToSentry } from "./lib/sentryReport";
+import { reportToSentry, stripUrlSecrets } from "./lib/sentryReport";
 import { jobsForCron } from "./lib/scheduledJobs";
 
 type ServerEntry = {
@@ -104,7 +104,7 @@ export default {
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
         tags: { source: "server-fetch-catch" },
-        extra: { url: request.url },
+        extra: { url: stripUrlSecrets(request.url) },
       });
       return brandedErrorResponse();
     }

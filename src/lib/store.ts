@@ -55,6 +55,14 @@ type AppStore = {
   // actually answered the tour-2 question, matching what was asked for.
   extrasOfferPending: boolean;
   setExtrasOfferPending: (v: boolean) => void;
+  // Which signed-in user the saved UI state below belongs to. Selected
+  // household, member filter, tour and onboarding-dismissal are all saved in
+  // the browser, so without this a different person signing in on the same
+  // browser inherited the last person's state (a running tour, a "wizard
+  // dismissed" flag, another account's household id). claimUiForUser() resets
+  // all of it whenever the signed-in user is not the one who saved it.
+  uiOwnerUserId: string | null;
+  claimUiForUser: (userId: string) => void;
 };
 
 export const useAppStore = create<AppStore>()(
@@ -79,11 +87,40 @@ export const useAppStore = create<AppStore>()(
       setCoreTourResolved: (coreTourResolved) => set({ coreTourResolved }),
       extrasOfferPending: false,
       setExtrasOfferPending: (extrasOfferPending) => set({ extrasOfferPending }),
+      uiOwnerUserId: null,
+      claimUiForUser: (userId) =>
+        set((s) =>
+          s.uiOwnerUserId === userId
+            ? s
+            : {
+                uiOwnerUserId: userId,
+                activeHouseholdId: null,
+                memberFilter: "all",
+                onboardingSoftDismissed: false,
+                activeTour: null,
+                tourStep: 0,
+                shareOpen: false,
+                wizardOpen: false,
+                coreTourResolved: false,
+                extrasOfferPending: false,
+              },
+        ),
     }),
     {
       name: "familyvault-ui",
+      // Not saved: anything that only makes sense while the app is open.
+      // A saved activeTour made the tour start by itself on the next visit
+      // (even for a different account); tourStep was saved but never read.
       partialize: (state) => {
-        const { wizardOpen: _wizardOpen, coreTourResolved: _coreTourResolved, extrasOfferPending: _extrasOfferPending, ...rest } = state;
+        const {
+          wizardOpen: _wizardOpen,
+          coreTourResolved: _coreTourResolved,
+          extrasOfferPending: _extrasOfferPending,
+          activeTour: _activeTour,
+          tourStep: _tourStep,
+          shareOpen: _shareOpen,
+          ...rest
+        } = state;
         return rest;
       },
     },

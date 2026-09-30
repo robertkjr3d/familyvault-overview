@@ -22,8 +22,8 @@ import { recurrenceLabel } from "@/lib/reminderRecurrence";
 // in Supabase Storage, not in these tables. This export includes the stored
 // file *reference* where one exists (e.g. inventory photo URL) but does NOT
 // download the actual files. A signed/storage URL may stop working once the
-// household is no longer using FamilyHub SG. True "take my files and leave"
-// portability needs a separate zip-of-files export — not built yet.
+// household is no longer using FamilyHub SG. The zip export (runFullBackupZip,
+// further down in this file) bundles this workbook with the actual files.
 
 const STATUS_LABEL: Record<string, string> = {
   urgent: "Urgent",

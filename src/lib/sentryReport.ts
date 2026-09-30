@@ -21,6 +21,18 @@
  * call at the caller — errors reporting an error must never cause a second error.
  */
 
+/**
+ * Removes the query string and hash from a URL before it is sent anywhere
+ * (Sentry, the error_logs table). Invite and sign-in links carry tokens and
+ * email addresses in the ?query and #hash, which must never leave the app in
+ * an error report. Works on absolute or relative URLs and never throws.
+ */
+export function stripUrlSecrets(url: string): string {
+  const text = String(url ?? "");
+  const cut = text.search(/[?#]/);
+  return cut === -1 ? text : text.slice(0, cut);
+}
+
 export type SentryReportParams = {
   message: string;
   stack?: string;

@@ -67,17 +67,43 @@ export function principalPaidOverYear(
   annualRatePct: number,
   monthlyPayment: number,
 ): number {
+  return loanYearRepayment(openingBalance, annualRatePct, monthlyPayment).principal;
+}
+
+/**
+ * Month-by-month repayment of an amortizing loan over one 12-month year.
+ * Same maths as principalPaidOverYear (interest each month = remaining balance
+ * x annual rate / 12), but it also reports what was actually PAID: in the
+ * month the balance is cleared only the remaining balance plus that month's
+ * interest is due, not the full instalment, and after that nothing is paid
+ * at all. `months` is how many payments fell in the year (12 unless the loan
+ * cleared mid-year or was already cleared). A payment smaller than the monthly
+ * interest repays no principal and the whole payment counts as interest.
+ */
+export function loanYearRepayment(
+  openingBalance: number,
+  annualRatePct: number,
+  monthlyPayment: number,
+): { principal: number; interest: number; total: number; months: number } {
   let balance = Math.max(Number(openingBalance) || 0, 0);
   const monthlyRate = (Number(annualRatePct) || 0) / 100 / 12;
   const payment = Number(monthlyPayment) || 0;
-  let paid = 0;
-  for (let m = 0; m < 12 && balance > 0; m++) {
-    const interest = balance * monthlyRate;
-    const principal = Math.min(Math.max(payment - interest, 0), balance);
-    balance -= principal;
-    paid += principal;
+  let principal = 0;
+  let interest = 0;
+  let months = 0;
+  // Half a cent is treated as cleared, so floating-point dust (or a payment a
+  // fraction of a cent short) cannot leave a phantom payment the year after.
+  for (let m = 0; m < 12 && balance > 0.005; m++) {
+    const monthInterest = balance * monthlyRate;
+    const clearsBalance = payment - monthInterest >= balance - 0.005;
+    const monthPrincipal = clearsBalance ? balance : Math.max(payment - monthInterest, 0);
+    const monthPaid = clearsBalance ? balance + monthInterest : payment;
+    balance -= monthPrincipal;
+    principal += monthPrincipal;
+    interest += monthPaid - monthPrincipal;
+    months += 1;
   }
-  return paid;
+  return { principal, interest, total: principal + interest, months };
 }
 
 export function freqTimesPerYear(freq: string | null | undefined): number {
@@ -401,28 +427,40 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
   // real loss. Over a multi-decade projection with a real mortgage this made
   // projected net worth look meaningfully worse than reality.
   //
-  // Deliberately does NOT touch annualOut/outflowItems — those are real cash
-  // leaving the bank account (a mortgage payment IS real cash out, principal
-  // and interest both) and are read directly by YearDetailPanel.tsx to show
-  // "what went out this year". Changing what they mean would silently break
-  // that display. Instead, a separate `principalRepaidThisYear` amount is
-  // computed below and added back into runningNetWorth on top of annualNet,
-  // so the net-worth line only actually feels the interest portion.
+  // annualOut/outflowItems keep meaning "real cash leaving the bank account"
+  // (principal AND interest both) and are read directly by YearDetailPanel.tsx
+  // to show "what went out this year". A separate `principalRepaidThisYear`
+  // amount is computed below and added back into runningNetWorth on top of
+  // annualNet, so the net-worth line only actually feels the interest portion.
+  //
+  // Payoff fix (Sep 29 2026): for a loan/mortgage with a tracked balance, the
+  // cash out is what is really paid — the final year is only the months
+  // needed to clear the balance, and every year after that is zero. It used
+  // to keep charging the full instalment forever (or until loan_end_date).
+  // A loan_end_date still stops payments early if it is earlier than payoff.
   //
   // Per-loan/mortgage balance tracking (mirrors propValues/invValues/savValues
   // above) — seeded from each loan's own `balance` field, or a mortgaged
   // property's own `mortgage_balance` field. Only loans/mortgages with a rate
-  // present are tracked this way; ones with no rate keep today's exact
-  // behaviour (full payment counted as a net-worth loss) rather than guessing
-  // a rate — same "never guess" principle used elsewhere in this app.
+  // AND a balance above zero are tracked this way; ones with no rate or no
+  // balance keep today's exact behaviour (full payment, counted as a
+  // net-worth loss, until the end date if any) rather than guessing — same
+  // "never guess" principle used elsewhere in this app.
   const loanValues: Record<string, number> = {};
   for (const l of loans) {
-    if (l.rate != null && l.rate !== "") loanValues[l.id] = Number(l.balance) || 0;
+    if (l.rate != null && l.rate !== "" && (Number(l.balance) || 0) > 0) {
+      loanValues[l.id] = Number(l.balance);
+    }
   }
   for (const p of properties) {
     const isMortgagedViaLoan = mortgagedPropertyIds.has(p.id);
-    if (!isMortgagedViaLoan && p.interest_rate != null && p.interest_rate !== "") {
-      loanValues[`prop-${p.id}`] = Number(p.mortgage_balance) || 0;
+    if (
+      !isMortgagedViaLoan &&
+      p.interest_rate != null &&
+      p.interest_rate !== "" &&
+      (Number(p.mortgage_balance) || 0) > 0
+    ) {
+      loanValues[`prop-${p.id}`] = Number(p.mortgage_balance);
     }
   }
 
@@ -486,21 +524,26 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
           ? new Date(p.mortgage_end_date).getFullYear()
           : null;
         if (mortgageEndYear === null || y <= mortgageEndYear) {
-          const mortgage = Number(p.monthly_payment) * 12;
-          annualOut += mortgage;
-          outflowItems.push({ label: `${p.name || "Property"} mortgage`, amount: mortgage, href: propHref, timesPerYear: 12, member_id: p.member_id });
+          let mortgage = Number(p.monthly_payment) * 12;
+          let mortgageMonths = 12;
 
-          // Principal/interest split — only for mortgages with a tracked balance (rate present)
+          // Principal/interest split — only for mortgages with a tracked balance (rate + balance present)
           const mortgageKey = `prop-${p.id}`;
           if (mortgageKey in loanValues) {
             const openingBalance = loanValues[mortgageKey];
-            const actualPrincipalPaid = principalPaidOverYear(
+            const repaid = loanYearRepayment(
               openingBalance,
               Number(p.interest_rate),
               Number(p.monthly_payment),
             );
-            loanValues[mortgageKey] = Math.max(openingBalance - actualPrincipalPaid, 0);
-            principalRepaidThisYear += actualPrincipalPaid;
+            loanValues[mortgageKey] = Math.max(openingBalance - repaid.principal, 0);
+            principalRepaidThisYear += repaid.principal;
+            mortgage = repaid.total; // only what is really paid: partial final year, then zero
+            mortgageMonths = repaid.months;
+          }
+          if (mortgage >= 0.5) {
+            annualOut += mortgage;
+            outflowItems.push({ label: `${p.name || "Property"} mortgage`, amount: mortgage, href: propHref, timesPerYear: mortgageMonths, member_id: p.member_id });
           }
         }
       }
@@ -518,20 +561,25 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
         ? new Date(l.loan_end_date).getFullYear()
         : null;
       if (loanEndYear === null || y <= loanEndYear) {
-        const repayment = Number(l.monthly_payment) * 12;
-        annualOut += repayment;
-        outflowItems.push({ label: `${l.bank || "Loan"} repayment`, amount: repayment, href: `/loans#record-${l.id}`, timesPerYear: 12, member_id: l.member_id });
+        let repayment = Number(l.monthly_payment) * 12;
+        let repaymentMonths = 12;
 
-        // Principal/interest split — only for loans with a tracked balance (rate present)
+        // Principal/interest split — only for loans with a tracked balance (rate + balance present)
         if (l.id in loanValues) {
           const openingBalance = loanValues[l.id];
-          const actualPrincipalPaid = principalPaidOverYear(
+          const repaid = loanYearRepayment(
             openingBalance,
             Number(l.rate),
             Number(l.monthly_payment),
           );
-          loanValues[l.id] = Math.max(openingBalance - actualPrincipalPaid, 0);
-          principalRepaidThisYear += actualPrincipalPaid;
+          loanValues[l.id] = Math.max(openingBalance - repaid.principal, 0);
+          principalRepaidThisYear += repaid.principal;
+          repayment = repaid.total; // only what is really paid: partial final year, then zero
+          repaymentMonths = repaid.months;
+        }
+        if (repayment >= 0.5) {
+          annualOut += repayment;
+          outflowItems.push({ label: `${l.bank || "Loan"} repayment`, amount: repayment, href: `/loans#record-${l.id}`, timesPerYear: repaymentMonths, member_id: l.member_id });
         }
       }
       if (loanEndYear === y) {

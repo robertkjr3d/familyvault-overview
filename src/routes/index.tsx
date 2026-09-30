@@ -112,6 +112,7 @@ function Dashboard() {
   const onboardingSoftDismissed = useAppStore((s) => s.onboardingSoftDismissed);
   const setOnboardingSoftDismissed = useAppStore((s) => s.setOnboardingSoftDismissed);
   const setWizardOpen = useAppStore((s) => s.setWizardOpen);
+  const activeTour = useAppStore((s) => s.activeTour);
 
   // Keeps the globally-mounted tour welcome popup (TourWelcomeScreen, in
   // __root.tsx) aware of the wizard's real open state, regardless of which
@@ -289,11 +290,14 @@ function Dashboard() {
   // every time the tour navigates back to "/".
   useEffect(() => {
     if (onboardingSoftDismissed) return;
+    // Never open the wizard on top of a running tour (a tour started from
+    // Settings navigates here) -- the two must not be on screen together.
+    if (activeTour) return;
     if (appSettings === undefined || !tablesLoaded) return; // still loading
     if (!appSettings?.onboarding_dismissed && isEmptyHousehold) {
       setOnboardingOpen(true);
     }
-  }, [appSettings, isEmptyHousehold, tablesLoaded, onboardingSoftDismissed]);
+  }, [appSettings, isEmptyHousehold, tablesLoaded, onboardingSoftDismissed, activeTour]);
 
   // Manual re-open from Settings → About → "Quick Start Guide" (links to /#onboarding),
   // same hash-link pattern HashHighlight already uses elsewhere in this app.
