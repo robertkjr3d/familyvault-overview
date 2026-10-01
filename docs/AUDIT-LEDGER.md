@@ -1,6 +1,6 @@
 # Audit ledger — read first when reviewing FamilyHub SG
 
-Short on purpose: what is already verified, what is deliberate, what is still open. Update it when something changes. Last updated: 2026-09-30.
+Short on purpose: what is already verified, what is deliberate, what is still open. Update it when something changes. Last updated: 2026-10-01.
 
 **Where the truth lives**
 - Database structure and security: `supabase/schema.sql` (generated from the live database; see `supabase/README.md`).
@@ -19,6 +19,10 @@ Short on purpose: what is already verified, what is deliberate, what is still op
 - Recycle Bin table writes limited to editors.
 - Nightly backup was exceeding Cloudflare's free 50-request limit; backup now has its own cron trigger.
 - Storage file writes/deletes limited to editors; unused broad adviser read rules removed from 6 tables (SQL run status: see chat/`schema.sql`).
+
+**Fixed 2026-10-01**
+- Browser-side Sentry is confirmed working end to end: a deliberate test error (`Sentry test 3`) run from the browser console arrived as a Sentry email within minutes. The URL-stripping change is also confirmed in PostHog (the pageview recorded for the `?test=` visit shows the bare address).
+- Last step of tour 2 ("There it is"): the highlight covered only part of "Due in the Next 90 Days" (about 2.5 entries). Cause from reading the code: the tour measures a highlight twice (on arrival and ~400ms later) and the list fills in afterwards as reminders and other records load. The step now sets `trackLayout`, so while it is showing the tour watches the section and the page column around it (`src/lib/layoutWatch.ts`), re-centres and re-measures on any size change. Event-based, only on this step. Not yet confirmed on a real device.
 
 **Fixed 2026-09-30**
 - Signing out from Settings left the address on `/settings`, so the next email-code or passkey sign-in landed on Settings (Google always returns to `/`). Sign-out now clears cached data, ends any tour and returns to `/` (`src/routes/__root.tsx`).
@@ -45,7 +49,8 @@ Short on purpose: what is already verified, what is deliberate, what is still op
 
 **Open**
 - Photos/documents have no automatic backup (only data tables); users are told to keep their own copy, and Settings > Data has a full ZIP download. Backup headroom on the free plan is thin (~35 of 50 requests) and grows with table row counts (1 request per 1,000 rows).
-- Confirm Sentry actually reports events. 30 Sep: a console test still printed "[ErrorLogger] Failed to log", which is exactly what the OLD code printed (a tab opened before the deploy, or an old build, still running); recheck after a hard refresh. The Sentry `/store/` endpoint used by `sentryReport.ts` is documented as legacy; switch to the envelope endpoint if events do not arrive.
+- Sentry: browser reporting confirmed (1 Oct). The Worker-side crash report (path-only URL, `src/server.ts`) is deployed but has not been exercised by a real server crash. `sentryReport.ts` uses Sentry's legacy `/store/` endpoint, which works today; move to the envelope endpoint only if events ever stop.
+- Tour 2 last step highlight fix (`trackLayout`) awaits a real-device check. If the highlight still stops mid-row, get a screenshot and the window size; if it simply runs off the bottom of a short window, the section is taller than the window and nothing can show all of it.
 - Unexplained, not yet reproduced: an invited person's tour and onboarding wizard appeared together after several idle minutes, with the tour's first step skipped. Retest in a clean browser after the 2026-09-30 deploy; do not touch Driver.js until then.
 - Lifetime chart does not use `loan_rate_schedule` (rates held constant); a loan with a rate but no balance recorded, or no rate, cannot be paid off in the projection and keeps charging until its end date.
 - Mortgage can still be entered in two places (Property tab and Loans tab); a dashboard note warns of double entry.

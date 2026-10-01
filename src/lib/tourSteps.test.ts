@@ -44,3 +44,24 @@ describe("tour steps that depend on something slow", () => {
     }
   });
 });
+
+describe("steps that keep their highlight in step with the page", () => {
+  it("the last step of tour 2 re-measures when the page around it changes size", () => {
+    const last = EXTRAS_TOUR_STEPS[EXTRAS_TOUR_STEPS.length - 1];
+    expect(last.id).toBe("upcoming");
+    expect(last.trackLayout).toBe(true);
+  });
+
+  it("no other step opts in (keeps the extra re-measuring limited to where it is needed)", () => {
+    const optedIn = [...CORE_TOUR_STEPS, ...EXTRAS_TOUR_STEPS]
+      .filter((s) => s.trackLayout)
+      .map((s) => s.id);
+    expect(optedIn).toEqual(["upcoming"]);
+  });
+
+  it("the dashboard marks its Upcoming section with the name the step looks for", () => {
+    const last = EXTRAS_TOUR_STEPS[EXTRAS_TOUR_STEPS.length - 1];
+    const dashboard = readFileSync("src/routes/index.tsx", "utf8");
+    expect(dashboard).toContain(`data-tour="${last.target}"`);
+  });
+});

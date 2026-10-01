@@ -6,6 +6,7 @@ import "driver.js/dist/driver.css";
 import { useAppStore } from "@/lib/store";
 import { useCurrentRole } from "@/lib/useCurrentRole";
 import { CORE_TOUR_STEPS, EXTRAS_TOUR_STEPS, markTourSeen, type TourStep } from "@/lib/tourSteps";
+import { watchLayout } from "@/lib/layoutWatch";
 import { toast } from "sonner";
 
 // Matches this app's own --radius-xl (styles.css) — NOT Tailwind's default
@@ -233,6 +234,32 @@ export function GuidedTour() {
         // which specific steps are affected.
         onHighlighted: (_element, _step, opts) => {
           window.setTimeout(() => opts.driver.refresh(), 400);
+          // Oct 1 2026: for a step that sets trackLayout (the last step of tour
+          // 2), keep re-measuring while its target or the page column around
+          // it changes size -- the list fills in after the two measurements
+          // above, which left the highlight covering only part of the section.
+          // Released by onDeselected (via cleanupListeners) or, if the tour
+          // simply ends, the first time it finds the tour no longer active.
+          if (step.trackLayout) {
+            const target = document.querySelector<HTMLElement>(`[data-tour="${step.target}"]`);
+            let stopWatching: () => void = () => {};
+            stopWatching = watchLayout([target, target?.parentElement], () => {
+              if (!opts.driver.isActive()) {
+                stopWatching();
+                return;
+              }
+              // Same instant re-centre as scrollToTarget, then re-measure.
+              document.body.classList.remove("driver-no-scroll");
+              target?.scrollIntoView({ behavior: "auto", block: "center" });
+              document.body.classList.add("driver-no-scroll");
+              opts.driver.refresh();
+            });
+            const previousCleanup = cleanupListeners;
+            cleanupListeners = () => {
+              previousCleanup?.();
+              stopWatching();
+            };
+          }
           // Bug fix (Sep 18 2026): confirmed by reading driver.js's own
           // compiled source (its internal x() function, run every time a
           // step highlights) — it deliberately auto-focuses the first

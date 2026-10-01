@@ -116,6 +116,19 @@ export type TourStep = {
    * there's no later step left for the earlier scroll-lag bug to recur on.
    */
   scrollToTarget?: boolean;
+  /**
+   * Keep this step's highlight in step with the page while it is showing.
+   * driver.js measures a target once when the step appears (and the tour
+   * measures once more ~400ms later) and never again, so a target that grows
+   * or moves AFTER that -- e.g. the dashboard's "Due in the Next 90 Days" list
+   * filling in as reminders and other records finish loading, or a section
+   * appearing above it -- was left with a highlight that no longer matched
+   * (reported Oct 1 2026: highlight covered only about 2.5 of the entries).
+   * With this set, GuidedTour.tsx watches the target and the page column
+   * around it for size changes, re-centres the target and re-measures. It is
+   * event-based (no timers) and applies only to a step that sets it.
+   */
+  trackLayout?: boolean;
 };
 
 // Shared by GuidedTour.tsx (on finish/skip) and TourWelcomeScreen.tsx (on
@@ -393,6 +406,7 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
     placement: "top",
     settleDelay: 400, // follows the nav-home route change
     scrollToTarget: true, // see this flag's own comment in the TourStep type above — this target can sit far down the page
+    trackLayout: true, // list fills in / page shifts after the first measure -- see the flag above
     // Final step, nothing to tap — "Done" ends the tour.
   },
 ];
