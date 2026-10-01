@@ -69,10 +69,12 @@ export async function logError(params: LogParams): Promise<void> {
       component_name: params.componentName?.slice(0, 200) ?? null,
       metadata: params.metadata ?? null,
     });
-  } catch {
+  } catch (loggerError) {
     // Silent fail — never propagate errors from the error logger.
     // console.error is safe here since it doesn't re-trigger the handler.
-    console.error("[ErrorLogger] Failed to log:", params.errorMessage);
+    // Sep 30 2026: also print the logger's OWN error — before, only the
+    // original message was shown, so a failing logger could not be diagnosed.
+    console.error("[ErrorLogger] Failed to log:", params.errorMessage, loggerError);
   }
 }
 

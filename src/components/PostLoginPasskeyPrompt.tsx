@@ -31,6 +31,7 @@ export function PostLoginPasskeyPrompt() {
   const queryClient = useQueryClient();
   const activeTour = useAppStore((s) => s.activeTour);
   const extrasOfferPending = useAppStore((s) => s.extrasOfferPending);
+  const coreTourResolved = useAppStore((s) => s.coreTourResolved);
   const [dismissedThisSession, setDismissedThisSession] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
@@ -61,7 +62,14 @@ export function PostLoginPasskeyPrompt() {
     // the Tour 2 question to actually be answered one way or the other,
     // and for no tour to be actively running, before showing this.
     !activeTour &&
-    !extrasOfferPending;
+    !extrasOfferPending &&
+    // Sep 30 2026: the intent above ("see this one on their next visit") was
+    // not being met -- finishing or skipping the tour marks it seen right away,
+    // which made this eligible in the SAME sitting, a second full-screen
+    // popup seconds after the tour. coreTourResolved is true only for a visit
+    // in which the tour question was just answered (it is not saved), so that
+    // visit skips this and the next one shows it.
+    !coreTourResolved;
 
   useEffect(() => {
     if (!show) return;

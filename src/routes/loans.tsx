@@ -59,7 +59,7 @@ function LoansPage() {
   return (
     <div className="space-y-4 pb-24">
       <h1 className="text-2xl font-bold tracking-tight">Loans</h1>
-      <MemberFilterBar table="loans" />
+      <MemberFilterBar table="loans" tourTarget="member-filter-loans" />
       <div className="space-y-3">
         {sortByStatus(loans).map((l: any) => (
           <LoanRow

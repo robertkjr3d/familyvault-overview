@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useRouterState } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentRole } from "@/lib/useCurrentRole";
@@ -26,6 +27,18 @@ export function TourWelcomeScreen() {
   const setCoreTourResolved = useAppStore((s) => s.setCoreTourResolved);
   const [dismissedThisSession, setDismissedThisSession] = useState(false);
   const queryClient = useQueryClient();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  // Sep 30 2026: the onboarding wizard's last item scrolls the Dashboard to the
+  // net-worth chart for the person to look at -- this full-screen popup used to
+  // land straight on top of it the moment the wizard closed. If the wizard was
+  // open this visit, hold the popup back until they move to another tab (the
+  // wizard only ever lives on "/"). Event-based, not a timer.
+  const [wizardSeenThisVisit, setWizardSeenThisVisit] = useState(false);
+  useEffect(() => {
+    if (wizardOpen) setWizardSeenThisVisit(true);
+  }, [wizardOpen]);
+  const waitingForPersonToLeaveDashboard = wizardSeenThisVisit && pathname === "/";
 
   const show =
     !isLoading &&
@@ -34,6 +47,7 @@ export function TourWelcomeScreen() {
     !activeTour &&
     !dismissedThisSession &&
     !wizardOpen &&
+    !waitingForPersonToLeaveDashboard &&
     !coreTourResolved;
 
   // Lock background scroll while this full-screen modal is up, same as the

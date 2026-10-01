@@ -71,6 +71,16 @@ export type TourStep = {
    */
   settleDelay?: number;
   /**
+   * How long driver.js may wait for this step's target to appear before
+   * giving up and skipping the step (default is the global 5s in
+   * GuidedTour.tsx). It is an upper limit only: driver.js watches the page
+   * and highlights the moment the target exists, so a longer limit costs
+   * nothing when things are fast. Set it on a step whose target depends on
+   * something slow -- a page's first download, or a save finishing -- so a
+   * slow connection does not make the tour skip ahead or end early.
+   */
+  waitForElement?: number;
+  /**
    * Highlight the real element but block real interaction with it — used
    * for a step whose real action (open a Sheet, open a dropdown) has no
    * downstream step depending on it having actually happened, so there's
@@ -152,7 +162,15 @@ export const CORE_TOUR_STEPS: TourStep[] = [
   {
     id: "member-confirm",
     route: "/loans",
-    target: "member-filter",
+    // Sep 30 2026: its own name, NOT "member-filter". The Dashboard has a bar
+    // with that same name (step 1). The first time Loans is opened its page
+    // has to download, and until it arrives the Dashboard is still on screen
+    // -- so on a slow connection the tour grabbed the DASHBOARD's bar, which
+    // then vanished when Loans appeared, leaving the popover pinned in the
+    // top-left corner. With a name only the Loans page has, driver.js just
+    // waits for the real one. (Reported on Firefox; works once cached.)
+    target: "member-filter-loans",
+    waitForElement: 15000,
     title: "Quick check",
     body: "Make sure this is set to you (or whoever the loan belongs to) before adding it.",
     placement: "bottom",
@@ -250,6 +268,10 @@ export const CORE_TOUR_STEPS: TourStep[] = [
     body: "Your loan is saved. This card is where everything about it lives from now on. Insurance, property, and other sections work the same way — add one whenever you're ready.",
     placement: "bottom",
     settleDelay: 500, // follows Save writing to the database and the list refetching
+    // Sep 30 2026: a slow save (8s seen on Firefox) outlasted the global 5s
+    // wait, so this step skipped itself, the tour ended mid-save and "Want
+    // more tips & tricks?" popped up while the loan was still saving.
+    waitForElement: 15000,
     // Nothing to tap — this is the last step, "Done" ends the tour.
   },
 ];

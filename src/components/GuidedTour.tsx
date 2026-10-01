@@ -221,6 +221,7 @@ export function GuidedTour() {
         },
         advanceOnClick: !!step.advanceOnClick,
         disableActiveInteraction: !!step.disableInteraction,
+        waitForElement: step.waitForElement,
         // driver.js measures the target's position once when a step first
         // highlights. If that target only just finished navigating to, or
         // sits inside a Sheet still mid-open-animation, that first

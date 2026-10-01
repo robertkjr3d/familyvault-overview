@@ -10,9 +10,14 @@ import { readableMemberColor } from "@/lib/memberColor";
 export function MemberFilterBar({
   className,
   table,
+  tourTarget = "member-filter",
 }: {
   className?: string;
   table?: string;
+  // The guided tour finds this bar by name. Two pages showing a bar with the
+  // SAME name can be confused with each other mid-navigation, so a page the
+  // tour moves to gives its own (see member-confirm in tourSteps.ts).
+  tourTarget?: string;
 }) {
   const { data: members = [] } = useMembers();
   const { memberFilter, setMemberFilter, activeHouseholdId } = useAppStore();
@@ -43,7 +48,7 @@ export function MemberFilterBar({
   }, [table, countRows]);
 
   return (
-    <div className={cn("flex flex-wrap gap-2", className)} data-tour="member-filter">
+    <div className={cn("flex flex-wrap gap-2", className)} data-tour={tourTarget}>
       <FilterChip
         active={memberFilter === "all"}
         onClick={() => setMemberFilter("all")}
