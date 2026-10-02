@@ -85,8 +85,7 @@ function TermsPage() {
 
         <Section title="Ending your use">
           <p>
-            You can stop using FamilyHub SG at any time. To request deletion of your account and
-            data, contact us at the email below.
+            You can stop using FamilyHub SG at any time. To delete your account, go to Settings and click "Delete Account". Alternatively, you may contact us at the email below.
           </p>
         </Section>
 
