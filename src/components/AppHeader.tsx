@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bell, Crown, Share2 } from "lucide-react";
+import { Bell, Clock, Crown, Share2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToday } from "@/lib/today";
 import { AlertsSheet } from "./AlertsSheet";
+import { RecentSheet } from "./RecentSheet";
 import { GlobalSearch } from "./GlobalSearch";
 import { buildUpcomingItems } from "@/lib/alerts";
 import { useAuthSession } from "@/hooks/useAuthSession";
@@ -52,6 +53,7 @@ const { simulated, today } = useToday();
 const { user } = useAuthSession();
 const queryClient = useQueryClient();
 const [alertsOpen, setAlertsOpen] = useState(false);
+const [recentOpen, setRecentOpen] = useState(false);
 useEffect(() => {
   const handler = () => setAlertsOpen(true);
   window.addEventListener("fh:open-alerts", handler);
@@ -394,6 +396,16 @@ return (
           )}
         </button>
 
+        <button
+          type="button"
+          onClick={() => setRecentOpen(true)}
+          className="cursor-pointer rounded-full p-2 hover:bg-accent"
+          aria-label="Recently edited"
+          title="Recently edited"
+        >
+          <Clock className="h-5 w-5" />
+        </button>
+
         {canShareActiveHousehold && (
           <Button
             variant="outline"
@@ -410,6 +422,7 @@ return (
     </div>
   </header>
   <AlertsSheet open={alertsOpen} onOpenChange={setAlertsOpen} />
+  <RecentSheet open={recentOpen} onOpenChange={setRecentOpen} />
 
   <Dialog open={shareOpen} onOpenChange={setShareOpen}>
     <DialogContent className="max-h-[90vh] overflow-y-auto">

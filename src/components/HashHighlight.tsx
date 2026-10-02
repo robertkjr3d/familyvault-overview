@@ -1,18 +1,25 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-// "Just added" memory: after a new record is saved, the save code calls
-// flashNewRecord(id). The card with that id (it only exists once the list has
-// refreshed) then scrolls into view and flashes. Held in memory only, never
-// saved, and ignored after 20s so a card that is hidden by a member filter
+// "Flash this card" signal. Used after a new record is saved and when a card is
+// picked from the header's Recent list: the caller names a record id, and the
+// card with that id scrolls into view and flashes. Cards already on screen are
+// told straight away; a card that only appears after the list refreshes (or
+// after the member filter changes) picks it up when it mounts. Held in memory
+// only, never saved, and ignored after 20s so a card hidden by a member filter
 // cannot flash by surprise later.
-const NEW_RECORD_MAX_AGE_MS = 20_000;
-const SHEET_CLOSE_MS = 600; // the add-form sheet takes ~500ms to slide away
-let justAdded: { id: string; at: number } | null = null;
+const FLASH_MAX_AGE_MS = 20_000;
+const SHEET_CLOSE_MS = 600; // a Sheet takes ~500ms to slide away; scroll after that
+const FLASH_MS = 3000;
+let pending: { id: string; at: number } | null = null;
+const listeners = new Set<() => void>();
 
-export function flashNewRecord(recordId: string | null | undefined) {
-  justAdded = recordId ? { id: `record-${recordId}`, at: Date.now() } : null;
+export function flashRecord(recordId: string | null | undefined) {
+  pending = recordId ? { id: `record-${recordId}`, at: Date.now() } : null;
+  listeners.forEach((notify) => notify());
 }
+// Older name, still used by the add-record forms.
+export const flashNewRecord = flashRecord;
 
 export function HashHighlight({ id, children }: { id: string; children: ReactNode }) {
   const [hl, setHl] = useState(false);
@@ -44,28 +51,36 @@ export function HashHighlight({ id, children }: { id: string; children: ReactNod
     return () => window.removeEventListener("hashchange", check);
   }, [id]);
 
-  // Newly saved record: wait for the add-form sheet to finish closing, scroll
-  // to this card, flash it for 3s. Timers are cleared on unmount.
+  // Flash signal (see top of file). Waits for any closing Sheet, scrolls to this
+  // card, flashes it for 3s. All timers are cleared on unmount.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!justAdded || justAdded.id !== id) return;
-    const age = Date.now() - justAdded.at;
-    if (age > NEW_RECORD_MAX_AGE_MS) {
-      justAdded = null;
-      return;
-    }
+    let startTimer: ReturnType<typeof setTimeout> | undefined;
     let hideTimer: ReturnType<typeof setTimeout> | undefined;
-    const startTimer = setTimeout(
-      () => {
-        document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" });
-        setHl(true);
-        justAdded = null;
-        hideTimer = setTimeout(() => setHl(false), 3000);
-      },
-      Math.max(0, SHEET_CLOSE_MS - age),
-    );
+    const run = () => {
+      if (!pending || pending.id !== id) return;
+      const age = Date.now() - pending.at;
+      if (age > FLASH_MAX_AGE_MS) {
+        pending = null;
+        return;
+      }
+      if (startTimer) clearTimeout(startTimer);
+      startTimer = setTimeout(
+        () => {
+          pending = null;
+          document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" });
+          setHl(true);
+          if (hideTimer) clearTimeout(hideTimer);
+          hideTimer = setTimeout(() => setHl(false), FLASH_MS);
+        },
+        Math.max(0, SHEET_CLOSE_MS - age),
+      );
+    };
+    run(); // a flash requested before this card mounted
+    listeners.add(run); // a flash requested while this card is already on screen
     return () => {
-      clearTimeout(startTimer);
+      listeners.delete(run);
+      if (startTimer) clearTimeout(startTimer);
       if (hideTimer) clearTimeout(hideTimer);
     };
   }, [id]);

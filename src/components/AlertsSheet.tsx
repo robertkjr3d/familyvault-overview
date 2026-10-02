@@ -21,7 +21,7 @@ import {
   useCreditCards,
 } from "@/lib/householdRecordQueries";
 
-const SOURCES = [
+export const SOURCES = [
   { table: "properties",         key: "properties",     href: "/property",     kind: "Property",  icon: Building2,  title: (r: any) => r.name },
   { table: "loans",              key: "loans",           href: "/loans",        kind: "Loan",      icon: Landmark,   title: (r: any) => `${r.bank} · ${r.purpose ?? ""}` },
   { table: "insurance_policies", key: "insurance",       href: "/insurance",    kind: "Insurance", icon: Shield,     title: (r: any) => r.name },
