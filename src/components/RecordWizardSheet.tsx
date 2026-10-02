@@ -14,6 +14,7 @@ import { recordConfigs, type FieldDef, type SelectOption } from "@/lib/recordCon
 import { MoneyInput } from "./MoneyInput";
 import { ChevronLeft, X } from "lucide-react";
 import { useAppStore } from "@/lib/store";
+import { flashNewRecord } from "@/components/HashHighlight";
 
 function optValue(o: SelectOption) { return typeof o === "string" ? o : o.value; }
 function optLabel(o: SelectOption) { return typeof o === "string" ? o : o.label; }
@@ -217,6 +218,8 @@ export function RecordWizardSheet({
       }
 
       toast.success(`${cfg.label} added`);
+      // Scroll to and flash the new card once the list refreshes (not during a tour).
+      if (!useAppStore.getState().activeTour) flashNewRecord(newId);
       qc.invalidateQueries({ queryKey: [cfg.queryKey] });
       // Bug fix (July 2026) — see matching fix + comment in RecordFormSheet.tsx:
       // MemberFilterBar's count badge keys off the real table name, which

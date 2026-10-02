@@ -1,48 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Trash2, Bold, Italic, List } from "lucide-react";
+import { Trash2, Bold, Italic, List } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentRole } from "@/lib/useCurrentRole";
-
-function escapeHtml(input: string): string {
-  return input
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function sanitizeHtml(input: string): string {
-  return input
-    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "")
-    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
-    .replace(/\s(href|src)\s*=\s*("\s*javascript:[^"]*"|'\s*javascript:[^']*')/gi, "");
-}
-
-function toEditorHtml(value: string | null | undefined): string {
-  const v = (value ?? "").trim();
-  if (!v) return "";
-
-  if (/<[a-z][\s\S]*>/i.test(v)) {
-    return sanitizeHtml(v);
-  }
-
-  const lines = (value ?? "").split(/\n/);
-  return lines.map((line) => (line.trim() ? `<p>${escapeHtml(line)}</p>` : "<p><br></p>")).join("");
-}
-
-function htmlToPlainText(html: string): string {
-  if (typeof document !== "undefined") {
-    const node = document.createElement("div");
-    node.innerHTML = html;
-    return (node.textContent ?? "").replace(/\u00a0/g, " ").trim();
-  }
-  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-}
+import { escapeHtml, sanitizeHtml, toEditorHtml, htmlToPlainText } from "@/lib/notesHtml";
 
 export function NotesEditor({
   table, queryKey, id, value,
@@ -52,7 +15,6 @@ export function NotesEditor({
   const [html, setHtml] = useState(toEditorHtml(value));
   const { canEdit } = useCurrentRole();
   const [justSaved, setJustSaved] = useState(false);
-  const [summarising, setSummarising] = useState(false);
   const [formatState, setFormatState] = useState({ bold: false, italic: false, bullet: false });
   const qc = useQueryClient();
   const lastSavedRef = useRef(toEditorHtml(value));
@@ -110,27 +72,6 @@ export function NotesEditor({
     if (editorRef.current) editorRef.current.innerHTML = "";
     if (debounceRef.current) clearTimeout(debounceRef.current);
     void commit("");
-  }
-
-  function summarise() {
-    const text = htmlToPlainText(html);
-    if (!text) return;
-
-    setSummarising(true);
-    setTimeout(() => {
-      const bullets = text
-        .split(/\n+/)
-        .map((l) => l.trim())
-        .filter(Boolean)
-        .map((l) => `<li>${escapeHtml(l.replace(/^[•\-\*]\s*/, ""))}</li>`)
-        .join("");
-      const next = bullets ? `<ul>${bullets}</ul>` : "";
-      setHtml(next);
-      if (editorRef.current) editorRef.current.innerHTML = next;
-      void commit(next);
-      setSummarising(false);
-      toast.success("Summarised to bullet points");
-    }, 300);
   }
 
   function insertFormat(type: "bold" | "italic" | "bullet") {
@@ -288,10 +229,6 @@ export function NotesEditor({
             Clear
           </Button>
           <div className="flex items-center gap-1.5">
-            <Button type="button" size="sm" variant="outline" onClick={summarise} disabled={isEmpty || summarising}>
-              <Sparkles className="mr-1 h-3.5 w-3.5" />
-              {summarising ? "Summarising…" : "Summarise"}
-            </Button>
             <Button type="button" size="sm" onClick={handleSave} disabled={isEmpty}>
               {justSaved ? "Saved ✓" : "Save"}
             </Button>

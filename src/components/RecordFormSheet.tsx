@@ -16,6 +16,7 @@ import { MoneyInput } from "./MoneyInput";
 import { X, Bell } from "lucide-react";
 import { addDays, parseISO } from "date-fns";
 import { useAppStore } from "@/lib/store";
+import { flashNewRecord } from "@/components/HashHighlight";
 
 // Sep 6 2026: cross-checked this list against every date field buildUpcomingItems()
 // in alerts.ts actually reads (not assumed — grepped recordConfigs.ts for each field
@@ -147,6 +148,9 @@ export function RecordFormSheet({
       }
 
       toast.success(isEdit ? "Saved" : `${cfg.label} added`);
+      // New record: remember it so its card scrolls into view and flashes once the
+      // list refreshes. Skipped while a guided tour runs (the tour owns the scrolling).
+      if (!isEdit && !useAppStore.getState().activeTour) flashNewRecord(savedId);
       qc.invalidateQueries({ queryKey: [cfg.queryKey] });
       // Bug fix (July 2026): MemberFilterBar's own per-member count badge
       // keys its cache off the REAL table name (cfg.table), not this
