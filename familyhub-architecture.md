@@ -83,6 +83,10 @@ Built with `driver.js` + React (`GuidedTour.tsx`, `tourSteps.ts`). Runs on both 
 ## 7a. Known display gap, now fixed (health.tsx)
 A Health record whose owning family member was later deleted had no section to appear under and was effectively invisible on the Health page, even though the row still existed everywhere else (exports, backups). Fixed Sep 22 2026 with a plain "Unassigned" section for exactly this case.
 
+## 7b. Notes editor and "new record" highlight (2 Oct 2026)
+- **Notes** (`NotesEditor.tsx`, pure helpers in `src/lib/notesHtml.ts`, tested): a note typed into an empty box is saved by the browser as HTML text without tags (a trailing space becomes `&nbsp;`, `&` becomes `&amp;`). The loader used to treat tag-less text as old plain text and escape it a second time, so saved notes showed a literal "&nbsp;". The loader now recognises those entities as HTML. The "Summarise" button (it only turned lines into bullets; no AI was involved) was removed.
+- **New record highlight:** after a record is saved from the Add form or the Guided add (`RecordFormSheet.tsx`, `RecordWizardSheet.tsx`, including Duplicate), `flashNewRecord(id)` (`HashHighlight.tsx`, in memory only) makes that card scroll to the centre of the screen and flash for 3 seconds once the list has refreshed. Skipped during a guided tour, ignored after 20 seconds, and a card hidden by a member filter simply does not flash. Inline adds (Members, Inventory items and folders, Go-bag and Travel checklist items) are not covered.
+
 ## 8. Advisor (FA) dashboard — separate sub-project
 Full detail in a dedicated reference (`advisor-dashboard.md`) — summary: a financial adviser can be given selective, per-category, per-member access to a household's data (insurance, investments, property, loans), with a household-side toggle to hide individual items regardless. Includes adviser notes, a policy-illustration chart tool, and per-member net worth. Built and deployed; still evolving.
 
