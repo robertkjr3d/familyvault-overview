@@ -3,6 +3,12 @@ import { recordConfigs, type FieldDef, type SelectOption } from "@/lib/recordCon
 import type { Member } from "@/hooks/useMembers";
 import { getDisplayUrl, getExportUrl } from "@/lib/storageUrls";
 import { recurrenceLabel } from "@/lib/reminderRecurrence";
+import {
+  buildWorkbookBuffer,
+  toLocalWallClock,
+  type ExportRow,
+  type SheetSpec,
+} from "@/lib/excelLayout";
 
 // Full household data export — one Excel sheet per record type (Properties,
 // Loans, Insurance, Investments, Savings & CPF, Other Assets, Health, Go-Bag,
@@ -44,125 +50,8 @@ function resolveSelectLabel(f: FieldDef, raw: any): string {
   return opt ? optLabel(opt) : String(raw);
 }
 
-type ExportRow = Record<string, any>;
-
-type SheetSpec = {
-  name: string;
-  columns: { header: string; key: string; width: number; numFmt?: string; wrap?: boolean }[];
-  rows: ExportRow[];
-};
-
-// ─── Column width overrides ────────────────────────────────────────────────────
-// The generic widthFor() formula (below) sizes by field type. These overrides
-// apply on top of it for specific fields where the formula produces a column
-// that's too wide given the actual data (e.g. "Interest rate %" is a short
-// 2-decimal number, not a paragraph of text).
-//
-// Two tiers:
-//  SHEET_OVERRIDES[configKey][fieldKey] — sheet-specific (takes precedence)
-//  GLOBAL_OVERRIDES[fieldKey]           — applied when no sheet-specific entry
-//
-// Width units are Excel character widths (≈ 1 character at 11pt Calibri).
-// Adjusted by Azariah Jun 2026 session to remove wasted whitespace.
-
-const SHEET_OVERRIDES: Record<string, Record<string, number>> = {
-  properties: {
-    name: 20,
-    member_id: 13,
-    joint_member_id: 18,
-    purpose: 13,
-    currency: 8,
-    purchase_price: 12,
-    purchase_date: 12,
-    current_value: 11,
-    mortgage_bank: 12,
-    mortgage_balance: 15,
-    monthly_payment: 12,
-    interest_rate: 6,
-    rate_type: 8,
-    market_rent: 14,
-    cost_management: 14,
-    cost_property_tax: 10,
-    cost_fire_insurance: 12,
-    cost_other_label: 12,
-    strategy: 17,
-    beneficiary: 12,
-  },
-  loans: {
-    purpose: 8,
-    member_id: 9,
-    original_amount: 10,
-    balance: 13,
-    term_years: 9,
-    rate: 13,
-    rate_label: 8,
-    monthly_payment: 13,
-    reprice_date: 11,
-    property_id: 23,
-  },
-  insurance_policies: {
-    also_covers: 17,
-    provider: 12,
-    member_id: 11,
-    policy_number: 15,
-    coverage: 20,
-    currency: 8,
-    frequency: 16,
-    payout_frequency: 15,
-    beneficiary: 12,
-    surrender_value_last_updated: 10,
-  },
-  savings_accounts: {
-    institution: 20,
-    member_id: 13,
-    joint_member_id: 18,
-    account_number: 13,
-  },
-};
-
-// Applied to any sheet that doesn't have a sheet-specific entry for the field.
-// Keeps common fields (currency, interest_rate, last_updated, coverage)
-// consistently sized across all tabs without repeating the override on each.
-const GLOBAL_OVERRIDES: Record<string, number> = {
-  currency: 8,
-  interest_rate: 6,
-  last_updated: 10,
-  coverage: 20,
-  beneficiary: 12,
-};
-
-// Status and Last Updated columns are appended by buildRecordSheet
-// (not driven by recordConfigs), so they get their own constants.
-const STATUS_COL_WIDTH = 8; // "Status": fits "Settled" / "Urgent"
-const UPDATED_AT_COL_WIDTH = 16; // "Last Updated In App": date, no need for 20
-
-function resolvedWidth(f: FieldDef, configKey: string): number {
-  return SHEET_OVERRIDES[configKey]?.[f.key] ?? GLOBAL_OVERRIDES[f.key] ?? widthFor(f);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// like — not the header text length. A long header like "Current estimated
-// value" holds short numbers and shouldn't force a wide column; a short
-// header like "Action" holds free-text notes and needs a wide one. The header
-// row has text-wrapping turned on (see assembly loop below) so a long header
-// on a narrow numeric/date column wraps to two lines instead of being clipped.
-function widthFor(f: FieldDef): number {
-  const headerLen = f.label.length;
-  if (f.money) return clamp(14, headerLen + 2, 18);
-  if (f.type === "date") return 14;
-  if (f.type === "number") return clamp(10, headerLen + 2, 16);
-  if (f.type === "chips") return 30;
-  if (f.type === "select" || f.type === "member" || f.type === "property_select") {
-    return clamp(16, headerLen + 4, 26);
-  }
-  // text / textarea — free-form notes are typically the longest actual
-  // content in the sheet (e.g. "Action": "Ask UOB for repricing rate May 2026")
-  return clamp(30, headerLen + 12, 48);
-}
-
-function clamp(min: number, value: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
+// Column widths, wrapping, row heights, fonts and print setup are all worked out from the real
+// data in excelLayout.ts, so nothing here needs hand-tuned widths.
 
 function numFmtFor(f: FieldDef): string | undefined {
   if (f.type === "date") return "dd mmm yyyy";
@@ -173,44 +62,6 @@ function numFmtFor(f: FieldDef): string | undefined {
   return undefined;
 }
 
-// Measures how long a value will actually LOOK once Excel renders it with
-// the given numFmt — used by the column auto-fit pass below. Mirrors
-// numFmtFor()'s exact format strings; if that function's formats ever
-// change, this must change with it. Deliberately does NOT rely on
-// ExcelJS's cell.text (confirmed by direct testing to ignore numFmt for
-// both dates and numbers — see the auto-fit comment in writeWorkbook()).
-function measureDisplayLength(value: any, numFmt?: string): number {
-  if (value == null || value === "") return 0;
-  if (value instanceof Date) {
-    // "dd mmm yyyy" always renders as exactly 2-digit day + space + 3-letter
-    // month + space + 4-digit year, e.g. "01 Mar 2027" — always 11 chars.
-    return 11;
-  }
-  if (typeof value === "object" && typeof value.text === "string") {
-    // ExcelJS hyperlink cell ({ text, hyperlink }) — measure the short
-    // display text, not the (often much longer) underlying link.
-    return value.text.length;
-  }
-  if (typeof value === "number") {
-    if (numFmt === "#,##0.00") {
-      return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-        .length;
-    }
-    if (numFmt === '0.00"%"') {
-      return `${value.toFixed(2)}%`.length;
-    }
-    if (numFmt === "#,##0.##") {
-      return value.toLocaleString("en-US", { maximumFractionDigits: 2 }).length;
-    }
-    return String(value).length;
-  }
-  // Plain text — longest line, so a multi-line note doesn't force a column
-  // wide enough to fit the whole note on one line.
-  return String(value)
-    .split("\n")
-    .reduce((m, l) => Math.max(m, l.length), 0);
-}
-
 function cellValue(
   f: FieldDef,
   raw: any,
@@ -219,6 +70,7 @@ function cellValue(
   if (raw == null || raw === "") return null;
   if (f.type === "member") return ctx.memberNameById.get(raw) ?? raw;
   if (f.type === "property_select") return ctx.propertyNameById.get(raw) ?? raw;
+  if (f.type === "boolean") return raw ? "Yes" : "No";
   if (f.type === "select") return resolveSelectLabel(f, raw);
   if (f.type === "chips") return Array.isArray(raw) ? raw.join("; ") : String(raw);
   if (f.type === "date") {
@@ -243,7 +95,6 @@ function buildRecordSheet(
     ...cfg.fields.map((f) => ({
       header: f.label,
       key: f.key,
-      width: resolvedWidth(f, configKey),
       numFmt: numFmtFor(f),
     })),
     // Sep 21 2026: the detailed Notes (the rich-text editor inside each card) live in a
@@ -251,19 +102,16 @@ function buildRecordSheet(
     // from every export. Same for who the follow-up action is assigned to, and the
     // packed/unpacked tick on the travel checklist.
     ...(NOTES_TABLES.has(configKey as string)
-      ? [{ header: "Notes", key: "__notes", width: 60, wrap: true }]
+      ? [{ header: "Notes", key: "__notes", wrap: true }]
       : []),
     ...(ACTION_OWNER_TABLES.has(configKey as string)
-      ? [{ header: "Action owner", key: "__action_owner", width: 18 }]
+      ? [{ header: "Action owner", key: "__action_owner" }]
       : []),
-    ...(configKey === "travel_checklist_items"
-      ? [{ header: "Checked", key: "__checked", width: 10 }]
-      : []),
-    { header: "Status", key: "__status", width: STATUS_COL_WIDTH },
+    ...(configKey === "travel_checklist_items" ? [{ header: "Checked", key: "__checked" }] : []),
+    { header: "Status", key: "__status" },
     {
       header: "Last Updated In App",
       key: "__updated_at",
-      width: UPDATED_AT_COL_WIDTH,
       numFmt: "dd mmm yyyy",
     },
   ];
@@ -280,7 +128,8 @@ function buildRecordSheet(
     }
     if (configKey === "travel_checklist_items") out.__checked = r.checked ? "Yes" : "No";
     out.__status = STATUS_LABEL[r.status] ?? r.status ?? "";
-    out.__updated_at = r.updated_at ? new Date(r.updated_at) : null;
+    // Excel has no time zones: store the time on the user's own clock so the day shown is right.
+    out.__updated_at = r.updated_at ? toLocalWallClock(new Date(r.updated_at)) : null;
     return out;
   });
   return { name: sheetName, columns, rows: outRows };
@@ -402,12 +251,12 @@ function buildActivitySheets(args: {
     {
       name: "Reminders",
       columns: [
-        { header: "Item type", key: "item_type", width: 16 },
-        { header: "Item", key: "item", width: 30 },
-        { header: "Reminder", key: "what", width: 40, wrap: true },
-        { header: "Remind on", key: "remind_on", width: 14, numFmt: "dd mmm yyyy" },
-        { header: "Repeats", key: "repeats", width: 16 },
-        { header: "Dismissed", key: "dismissed", width: 10 },
+        { header: "Item type", key: "item_type" },
+        { header: "Item", key: "item" },
+        { header: "Reminder", key: "what", wrap: true },
+        { header: "Remind on", key: "remind_on", numFmt: "dd mmm yyyy" },
+        { header: "Repeats", key: "repeats" },
+        { header: "Dismissed", key: "dismissed" },
       ],
       rows: reminders.map((r) => ({
         ...describe(r.entity_type, r.entity_id),
@@ -421,10 +270,10 @@ function buildActivitySheets(args: {
       // Named "Updates" (what the app calls them) - Excel itself reserves the sheet name "History".
       name: "Updates",
       columns: [
-        { header: "Item type", key: "item_type", width: 16 },
-        { header: "Item", key: "item", width: 30 },
-        { header: "Date", key: "occurred_on", width: 14, numFmt: "dd mmm yyyy" },
-        { header: "Note", key: "note", width: 60, wrap: true },
+        { header: "Item type", key: "item_type" },
+        { header: "Item", key: "item" },
+        { header: "Date", key: "occurred_on", numFmt: "dd mmm yyyy" },
+        { header: "Note", key: "note", wrap: true },
       ],
       rows: history.map((h) => ({
         ...describe(h.entity_type, h.entity_id),
@@ -609,13 +458,13 @@ export async function runFullExport(householdId: string, members: Member[]) {
   sheets.push({
     name: "Inventory",
     columns: [
-      { header: "Location", key: "location", width: 20 },
-      { header: "Subfolder", key: "subfolder", width: 20 },
-      { header: "Item name", key: "name", width: 24 },
-      { header: "Category", key: "category", width: 16 },
-      { header: "Action / Notes", key: "action", width: 28 },
-      { header: "Warranty / Expiry date", key: "warranty_date", width: 20, numFmt: "dd mmm yyyy" },
-      { header: "Photo (click to open — see Read Me)", key: "photo_url", width: 30 },
+      { header: "Location", key: "location" },
+      { header: "Subfolder", key: "subfolder" },
+      { header: "Item name", key: "name" },
+      { header: "Category", key: "category" },
+      { header: "Action / Notes", key: "action" },
+      { header: "Warranty / Expiry date", key: "warranty_date", numFmt: "dd mmm yyyy" },
+      { header: "Photo (click to open — see Read Me)", key: "photo_url" },
     ],
     rows: inventoryRows,
   });
@@ -642,8 +491,8 @@ export async function runFullExport(householdId: string, members: Member[]) {
   sheets.push({
     name: "Members",
     columns: [
-      { header: "Name", key: "name", width: 20 },
-      { header: "Short name", key: "short_name", width: 16 },
+      { header: "Name", key: "name" },
+      { header: "Short name", key: "short_name" },
     ],
     rows: members.map((m) => ({
       name: `${m.emoji ? m.emoji + " " : ""}${m.name}`,
@@ -662,144 +511,13 @@ async function writeWorkbook(
   sheets: SheetSpec[],
   context: "standalone" | "backup-zip" = "standalone",
 ) {
-  // Sep 22 2026 -- bundled as a real dependency instead of fetched from esm.sh
-  // at click-time (see package.json). Still a dynamic import deliberately --
-  // Vite still code-splits this into its own chunk, so it is NOT added to
-  // everyone's initial page load, only downloaded (from familyhubsg.com now,
-  // not a third party) the moment someone actually exports something.
+  // Bundled as real dependencies (not fetched at click-time); dynamic imports so Vite code-splits
+  // them: they only download when someone actually exports.
   const mod: any = await import("exceljs");
   const ExcelJS = mod.default ?? mod;
-  const workbook = new ExcelJS.Workbook();
-  workbook.creator = "FamilyHub SG";
-  workbook.created = new Date();
-
-  // Read Me sheet — first tab, sets expectations honestly.
-  const readMe = workbook.addWorksheet("Read Me");
-  readMe.columns = [{ width: 100 }];
-  const readMeLines =
-    context === "backup-zip"
-      ? [
-          "FamilyHub SG — Full Backup",
-          `Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`,
-          "",
-          "What's included: every record from every tab in the app, as one sheet per tab — plus the actual photo",
-          'and document files themselves, included right alongside this spreadsheet in the "Documents" and',
-          '"Inventory Photos" folders of this .zip. This backup is fully self-contained: nothing in it depends on',
-          "FamilyHub SG, Supabase, or any link ever again.",
-          "",
-          "The Inventory sheet's Photo column and each record's document links still work too (valid for up to 10",
-          "years), as a convenient shortcut — but you don't need them, since the real files are right here.",
-          "",
-          "Also included: the detailed Notes on each record, plus a Reminders sheet and an Updates sheet (the dated update log).",
-          "Not included: planned one-off cash-flow events, estate checklist ticks, and your projection assumptions (income, growth rates, etc.).",
-          "",
-          "Each sheet below is safe to delete if you don't need it — they're independent.",
-          "",
-          "This export is for your own records and is not financial advice.",
-        ]
-      : [
-          "FamilyHub SG — Full Data Export",
-          `Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`,
-          "",
-          "What's included: every record from every tab in the app — Properties, Loans, Insurance, Investments,",
-          "Savings & CPF, Other Assets, Health, Go-Bag, and Inventory — as one sheet per tab, with names instead",
-          "of internal IDs and real numbers/dates you can sort, filter, and calculate with directly in Excel or",
-          "Google Sheets.",
-          "",
-          "What's NOT included in this version: the actual photo and document FILES (e.g. inventory item photos,",
-          "insurance policy PDFs). Instead, each has a private link (see the Inventory sheet's Photo column and",
-          "each record's documents) that opens the real file directly, valid for up to 10 years from when this",
-          "export was generated. Treat these links like a shared cloud storage link — anyone with the exact link",
-          "can open it, so avoid forwarding this file to anyone you wouldn't want to have that access.",
-          "",
-          "If you'd rather have the actual files themselves, with nothing depending on a link or on FamilyHub SG",
-          'still running, use "Download full backup (.zip)" from Settings \u2192 Data instead — it includes this same',
-          "spreadsheet plus every photo and document as real files.",
-          "",
-          "Also included: the detailed Notes on each record, plus a Reminders sheet and an Updates sheet (the dated update log).",
-          "Not included: planned one-off cash-flow events, estate checklist ticks, and your projection assumptions (income, growth rates, etc.).",
-          "",
-          "Each sheet below is safe to delete if you don't need it — they're independent.",
-          "",
-          "This export is for your own records and is not financial advice.",
-        ];
-  readMeLines.forEach((line, i) => {
-    const row = readMe.getRow(i + 1);
-    row.getCell(1).value = line;
-    if (i === 0) row.getCell(1).font = { bold: true, size: 14 };
-  });
-
-  for (const spec of sheets) {
-    const ws = workbook.addWorksheet(spec.name);
-    ws.columns = spec.columns.map((c) => ({ header: c.header, key: c.key, width: c.width }));
-    ws.getRow(1).font = { bold: true };
-    ws.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8E8E8" } };
-    ws.getRow(1).alignment = { wrapText: true, vertical: "middle" };
-    ws.getRow(1).height = 30;
-    ws.views = [{ state: "frozen", ySplit: 1 }];
-    if (spec.rows.length > 0) {
-      ws.addRows(spec.rows);
-    }
-    // Columns flagged wrap (Notes, Reminder, History note): long multi-line text
-    // must wrap inside its cell, otherwise Excel shows it as one long line.
-    for (const c of spec.columns) {
-      if (!c.wrap) continue;
-      const colIdx = ws.getColumn(c.key).number;
-      for (let r = 2; r <= spec.rows.length + 1; r++) {
-        ws.getCell(r, colIdx).alignment = { wrapText: true, vertical: "top" };
-      }
-    }
-    for (const c of spec.columns) {
-      if (!c.numFmt) continue;
-      const colIdx = ws.getColumn(c.key).number;
-      for (let r = 2; r <= spec.rows.length + 1; r++) {
-        ws.getCell(r, colIdx).numFmt = c.numFmt;
-      }
-    }
-    // Auto-fit every column to its actual data (added July 2026, per Azariah
-    // request — replaces guessing at widths by hand). Measures from the raw
-    // row data + each column's numFmt, NOT from ExcelJS's cell.text — tested
-    // directly and confirmed cell.text is unreliable for this: it returns
-    // the full 63-character Date.toString() for date cells (ignoring numFmt
-    // entirely) and the unformatted number for currency cells, which would
-    // have forced every single date column to the max-width cap and
-    // under-sized every currency column. Deliberately only measures DATA
-    // rows, not the header (row 1 already has wrapText + a taller row
-    // height, matching the same "long header shouldn't force a wide column"
-    // design already established above for widthFor()) — otherwise a long
-    // header on a short numeric/date column would widen it right back to
-    // the exact problem this replaces. Skips empty sheets — an empty table
-    // has nothing to size from, so it keeps its original hand-set width
-    // rather than collapsing to the bare minimum.
-    if (spec.rows.length > 0) {
-      for (const c of spec.columns) {
-        let maxLen = 0;
-        for (const row of spec.rows) {
-          const len = measureDisplayLength(row[c.key], c.numFmt);
-          if (len > maxLen) maxLen = len;
-        }
-        if (maxLen > 0) ws.getColumn(c.key).width = clamp(8, maxLen + 2, 60);
-      }
-    }
-    // Header row height must be set AFTER auto-fit above, since auto-fit can
-    // make a column narrower than the fixed-width layout this was originally
-    // tuned for — a long header wrapping onto 3+ lines at a narrow column was
-    // getting cut off at the old fixed 30pt (added July 2026, same session as
-    // auto-fit, to fix that). ~1.1 characters fit per width-unit for bold
-    // 11pt text (approximate, deliberately generous — better to leave a
-    // little extra blank space than cut a header off again), each wrapped
-    // line ~15pt tall.
-    let maxHeaderLines = 1;
-    for (const c of spec.columns) {
-      const width = ws.getColumn(c.key).width ?? c.width;
-      const charsPerLine = Math.max(1, Math.floor(width * 1.1));
-      const lines = Math.ceil(c.header.length / charsPerLine);
-      if (lines > maxHeaderLines) maxHeaderLines = lines;
-    }
-    ws.getRow(1).height = clamp(30, maxHeaderLines * 15 + 6, 90);
-  }
-
-  return await workbook.xlsx.writeBuffer();
+  const zipMod: any = await import("jszip");
+  const JSZip = zipMod.default ?? zipMod;
+  return await buildWorkbookBuffer(ExcelJS, JSZip, sheets, context);
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -1003,13 +721,13 @@ export async function runFullBackupZip(householdId: string, members: Member[]) {
   sheets.push({
     name: "Inventory",
     columns: [
-      { header: "Location", key: "location", width: 20 },
-      { header: "Subfolder", key: "subfolder", width: 20 },
-      { header: "Item name", key: "name", width: 24 },
-      { header: "Category", key: "category", width: 16 },
-      { header: "Action / Notes", key: "action", width: 28 },
-      { header: "Warranty / Expiry date", key: "warranty_date", width: 20, numFmt: "dd mmm yyyy" },
-      { header: "Photo", key: "photo_url", width: 30 },
+      { header: "Location", key: "location" },
+      { header: "Subfolder", key: "subfolder" },
+      { header: "Item name", key: "name" },
+      { header: "Category", key: "category" },
+      { header: "Action / Notes", key: "action" },
+      { header: "Warranty / Expiry date", key: "warranty_date", numFmt: "dd mmm yyyy" },
+      { header: "Photo", key: "photo_url" },
     ],
     rows: inventoryRows,
   });
@@ -1033,8 +751,8 @@ export async function runFullBackupZip(householdId: string, members: Member[]) {
   sheets.push({
     name: "Members",
     columns: [
-      { header: "Name", key: "name", width: 20 },
-      { header: "Short name", key: "short_name", width: 16 },
+      { header: "Name", key: "name" },
+      { header: "Short name", key: "short_name" },
     ],
     rows: members.map((m) => ({
       name: `${m.emoji ? m.emoji + " " : ""}${m.name}`,
