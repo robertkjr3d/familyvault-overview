@@ -169,8 +169,6 @@ function QuickAddProperty({ onSaved }: { onSaved: () => void }) {
   const [name, setName] = useState("");
   const [currentValue, setCurrentValue] = useState("");
   const [monthlyRent, setMonthlyRent] = useState("");
-  const [hasMortgage, setHasMortgage] = useState(false);
-  const [monthlyPayment, setMonthlyPayment] = useState("");
   const [noteText, setNoteText] = useState("");
   const [noteDate, setNoteDate] = useState("");
   const [saving, setSaving] = useState(false);
@@ -185,7 +183,6 @@ function QuickAddProperty({ onSaved }: { onSaved: () => void }) {
         name: name.trim(),
         current_value: currentValue ? Number(currentValue) : null,
         monthly_rent: monthlyRent ? Number(monthlyRent) : null,
-        monthly_payment: hasMortgage && monthlyPayment ? Number(monthlyPayment) : null,
         action_note: noteText.trim() || null,
       };
       const { data, error } = await supabase.from("properties").insert(payload).select("id").single();
@@ -231,21 +228,6 @@ function QuickAddProperty({ onSaved }: { onSaved: () => void }) {
           <MoneyInput value={monthlyRent} onChange={setMonthlyRent} />
         </div>
       </div>
-      <label className="flex items-center gap-2 text-xs">
-        <input
-          type="checkbox"
-          checked={hasMortgage}
-          onChange={(e) => setHasMortgage(e.target.checked)}
-          className="h-4 w-4 rounded border-border"
-        />
-        There's a mortgage on this
-      </label>
-      {hasMortgage && (
-        <div className="space-y-1.5">
-          <Label className="text-xs">Monthly mortgage payment</Label>
-          <MoneyInput value={monthlyPayment} onChange={setMonthlyPayment} />
-        </div>
-      )}
       <div className="space-y-1.5">
         <Label className="text-xs">Note or reminder (optional)</Label>
         <Input value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="e.g. Renew lease" />

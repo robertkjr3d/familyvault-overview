@@ -2,7 +2,6 @@ import { useState } from "react";
 import { HistoryLog } from "@/components/HistoryLog";
 import { AuditTrail } from "@/components/AuditTrail";
 import { AddRecordFab } from "@/components/AddRecordFab";
-import { Bell } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,7 +16,6 @@ import {
   fmtPct,
   groupByCurrency,
   totalWithFx,
-  convertToSgd,
   type FxRates,
 } from "@/lib/format";
 import { useFxRates } from "@/hooks/useFxRates";
@@ -32,6 +30,8 @@ import { DocumentsList } from "@/components/DocumentsList";
 import { ReminderButton } from "@/components/ReminderButton";
 import { RemindersList } from "@/components/RemindersList";
 import { useEntityCounts } from "@/lib/useEntityCounts";
+import { loansLinkedTo, mortgageTotals } from "@/lib/propertyMortgage";
+import { PropertyMortgageSection } from "@/components/PropertyMortgageSection";
 
 export const Route = createFileRoute("/property")({
   component: PropertyPage,
@@ -86,7 +86,9 @@ function PropertyPage() {
       if (!activeHouseholdId) return [];
       const { data } = await supabase
         .from("loans")
-        .select("id, property_id, monthly_payment, bank, balance, currency")
+        .select(
+          "id, property_id, member_id, bank, purpose, balance, currency, monthly_payment, original_amount, term_years, rate, rate_label, reprice_date, loan_end_date",
+        )
         .eq("household_id", activeHouseholdId);
       return data ?? [];
     },
@@ -108,15 +110,14 @@ function PropertyPage() {
   const investments = properties.filter((p: any) => p.purpose !== "own_home");
   const homes = properties.filter((p: any) => p.purpose === "own_home");
   const { data: fxRates } = useFxRates();
-  // Net of mortgage uses each property's own mortgage_balance field (same
-  // currency as the property, always in the same record) — not the Loans
-  // tab's balance for a linked loan, since that's a separate manually-
-  // entered number that could drift from this one. This matches what this
-  // page's own "Loan vs Value %" figure already uses per property.
+  // Net of mortgage = value minus the balance of the loans linked to each
+  // property (Loans tab), converted into the property's own currency.
   const grossTotals = groupByCurrency(properties, (p: any) => p.current_value);
   const netTotals = groupByCurrency(
     properties,
-    (p: any) => (Number(p.current_value) || 0) - (Number(p.mortgage_balance) || 0),
+    (p: any) =>
+      (Number(p.current_value) || 0) -
+      mortgageTotals(p.currency, loansLinkedTo(p.id, loans), fxRates).owed,
   );
 
   return (
@@ -179,22 +180,13 @@ function PropertyPage() {
           </div>
           <ForeignCurrencyTotals foreign={netTotals.foreign} fx={fxRates} />
           <p className="mt-1 text-[11px] text-muted-foreground">
-            Net of mortgage uses each property's own "Mortgage" balance field — update it there to
-            keep this accurate.
+            Net of mortgage uses the loans linked to each property. Add or update a mortgage in the
+            Loans tab to keep this accurate.
           </p>
         </div>
       )}
       <AddRecordFab configKey="properties" />
     </div>
-  );
-}
-
-function AlertLabel({ text }: { text: string }) {
-  return (
-    <span className="flex items-center gap-1">
-      {text}
-      <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" />
-    </span>
   );
 }
 
@@ -221,28 +213,11 @@ function PropertyRow({
 }) {
   const edit = useEditRecord("properties", p);
   const dup = useDuplicateRecord("properties", p);
-  const linkedLoan = loans.find((l: any) => l.property_id === p.id);
-  const hasMismatch =
-    linkedLoan && Number(linkedLoan.monthly_payment) !== Number(p.monthly_payment);
-  // Compares via SGD-equivalent so this still works correctly even if the
-  // linked loan happens to be entered in a different currency than the
-  // property. If either side's currency has no cached rate yet, this stays
-  // false rather than risk a false "mismatch" warning built on a bad number.
-  const propertyMortgageSgd = convertToSgd(
-    Number(p.mortgage_balance) || 0,
-    p.currency || "SGD",
-    fx,
-  );
-  const loanBalanceSgd = linkedLoan
-    ? convertToSgd(Number(linkedLoan.balance) || 0, linkedLoan.currency || "SGD", fx)
-    : null;
-  const hasBalanceMismatch =
-    linkedLoan != null &&
-    linkedLoan.balance != null &&
-    p.mortgage_balance != null &&
-    propertyMortgageSgd != null &&
-    loanBalanceSgd != null &&
-    Math.round(propertyMortgageSgd) !== Math.round(loanBalanceSgd);
+  const setMemberFilter = useAppStore((s) => s.setMemberFilter);
+  // The mortgage lives in the Loans tab; this card only displays the loans
+  // linked to it (a property can have more than one).
+  const linked = loansLinkedTo(p.id, loans);
+  const mortgage = mortgageTotals(p.currency, linked, fx);
   const costs = totalCosts(p);
   const gainPa = capitalGainPa(p);
   const target = parseTargetPct(p.strategy);
@@ -258,7 +233,7 @@ function PropertyRow({
     p.current_value && p.monthly_rent ? ((p.monthly_rent * 12) / p.current_value) * 100 : null;
   const netRent = (Number(p.monthly_rent) || 0) - costs;
   const netYield = p.current_value ? ((netRent * 12) / p.current_value) * 100 : null;
-  const cashFlow = netRent - (Number(p.monthly_payment) || 0);
+  const cashFlow = netRent - mortgage.payment;
 
   const [cardOpen, setCardOpen] = useState(false);
   const [section, setSection] = useState<
@@ -340,50 +315,15 @@ function PropertyRow({
               )
             }
           />
-          <FieldRow
-            label="Mortgage"
-            value={
-              p.mortgage_bank
-                ? `${p.mortgage_bank} · ${fmtMoney(p.mortgage_balance, p.currency)}`
-                : "—"
-            }
-          />
-          <FieldRow label="Monthly payment" value={fmtMoney(p.monthly_payment, p.currency)} />
-          {hasMismatch && (
-            <div className="rounded-lg border border-review/40 bg-review-soft/30 px-3 py-2 text-xs text-muted-foreground">
-              ⚠ Linked loan ({linkedLoan.bank}) has a different monthly payment of{" "}
-              {fmtMoney(linkedLoan.monthly_payment, linkedLoan.currency)}. The loan amount is used
-              for cash flow calculations — update one to match.
-            </div>
-          )}
-          {hasBalanceMismatch && (
-            <div className="rounded-lg border border-review/40 bg-review-soft/30 px-3 py-2 text-xs text-muted-foreground">
-              ⚠ Linked loan ({linkedLoan.bank}) shows a balance of{" "}
-              {fmtMoney(linkedLoan.balance, linkedLoan.currency)}, which doesn't match this
-              property's Mortgage balance of {fmtMoney(p.mortgage_balance, p.currency)}. This
-              property's "Net of mortgage" total uses the figure above — update one so they agree.
-            </div>
-          )}
-          <FieldRow label="Interest rate" value={fmtPct(p.interest_rate)} />
-          <FieldRow label="Rate type" value={p.rate_type ?? "—"} />
-          <FieldRow
-            label={<AlertLabel text="Rate ends / Reprice" />}
-            value={fmtDate(p.fixed_rate_end)}
-          />
-          <FieldRow
-            label="Mortgage end date"
-            value={
-              p.mortgage_end_date ? (
-                fmtDate(p.mortgage_end_date)
-              ) : (
-                <span className="text-muted-foreground text-xs">
-                  Not set — chart assumes ongoing
-                </span>
-              )
-            }
-          />
           <FieldRow label="Monthly rent" value={fmtMoney(p.monthly_rent, p.currency)} />
         </Section>
+
+        <PropertyMortgageSection
+          linked={linked}
+          totals={mortgage}
+          currency={p.currency}
+          onOpenLoan={(l) => setMemberFilter(l.member_id ?? "all")}
+        />
 
         <Section title="Monthly Costs">
           <FieldRow label="Management fee" value={fmtMoney(p.cost_management, p.currency)} />
@@ -414,8 +354,8 @@ function PropertyRow({
           <FieldRow
             label="Loan vs Value %"
             value={
-              p.current_value && p.mortgage_balance
-                ? fmtPct((p.mortgage_balance / p.current_value) * 100)
+              p.current_value && mortgage.owed
+                ? fmtPct((mortgage.owed / p.current_value) * 100)
                 : "—"
             }
           />

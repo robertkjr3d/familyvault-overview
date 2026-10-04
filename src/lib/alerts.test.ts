@@ -533,3 +533,54 @@ describe("timezone independence (regression, Aug 17 2026)", () => {
     expect(next).toBe("2026-08-01");
   });
 });
+
+describe("mortgage alerts come only from the Loans tab (Oct 2026)", () => {
+  const today = new Date(2026, 5, 18); // 18 Jun 2026
+  const empty = {
+    properties: [],
+    loans: [],
+    insurance: [],
+    investments: [],
+    savings: [],
+    inventoryItems: [],
+    reminders: [],
+  };
+
+  it("a property's own fixed-rate date no longer creates an alert (it would duplicate the loan's)", () => {
+    const items = buildUpcomingItems(
+      {
+        ...empty,
+        properties: [{ id: "p1", name: "Echelon", fixed_rate_end: "2026-07-01", member_id: "m1" }],
+      },
+      today,
+      90,
+    );
+    expect(items.some((i) => i.recordId === "p1")).toBe(false);
+  });
+
+  it("a linked loan's reprice date and end date still alert, once each", () => {
+    const items = buildUpcomingItems(
+      {
+        ...empty,
+        properties: [{ id: "p1", name: "Echelon", member_id: "m1" }],
+        loans: [
+          {
+            id: "l1",
+            bank: "OCBC",
+            property_id: "p1",
+            reprice_date: "2026-07-01",
+            loan_end_date: "2026-08-01",
+            member_id: "m1",
+          },
+        ],
+      },
+      today,
+      90,
+    );
+    expect(
+      items.filter((i) => i.recordId === "l1" && i.sourceType === "loan_reprice"),
+    ).toHaveLength(1);
+    expect(items.filter((i) => i.recordId === "l1" && i.sourceType === "loan_end")).toHaveLength(1);
+    expect(items.filter((i) => i.sourceType === "property_fixed_rate")).toHaveLength(0);
+  });
+});

@@ -32,9 +32,7 @@ const PROPERTY_COST_KEYS = new Set([
 
 type WizardStep =
   | { kind: "field"; field: FieldDef }
-  | { kind: "property_costs" }
-  | { kind: "property_mortgage_yn" }
-  | { kind: "loan_intro" };
+  | { kind: "property_costs" };
 
 export function RecordWizardSheet({
   configKey, open, onOpenChange,
@@ -60,8 +58,6 @@ export function RecordWizardSheet({
 
   const [stepIdx, setStepIdx] = useState(0);
   const [values, setValues] = useState<Record<string, any>>({});
-  const [wantsMortgage, setWantsMortgage] = useState<boolean | null>(null);
-  const [loanValues, setLoanValues] = useState<Record<string, any>>({});
   const [submitting, setSubmitting] = useState(false);
   const [redirectMsg, setRedirectMsg] = useState<string | null>(null);
 
@@ -69,8 +65,6 @@ export function RecordWizardSheet({
     if (open) {
       setStepIdx(0);
       setValues({});
-      setWantsMortgage(null);
-      setLoanValues({});
       setRedirectMsg(null);
       setSubmitting(false);
     }
@@ -98,25 +92,11 @@ export function RecordWizardSheet({
         continue;
       }
 
-      if (configKey === "properties" && f.key === "mortgage_bank") {
-        // Insert the yes/no mortgage question before the mortgage section.
-        out.push({ kind: "property_mortgage_yn" });
-        if (wantsMortgage === false) continue; // skip whole mortgage section's fields below via showIf-like check
-      }
-
-      if (configKey === "properties" && wantsMortgage === false && isMortgageField(f.key)) {
-        continue;
-      }
-
       out.push({ kind: "field", field: f });
     }
 
-    if (configKey === "properties" && wantsMortgage === true) {
-      out.push({ kind: "loan_intro" });
-    }
-
     return out;
-  }, [cfg.fields, values, wantsMortgage, configKey]);
+  }, [cfg.fields, values, configKey]);
 
   const step = steps[stepIdx];
   const isLast = stepIdx >= steps.length - 1;
@@ -160,16 +140,6 @@ export function RecordWizardSheet({
         }
       }
     }
-    if (step.kind === "property_mortgage_yn" && wantsMortgage === null) {
-      toast.error("Please choose an option");
-      return false;
-    }
-    if (step.kind === "loan_intro") {
-      if (!loanValues.bank) {
-        toast.error("Bank is required for the loan");
-        return false;
-      }
-    }
     return true;
   }
 
@@ -197,25 +167,6 @@ export function RecordWizardSheet({
       const { data: inserted, error } = await supabase.from(cfg.table as any).insert(payload).select("id").single();
       if (error) throw error;
       const newId = (inserted as any)?.id;
-
-      // Property + mortgage: create the linked loan record.
-      if (configKey === "properties" && wantsMortgage === true && newId) {
-        const loanPayload = buildPayload(recordConfigs.loans.fields, loanValues, activeHouseholdId);
-        loanPayload.property_id = newId;
-        const { error: loanErr } = await supabase.from("loans").insert(loanPayload);
-        if (loanErr) {
-          toast.error(
-            `Property saved, but the loan could not be saved (${loanErr.message}). Add it manually from the Loans tab and link it to "${values.name || "this property"}".`
-          );
-          qc.invalidateQueries({ queryKey: [cfg.queryKey] });
-          qc.invalidateQueries({ queryKey: [cfg.table] });
-          qc.invalidateQueries({ queryKey: ["dashboard"] });
-          onOpenChange(false);
-          setSubmitting(false);
-          return;
-        }
-        qc.invalidateQueries({ queryKey: ["loans"] });
-      }
 
       toast.success(`${cfg.label} added`);
       // Scroll to and flash the new card once the list refreshes (not during a tour).
@@ -279,18 +230,6 @@ export function RecordWizardSheet({
               />
             )}
 
-            {step?.kind === "property_mortgage_yn" && (
-              <MortgageYesNoStep value={wantsMortgage} onChange={setWantsMortgage} />
-            )}
-
-            {step?.kind === "loan_intro" && (
-              <LoanIntroStep
-                values={loanValues}
-                onChange={(k, v) => setLoanValues((s) => ({ ...s, [k]: v }))}
-                currency={values.currency || "SGD"}
-              />
-            )}
-
             <div className="sticky bottom-0 -mx-4 flex gap-2 border-t border-border bg-background/95 px-4 py-3 backdrop-blur">
               <Button type="button" variant="outline" className="flex-1 cursor-pointer" onClick={back}>
                 {stepIdx === 0 ? <X className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
@@ -304,10 +243,6 @@ export function RecordWizardSheet({
       </SheetContent>
     </Sheet>
   );
-}
-
-function isMortgageField(key: string): boolean {
-  return ["mortgage_bank", "mortgage_balance", "monthly_payment", "interest_rate", "rate_type", "fixed_rate_end", "mortgage_end_date"].includes(key);
 }
 
 function buildPayload(fields: FieldDef[], values: Record<string, any>, householdId: string): Record<string, any> {
@@ -455,7 +390,7 @@ function PropertyCostsStep({ values, onChange, currency }: {
       <div className="text-sm font-medium">Monthly running costs</div>
       <p className="text-xs text-muted-foreground">
         Add up management fees, property tax, fire insurance and maintenance into one combined monthly figure.
-        Do not include mortgage/loan payments — those are entered separately in the Loan section.
+        Do not include mortgage/loan payments — add those in the Loans tab.
         You can break this down into individual categories later via "edit full details".
       </p>
       <MoneyInput
@@ -464,71 +399,6 @@ function PropertyCostsStep({ values, onChange, currency }: {
         currency={currency}
         placeholder="Combined monthly cost"
       />
-    </div>
-  );
-}
-
-function MortgageYesNoStep({ value, onChange }: { value: boolean | null; onChange: (v: boolean) => void }) {
-  return (
-    <div className="space-y-2">
-      <div className="text-sm font-medium">Do you have a mortgage on this property?</div>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => onChange(true)}
-          className={`flex-1 cursor-pointer rounded-md border px-3 py-2 text-sm transition ${
-            value === true ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background"
-          }`}
-        >
-          Yes
-        </button>
-        <button
-          type="button"
-          onClick={() => onChange(false)}
-          className={`flex-1 cursor-pointer rounded-md border px-3 py-2 text-sm transition ${
-            value === false ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background"
-          }`}
-        >
-          No
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function LoanIntroStep({ values, onChange, currency }: {
-  values: Record<string, any>; onChange: (k: string, v: any) => void; currency: string;
-}) {
-  const loanCfg = recordConfigs.loans;
-  const bankField = loanCfg.fields.find((f) => f.key === "bank")!;
-  const balanceField = loanCfg.fields.find((f) => f.key === "balance")!;
-  const paymentField = loanCfg.fields.find((f) => f.key === "monthly_payment")!;
-  const rateField = loanCfg.fields.find((f) => f.key === "rate")!;
-
-  return (
-    <div className="space-y-4">
-      <div className="space-y-1">
-        <div className="text-sm font-medium">Let's add the loan details</div>
-        <p className="text-xs text-muted-foreground">
-          This will be saved as a separate loan record, linked to this property. You can add more detail later from the Loans tab.
-        </p>
-      </div>
-      <div className="space-y-1.5">
-        <div className="text-xs font-medium">{bankField.label} <span className="text-urgent">*</span></div>
-        <FieldInput f={bankField} value={values.bank} onChange={(v) => onChange("bank", v)} members={[]} properties={[]} currency={currency} />
-      </div>
-      <div className="space-y-1.5">
-        <div className="text-xs font-medium">{balanceField.label}</div>
-        <FieldInput f={balanceField} value={values.balance} onChange={(v) => onChange("balance", v)} members={[]} properties={[]} currency={currency} />
-      </div>
-      <div className="space-y-1.5">
-        <div className="text-xs font-medium">{paymentField.label}</div>
-        <FieldInput f={paymentField} value={values.monthly_payment} onChange={(v) => onChange("monthly_payment", v)} members={[]} properties={[]} currency={currency} />
-      </div>
-      <div className="space-y-1.5">
-        <div className="text-xs font-medium">{rateField.label}</div>
-        <FieldInput f={rateField} value={values.rate} onChange={(v) => onChange("rate", v)} members={[]} properties={[]} currency={currency} />
-      </div>
     </div>
   );
 }

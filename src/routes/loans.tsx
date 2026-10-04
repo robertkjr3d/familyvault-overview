@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AddRecordFab } from "@/components/AddRecordFab";
 import { Bell } from "lucide-react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppStore } from "@/lib/store";
@@ -54,6 +54,24 @@ function LoansPage() {
     },
   });
 
+  // Property names, so a mortgage card can say which property it is linked to.
+  // Same query key and columns as the property pickers in the record forms.
+  const { data: properties = [] } = useQuery({
+    queryKey: ["properties", activeHouseholdId],
+    enabled: !!activeHouseholdId,
+    queryFn: async () => {
+      if (!activeHouseholdId) return [];
+      const { data } = await supabase
+        .from("properties")
+        .select("id, name")
+        .eq("household_id", activeHouseholdId);
+      return data ?? [];
+    },
+  });
+  const propertyNameById = new Map<string, string>(
+    properties.map((p: { id: string; name: string | null }) => [p.id, p.name ?? "Property"]),
+  );
+
   const balanceTotals = groupByCurrency(loans, (l: any) => l.balance);
 
   return (
@@ -65,6 +83,7 @@ function LoansPage() {
           <LoanRow
             key={l.id}
             l={l}
+            propertyName={l.property_id ? (propertyNameById.get(l.property_id) ?? null) : null}
             today={today}
             onStatus={(s) => status.mutate({ id: l.id, status: s })}
             onDelete={() => del.mutate(l.id)}
@@ -114,6 +133,7 @@ function AlertLabel({ text }: { text: string }) {
 
 function LoanRow({
   l,
+  propertyName,
   today,
   onStatus,
   onDelete,
@@ -123,6 +143,7 @@ function LoanRow({
   documentsCount,
 }: {
   l: any;
+  propertyName: string | null;
   today: Date;
   onStatus: (s: any) => void;
   onDelete: () => void;
@@ -131,6 +152,7 @@ function LoanRow({
   auditCount: number;
   documentsCount: number;
 }) {
+  const setMemberFilter = useAppStore((s) => s.setMemberFilter);
   const edit = useEditRecord("loans", l);
   const dup = useDuplicateRecord("loans", l);
   const principal = Number(l.original_amount ?? l.balance ?? 0);
@@ -210,6 +232,21 @@ function LoanRow({
         }
       >
         <Section title="Loan details">
+          {propertyName && (
+            <FieldRow
+              label="Linked property"
+              value={
+                <Link
+                  to="/property"
+                  hash={`record-${l.property_id}`}
+                  onClick={() => setMemberFilter("all")}
+                  className="font-semibold text-primary underline"
+                >
+                  {propertyName}
+                </Link>
+              }
+            />
+          )}
           <FieldRow label="Original amount" value={fmtMoney(l.original_amount, l.currency)} />
           <FieldRow label="Current balance" value={fmtMoney(l.balance, l.currency)} />
           <FieldRow label="Loan start" value={fmtDate(l.start_date)} />

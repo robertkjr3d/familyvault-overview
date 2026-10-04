@@ -99,6 +99,9 @@ A Health record whose owning family member was later deleted had no section to a
 - Changing a record field needs NO export layout change; a new record type only needs a sheet added in `fullExport.ts`.
 - Not verified in real Excel (only LibreOffice, openpyxl and the XML checks): open one export in Excel on Windows or Mac after deploying.
 
+## 7e. Mortgages live only in the Loans tab (3 Oct 2026)
+A mortgage is a loan in the Loans tab, linked to its property through "Linked property". The Property card only displays the linked loans (bank, balance, payment, rate, reprice and end dates, totals if there are several) with an "Edit in Loans" link; "Net of mortgage", loan-vs-value and rental cash flow on that page come from those loans (`src/lib/propertyMortgage.ts`, `PropertyMortgageSection.tsx`). The property form, the Add Property wizard and the onboarding wizard no longer ask about a mortgage, and reprice/end-date alerts come only from the loan. The old mortgage columns on `properties` still exist in the database but nothing writes them; the net worth, projection chart and adviser view still ignore them whenever a loan is linked (to be removed later together with the SQL view).
+
 ## 8. Advisor (FA) dashboard — separate sub-project
 Full detail in a dedicated reference (`advisor-dashboard.md`) — summary: a financial adviser can be given selective, per-category, per-member access to a household's data (insurance, investments, property, loans), with a household-side toggle to hide individual items regardless. Includes adviser notes, a policy-illustration chart tool, and per-member net worth. Built and deployed; still evolving.
 

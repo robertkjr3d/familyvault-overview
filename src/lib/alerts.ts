@@ -1,14 +1,5 @@
 import { addDays, isBefore, parseISO } from "date-fns";
-import {
-  Building2,
-  Shield,
-  Landmark,
-  TrendingUp,
-  PiggyBank,
-  Bell,
-  Package,
-  CreditCard,
-} from "lucide-react";
+import { Shield, Landmark, TrendingUp, PiggyBank, Bell, Package, CreditCard } from "lucide-react";
 import { computeNextReminderDate } from "./reminderRecurrence";
 
 export type UpcomingItem = {
@@ -337,23 +328,8 @@ export function buildUpcomingItems(
     }
   }
 
-  for (const p of data.properties) {
-    if (within(p.fixed_rate_end, mortgageHorizon)) {
-      items.push({
-        date: p.fixed_rate_end,
-        label: `${p.name} — fixed rate ends`,
-        amount: null,
-        member_id: p.member_id,
-        href: "/property",
-        recordId: p.id,
-        sourceType: "property_fixed_rate",
-        daysLeft: daysUntil(p.fixed_rate_end),
-        icon: Building2,
-        kind: "Property",
-      });
-    }
-  }
-
+  // A mortgage is a loan in the Loans tab, so its reprice and end-date alerts come from
+  // the loan loop below (not from the property).
   for (const l of data.loans) {
     if (within(l.reprice_date, mortgageHorizon)) {
       items.push({

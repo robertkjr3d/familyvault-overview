@@ -46,8 +46,6 @@ export type RecordConfig = {
   fields: FieldDef[];
 };
 
-const RATE_TYPES = ["Fixed", "Floating", "SORA-pegged"];
-
 export const recordConfigs: Record<string, RecordConfig> = {
   properties: {
     table: "properties",
@@ -105,51 +103,6 @@ export const recordConfigs: Record<string, RecordConfig> = {
         money: true,
         currencyFrom: "currency",
         section: "💰 Financials",
-      },
-
-      // 🏦 Mortgage
-      {
-        key: "mortgage_bank",
-        label: "Mortgage bank",
-        type: "select",
-        options: BANKS,
-        section: "🏦 Mortgage",
-      },
-      {
-        key: "mortgage_balance",
-        label: "Mortgage balance",
-        type: "number",
-        money: true,
-        currencyFrom: "currency",
-        section: "🏦 Mortgage",
-      },
-      {
-        key: "monthly_payment",
-        label: "Monthly mortgage payment",
-        type: "number",
-        money: true,
-        currencyFrom: "currency",
-        section: "🏦 Mortgage",
-      },
-      { key: "interest_rate", label: "Interest rate %", type: "number", section: "🏦 Mortgage" },
-      {
-        key: "rate_type",
-        label: "Rate type",
-        type: "select",
-        options: RATE_TYPES,
-        section: "🏦 Mortgage",
-      },
-      {
-        key: "fixed_rate_end",
-        label: "Rate ends / Next reprice date",
-        type: "date",
-        section: "🏦 Mortgage",
-      },
-      {
-        key: "mortgage_end_date",
-        label: "Mortgage end date",
-        type: "date",
-        section: "🏦 Mortgage",
       },
 
       // 🏠 Rental
@@ -296,7 +249,11 @@ export const recordConfigs: Record<string, RecordConfig> = {
         placeholder: "Leave blank to auto-calculate",
       },
       { key: "reprice_date", label: "Reprice date", type: "date" },
-      { key: "property_id", label: "Linked property (mortgage)", type: "property_select" },
+      {
+        key: "property_id",
+        label: "Linked property (if this is a mortgage)",
+        type: "property_select",
+      },
       { key: "loan_end_date", label: "Loan end date", type: "date" },
       {
         key: "action",
