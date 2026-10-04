@@ -14,6 +14,274 @@ export type Database = {
   }
   public: {
     Tables: {
+      advisor_household_links: {
+        Row: {
+          id: string
+          household_id: string
+          advisor_user_id: string
+          can_view_insurance: boolean
+          can_view_investments: boolean
+          can_view_networth_summary: boolean
+          status: string
+          linked_at: string
+          consent_renewed_at: string
+          revoked_at: string | null
+          last_digest_sent_at: string | null
+          can_view_property: boolean
+          can_view_loans: boolean
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          advisor_user_id: string
+          can_view_insurance?: boolean
+          can_view_investments?: boolean
+          can_view_networth_summary?: boolean
+          status?: string
+          linked_at?: string
+          consent_renewed_at?: string
+          revoked_at?: string | null
+          last_digest_sent_at?: string | null
+          can_view_property?: boolean
+          can_view_loans?: boolean
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          advisor_user_id?: string
+          can_view_insurance?: boolean
+          can_view_investments?: boolean
+          can_view_networth_summary?: boolean
+          status?: string
+          linked_at?: string
+          consent_renewed_at?: string
+          revoked_at?: string | null
+          last_digest_sent_at?: string | null
+          can_view_property?: boolean
+          can_view_loans?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advisor_household_links_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      advisor_invites: {
+        Row: {
+          id: string
+          household_id: string
+          invited_email: string
+          can_view_insurance: boolean
+          can_view_investments: boolean
+          can_view_networth_summary: boolean
+          invited_by_user_id: string
+          token: string
+          created_at: string
+          expires_at: string
+          accepted_at: string | null
+          accepted_by_user_id: string | null
+          cancelled_at: string | null
+          member_ids: string[]
+          can_view_property: boolean
+          can_view_loans: boolean
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          invited_email: string
+          can_view_insurance?: boolean
+          can_view_investments?: boolean
+          can_view_networth_summary?: boolean
+          invited_by_user_id: string
+          token: string
+          created_at?: string
+          expires_at?: string
+          accepted_at?: string | null
+          accepted_by_user_id?: string | null
+          cancelled_at?: string | null
+          member_ids?: string[]
+          can_view_property?: boolean
+          can_view_loans?: boolean
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          invited_email?: string
+          can_view_insurance?: boolean
+          can_view_investments?: boolean
+          can_view_networth_summary?: boolean
+          invited_by_user_id?: string
+          token?: string
+          created_at?: string
+          expires_at?: string
+          accepted_at?: string | null
+          accepted_by_user_id?: string | null
+          cancelled_at?: string | null
+          member_ids?: string[]
+          can_view_property?: boolean
+          can_view_loans?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advisor_invites_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      advisor_link_members: {
+        Row: {
+          link_id: string
+          member_id: string
+          created_at: string
+        }
+        Insert: {
+          link_id: string
+          member_id: string
+          created_at?: string
+        }
+        Update: {
+          link_id?: string
+          member_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advisor_link_members_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "advisor_household_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "advisor_link_members_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      advisor_policy_charts: {
+        Row: {
+          id: string
+          link_id: string
+          household_id: string
+          member_id: string | null
+          advisor_user_id: string
+          title: string | null
+          phases: Json
+          created_at: string
+          updated_at: string
+          record_id: string
+          record_category: string
+        }
+        Insert: {
+          id?: string
+          link_id: string
+          household_id: string
+          member_id?: string | null
+          advisor_user_id: string
+          title?: string | null
+          phases?: Json
+          created_at?: string
+          updated_at?: string
+          record_id: string
+          record_category: string
+        }
+        Update: {
+          id?: string
+          link_id?: string
+          household_id?: string
+          member_id?: string | null
+          advisor_user_id?: string
+          title?: string | null
+          phases?: Json
+          created_at?: string
+          updated_at?: string
+          record_id?: string
+          record_category?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advisor_policy_charts_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "advisor_household_links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      advisor_record_notes: {
+        Row: {
+          id: string
+          link_id: string
+          household_id: string
+          member_id: string | null
+          advisor_user_id: string
+          record_category: string
+          record_id: string
+          note: string | null
+          created_at: string
+          updated_at: string
+          status: string | null
+        }
+        Insert: {
+          id?: string
+          link_id: string
+          household_id: string
+          member_id?: string | null
+          advisor_user_id: string
+          record_category: string
+          record_id: string
+          note?: string | null
+          created_at?: string
+          updated_at?: string
+          status?: string | null
+        }
+        Update: {
+          id?: string
+          link_id?: string
+          household_id?: string
+          member_id?: string | null
+          advisor_user_id?: string
+          record_category?: string
+          record_id?: string
+          note?: string | null
+          created_at?: string
+          updated_at?: string
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advisor_record_notes_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "advisor_record_notes_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "advisor_household_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "advisor_record_notes_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_settings: {
         Row: {
           id: string
@@ -84,6 +352,176 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "app_settings_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_log: {
+        Row: {
+          id: number
+          household_id: string | null
+          table_name: string
+          record_id: string
+          action: string
+          changed_by: string | null
+          changed_fields: string[] | null
+          old_data: Json | null
+          new_data: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          household_id?: string | null
+          table_name: string
+          record_id: string
+          action: string
+          changed_by?: string | null
+          changed_fields?: string[] | null
+          old_data?: Json | null
+          new_data?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          household_id?: string | null
+          table_name?: string
+          record_id?: string
+          action?: string
+          changed_by?: string | null
+          changed_fields?: string[] | null
+          old_data?: Json | null
+          new_data?: Json | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      credit_cards: {
+        Row: {
+          id: string
+          household_id: string
+          member_id: string | null
+          name: string
+          issuer: string | null
+          network: string | null
+          last4: string | null
+          card_status: string
+          reward_type: string | null
+          points_balance: number | null
+          points_expiry_date: string | null
+          min_spend: number | null
+          annual_fee: number | null
+          action: string | null
+          external_url: string | null
+          notes: string | null
+          status: Database["public"]["Enums"]["record_status"]
+          is_demo: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          member_id?: string | null
+          name: string
+          issuer?: string | null
+          network?: string | null
+          last4?: string | null
+          card_status?: string
+          reward_type?: string | null
+          points_balance?: number | null
+          points_expiry_date?: string | null
+          min_spend?: number | null
+          annual_fee?: number | null
+          action?: string | null
+          external_url?: string | null
+          notes?: string | null
+          status?: Database["public"]["Enums"]["record_status"]
+          is_demo?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          member_id?: string | null
+          name?: string
+          issuer?: string | null
+          network?: string | null
+          last4?: string | null
+          card_status?: string
+          reward_type?: string | null
+          points_balance?: number | null
+          points_expiry_date?: string | null
+          min_spend?: number | null
+          annual_fee?: number | null
+          action?: string | null
+          external_url?: string | null
+          notes?: string | null
+          status?: Database["public"]["Enums"]["record_status"]
+          is_demo?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_cards_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_cards_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deleted_records: {
+        Row: {
+          id: string
+          household_id: string
+          table_name: string
+          entity_type: string | null
+          record_id: string
+          record_data: Json
+          deleted_by: string | null
+          deleted_at: string
+          related_reminders: Json
+          batch_id: string | null
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          table_name: string
+          entity_type?: string | null
+          record_id: string
+          record_data: Json
+          deleted_by?: string | null
+          deleted_at?: string
+          related_reminders?: Json
+          batch_id?: string | null
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          table_name?: string
+          entity_type?: string | null
+          record_id?: string
+          record_data?: Json
+          deleted_by?: string | null
+          deleted_at?: string
+          related_reminders?: Json
+          batch_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deleted_records_household_id_fkey"
             columns: ["household_id"]
             isOneToOne: false
             referencedRelation: "households"
@@ -208,6 +646,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      fx_rates: {
+        Row: {
+          id: string
+          rate_date: string
+          base_currency: string
+          rates: Json
+          fetched_at: string
+        }
+        Insert: {
+          id?: string
+          rate_date: string
+          base_currency?: string
+          rates: Json
+          fetched_at?: string
+        }
+        Update: {
+          id?: string
+          rate_date?: string
+          base_currency?: string
+          rates?: Json
+          fetched_at?: string
+        }
+        Relationships: []
       }
       gobag_items: {
         Row: {
@@ -369,6 +831,7 @@ export type Database = {
           invited_by: string | null
           created_at: string
           has_seen_tour: boolean
+          has_seen_passkey_prompt: boolean
         }
         Insert: {
           household_id: string
@@ -377,6 +840,7 @@ export type Database = {
           invited_by?: string | null
           created_at?: string
           has_seen_tour?: boolean
+          has_seen_passkey_prompt?: boolean
         }
         Update: {
           household_id?: string
@@ -385,6 +849,7 @@ export type Database = {
           invited_by?: string | null
           created_at?: string
           has_seen_tour?: boolean
+          has_seen_passkey_prompt?: boolean
         }
         Relationships: [
           {
@@ -403,6 +868,8 @@ export type Database = {
           slug: string | null
           created_at: string
           updated_at: string
+          storage_tier: string
+          storage_bytes_used: number
         }
         Insert: {
           id?: string
@@ -410,6 +877,8 @@ export type Database = {
           slug?: string | null
           created_at?: string
           updated_at?: string
+          storage_tier?: string
+          storage_bytes_used?: number
         }
         Update: {
           id?: string
@@ -417,6 +886,8 @@ export type Database = {
           slug?: string | null
           created_at?: string
           updated_at?: string
+          storage_tier?: string
+          storage_bytes_used?: number
         }
         Relationships: []
       }
@@ -453,10 +924,11 @@ export type Database = {
           beneficiary: string | null
           also_covers: string[]
           surrender_value: number | null
+          external_url: string | null
+          is_giro: boolean
+          hidden_from_advisors: boolean
           surrender_value_date: string | null
           surrender_value_last_updated: string | null
-          external_url: string | null
-          hidden_from_advisors: boolean
         }
         Insert: {
           id?: string
@@ -490,10 +962,11 @@ export type Database = {
           beneficiary?: string | null
           also_covers?: string[]
           surrender_value?: number | null
+          external_url?: string | null
+          is_giro?: boolean
+          hidden_from_advisors?: boolean
           surrender_value_date?: string | null
           surrender_value_last_updated?: string | null
-          external_url?: string | null
-          hidden_from_advisors?: boolean
         }
         Update: {
           id?: string
@@ -527,10 +1000,11 @@ export type Database = {
           beneficiary?: string | null
           also_covers?: string[]
           surrender_value?: number | null
+          external_url?: string | null
+          is_giro?: boolean
+          hidden_from_advisors?: boolean
           surrender_value_date?: string | null
           surrender_value_last_updated?: string | null
-          external_url?: string | null
-          hidden_from_advisors?: boolean
         }
         Relationships: [
           {
@@ -565,6 +1039,7 @@ export type Database = {
           sort_order: number
           created_at: string
           household_id: string
+          photo_size_bytes: number | null
         }
         Insert: {
           id?: string
@@ -574,6 +1049,7 @@ export type Database = {
           sort_order?: number
           created_at?: string
           household_id?: string
+          photo_size_bytes?: number | null
         }
         Update: {
           id?: string
@@ -583,6 +1059,7 @@ export type Database = {
           sort_order?: number
           created_at?: string
           household_id?: string
+          photo_size_bytes?: number | null
         }
         Relationships: [
           {
@@ -618,6 +1095,7 @@ export type Database = {
           action: string | null
           warranty_date: string | null
           photo_url: string | null
+          photo_size_bytes: number | null
         }
         Insert: {
           id?: string
@@ -635,6 +1113,7 @@ export type Database = {
           action?: string | null
           warranty_date?: string | null
           photo_url?: string | null
+          photo_size_bytes?: number | null
         }
         Update: {
           id?: string
@@ -652,6 +1131,7 @@ export type Database = {
           action?: string | null
           warranty_date?: string | null
           photo_url?: string | null
+          photo_size_bytes?: number | null
         }
         Relationships: [
           {
@@ -676,27 +1156,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      inventory_locations: {
-        Row: {
-          id: string
-          name: string
-          description: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          name: string
-          description?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          name?: string
-          description?: string | null
-          created_at?: string
-        }
-        Relationships: []
       }
       investments: {
         Row: {
@@ -728,6 +1187,7 @@ export type Database = {
           currency: string | null
           last_updated: string | null
           external_url: string | null
+          is_giro: boolean
           hidden_from_advisors: boolean
         }
         Insert: {
@@ -759,6 +1219,7 @@ export type Database = {
           currency?: string | null
           last_updated?: string | null
           external_url?: string | null
+          is_giro?: boolean
           hidden_from_advisors?: boolean
         }
         Update: {
@@ -790,6 +1251,7 @@ export type Database = {
           currency?: string | null
           last_updated?: string | null
           external_url?: string | null
+          is_giro?: boolean
           hidden_from_advisors?: boolean
         }
         Relationships: [
@@ -1161,6 +1623,7 @@ export type Database = {
           mortgage_end_date: string | null
           beneficiary: string | null
           external_url: string | null
+          joint_member_id: string | null
           hidden_from_advisors: boolean
         }
         Insert: {
@@ -1199,6 +1662,7 @@ export type Database = {
           mortgage_end_date?: string | null
           beneficiary?: string | null
           external_url?: string | null
+          joint_member_id?: string | null
           hidden_from_advisors?: boolean
         }
         Update: {
@@ -1237,6 +1701,7 @@ export type Database = {
           mortgage_end_date?: string | null
           beneficiary?: string | null
           external_url?: string | null
+          joint_member_id?: string | null
           hidden_from_advisors?: boolean
         }
         Relationships: [
@@ -1319,6 +1784,7 @@ export type Database = {
           reminder_date: string | null
           uploaded_at: string
           household_id: string
+          size_bytes: number
         }
         Insert: {
           id?: string
@@ -1330,6 +1796,7 @@ export type Database = {
           reminder_date?: string | null
           uploaded_at?: string
           household_id?: string
+          size_bytes?: number
         }
         Update: {
           id?: string
@@ -1341,6 +1808,7 @@ export type Database = {
           reminder_date?: string | null
           uploaded_at?: string
           household_id?: string
+          size_bytes?: number
         }
         Relationships: [
           {
@@ -1400,6 +1868,8 @@ export type Database = {
           dismissed: boolean
           created_at: string
           household_id: string
+          recurrence: string | null
+          recurrence_end_of_month: boolean
         }
         Insert: {
           id?: string
@@ -1410,6 +1880,8 @@ export type Database = {
           dismissed?: boolean
           created_at?: string
           household_id?: string
+          recurrence?: string | null
+          recurrence_end_of_month?: boolean
         }
         Update: {
           id?: string
@@ -1420,6 +1892,8 @@ export type Database = {
           dismissed?: boolean
           created_at?: string
           household_id?: string
+          recurrence?: string | null
+          recurrence_end_of_month?: boolean
         }
         Relationships: [
           {
