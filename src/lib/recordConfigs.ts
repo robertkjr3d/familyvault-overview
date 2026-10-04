@@ -331,7 +331,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
       },
       {
         key: "frequency",
-        label: "Premium frequency",
+        label: "Premium frequency (Annual by default)",
         type: "select",
         options: INSURANCE_FREQ,
         default: "annual",
@@ -493,7 +493,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
       },
       {
         key: "premium_frequency",
-        label: "Premium frequency",
+        label: "Premium frequency (annual if left blank)",
         type: "select",
         options: INSURANCE_FREQ,
         showIf: (v) =>

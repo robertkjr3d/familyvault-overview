@@ -7,6 +7,7 @@ import { Building2, Shield, Landmark, TrendingUp, Heart, ChevronRight, Gem, Wall
 import { MemberTag } from "./MemberTag";
 import { fmtDate, fmtMoney } from "@/lib/format";
 import { useAppStore } from "@/lib/store";
+import { flashRecord } from "./HashHighlight";
 import { buildUpcomingItems } from "@/lib/alerts";
 import type { UpcomingItem } from "@/lib/alerts";
 import {
@@ -149,8 +150,7 @@ export function AlertsSheet({ open, onOpenChange }: { open: boolean; onOpenChang
                     <li key={i}>
                       <Link
                         to={item.href as any}
-                        hash={`record-${item.recordId}`}
-                        onClick={() => { onOpenChange(false); setMemberFilter(item.member_id ?? "all"); }}
+                        onClick={() => { onOpenChange(false); setMemberFilter(item.member_id ?? "all"); flashRecord(item.recordId); }}
                         className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-card p-3 hover:bg-accent/50"
                       >
                         <Icon className="mt-0.5 h-4 w-4 text-muted-foreground" />
@@ -227,8 +227,7 @@ function Group({
               <li key={i}>
                 <Link
                   to={src.href as any}
-                  hash={`record-${row.id}`}
-                  onClick={() => { onNav(); setMemberFilter(row.member_id ?? "all"); }}
+                  onClick={() => { onNav(); setMemberFilter(row.member_id ?? "all"); flashRecord(row.id); }}
                   className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 hover:brightness-95 ${GROUP_TONE_CLS[tone]}`}
                 >
                   <Icon className="mt-0.5 h-4 w-4 text-muted-foreground" />

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppStore } from "@/lib/store";
+import { flashRecord } from "@/components/HashHighlight";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   Command,
@@ -28,8 +29,8 @@ import {
 
 // Every record type this search covers, and how to find/display/link to it.
 // column: which text column to match the typed search term against.
-// href + hash: reuses the same "record-<id>" convention that AlertsSheet
-// already relies on for deep-linking into a record on its page.
+// href: the tab the record lives on. Cards there are wrapped in HashHighlight with
+// id "record-<id>", which is how a picked result gets scrolled to and flashed.
 const SOURCES = [
   { table: "properties", column: "name", href: "/property", kind: "Properties", icon: Building2 },
   { table: "loans", column: "bank", href: "/loans", kind: "Loans", icon: Landmark },
@@ -148,7 +149,16 @@ export function GlobalSearch() {
 
   function goTo(r: Result) {
     setOpen(false);
-    navigate({ to: r.href as any, hash: `record-${r.id}` });
+    // The result may belong to a member this tab is currently filtered away from;
+    // show everyone so the card is actually on the page.
+    const { memberFilter, setMemberFilter } = useAppStore.getState();
+    if (r.kind !== "People" && memberFilter !== "all") setMemberFilter("all");
+    navigate({ to: r.href as any });
+    // Same "scroll to it and flash it" signal the header's Recent list uses. Unlike
+    // the old URL-hash jump it also works when you are already on that tab (the
+    // router changes the URL without telling the page), and it waits for this
+    // dialog to finish closing before scrolling.
+    flashRecord(r.id);
   }
 
   return (

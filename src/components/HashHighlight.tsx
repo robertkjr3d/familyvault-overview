@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { scrollCardIntoView } from "@/lib/scrollToCard";
 
 // "Flash this card" signal. Used after a new record is saved and when a card is
 // picked from the header's Recent list: the caller names a record id, and the
@@ -24,6 +25,7 @@ export const flashNewRecord = flashRecord;
 export function HashHighlight({ id, children }: { id: string; children: ReactNode }) {
   const [hl, setHl] = useState(false);
   useEffect(() => {
+    let cancelScroll: (() => void) | undefined;
     const check = () => {
       if (typeof window === "undefined") return;
       if (window.location.hash === `#${id}`) {
@@ -34,7 +36,8 @@ export function HashHighlight({ id, children }: { id: string; children: ReactNod
         const tryScroll = () => {
           const el = document.getElementById(id);
           if (el) {
-            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            cancelScroll?.();
+            cancelScroll = scrollCardIntoView(el);
           } else if (attempts < 20) {
             attempts++;
             setTimeout(tryScroll, 100);
@@ -48,7 +51,10 @@ export function HashHighlight({ id, children }: { id: string; children: ReactNod
     };
     check();
     window.addEventListener("hashchange", check);
-    return () => window.removeEventListener("hashchange", check);
+    return () => {
+      window.removeEventListener("hashchange", check);
+      cancelScroll?.();
+    };
   }, [id]);
 
   // Flash signal (see top of file). Waits for any closing Sheet, scrolls to this
@@ -57,6 +63,7 @@ export function HashHighlight({ id, children }: { id: string; children: ReactNod
     if (typeof window === "undefined") return;
     let startTimer: ReturnType<typeof setTimeout> | undefined;
     let hideTimer: ReturnType<typeof setTimeout> | undefined;
+    let cancelScroll: (() => void) | undefined;
     const run = () => {
       if (!pending || pending.id !== id) return;
       const age = Date.now() - pending.at;
@@ -68,7 +75,11 @@ export function HashHighlight({ id, children }: { id: string; children: ReactNod
       startTimer = setTimeout(
         () => {
           pending = null;
-          document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" });
+          const el = document.getElementById(id);
+          if (el) {
+            cancelScroll?.();
+            cancelScroll = scrollCardIntoView(el);
+          }
           setHl(true);
           if (hideTimer) clearTimeout(hideTimer);
           hideTimer = setTimeout(() => setHl(false), FLASH_MS);
@@ -82,6 +93,7 @@ export function HashHighlight({ id, children }: { id: string; children: ReactNod
       listeners.delete(run);
       if (startTimer) clearTimeout(startTimer);
       if (hideTimer) clearTimeout(hideTimer);
+      cancelScroll?.();
     };
   }, [id]);
 
