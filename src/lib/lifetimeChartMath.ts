@@ -413,6 +413,9 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
     savValues[s.id] = Number(s.balance) || 0;
   }
 
+  // LEGACY safety net (since 3 Oct 2026, see src/lib/netWorthMath.ts and docs/AUDIT-LEDGER.md): the property's own mortgage fields are
+  // no longer written; the three fallbacks that read them in this function do nothing on
+  // current data.
   // Properties linked to a loan — skip their monthly_payment (counted via loan)
   const mortgagedPropertyIds = new Set(
     loans.filter((l: any) => l.property_id).map((l: any) => l.property_id)
@@ -452,6 +455,7 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
       loanValues[l.id] = Number(l.balance);
     }
   }
+  // LEGACY fallback (see the note above): seeds a balance from the property's old mortgage fields.
   for (const p of properties) {
     const isMortgagedViaLoan = mortgagedPropertyIds.has(p.id);
     if (
@@ -517,6 +521,7 @@ export function projectLifetimeChart(input: LifetimeProjectionInput): ChartPoint
       annualOut += annualCosts;
       if (annualCosts > 0) outflowItems.push({ label: `${p.name || "Property"} costs`, amount: annualCosts, href: propHref, timesPerYear: 12, member_id: p.member_id });
 
+      // LEGACY fallback (see the note above): reads the property's old mortgage fields.
       // Mortgage — skip if linked loan covers it, stop at mortgage_end_date
       const isMortgagedViaLoan = mortgagedPropertyIds.has(p.id);
       if (!isMortgagedViaLoan && p.monthly_payment) {

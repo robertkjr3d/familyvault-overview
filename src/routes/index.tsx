@@ -333,6 +333,9 @@ function Dashboard() {
   // the app: foreign amounts are converted using the cached daily rate, and
   // any currency with no cached rate yet contributes $0 rather than being
   // counted at face value in the wrong currency — never silently wrong.
+  // LEGACY safety net (since 3 Oct 2026, see src/lib/netWorthMath.ts and docs/AUDIT-LEDGER.md): a property's OWN mortgage fields
+  // are no longer editable or written, so the fallbacks that use mortgagedPropertyIds and
+  // unlinkedMortgageProperties in this file do nothing on current data.
   // Properties with a linked mortgage loan (a `loans` row with matching
   // property_id) already have that debt counted via loanTotals below — this
   // set says which properties those are, so a property's OWN mortgage_balance
@@ -396,6 +399,8 @@ function Dashboard() {
   const totalAssets =
     propertyValue + investmentsValue + savingsValue + otherAssetsValue + insuranceSurrenderValue;
   const loansValue = totalWithFx(loanTotals, fxRates);
+  // LEGACY: stays 0 on current data, so the "Property mortgages" row and note further down
+  // never show; see src/lib/netWorthMath.ts.
   const propertyMortgageValue = totalWithFx(propertyMortgageTotals, fxRates);
   const totalLiabilities = loansValue + propertyMortgageValue;
   const netWorth = totalAssets - totalLiabilities;
@@ -451,6 +456,7 @@ function Dashboard() {
   // (next to the Net Worth calc), and reused here.
   const propertyOut = properties.reduce((s: number, p: any) => {
     const costs = toSgdAmount(propertyTotalCosts(p), p.currency);
+    // LEGACY fallback (see the note near the top of this component): old property payment field.
     const mortgage = mortgagedPropertyIds.has(p.id)
       ? 0
       : toSgdAmount(p.monthly_payment, p.currency);
@@ -1598,6 +1604,7 @@ function CashFlowBars({
 }
 
 function reviewDateInfo(kind: string, row: any): { prefix: string; date: string } | null {
+  // LEGACY: old property field, no longer written (a mortgage is a Loans-tab row). See src/lib/netWorthMath.ts.
   if (kind === "Property" && row.fixed_rate_end)
     return { prefix: "Reprice by", date: fmtMonth(row.fixed_rate_end) };
   if (kind === "Loan" && row.reprice_date)

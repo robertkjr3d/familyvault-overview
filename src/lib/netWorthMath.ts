@@ -1,3 +1,16 @@
+// STATUS (since 3 Oct 2026): everything below about a mortgage being recorded "in
+// two places" is HISTORY. A mortgage is now ONLY a row in the Loans tab linked to its
+// property (loans.property_id). The Property tab has no mortgage fields any more,
+// nothing writes properties.mortgage_balance / monthly_payment / interest_rate /
+// rate_type / fixed_rate_end / mortgage_end_date / mortgage_bank, and the live values
+// were cleared on 4 Oct 2026. The fallbacks that still read those columns (here, in
+// lifetimeChartMath.ts, the dashboard, the Word summary and the adviser SQL view) do
+// nothing on current data. They are kept ON PURPOSE as a safety net: if an old value
+// ever reappears (e.g. a property restored from the Recycle Bin), the debt is still
+// counted instead of silently vanishing. Do not extend them or copy the pattern.
+// When and how to remove them (two checks must return 0 first):
+// docs/AUDIT-LEDGER.md, "Old mortgage columns".
+//
 // Shared helpers for the "which mortgages count as a liability" rule, used by
 // every place that totals liabilities (dashboard Net Worth, the Asset &
 // Liability Summary Word export, ...) so they can never drift apart again.

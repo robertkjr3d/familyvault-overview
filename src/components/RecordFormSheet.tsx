@@ -380,6 +380,7 @@ function seed(fields: FieldDef[], initial?: Record<string, any>, smartDefaults?:
 // Computes "most common existing value" defaults for owner, currency, and bank
 // fields, based on the household's existing records in this table. Falls back
 // to nothing (undefined) if there's no data yet — seed() then uses f.default.
+// ("mortgage_bank" is legacy: no form has that field since 3 Oct 2026. Harmless; left as is.)
 const SMART_DEFAULT_KEYS = new Set(["member_id", "currency", "bank", "mortgage_bank"]);
 
 function mostCommon(values: any[]): any {

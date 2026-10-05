@@ -568,6 +568,7 @@ function SettingsPage() {
             s + toSgd(l.balance, l.currency, `${ownerLabel(l.member_id)} — ${l.bank ?? "Loan"}`),
           0,
         ) +
+        // LEGACY safety net: old property mortgage fields; see src/lib/netWorthMath.ts
         unlinkedMortgageProperties(properties, loans).reduce(
           (s: number, p: any) =>
             s +
@@ -650,6 +651,7 @@ function SettingsPage() {
               s + toSgd(l.balance, l.currency, `${label} — ${l.bank ?? "Loan"}`),
             0,
           ) +
+          // LEGACY safety net: old property mortgage fields; see src/lib/netWorthMath.ts
           unlinkedMortgageProperties(ownProps, loans).reduce(
             (s: number, p: any) =>
               s +
