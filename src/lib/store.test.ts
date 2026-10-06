@@ -19,6 +19,7 @@ const clean = {
   onboardingSoftDismissed: false,
   activeTour: null,
   tourStep: 0,
+  tourRecordId: null,
   shareOpen: false,
   wizardOpen: false,
   coreTourResolved: false,
@@ -33,6 +34,7 @@ function leaveSomeoneElsesState() {
     onboardingSoftDismissed: true,
     activeTour: "core",
     tourStep: 3,
+    tourRecordId: "loan-of-a",
     shareOpen: true,
     wizardOpen: true,
     coreTourResolved: true,
@@ -56,6 +58,7 @@ describe("claimUiForUser (no account inherits another account's UI state)", () =
     expect(s.onboardingSoftDismissed).toBe(false);
     expect(s.activeTour).toBeNull();
     expect(s.tourStep).toBe(0);
+    expect(s.tourRecordId).toBeNull();
     expect(s.shareOpen).toBe(false);
     expect(s.wizardOpen).toBe(false);
     expect(s.coreTourResolved).toBe(false);
@@ -114,5 +117,33 @@ describe("what is saved to the browser", () => {
     expect(stored.activeHouseholdId).toBe("household-of-a");
     expect(stored.memberFilter).toBe("member-1");
     expect(stored.onboardingSoftDismissed).toBe(true);
+  });
+});
+
+describe("tourRecordId (the loan the core tour created)", () => {
+  beforeEach(() => {
+    saved.clear();
+    useAppStore.setState(clean);
+  });
+
+  it("is cleared when a new core tour starts, kept when the extras tour starts", () => {
+    useAppStore.getState().setTourRecordId("loan-1");
+    useAppStore.getState().startTour("extras");
+    expect(useAppStore.getState().tourRecordId).toBe("loan-1");
+    useAppStore.getState().startTour("core");
+    expect(useAppStore.getState().tourRecordId).toBeNull();
+  });
+
+  it("survives the core tour ending (the extras tour is offered right after)", () => {
+    useAppStore.getState().startTour("core");
+    useAppStore.getState().setTourRecordId("loan-1");
+    useAppStore.getState().endTour();
+    expect(useAppStore.getState().tourRecordId).toBe("loan-1");
+  });
+
+  it("is not written to the browser", () => {
+    useAppStore.getState().setTourRecordId("loan-1");
+    const stored = [...saved.values()].join("");
+    expect(stored).not.toContain("loan-1");
   });
 });

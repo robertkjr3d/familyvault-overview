@@ -5,7 +5,13 @@ import { driver, type DriveStep, type Driver } from "driver.js";
 import "driver.js/dist/driver.css";
 import { useAppStore } from "@/lib/store";
 import { useCurrentRole } from "@/lib/useCurrentRole";
-import { CORE_TOUR_STEPS, EXTRAS_TOUR_STEPS, markTourSeen, type TourStep } from "@/lib/tourSteps";
+import {
+  CORE_TOUR_STEPS,
+  EXTRAS_TOUR_STEPS,
+  markTourSeen,
+  tourSelector,
+  type TourStep,
+} from "@/lib/tourSteps";
 import { watchLayout } from "@/lib/layoutWatch";
 import { toast } from "sonner";
 
@@ -37,12 +43,11 @@ const STAGE_RADIUS = 18;
 // safe here because driver.js hasn't locked page scrolling yet). Gives up
 // quietly after maxWaitMs so a target that never settles can't block the tour.
 async function waitForStableTarget(
-  target: string,
+  getSelector: () => string,
   minDelayMs: number,
   isCancelled: () => boolean,
   maxWaitMs = 5000,
 ): Promise<void> {
-  const selector = `[data-tour="${target}"]`;
   const startedAt = performance.now();
   const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
   if (minDelayMs > 0) await sleep(minDelayMs);
@@ -50,7 +55,7 @@ async function waitForStableTarget(
   let stablePolls = 0;
   let scrolledIntoView = false;
   while (performance.now() - startedAt < maxWaitMs && !isCancelled()) {
-    const el = document.querySelector(selector);
+    const el = document.querySelector(getSelector());
     const r = el?.getBoundingClientRect();
     const hasSize = !!r && r.width > 0 && r.height > 0;
     const key = hasSize ? `${Math.round(r!.top)}|${Math.round(r!.left)}|${Math.round(r!.width)}|${Math.round(r!.height)}` : "";
@@ -150,6 +155,11 @@ export function GuidedTour() {
       }
     }
 
+    // The selector for a step's target right now (reads the saved tour record
+    // each time, so it follows the store if that changes).
+    const currentSelector = (step: TourStep) =>
+      tourSelector(step, useAppStore.getState().tourRecordId);
+
     const driveSteps: DriveStep[] = tourSteps.map((step) => {
       // Bug fix (Sep 2026): onPopoverRender's requireValue/requireChange
       // branches were attaching real DOM listeners (to the actual page's
@@ -167,7 +177,25 @@ export function GuidedTour() {
       // release it the moment the tour moves off this step.
       let cleanupListeners: (() => void) | undefined;
       return {
-        element: `[data-tour="${step.target}"]`,
+        // A function, not a fixed selector: for a step inside a record card it
+        // is evaluated each time driver.js looks for the target, so it finds
+        // the card the tour created as soon as that card appears (driver.js
+        // keeps waiting up to waitForElement while this returns nothing).
+        // (driver.js treats a missing element, i.e. null, as "not there yet";
+        // its type only says Element, hence the cast.)
+        element: () => document.querySelector(currentSelector(step)) as Element,
+        // A card the tour points at can be anywhere in a long list, and
+        // driver.js's own scroll-into-view is blocked while the tour locks
+        // page scrolling (see scrollToTarget in tourSteps.ts). Scroll it to
+        // the centre ourselves, instantly, before driver.js measures it.
+        onHighlightStarted: step.inRecordCard
+          ? (element) => {
+              if (!element) return;
+              document.body.classList.remove("driver-no-scroll");
+              element.scrollIntoView({ behavior: "auto", block: "center" });
+              document.body.classList.add("driver-no-scroll");
+            }
+          : undefined,
         popover: {
           title: step.title,
           description: step.body,
@@ -428,7 +456,7 @@ export function GuidedTour() {
         function scrollToTargetIfNeeded() {
           if (nextTourStep?.scrollToTarget) {
             document.body.classList.remove("driver-no-scroll");
-            const el = document.querySelector(`[data-tour="${nextTourStep.target}"]`);
+            const el = document.querySelector(currentSelector(nextTourStep));
             el?.scrollIntoView({ behavior: "auto", block: "center" });
             document.body.classList.add("driver-no-scroll");
           }
@@ -483,15 +511,25 @@ export function GuidedTour() {
     // If the target never settles, start anyway after 5s — the same as before.
     let cancelled = false;
     const startFirstStep = () => {
-      if (!cancelled) driverObj.drive();
+      if (cancelled) return;
+      // The extras tour aims at the loan the core tour created. If that card
+      // is not on the page any more (deleted since, or this is a later
+      // session), fall back to the first card rather than skip every step.
+      const savedId = useAppStore.getState().tourRecordId;
+      if (savedId && !document.getElementById(`record-${savedId}`)) {
+        useAppStore.getState().setTourRecordId(null);
+      }
+      driverObj.drive();
     };
     const first = tourSteps[0];
     const needsNavigation = !!(first?.route && window.location.pathname !== first.route);
     if (needsNavigation) {
       navigate({ to: first.route! });
-      void waitForStableTarget(first.target, first.settleDelay ?? 0, () => cancelled).then(
-        startFirstStep,
-      );
+      void waitForStableTarget(
+        () => currentSelector(first),
+        first.settleDelay ?? 0,
+        () => cancelled,
+      ).then(startFirstStep);
     } else if (first?.settleDelay) {
       window.setTimeout(startFirstStep, first.settleDelay);
     } else {

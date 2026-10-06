@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { CORE_TOUR_STEPS, EXTRAS_TOUR_STEPS } from "./tourSteps";
+import { CORE_TOUR_STEPS, EXTRAS_TOUR_STEPS, tourSelector } from "./tourSteps";
 
 // Guards for the Sep 30 2026 tour fixes (step 3 pinned top-left on a slow
 // first visit to Loans; tour ending mid-save on a slow save).
@@ -63,5 +63,47 @@ describe("steps that keep their highlight in step with the page", () => {
     const last = EXTRAS_TOUR_STEPS[EXTRAS_TOUR_STEPS.length - 1];
     const dashboard = readFileSync("src/routes/index.tsx", "utf8");
     expect(dashboard).toContain(`data-tour="${last.target}"`);
+  });
+});
+
+describe("card steps aim at the card the tour created (Oct 5 2026)", () => {
+  const all = [...CORE_TOUR_STEPS, ...EXTRAS_TOUR_STEPS];
+
+  it("exactly the steps whose target sits inside a record card are marked", () => {
+    const marked = all.filter((s) => s.inRecordCard).map((s) => s.id);
+    expect(marked).toEqual([
+      "saved",
+      "status-toggle",
+      "duplicate",
+      "expand",
+      "reminders-section",
+      "reminder-trigger",
+    ]);
+  });
+
+  it("a marked step is limited to the created card's own wrapper", () => {
+    const step = all.find((s) => s.id === "status-toggle")!;
+    expect(tourSelector(step, "abc-123")).toBe('[id="record-abc-123"] [data-tour="status-toggle"]');
+  });
+
+  it("falls back to the plain name when no card is known (tour started later)", () => {
+    const step = all.find((s) => s.id === "status-toggle")!;
+    expect(tourSelector(step, null)).toBe('[data-tour="status-toggle"]');
+  });
+
+  it("never narrows a step that is not marked, even when a card is known", () => {
+    const step = all.find((s) => s.id === "add-entry")!;
+    expect(tourSelector(step, "abc-123")).toBe('[data-tour="add-record-fab"]');
+  });
+
+  it("every card on the Loans page sits inside a wrapper with the id the selector uses", () => {
+    const loans = readFileSync("src/routes/loans.tsx", "utf8");
+    expect(loans).toContain("<HashHighlight id={`record-${l.id}`}>");
+  });
+
+  it("saving a new record during the core tour remembers its id", () => {
+    const form = readFileSync("src/components/RecordFormSheet.tsx", "utf8");
+    expect(form).toContain('activeTour === "core"');
+    expect(form).toContain("setTourRecordId(savedId)");
   });
 });

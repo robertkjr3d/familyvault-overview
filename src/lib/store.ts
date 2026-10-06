@@ -14,6 +14,14 @@ type AppStore = {
   activeTour: TourId | null;
   tourStep: number;
   startTour: (tour: TourId) => void;
+  // The loan the core tour made the person add. The tour's card steps (the
+  // "saved" step and the whole extras tour) aim at THIS card instead of
+  // whichever card happens to be first in the list. Kept after the core tour
+  // ends so the extras tour offered right after it still finds the same card.
+  // Not saved to the browser (see partialize): it only makes sense in the
+  // session that created the record.
+  tourRecordId: string | null;
+  setTourRecordId: (id: string | null) => void;
   advanceTour: () => void;
   endTour: () => void;
   // Closing the wizard any way OTHER than its explicit "Don't show this
@@ -76,7 +84,16 @@ export const useAppStore = create<AppStore>()(
       setShareOpen: (shareOpen) => set({ shareOpen }),
       activeTour: null,
       tourStep: 0,
-      startTour: (activeTour) => set({ activeTour, tourStep: 0 }),
+      startTour: (activeTour) =>
+        set((s) => ({
+          activeTour,
+          tourStep: 0,
+          // A fresh core tour will create its own record; the extras tour
+          // keeps whatever the core tour created.
+          tourRecordId: activeTour === "core" ? null : s.tourRecordId,
+        })),
+      tourRecordId: null,
+      setTourRecordId: (tourRecordId) => set({ tourRecordId }),
       advanceTour: () => set((s) => ({ tourStep: s.tourStep + 1 })),
       endTour: () => set({ activeTour: null, tourStep: 0 }),
       onboardingSoftDismissed: false,
@@ -99,6 +116,7 @@ export const useAppStore = create<AppStore>()(
                 onboardingSoftDismissed: false,
                 activeTour: null,
                 tourStep: 0,
+                tourRecordId: null,
                 shareOpen: false,
                 wizardOpen: false,
                 coreTourResolved: false,
@@ -118,6 +136,7 @@ export const useAppStore = create<AppStore>()(
           extrasOfferPending: _extrasOfferPending,
           activeTour: _activeTour,
           tourStep: _tourStep,
+          tourRecordId: _tourRecordId,
           shareOpen: _shareOpen,
           ...rest
         } = state;

@@ -129,7 +129,32 @@ export type TourStep = {
    * event-based (no timers) and applies only to a step that sets it.
    */
   trackLayout?: boolean;
+  /**
+   * The target sits inside a record card (the card, its status toggle, its
+   * duplicate / expand buttons, its Reminders section). Oct 5 2026: these
+   * steps used to grab the FIRST card on the page, which is only the right
+   * card when the list holds one loan. With this set, the tour aims at the
+   * card the core tour just created (see tourSelector below); if no such
+   * card is known (the tour was started later from Settings) it falls back
+   * to the first card, as before.
+   */
+  inRecordCard?: boolean;
 };
+
+/**
+ * The CSS selector for a step's target. For a step inside a record card and a
+ * known tour record, it is limited to that record's card (every card is wrapped
+ * in an element with id "record-<id>"); otherwise it is the plain data-tour
+ * name. Pure on purpose so it can be tested without a browser.
+ */
+export function tourSelector(
+  step: Pick<TourStep, "target" | "inRecordCard">,
+  tourRecordId: string | null,
+): string {
+  const own = `[data-tour="${step.target}"]`;
+  if (step.inRecordCard && tourRecordId) return `[id="record-${tourRecordId}"] ${own}`;
+  return own;
+}
 
 // Shared by GuidedTour.tsx (on finish/skip) and TourWelcomeScreen.tsx (on
 // cancel) so there's exactly one place that writes this flag. Best-effort:
@@ -277,6 +302,7 @@ export const CORE_TOUR_STEPS: TourStep[] = [
   {
     id: "saved",
     target: "record-card",
+    inRecordCard: true,
     title: "Nice — you're all set! 🎉",
     body: "Your loan is saved. This card is where everything about it lives from now on. Insurance, property, and other sections work the same way — add one whenever you're ready.",
     placement: "bottom",
@@ -294,6 +320,7 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
     id: "status-toggle",
     route: "/loans",
     target: "status-toggle",
+    inRecordCard: true,
     title: "Track progress",
     body: "Tap here and pick a status, so it's easy to see what still needs attention.",
     placement: "top",
@@ -302,6 +329,7 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
   {
     id: "duplicate",
     target: "duplicate-icon",
+    inRecordCard: true,
     title: "Got a similar one?",
     body: "Duplicate copies this entry's details into a new one — handy if you're adding several similar loans.",
     placement: "left",
@@ -310,6 +338,7 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
   {
     id: "expand",
     target: "expand-card",
+    inRecordCard: true,
     title: "More options",
     body: "Tap here to open the card and see notes, reminders, and history.",
     placement: "top",
@@ -318,6 +347,7 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
   {
     id: "reminders-section",
     target: "reminders-section",
+    inRecordCard: true,
     title: "Reminders live here",
     body: "Tap to open the Reminders section.",
     placement: "top",
@@ -346,6 +376,7 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
   {
     id: "reminder-trigger",
     target: "reminder-trigger",
+    inRecordCard: true,
     title: "Set a reminder",
     body: "Tap here if you want an alert to come back to this later.",
     placement: "top",

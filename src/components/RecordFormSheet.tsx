@@ -151,6 +151,11 @@ export function RecordFormSheet({
       // New record: remember it so its card scrolls into view and flashes once the
       // list refreshes. Skipped while a guided tour runs (the tour owns the scrolling).
       if (!isEdit && !useAppStore.getState().activeTour) flashNewRecord(savedId);
+      // The core tour's last step (and the extras tour after it) must point at
+      // THIS card, not whichever card is first in the list.
+      if (!isEdit && useAppStore.getState().activeTour === "core" && savedId) {
+        useAppStore.getState().setTourRecordId(savedId);
+      }
       qc.invalidateQueries({ queryKey: [cfg.queryKey] });
       // Bug fix (July 2026): MemberFilterBar's own per-member count badge
       // keys its cache off the REAL table name (cfg.table), not this
