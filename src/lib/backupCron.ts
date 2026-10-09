@@ -120,6 +120,9 @@ async function selectAllWithRetry(
 // in-app delete-button mistakes.
 //
 // DELIBERATELY DOES NOT TOUCH DOCUMENTS, PHOTOS, OR ANY UPLOADED FILE.
+// (Oct 5 2026: uploaded files are now backed up by a SEPARATE job on its own
+// hourly trigger, src/lib/fileBackupCron.ts. Keep the two apart: this one has
+// ~35 of its 50 outside requests used already.)
 // This only reads database rows (via Supabase's Postgres API) — it never
 // calls Supabase Storage. Storage/file backup is a separate, harder problem
 // (much larger volumes, real cost implications) and was explicitly decided

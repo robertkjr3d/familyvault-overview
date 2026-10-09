@@ -5,6 +5,7 @@ import { renderErrorPage } from "./lib/error-page";
 import { runFxRateFetch } from "./lib/fxRateCron";
 import { runTrashCleanup } from "./lib/trashCleanupCron";
 import { runDailyBackup } from "./lib/backupCron";
+import { runFileBackup, type R2BucketForFiles } from "./lib/fileBackupCron";
 import { reportToSentry, stripUrlSecrets } from "./lib/sentryReport";
 import { jobsForCron } from "./lib/scheduledJobs";
 
@@ -118,10 +119,13 @@ export default {
     env: {
       SUPABASE_URL?: string;
       SUPABASE_SERVICE_ROLE_KEY?: string;
-      BACKUPS_BUCKET?: { put(key: string, value: string): Promise<unknown> };
+      BACKUPS_BUCKET?: R2BucketForFiles & { put(key: string, value: string): Promise<unknown> };
       // Sep 22 2026 — optional Healthchecks.io ping URL for the nightly backup
       // (see backupCron.ts). Left undefined = pings are silently skipped.
       HEALTHCHECKS_PING_URL?: string;
+      // Oct 5 2026 — separate Healthchecks check for the hourly photo/document
+      // backup (see fileBackupCron.ts). Same rule: unset = pings skipped.
+      HEALTHCHECKS_FILES_PING_URL?: string;
     },
     ctx: { waitUntil: (promise: Promise<unknown>) => void },
   ) {
@@ -134,5 +138,6 @@ export default {
     if (jobs.includes("fx")) ctx.waitUntil(runFxRateFetch(env));
     if (jobs.includes("trash")) ctx.waitUntil(runTrashCleanup(env));
     if (jobs.includes("backup")) ctx.waitUntil(runDailyBackup(env));
+    if (jobs.includes("files")) ctx.waitUntil(runFileBackup(env));
   },
 };
