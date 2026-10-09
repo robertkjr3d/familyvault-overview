@@ -139,6 +139,16 @@ export type TourStep = {
    * to the first card, as before.
    */
   inRecordCard?: boolean;
+  /**
+   * Oct 6 2026. Used with advanceOnClick on a step whose tap starts something
+   * that takes a moment (saving to the database). Instead of moving on 400 ms
+   * after the tap, the tour waits until this step's own target has left the
+   * page (the Sheet containing it has closed, which only happens after a
+   * successful save), and only then shows the next step. If the target is
+   * still there after 15 s (the save failed), the tour stays put so the
+   * person can tap again.
+   */
+  advanceWhenGone?: boolean;
 };
 
 /**
@@ -417,7 +427,8 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
     title: "Save the reminder",
     body: "That's it — it'll show up on your dashboard when it's due.",
     placement: "top",
-    advanceOnClick: true, // real submit button, instant
+    advanceOnClick: true, // real submit button
+    advanceWhenGone: true, // a real network save: wait for the Sheet to close, don't just assume it did
   },
   {
     id: "nav-home",
@@ -441,3 +452,26 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
     // Final step, nothing to tap — "Done" ends the tour.
   },
 ];
+
+/**
+ * Resolves true as soon as `isStillThere()` returns false (the thing being
+ * waited for has left the page); false if `timeoutMs` passes first, or if
+ * `isCancelled()` says the tour is over. Checks right away, then every
+ * `intervalMs`. Used for steps flagged advanceWhenGone.
+ */
+export function waitUntilGone(
+  isStillThere: () => boolean,
+  opts: { intervalMs?: number; timeoutMs?: number; isCancelled?: () => boolean } = {},
+): Promise<boolean> {
+  const { intervalMs = 100, timeoutMs = 15000, isCancelled = () => false } = opts;
+  const startedAt = Date.now();
+  return new Promise((resolve) => {
+    const tick = () => {
+      if (isCancelled()) return resolve(false);
+      if (!isStillThere()) return resolve(true);
+      if (Date.now() - startedAt > timeoutMs) return resolve(false);
+      setTimeout(tick, intervalMs);
+    };
+    tick();
+  });
+}

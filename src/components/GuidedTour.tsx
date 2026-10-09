@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { driver, type DriveStep, type Driver } from "driver.js";
+import { driver, type Config, type DriveStep, type Driver } from "driver.js";
 import "driver.js/dist/driver.css";
 import { useAppStore } from "@/lib/store";
 import { useCurrentRole } from "@/lib/useCurrentRole";
@@ -10,6 +10,7 @@ import {
   EXTRAS_TOUR_STEPS,
   markTourSeen,
   tourSelector,
+  waitUntilGone,
   type TourStep,
 } from "@/lib/tourSteps";
 import { watchLayout } from "@/lib/layoutWatch";
@@ -338,6 +339,93 @@ export function GuidedTour() {
       };
     });
 
+    // Moves the tour on from step `idx`: navigates if the next step lives on
+    // another page, waits out its settleDelay, then asks driver.js to show it.
+    // (This is the original body of onNextClick, moved here unchanged so a step
+    // can ask to be held back first; see the advanceWhenGone branch below.)
+    type NextOpts = Parameters<NonNullable<Config["onNextClick"]>>[2];
+    const advance = (opts: NextOpts, idx: number) => {
+      lastActiveIndex = idx;
+      // The core tour's first step deliberately lets the person tap
+      // either "All" or a specific member chip — that's the step's
+      // whole point. But if they land on a specific member, the loan
+      // this tour creates later can end up filtered OUT of view by the
+      // time the "saved" step looks for its card — confirmed cause of
+      // the tour appearing to break at Save for some people and not
+      // others. Reset to "All" the moment this step is left (not
+      // before it's shown, which wouldn't catch whatever gets tapped
+      // during it), so the rest of the tour always has an unfiltered
+      // view regardless of what was picked.
+      if (activeTour === "core" && idx === 0) {
+        useAppStore.getState().setMemberFilter("all");
+      }
+      const nextTourStep = tourSteps[idx + 1];
+      // window.location, not React's own location state (which was here
+      // before): confirmed real bug — React's location hook lags one
+      // render behind an actual navigation (the browser's History API
+      // updates window.location synchronously; React's own re-render
+      // with the new value follows a moment later). That lag meant a
+      // step like member-confirm, whose route matched where the
+      // PREVIOUS step's own real tap (a nav link) already sent the
+      // page, saw a stale "still on the old route" reading here and
+      // fired a second, redundant navigate() call — racing the
+      // first one already in flight. That's what was landing the
+      // popover pinned in the corner over a dummy placeholder: the
+      // real target was never actually found, because the page was
+      // mid-collision between two navigations instead of settled on
+      // one.
+      if (nextTourStep?.route && window.location.pathname !== nextTourStep.route) {
+        navigate({ to: nextTourStep.route });
+      }
+      // Correction (Aug 28, 2026): scrollToTarget used to run here,
+      // BEFORE the settleDelay wait below. That was fine for a step like
+      // "upcoming" whose target already exists on the page regardless of
+      // timing — but wrong for "reminders-section", confirmed as the
+      // REAL cause of that step's "flies from top to middle" glitch
+      // (two earlier attempts at this fixed the wrong thing — see that
+      // step's own comment in tourSteps.ts). Expanding the card can push
+      // reminders-section below the fold, exactly like the already-fixed
+      // Step 10 bug: allowScroll:false locks <body> scroll, silently
+      // defeating driver.js's own scroll-into-view for anything
+      // off-screen. But reminders-section ALSO doesn't exist in the DOM
+      // at all until React re-renders the expanded card — so scrolling
+      // to it here, before that render happens, would find nothing.
+      // Moved inside the settleDelay callback below, so it only runs
+      // once the real element is guaranteed to exist.
+      function scrollToTargetIfNeeded() {
+        if (nextTourStep?.scrollToTarget) {
+          document.body.classList.remove("driver-no-scroll");
+          const el = document.querySelector(currentSelector(nextTourStep));
+          el?.scrollIntoView({ behavior: "auto", block: "center" });
+          document.body.classList.add("driver-no-scroll");
+        }
+      }
+      // See settleDelay's own comment in tourSteps.ts — waiting here,
+      // BEFORE driver.js starts looking for the next target, is what
+      // actually fixes the "appears wrong, then visibly snaps into
+      // place" look: driver.js's own first measurement only happens
+      // once moveNext() is called, so delaying that call means the
+      // Sheet/route transition has already finished by the time it
+      // measures, instead of needing a correction afterward.
+      // Reverted (Sep 2026): the "wait for stable position" version below
+      // was tried across two rounds and made things worse or unchanged
+      // on a real device, not better — clear enough signal to stop
+      // experimenting on this and go back to what was actually working.
+      if (nextTourStep?.settleDelay) {
+        window.setTimeout(() => {
+          scrollToTargetIfNeeded();
+          opts.driver.moveNext();
+        }, nextTourStep.settleDelay);
+      } else {
+        scrollToTargetIfNeeded();
+        opts.driver.moveNext();
+      }
+    };
+
+    // True while a step flagged advanceWhenGone is waiting for its target (a
+    // Save button inside a Sheet) to leave the page.
+    let waitingForGone = false;
+
     const driverObj: Driver = driver({
       showProgress: true,
       progressText: "{{current}} of {{total}}",
@@ -406,81 +494,28 @@ export function GuidedTour() {
       // only after the route change has been kicked off.
       onNextClick: (_element, _step, opts) => {
         const idx = opts.index ?? 0;
-        lastActiveIndex = idx;
-        // The core tour's first step deliberately lets the person tap
-        // either "All" or a specific member chip — that's the step's
-        // whole point. But if they land on a specific member, the loan
-        // this tour creates later can end up filtered OUT of view by the
-        // time the "saved" step looks for its card — confirmed cause of
-        // the tour appearing to break at Save for some people and not
-        // others. Reset to "All" the moment this step is left (not
-        // before it's shown, which wouldn't catch whatever gets tapped
-        // during it), so the rest of the tour always has an unfiltered
-        // view regardless of what was picked.
-        if (activeTour === "core" && idx === 0) {
-          useAppStore.getState().setMemberFilter("all");
+        const here = tourSteps[idx];
+        if (here?.advanceWhenGone) {
+          // Oct 6 2026. A tap on this step's target (the reminder Save button) is
+          // a real network save, not an instant action. The tap used to move the
+          // tour on after 400 ms whether or not the save had finished; on a slow
+          // save the next step then highlighted the Home tab while the Sheet
+          // (and its dark overlay) was still open, so the highlight looked like
+          // empty space. Now the tour waits until the Sheet has actually closed,
+          // which only happens once the save succeeded. If it has not closed
+          // after 15 s (the save failed, so the Save button is still there) the
+          // tour stays on this step and the person can simply tap Save again.
+          if (waitingForGone) return; // already waiting; extra taps are ignored
+          waitingForGone = true;
+          void waitUntilGone(() => !!document.querySelector(currentSelector(here)), {
+            isCancelled: () => !driverObj.isActive(),
+          }).then((gone) => {
+            waitingForGone = false;
+            if (gone && driverObj.isActive()) advance(opts, idx);
+          });
+          return;
         }
-        const nextTourStep = tourSteps[idx + 1];
-        // window.location, not React's own location state (which was here
-        // before): confirmed real bug — React's location hook lags one
-        // render behind an actual navigation (the browser's History API
-        // updates window.location synchronously; React's own re-render
-        // with the new value follows a moment later). That lag meant a
-        // step like member-confirm, whose route matched where the
-        // PREVIOUS step's own real tap (a nav link) already sent the
-        // page, saw a stale "still on the old route" reading here and
-        // fired a second, redundant navigate() call — racing the
-        // first one already in flight. That's what was landing the
-        // popover pinned in the corner over a dummy placeholder: the
-        // real target was never actually found, because the page was
-        // mid-collision between two navigations instead of settled on
-        // one.
-        if (nextTourStep?.route && window.location.pathname !== nextTourStep.route) {
-          navigate({ to: nextTourStep.route });
-        }
-        // Correction (Aug 28, 2026): scrollToTarget used to run here,
-        // BEFORE the settleDelay wait below. That was fine for a step like
-        // "upcoming" whose target already exists on the page regardless of
-        // timing — but wrong for "reminders-section", confirmed as the
-        // REAL cause of that step's "flies from top to middle" glitch
-        // (two earlier attempts at this fixed the wrong thing — see that
-        // step's own comment in tourSteps.ts). Expanding the card can push
-        // reminders-section below the fold, exactly like the already-fixed
-        // Step 10 bug: allowScroll:false locks <body> scroll, silently
-        // defeating driver.js's own scroll-into-view for anything
-        // off-screen. But reminders-section ALSO doesn't exist in the DOM
-        // at all until React re-renders the expanded card — so scrolling
-        // to it here, before that render happens, would find nothing.
-        // Moved inside the settleDelay callback below, so it only runs
-        // once the real element is guaranteed to exist.
-        function scrollToTargetIfNeeded() {
-          if (nextTourStep?.scrollToTarget) {
-            document.body.classList.remove("driver-no-scroll");
-            const el = document.querySelector(currentSelector(nextTourStep));
-            el?.scrollIntoView({ behavior: "auto", block: "center" });
-            document.body.classList.add("driver-no-scroll");
-          }
-        }
-        // See settleDelay's own comment in tourSteps.ts — waiting here,
-        // BEFORE driver.js starts looking for the next target, is what
-        // actually fixes the "appears wrong, then visibly snaps into
-        // place" look: driver.js's own first measurement only happens
-        // once moveNext() is called, so delaying that call means the
-        // Sheet/route transition has already finished by the time it
-        // measures, instead of needing a correction afterward.
-        // Reverted (Sep 2026): the "wait for stable position" version below
-        // was tried across two rounds and made things worse or unchanged
-        // on a real device, not better — clear enough signal to stop
-        // experimenting on this and go back to what was actually working.
-        if (nextTourStep?.settleDelay) {
-          window.setTimeout(() => {
-            scrollToTargetIfNeeded();
-            opts.driver.moveNext();
-          }, nextTourStep.settleDelay);
-        } else {
-          scrollToTargetIfNeeded();
-          opts.driver.moveNext();
-        }
+        advance(opts, idx);
       },
       onCloseClick: () => {
         const idx = driverObj.getActiveIndex() ?? 0;

@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
-import { CORE_TOUR_STEPS, EXTRAS_TOUR_STEPS, tourSelector } from "./tourSteps";
+import { CORE_TOUR_STEPS, EXTRAS_TOUR_STEPS, tourSelector, waitUntilGone } from "./tourSteps";
 
 // Guards for the Sep 30 2026 tour fixes (step 3 pinned top-left on a slow
 // first visit to Loans; tour ending mid-save on a slow save).
@@ -105,5 +105,60 @@ describe("card steps aim at the card the tour created (Oct 5 2026)", () => {
     const form = readFileSync("src/components/RecordFormSheet.tsx", "utf8");
     expect(form).toContain('activeTour === "core"');
     expect(form).toContain("setTourRecordId(savedId)");
+  });
+});
+
+describe("the reminder Save step waits for the Sheet to close (Oct 6 2026)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("only the reminder Save step is held back, and it is a tap-to-advance step", () => {
+    const held = [...CORE_TOUR_STEPS, ...EXTRAS_TOUR_STEPS].filter((s) => s.advanceWhenGone);
+    expect(held.map((s) => s.id)).toEqual(["reminder-save"]);
+    expect(held[0].advanceOnClick).toBe(true);
+  });
+
+  it("does not say 'gone' while the thing is still on the page, and says it as soon as it leaves (slow save)", async () => {
+    vi.useFakeTimers();
+    let present = true;
+    let result: boolean | null = null;
+    void waitUntilGone(() => present).then((r) => (result = r));
+    await vi.advanceTimersByTimeAsync(3000); // a slow 3-second save
+    expect(result).toBeNull();
+    present = false; // the Sheet closes
+    await vi.advanceTimersByTimeAsync(150);
+    expect(result).toBe(true);
+  });
+
+  it("says 'gone' straight away if it was already gone", async () => {
+    await expect(waitUntilGone(() => false)).resolves.toBe(true);
+  });
+
+  it("gives up with false after 15 s if the thing never leaves (the save failed)", async () => {
+    vi.useFakeTimers();
+    let result: boolean | null = null;
+    void waitUntilGone(() => true).then((r) => (result = r));
+    await vi.advanceTimersByTimeAsync(14000);
+    expect(result).toBeNull();
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(result).toBe(false);
+  });
+
+  it("stops with false if the tour is cancelled meanwhile", async () => {
+    vi.useFakeTimers();
+    let cancelled = false;
+    let result: boolean | null = null;
+    void waitUntilGone(() => true, { isCancelled: () => cancelled }).then((r) => (result = r));
+    await vi.advanceTimersByTimeAsync(500);
+    cancelled = true;
+    await vi.advanceTimersByTimeAsync(200);
+    expect(result).toBe(false);
+  });
+
+  it("the tour component really holds the step back and uses this wait", () => {
+    const src = readFileSync("src/components/GuidedTour.tsx", "utf8");
+    expect(src).toContain("here?.advanceWhenGone");
+    expect(src).toContain("waitUntilGone(");
   });
 });
