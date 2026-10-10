@@ -22,7 +22,7 @@
 |---|:---:|---|---|---|
 | Nightly database backup (32 tables, completeness-checked) | 🟢 8 | Copy outside Cloudflare too; a full scheduled database dump | More cost, more moving parts | **Good as-is for beta.** Revisit once real paying households depend on it. |
 | Backup failure alerts (new) | 🟢 8 | — | Unproven in real production yet (just added) | **Keep, re-confirm in a few weeks.** |
-| Photos & documents backup | 🟢 7 (built Oct 5 2026; confirm after the first real runs) | Copy outside Cloudflare too; a restore button | Another moving part; uses the Cloudflare free-plan limits carefully | **Built on the free plan**, with size-checks, a 30-day holding folder for deleted files, and its own failure alert. Re-confirm after a week of real runs. |
+| Photos & documents backup | 🟢 7 (live since Oct 10 2026: all 30 files copied, hourly checks green; deleting a file not yet tried live) | Copy outside Cloudflare too; a restore button | Another moving part; uses the Cloudflare free-plan limits carefully | **Built on the free plan**, with size-checks, a 30-day holding folder for deleted files, and its own failure alert. Re-confirm after a week of real runs. |
 | Self-service full export (Excel + ZIP, notes/reminders included, no longer CDN-dependent) | 🟢 9 | — | None | **Keep — this is genuinely strong and safe to advertise.** |
 | Recycle Bin (30-day undo) | 🟢 8 | — (now covers core records, inventory items/folders, members, single documents) | Free-text entries on some small lists (checklists, reminders) are not restorable | **Good.** Say "most things can be restored within 30 days", not "everything". |
 | Storage limits enforced honestly (can't be tricked into using more than paid for) | 🟢 9 | — | None | **Keep.** |

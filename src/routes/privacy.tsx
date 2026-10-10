@@ -5,7 +5,7 @@ export const Route = createFileRoute("/privacy")({
   head: () => ({ meta: [{ title: "Privacy Policy — FamilyHub SG" }] }),
 });
 
-const LAST_UPDATED = "29 September 2026";
+const LAST_UPDATED = "10 October 2026";
 // Placeholder — replace with a real, monitored inbox. See chat for details.
 const CONTACT_EMAIL = "support@familyhubsg.com";
 
@@ -112,16 +112,23 @@ function PrivacyPage() {
             deleted, contact us at the email below and we'll action it.
           </p>
           <p className="mt-3">
-            Behind the scenes, we also keep a nightly backup of your household's records (not
-            your photos or documents) for up to 30 days, so that data can be recovered if
-            something is deleted by mistake or a technical problem occurs.
+            Behind the scenes, we also keep a nightly backup of your household's
+            records for up to 30 days, and a separate copy of your uploaded
+            photos and documents that is refreshed through the day, so that data
+            can be recovered if something is deleted by mistake or a technical
+            problem occurs. When a photo or document is permanently removed from
+            your account (including when an account is deleted), its backup copy
+            is erased about 30 days later.
           </p>
           <p className="mt-3">
-            Deleted inventory items and documents (with their photos and files) stay in your Recycle
-            Bin for 30 days, then are permanently deleted. Replacing or removing a photo on an
-            existing item deletes the old photo immediately. We recommend keeping your own extra
-            copy of your files somewhere else, especially important documents; the full backup in
-            Settings → Data makes this easy.
+            Deleted inventory items and documents (with their photos and files)
+            stay in your Recycle Bin for 30 days, then are permanently deleted
+            from your account. Replacing or removing a photo on an existing item
+            deletes the old photo from your account immediately. (A backup copy
+            is kept for a further 30 days, as described above.) We recommend
+            keeping your own extra copy of your files somewhere else, especially
+            important documents; the full backup in Settings → Data makes this
+            easy.
           </p>
         </Section>
 
