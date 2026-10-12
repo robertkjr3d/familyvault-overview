@@ -22,7 +22,7 @@ A Singapore-focused family financial management web app. Households track proper
 - **Database:** Supabase (Postgres), Singapore region, project ref `aowvotxddrlfnpzhejvc`. Free plan.
 - **File storage:** Supabase Storage — `vault-docs` (10MB/file cap) and `inventory-photos` (5MB/file cap) buckets, both private.
 - **Backups:** Cloudflare R2 (`familyhub-backups` bucket): database snapshot nightly, photo/document mirror hourly, both by Cloudflare Cron Triggers.
-- **Repo:** GitHub, `robertkjr3d/familyvault-overview`, `azariah` branch. Robert owns the repo and infrastructure; the user codes exclusively via Claude + the GitHub web editor (no CLI) plus the Supabase SQL Editor.
+- **Repo:** GitHub, `robertkjr3d/familyvault-overview`, `azariah` branch. Robert (IT developer) owns the repo and infrastructure and, with the founder, can access stored data to run and maintain the service; the user codes exclusively via Claude + the GitHub web editor (no CLI) plus the Supabase SQL Editor.
 - **Cloudflare plan:** Free (confirmed by user Sep 21 2026) — this caps CPU time and outside-request count per Worker invocation; see §6.
 
 ## 3. Data model & multi-tenancy
