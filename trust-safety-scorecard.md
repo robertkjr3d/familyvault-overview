@@ -57,3 +57,6 @@ Use these as starting points, not final copy — adjust tone to match your site:
 - *"Can I control exactly what my adviser sees?"* — hold this one until the "Unrestricted" item below is resolved.
 
 **Don't yet claim publicly** (not false, just not fully true today): "everything is backed up" (login accounts aren't, and the photo/document backup is new — confirm it first), "every action is undoable" (records, inventory, members and documents are; small checklists and reminders are not), "SOC 2 / bank-grade" or similar formal compliance language (no such certification exists or is warranted at this size).
+
+## Who can access stored data (12 Oct 2026)
+The founder and one IT developer (Robert) have access to the database and hosting and can technically read stored data in order to run and maintain the service. Data is encrypted in transit and stored encrypted by the providers, but it is not end-to-end encrypted. The privacy page and the website say "the founder and one IT developer". Never claim that nobody can see user data.
