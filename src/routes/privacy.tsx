@@ -5,7 +5,7 @@ export const Route = createFileRoute("/privacy")({
   head: () => ({ meta: [{ title: "Privacy Policy — FamilyHub SG" }] }),
 });
 
-const LAST_UPDATED = "10 October 2026";
+const LAST_UPDATED = "12 October 2026";
 // Placeholder — replace with a real, monitored inbox. See chat for details.
 const CONTACT_EMAIL = "support@familyhubsg.com";
 
@@ -74,7 +74,7 @@ function PrivacyPage() {
           <p>
             Only people you've explicitly invited into your household, any financial adviser you
             choose to link (who sees only the categories and family members you allow, and only
-            while you keep that link active), plus FamilyHub SG's operator for the limited
+            while you keep that link active), plus FamilyHub SG's founder and one IT developer, for the limited
             purpose of running and maintaining the service. We do not
             sell your data, and we do not share it with advertisers.
           </p>
