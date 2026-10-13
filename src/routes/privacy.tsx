@@ -5,7 +5,7 @@ export const Route = createFileRoute("/privacy")({
   head: () => ({ meta: [{ title: "Privacy Policy — FamilyHub SG" }] }),
 });
 
-const LAST_UPDATED = "12 October 2026";
+const LAST_UPDATED = "13 October 2026";
 // Placeholder — replace with a real, monitored inbox. See chat for details.
 const CONTACT_EMAIL = "support@familyhubsg.com";
 
@@ -59,7 +59,8 @@ function PrivacyPage() {
           <p>
             Photos and documents you upload are stored privately — not on the open internet.
             Viewing or downloading a file always requires being signed in as a member of your
-            household first; nobody can access your files without that. When you view a file in
+            household first; no one else using the app, and no one on the open internet, can get to your
+            files without that (the only exceptions are the people described in the next section). When you view a file in
             the app, or when a link is generated for you, that link is time-limited: links used
             inside the app expire after about an hour and are silently regenerated each time you
             need them, and links included in downloaded exports remain valid for up to 10 years,
@@ -108,8 +109,11 @@ function PrivacyPage() {
             time-limited links to your photos and documents, valid for up to 10 years), or a full
             backup as a single .zip file that includes the same spreadsheet plus the actual photo
             and document files themselves — fully self-contained, with nothing that depends on
-            FamilyHub SG continuing to run. If you'd like your account and data permanently
-            deleted, contact us at the email below and we'll action it.
+            FamilyHub SG continuing to run. You can delete your account yourself at any time in
+            Settings (Delete Account). If you own a household, this permanently deletes the whole
+            household and everything in it, for everyone who has access; if you are a member or
+            viewer, it removes your own access and leaves the household's records as they are. You
+            can also contact us at the email below and we'll action a deletion request.
           </p>
           <p className="mt-3">
             Behind the scenes, we also keep a nightly backup of your household's
