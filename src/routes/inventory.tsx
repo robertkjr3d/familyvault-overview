@@ -39,7 +39,7 @@ import { useAppStore } from "@/lib/store";
 import { compressImage } from "@/lib/imageCompression";
 import { validateInventoryPhoto } from "@/lib/uploadValidation";
 import { checkHouseholdQuota } from "@/lib/storageQuota";
-import { getDisplayUrl, getExportUrl } from "@/lib/storageUrls";
+import { getDisplayUrl, getExportUrl, prefetchDisplayUrls } from "@/lib/storageUrls";
 import { SignedImg } from "@/components/SignedImg";
 import { useCurrentRole } from "@/lib/useCurrentRole";
 
@@ -201,6 +201,16 @@ function InventoryPage() {
       return data ?? [];
     },
   });
+
+  // Quietly get the photo links ready (one small request, no photos downloaded)
+  // so opening a folder doesn't have to wait for them. Capped so a very large
+  // household can't trigger a huge burst; anything past the cap is fetched on demand.
+  useEffect(() => {
+    prefetchDisplayUrls(
+      "inventory-photos",
+      [...folders.map((f) => f.photo_url), ...allItems.map((i) => i.photo_url)].slice(0, 300),
+    );
+  }, [folders, allItems]);
 
   const folderById = useMemo(() => {
     const m = new Map<string, Folder>();
