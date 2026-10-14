@@ -5,9 +5,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMembers } from "@/hooks/useMembers";
 import { useAppStore } from "@/lib/store";
 import { MemberFilterBar } from "@/components/MemberFilterBar";
+import { SortControl } from "@/components/SortControl";
 import { RecordCard } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
-import { sortByStatus } from "@/lib/sort";
+import { useRecordSorter } from "@/hooks/useRecordSorter";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { NotesEditor } from "@/components/NotesEditor";
 import { HistoryLog } from "@/components/HistoryLog";
@@ -24,6 +25,7 @@ export const Route = createFileRoute("/health")({
 
 function HealthPage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
+  const sortCards = useRecordSorter();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("health_conditions", "health");
   const del = useDeleteMutation("health_conditions", "health", "health");
@@ -44,7 +46,10 @@ function HealthPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold tracking-tight">Health</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold tracking-tight">Health</h1>
+        <SortControl />
+      </div>
       <MemberFilterBar table="health_conditions" />
       {members.map((m) => {
         const conditions = items.filter((c: any) => c.member_id === m.id);
@@ -58,7 +63,7 @@ function HealthPage() {
               {m.name}
             </h2>
             <div className="space-y-3">
-              {sortByStatus(conditions).map((c: any) => (
+              {sortCards(conditions).map((c: any) => (
                 <HealthRow
                   key={c.id}
                   c={c}
@@ -89,7 +94,7 @@ function HealthPage() {
               Unassigned
             </h2>
             <div className="space-y-3">
-              {sortByStatus(unassigned).map((c: any) => (
+              {sortCards(unassigned).map((c: any) => (
                 <HealthRow
                   key={c.id}
                   c={c}
