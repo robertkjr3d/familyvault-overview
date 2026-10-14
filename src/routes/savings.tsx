@@ -5,9 +5,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppStore } from "@/lib/store";
 import { MemberFilterBar } from "@/components/MemberFilterBar";
+import { SortControl } from "@/components/SortControl";
 import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
-import { sortByStatus } from "@/lib/sort";
+import { useRecordSorter } from "@/hooks/useRecordSorter";
 import { fmtMoney, fmtDate, fmtPct, groupByCurrency, totalWithFx } from "@/lib/format";
 import { FxInfoNote } from "@/components/FxInfoNote";
 import { useState } from "react";
@@ -132,6 +133,7 @@ function UpdateBalanceInline({ id, current }: { id: string; current: number | nu
 
 function SavingsPage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
+  const sortCards = useRecordSorter();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("savings_accounts", "savings");
   const del = useDeleteMutation("savings_accounts", "savings", "savings");
@@ -161,7 +163,10 @@ function SavingsPage() {
 
   return (
     <div className="space-y-4 pb-24">
-      <h1 className="text-2xl font-bold tracking-tight">Savings</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold tracking-tight">Savings</h1>
+        <SortControl />
+      </div>
       <MemberFilterBar table="savings_accounts" />
       {groups.map((g) => (
         <section key={g}>
@@ -169,7 +174,7 @@ function SavingsPage() {
             {g}
           </h2>
           <div className="space-y-3">
-            {sortByStatus(items.filter((i: any) => (i.account_type || "Other") === g)).map(
+            {sortCards(items.filter((i: any) => (i.account_type || "Other") === g)).map(
               (a: any) => (
                 <SavingsRow
                   key={a.id}
