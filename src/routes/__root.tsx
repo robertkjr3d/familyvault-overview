@@ -438,9 +438,8 @@ function NoHouseholdScreen() {
         <div className="p-6">
           <h1 className="text-lg font-semibold tracking-tight">No household access</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            You're signed in, but you're not currently part of any household. If you were recently
-            removed, or you're waiting on an invite, check with whoever manages the household you're
-            expecting access to. Otherwise, you can start your own.
+            You're signed in but not part of any household. Ask whoever manages yours for an invite,
+            or start your own.
           </p>
           <Button
             type="button"

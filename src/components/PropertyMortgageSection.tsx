@@ -98,8 +98,7 @@ export function PropertyMortgageSection({
           )}
           {totals.unconverted && (
             <p className="text-[11px] text-muted-foreground">
-              A loan in another currency is left out of the totals until its exchange rate is
-              available.
+              Loans in other currencies are left out of the totals until a rate is available.
             </p>
           )}
         </>

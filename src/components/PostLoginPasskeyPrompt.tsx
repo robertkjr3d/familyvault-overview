@@ -111,8 +111,7 @@ export function PostLoginPasskeyPrompt() {
         <div className="mb-3 text-4xl">🔐</div>
         <h2 className="text-lg font-bold">Skip the email code next time</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Set up Face ID, Touch ID, or your device's screen lock to sign in instantly — no code to
-          wait for or type in.
+          Sign in with Face ID, Touch ID or your screen lock. No code needed.
         </p>
         <div className="mt-5 flex flex-col gap-2">
           <button

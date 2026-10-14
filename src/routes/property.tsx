@@ -188,8 +188,7 @@ function PropertyPage() {
           </div>
           <ForeignCurrencyTotals foreign={netTotals.foreign} fx={fxRates} />
           <p className="mt-1 text-[11px] text-muted-foreground">
-            Net of mortgage uses the loans linked to each property. Add or update a mortgage in the
-            Loans tab to keep this accurate.
+            Net of mortgage uses the loans linked to each property.
           </p>
         </div>
       )}

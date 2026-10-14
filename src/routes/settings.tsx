@@ -32,6 +32,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { HashHighlight } from "@/components/HashHighlight";
 import { AdvisorSharingSection } from "@/components/AdvisorSharingSection";
 import { PasskeyManager } from "@/components/PasskeyManager";
+import { InfoTip } from "@/components/InfoTip";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -1088,10 +1089,7 @@ function SettingsPage() {
           defaultValue={settings?.family_name ?? ""}
           onChange={(e) => setFamilyName(e.target.value)}
         />
-        <p className="mt-1 text-[11px] text-muted-foreground">
-          Shown as the app's header title — just a label for you, not the household's own name
-          below.
-        </p>
+        <p className="mt-1 text-[11px] text-muted-foreground">Shown as the app's header title.</p>
         <button
           className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
           onClick={() => save.mutate({ family_name: familyName || settings?.family_name })}
@@ -1110,8 +1108,7 @@ function SettingsPage() {
               onChange={(e) => setHouseholdNameInput(e.target.value)}
             />
             <p className="mt-1 text-[11px] text-muted-foreground">
-              This is what shows in the household switcher and the Share dialog — visible to
-              everyone with access.
+              Shown in the household switcher and Share dialog, to everyone with access.
             </p>
             <button
               className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
@@ -1151,10 +1148,7 @@ function SettingsPage() {
 
       {/* Household Finances */}
       <section className="rounded-2xl border border-border bg-card p-4">
-        <h2 className="mb-1 text-sm font-bold">Household Finances</h2>
-        <p className="mb-3 text-xs text-muted-foreground">
-          Combined household figures used for cash flow and lifetime projections.
-        </p>
+        <h2 className="mb-3 text-sm font-bold">Household Finances</h2>
         <div className="space-y-3">
           <div>
             <label className="block text-xs font-medium text-muted-foreground">
@@ -1182,7 +1176,7 @@ function SettingsPage() {
               onChange={(e) => setMonthlyExpenses(e.target.value)}
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              Exclude loan repayments and insurance premiums — those are tracked automatically.
+              Exclude loan repayments and insurance premiums (counted automatically).
             </p>
           </div>
           {showSurplus && (
@@ -1210,13 +1204,14 @@ function SettingsPage() {
 
       {/* Projection Assumptions */}
       <section className="rounded-2xl border border-border bg-card p-4">
-        <h2 className="mb-1 text-sm font-bold">Projection Assumptions</h2>
-        <p className="mb-3 text-xs text-muted-foreground">
-          Used only for the Lifetime Net Worth chart. All rates are annual percentages. These are
-          one shared set of assumptions for the whole household (not tied to a specific member) —
-          for a household with more than one income earner, treat them as a simplified, combined
-          estimate rather than any one person's exact numbers.
-        </p>
+        <div className="mb-3 flex items-center gap-1.5">
+          <h2 className="text-sm font-bold">Projection Assumptions</h2>
+          <InfoTip label="About projection assumptions">
+            Used only for the Lifetime Net Worth chart. Rates are annual percentages. This is one
+            shared set for the whole household, so with several earners treat it as a combined
+            estimate.
+          </InfoTip>
+        </div>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -1247,9 +1242,7 @@ function SettingsPage() {
                 value={planningHorizonAge}
                 onChange={(e) => setPlanningHorizonAge(e.target.value)}
               />
-              <p className="mt-0.5 text-[10px] text-muted-foreground">
-                Chart projects to this age, for your household's oldest member
-              </p>
+              <p className="mt-0.5 text-[10px] text-muted-foreground">For the oldest member</p>
             </div>
           </div>
           <div className="grid grid-cols-2 items-start gap-3">
@@ -1266,9 +1259,7 @@ function SettingsPage() {
                 value={cpfPayoutAge}
                 onChange={(e) => setCpfPayoutAge(e.target.value)}
               />
-              <p className="mt-0.5 text-[10px] text-muted-foreground">
-                Based on your household's oldest member
-              </p>
+              <p className="mt-0.5 text-[10px] text-muted-foreground">For the oldest member</p>
             </div>
             <div>
               <label className="block text-xs font-medium text-muted-foreground">
@@ -1396,8 +1387,7 @@ function SettingsPage() {
       <section className="rounded-2xl border border-border bg-card p-4">
         <h2 className="mb-3 text-sm font-bold">Alerts & Reminders</h2>
         <p className="mb-3 text-xs text-muted-foreground">
-          How many days before each kind of date you want to start seeing it on the dashboard and in
-          the bell.
+          Days before a date to start showing it on the dashboard and bell.
         </p>
         {[
           {
@@ -1453,8 +1443,7 @@ function SettingsPage() {
       <section className="rounded-2xl border border-review/40 bg-review-soft/30 p-4">
         <h2 className="mb-1 text-sm font-bold">Test Mode</h2>
         <p className="mb-3 text-xs text-muted-foreground">
-          Simulate a future date (for testing alerts). The whole app behaves as if today were the
-          date you pick.
+          Pretend today is this date, to test alerts.
         </p>
         <input
           type="date"
@@ -1504,9 +1493,7 @@ function SettingsPage() {
               : "Download full backup (Excel + all photos & documents, .zip)"}
           </button>
           <p className="px-1 text-[11px] text-muted-foreground">
-            "Export everything" gives you a spreadsheet with 10-year links to your files. "Download
-            full backup" downloads the actual files too, in one .zip — nothing depends on FamilyHub
-            SG still running.
+            "Export everything" is a spreadsheet. "Full backup" also includes your actual files.
           </p>
           <HashHighlight id="export-summary">
             <button
@@ -1536,11 +1523,7 @@ function SettingsPage() {
           on this line or in this file is touched. */}
       {currentRole !== "viewer" && (
         <section className="rounded-2xl border border-border bg-card p-4">
-          <h2 className="mb-1 text-sm font-bold">Take the Tour</h2>
-          <p className="mb-3 text-xs text-muted-foreground">
-            A quick walkthrough of adding your first record and setting a reminder — the same tour
-            new members see automatically on their first login.
-          </p>
+          <h2 className="mb-3 text-sm font-bold">Take the Tour</h2>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => useAppStore.getState().startTour("core")}
@@ -1563,8 +1546,7 @@ function SettingsPage() {
           </div>
           {!hasLoanForTour && (
             <p className="mt-2 text-xs text-muted-foreground">
-              Add a loan entry first (the tour above walks you through it) — these tips are shown on
-              a real entry.
+              Add a loan first to see these tips.
             </p>
           )}
         </section>
@@ -1583,9 +1565,7 @@ function SettingsPage() {
           </span>
         </div>
         <p className="mb-3 text-xs text-muted-foreground">
-          FamilyHub SG is still in beta — your feedback directly shapes what gets fixed next.
-          Specific is more useful than general (e.g. "the loans page was confusing because X" beats
-          "loans page needs work"). Two minutes, and it genuinely helps.
+          FamilyHub SG is in beta. Specific feedback helps most: what confused you, and where.
         </p>
         <a
           href={FEEDBACK_FORM_URL}
@@ -1602,9 +1582,7 @@ function SettingsPage() {
       <section className="rounded-2xl border border-review/40 bg-review-soft/20 p-4">
         <h2 className="mb-1 text-sm font-bold">Demo Mode</h2>
         <p className="mb-3 text-xs text-muted-foreground">
-          Create a separate household pre-filled with sample Singapore data — useful for showing the
-          app to someone without exposing your real family records. Switch between households
-          anytime using the dropdown in the top bar.
+          A separate household with sample data, for showing the app without your real records.
         </p>
         {!demoHousehold ? (
           <button
@@ -1768,13 +1746,7 @@ function SettingsPage() {
       <section className="rounded-2xl border border-border bg-card p-4 text-sm">
         <h2 className="mb-2 text-sm font-bold">About</h2>
         <p className="font-semibold">FamilyHub SG</p>
-        <p className="text-muted-foreground">
-          Your one stop for everything family — all in one place.
-        </p>
         <p className="mt-2 text-xs text-muted-foreground">Version 1.0.0</p>
-        <p className="mt-2 text-xs italic text-muted-foreground">
-          Built for families who want one place to track everything that matters.
-        </p>
         <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-border/60 pt-3 text-xs">
           <a href="/#onboarding" className="font-semibold text-primary underline">
             Quick Start Guide
@@ -1881,7 +1853,7 @@ function PlannedEvents({
     <section className="rounded-2xl border border-border bg-card p-4">
       <h2 className="mb-1 text-sm font-bold">Planned Events</h2>
       <p className="mb-3 text-xs text-muted-foreground">
-        One-off future inflows or outflows — renovations, education fees, inheritances, windfalls.
+        One-off future amounts: renovations, education fees, inheritances.
       </p>
       <div className="space-y-2 rounded-xl bg-background/50 p-3">
         <input
@@ -2126,9 +2098,7 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
       {expanded && (
         <div className="mt-3">
           {historyCount === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">
-              Nothing here yet. Items you mark as done on the dashboard appear here.
-            </p>
+            <p className="py-4 text-center text-sm text-muted-foreground">Nothing here yet.</p>
           ) : (
             <>
               <ul className="divide-y divide-border">
@@ -2418,11 +2388,15 @@ function RecycleBin({
       </div>
       {expanded && (
         <div className="mt-3">
-          <p className="mb-3 text-xs text-muted-foreground">
-            Deleted entries stay here for 30 days before being permanently removed. Restoring brings
-            back the entry, its documents/photos, and its reminders. Covers financial records,
-            Inventory, Members, and single documents — not account deletion. Restoring a Member does
-            not re-link their old records to them.
+          <p className="mb-3 flex items-start gap-1.5 text-xs text-muted-foreground">
+            <span>
+              Deleted entries are kept for 30 days, then removed for good. Restoring brings back
+              their files and reminders.
+            </span>
+            <InfoTip label="More about the Recycle Bin">
+              Covers financial records, Inventory, Members and single documents, not account
+              deletion. Restoring a Member does not re-link their old records to them.
+            </InfoTip>
           </p>
           {trashCount === 0 ? (
             <p className="py-4 text-center text-sm text-muted-foreground">

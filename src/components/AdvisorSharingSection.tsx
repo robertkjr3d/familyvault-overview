@@ -11,6 +11,7 @@ import {
 } from "@/lib/advisorAccess";
 import { useCurrentRole } from "@/lib/useCurrentRole";
 import { useMembers } from "@/hooks/useMembers";
+import { InfoTip } from "@/components/InfoTip";
 
 type AdvisorEntry = {
   advisorUserId: string;
@@ -342,12 +343,13 @@ export function AdvisorSharingSection() {
           {myAdvisorClients!.clients.length === 1 ? "" : "s"} — tap to view →
         </a>
       )}
-      <p className="mb-3 text-xs text-muted-foreground">
-        Share a limited view with an adviser you work with. Whichever categories you tick below —
-        insurance, investments, property, loans — show real, itemized entries for the members you
-        select. A net worth summary (if you choose to share it, separately) always shows one combined
-        total only, regardless of what else you share — itemized savings details are never shown to
-        an adviser, under any setting. They never see your inventory or anything else.
+      <p className="mb-3 flex items-start gap-1.5 text-xs text-muted-foreground">
+        <span>Share a limited view with an adviser you work with.</span>
+        <InfoTip label="What an adviser can see">
+          Ticked categories (insurance, investments, property, loans) show itemized entries for the
+          members you select. The net worth summary, if shared, is one combined total. Savings are
+          never itemized, and advisers never see your inventory or anything else.
+        </InfoTip>
       </p>
 
       {isLoading && <p className="text-xs text-muted-foreground">Loading...</p>}
@@ -428,8 +430,12 @@ export function AdvisorSharingSection() {
           </div>
 
           <div className="space-y-1.5">
-            <p className="text-xs font-medium text-muted-foreground">
+            <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
               Which household members can they see
+              <InfoTip label="How members are shown to an adviser">
+                Each selected member appears as a separate profile, never a combined household
+                total. Records not tied to one member appear on every selected profile.
+              </InfoTip>
             </p>
             {members.length === 0 && (
               <p className="text-xs text-muted-foreground">No members set up yet.</p>
@@ -444,11 +450,6 @@ export function AdvisorSharingSection() {
                 {m.name}
               </label>
             ))}
-            <p className="text-xs text-muted-foreground">
-              An FA sees each selected member as a separate profile — never a combined household
-              total. Anything not tied to one member (e.g. unassigned records) is visible on every
-              selected member's profile.
-            </p>
           </div>
 
           <div className="space-y-1.5">
@@ -495,8 +496,7 @@ export function AdvisorSharingSection() {
               <span>
                 Net worth summary
                 <span className="block text-xs text-muted-foreground">
-                  One combined total only, independent of whatever you share above — savings is
-                  never itemized under any setting
+                  One combined total. Savings are never itemized.
                 </span>
               </span>
             </label>

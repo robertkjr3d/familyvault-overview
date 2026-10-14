@@ -912,11 +912,6 @@ function InventoryPage() {
         items={gobag}
       />
 
-      <p className="px-1 pr-16 text-[11px] text-muted-foreground">
-        Tip: from time to time, download a backup copy of your inventory and photos (Settings → Data
-        → Download full backup).
-      </p>
-
       {/* FAB */}
       {canEdit && (
         <button
@@ -972,9 +967,6 @@ function InventoryPage() {
         >
           {generatingCsv ? "Preparing... please wait" : "Export as spreadsheet (CSV)"}
         </Button>
-        <p className="text-center text-[11px] text-muted-foreground">
-          One row per item with photo links — open in Google Sheets / Excel.
-        </p>
         <Button
           variant="outline"
           className="w-full"
@@ -983,9 +975,6 @@ function InventoryPage() {
         >
           Export as text list
         </Button>
-        <p className="text-center text-[11px] text-muted-foreground">
-          Clean outline by location and subfolder — good for Apple Notes (no photos).
-        </p>
         <Button
           variant="outline"
           className="w-full"
@@ -997,8 +986,7 @@ function InventoryPage() {
             : "Export master document (Word, with photos)"}
         </Button>
         <p className="text-center text-[11px] text-muted-foreground">
-          Full backup with embedded photos. Can take up to a minute for large inventories — don't
-          close the page while it's generating.
+          Can take up to a minute. Keep this page open.
         </p>
       </div>
       {pageLightboxUrl &&
@@ -1572,7 +1560,6 @@ function AddFolderSheet({
                 <div className="flex flex-col items-center gap-1 py-6 text-muted-foreground">
                   <Camera className="h-7 w-7" />
                   <span className="text-xs">Tap to take photo or choose from library</span>
-                  <span className="text-[11px]">Photos are compressed (~200KB) automatically</span>
                 </div>
               )}
             </div>
@@ -2540,9 +2527,6 @@ function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => voi
       </div>
       <div className="space-y-2">
         <Label className="text-xs">Photo (optional)</Label>
-        <p className="text-[11px] text-muted-foreground">
-          Photos are automatically compressed (~200KB) to keep the app fast and free.
-        </p>
         <input
           ref={fileRef}
           type="file"

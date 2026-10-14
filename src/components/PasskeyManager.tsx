@@ -96,7 +96,7 @@ export function PasskeyManager() {
     <div className="mt-2 border-t border-border pt-3">
       <h3 className="mb-2 text-xs font-bold text-muted-foreground">Passkeys</h3>
       <p className="mb-2 text-xs text-muted-foreground">
-        Sign in with Face ID, Touch ID, or your device's screen lock instead of an email code.
+        Sign in with Face ID, Touch ID or screen lock instead of an email code.
       </p>
 
       {isLoading && <p className="text-xs text-muted-foreground">Loading…</p>}

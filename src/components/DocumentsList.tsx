@@ -273,18 +273,10 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
           </div>
 
           <p className="text-[11px] text-muted-foreground">
-            Links to uploaded files aren't password-protected — anyone with the exact link can open
-            it. Avoid sharing it outside people you trust with this document.
+            Anyone with a file's link can open it. Share links only with people you trust.
           </p>
           {mode === "upload" && (
             <p className="text-[11px] text-muted-foreground">Max 10MB · JPEG, PNG, WebP or PDF</p>
-          )}
-
-          {mode === "upload" && (
-            <p className="text-[11px] text-muted-foreground">
-              Tip: keep a backup copy of your files somewhere else too, especially important
-              documents.
-            </p>
           )}
 
           {mode === "upload" && (

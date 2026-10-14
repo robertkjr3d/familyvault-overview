@@ -101,7 +101,7 @@ function OtherAssetsPage() {
             </div>
             <ForeignCurrencyTotals foreign={valueTotals.foreign} fx={fxRates} />
             <p className="mt-1 text-[11px] text-muted-foreground">
-              Values are manually entered estimates. Check "Value as of" dates.
+              Estimates entered by you. Check the "Value as of" dates.
             </p>
           </div>
         </>

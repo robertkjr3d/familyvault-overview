@@ -87,7 +87,9 @@ export function RecentSheet({
       <SheetContent side="right" className="w-full max-w-md overflow-y-auto">
         <SheetHeader>
           <SheetTitle>Recently edited</SheetTitle>
-          <SheetDescription>Tap a card to jump straight to it.</SheetDescription>
+          <SheetDescription className="sr-only">
+            Tap a card to jump straight to it.
+          </SheetDescription>
         </SheetHeader>
         <div className="mt-4">
           {!loaded && !failed && (

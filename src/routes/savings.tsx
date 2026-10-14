@@ -215,7 +215,7 @@ function SavingsPage() {
               </div>
               <ForeignCurrencyTotals foreign={cpfTotals.foreign} fx={fxRates} />
               <p className="mt-1 text-[11px] text-muted-foreground">
-                CPF funds are not freely accessible like other savings — kept as a separate total.
+                CPF is shown separately from other savings.
               </p>
             </div>
           )}
@@ -341,8 +341,7 @@ function SavingsRow({
                 value={fmtMoney(a.estimated_monthly_payout, a.currency)}
               />
               <p className="pt-1 text-[11px] text-muted-foreground">
-                Reference only — not used in the Lifetime Net Worth chart. The chart's CPF LIFE
-                payout estimate is set under Settings.
+                Reference only, not used in the Lifetime chart.
               </p>
             </>
           )}

@@ -237,16 +237,15 @@ export function LifetimeChart({
         <div className="rounded-xl border border-urgent/40 bg-urgent-soft/30 px-4 py-3 text-sm">
           <span className="font-bold text-urgent">⚠ Projected shortfall in {shortfallYear.year}</span>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Net worth turns negative in {shortfallYear.year} based on current projections.
-            Consider adjusting income, expenses, or retirement date.
+            Net worth turns negative in {shortfallYear.year}. Consider adjusting income, expenses
+            or retirement date.
           </p>
         </div>
       )}
       {hasILPPayout && (
         <p className="rounded-lg bg-review-soft/40 px-3 py-2 text-xs text-muted-foreground">
-          ⚠ ILP/Endowment payouts are shown as additional income, while the policy's current value
-          keeps growing untouched. In reality, the value would decline as payouts are drawn —
-          this projection is indicative only and likely optimistic for years with active payouts.
+          ⚠ ILP/Endowment payouts count as income while the policy value stays flat, so years with
+          payouts may look optimistic.
         </p>
       )}
       {hasForeignExcluded && (
@@ -319,7 +318,7 @@ export function LifetimeChart({
         showMember={memberFilter === "all"}
       />
       <p className="text-[10px] text-muted-foreground">
-        Projection only · inflation-adjusted expenses · property &amp; investment growth modelled at assumed rates · loan and mortgage rates held constant (future rate changes not modelled) · foreign currency included at today's converted rate, not modelled to grow · not financial advice
+        Projection only, not financial advice. Assumptions are set in Settings.
       </p>
     </div>
   );

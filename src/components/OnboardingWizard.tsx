@@ -53,7 +53,7 @@ export function OnboardingWizard({
           <SheetTitle>Welcome to FamilyHub SG 👋</SheetTitle>
         </SheetHeader>
         <p className="mt-1 text-xs text-muted-foreground">
-          Four quick things that show you what this actually does for you — under a minute each, any order, skip whatever you like.
+          Four quick things, under a minute each. Skip any.
         </p>
 
         <div className="mt-4 space-y-3 pb-6">
@@ -322,7 +322,7 @@ function QuickAddInsurance({ onSaved }: { onSaved: () => void }) {
         </div>
       </div>
       <p className="rounded-lg bg-accent/50 px-2.5 py-2 text-[11px] text-accent-foreground">
-        💡 We'll automatically alert you 90 days before this renews — no manual reminder needed.
+        💡 We'll alert you 90 days before this renews.
       </p>
       <Button className="w-full" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save policy"}</Button>
     </div>

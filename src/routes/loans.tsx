@@ -117,9 +117,7 @@ function LoansPage() {
             </span>
           </div>
           <ForeignCurrencyTotals foreign={balanceTotals.foreign} fx={fxRates} />
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            This is a liability — it's subtracted from, not added to, your other totals.
-          </p>
+          <p className="mt-1 text-[11px] text-muted-foreground">Subtracted from your net worth.</p>
         </div>
       )}
       <AddRecordFab configKey="loans" />

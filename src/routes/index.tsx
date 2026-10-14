@@ -67,6 +67,7 @@ import {
   useCreditCards,
 } from "@/lib/householdRecordQueries";
 import { useCurrentRole } from "@/lib/useCurrentRole";
+import { InfoTip } from "@/components/InfoTip";
 
 // Lazy-loaded: LifetimeChart pulls in recharts, by far the heaviest single
 // dependency in this route's bundle. Deferring it means the rest of the
@@ -418,7 +419,7 @@ function Dashboard() {
     cpfTotals.foreign.length > 0;
   const netWorthSub = netWorthHasForeign ? (
     <span>
-      Includes foreign currency, converted at today's rate
+      Incl. foreign currency
       <FxInfoNote fx={fxRates} />
     </span>
   ) : undefined;
@@ -1028,9 +1029,7 @@ function Dashboard() {
             )}
             {propertyMortgageValue > 0 && loans.some((l: any) => !l.property_id) && (
               <p className="text-[10px] text-muted-foreground">
-                Property mortgages come from each property's own Mortgage balance (no loan is linked
-                to it). If you also entered the same mortgage in Loans, link that loan to the
-                property so it isn't counted twice.
+                If this mortgage is also in Loans, link it to the property to avoid double counting.
               </p>
             )}
             <BreakdownRow
@@ -1045,15 +1044,14 @@ function Dashboard() {
               <span className="text-2xl font-bold text-primary">{fmtMoney(netWorth)}</span>
             </div>
             <div className="mt-2 border-t border-border/40 pt-2 text-center text-[11px] text-muted-foreground">
-              For a full itemized list of assets and liabilities,{" "}
+              Full itemized list:{" "}
               <Link
                 to="/settings"
                 hash="export-summary"
                 className="font-semibold text-primary underline"
               >
-                tap Export in Settings
+                Export in Settings
               </Link>
-              .
             </div>
           </div>
         )}
@@ -1088,11 +1086,6 @@ function Dashboard() {
             )}
           </div>
         </div>
-        {editMode && (
-          <p className="mb-2 text-xs text-muted-foreground">
-            Tap ✓ to mark an item as done and remove it from this list.
-          </p>
-        )}
         {upcoming.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">Nothing due soon ✓</p>
         ) : (
@@ -1382,10 +1375,6 @@ function Dashboard() {
             <Info className="h-3 w-3" />
           </button>
         </div>
-        <p className="mb-3 text-xs text-muted-foreground">
-          Projected trajectory based on your current records. Tap the year detail below for a full
-          breakdown of what's driving each year's change.
-        </p>
         {chartInfoOpen && (
           <div className="mb-3 space-y-1.5 rounded-lg border border-border bg-muted/30 p-3 text-[11px] text-muted-foreground">
             <p className="font-semibold text-foreground">What this chart simplifies:</p>
@@ -1402,6 +1391,7 @@ function Dashboard() {
               • Insurance/ILP payout amounts are added as income but don't reduce the policy's
               compounding value.
             </p>
+            <p>• Loan and mortgage rates are held constant.</p>
           </div>
         )}
         <Suspense fallback={<div className="h-64 w-full animate-pulse rounded-xl bg-muted/40" />}>
@@ -1669,7 +1659,7 @@ function AssetAllocationCard({
         <span className="flex items-center text-xs text-muted-foreground">
           {hasForeign ? (
             <>
-              Includes converted foreign currency
+              Incl. foreign currency
               <FxInfoNote fx={fx} />
             </>
           ) : (
@@ -1679,8 +1669,7 @@ function AssetAllocationCard({
       </div>
       {isEmpty ? (
         <p className="py-2 text-xs text-muted-foreground">
-          No asset values recorded yet. Add properties, investments, or savings to see your
-          allocation.
+          Add properties, investments or savings to see your allocation.
         </p>
       ) : (
         <div className="space-y-3">
@@ -1714,11 +1703,6 @@ function AssetAllocationCard({
               );
             })}
           </div>
-          {activeSegments.length === 1 && (
-            <p className="text-[10px] text-muted-foreground">
-              Only one asset class recorded — add investments or savings for a complete picture.
-            </p>
-          )}
         </div>
       )}
     </section>
@@ -1833,7 +1817,12 @@ function InsuranceAdequacyCard({
 
           <p className="text-[10px] text-muted-foreground">
             Based on {activePolicyCount} active polic{activePolicyCount === 1 ? "y" : "ies"}.
-            Estimate only — excludes savings, CPF, and debt obligations.
+            Estimate only.
+            <span className="ml-1 inline-flex align-middle">
+              <InfoTip label="What this estimate leaves out">
+                Excludes savings, CPF and debt obligations.
+              </InfoTip>
+            </span>
             <Link to="/insurance" className="ml-1 font-semibold text-primary">
               Add sum assured →
             </Link>

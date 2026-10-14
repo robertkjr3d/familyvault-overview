@@ -429,7 +429,7 @@ return (
       <DialogHeader>
         <DialogTitle>Share by Email</DialogTitle>
         <DialogDescription>
-          Send an invite link for {selectedHousehold?.name ?? "this household"}. The recipient can accept directly from their email.
+          Send an invite link for {selectedHousehold?.name ?? "this household"}.
         </DialogDescription>
       </DialogHeader>
 
@@ -540,7 +540,7 @@ return (
             required
           />
           <p className="text-xs text-muted-foreground">
-            Target must already be a member of this household. You will be downgraded to member.
+            Must already be a member. You'll be downgraded to member.
           </p>
         </div>
 

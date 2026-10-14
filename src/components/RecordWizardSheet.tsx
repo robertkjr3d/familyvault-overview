@@ -389,9 +389,8 @@ function PropertyCostsStep({ values, onChange, currency }: {
     <div className="space-y-2">
       <div className="text-sm font-medium">Monthly running costs</div>
       <p className="text-xs text-muted-foreground">
-        Add up management fees, property tax, fire insurance and maintenance into one combined monthly figure.
-        Do not include mortgage/loan payments — add those in the Loans tab.
-        You can break this down into individual categories later via "edit full details".
+        Combined monthly total of management fees, property tax, fire insurance and maintenance.
+        Exclude mortgage payments (add those in Loans).
       </p>
       <MoneyInput
         value={values.cost_other}

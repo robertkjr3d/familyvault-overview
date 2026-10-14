@@ -174,9 +174,7 @@ export function YearDetailPanel({ data, retirementYear, shortfallYear, jumpTarge
               <span className="text-muted-foreground">Property appreciation</span>
               <span className="font-medium text-settled">+{fmt(point.propAppreciation)}</span>
             </div>
-            <p className="text-[10px] text-muted-foreground">
-              Not included in cash flow — tracked separately as an asset value increase.
-            </p>
+            <p className="text-[10px] text-muted-foreground">Not included in cash flow.</p>
           </div>
         )}
 
@@ -203,10 +201,6 @@ export function YearDetailPanel({ data, retirementYear, shortfallYear, jumpTarge
         {inflows.length === 0 && outflows.length === 0 && (
           <div className="text-muted-foreground">No cash flow recorded for this year.</div>
         )}
-
-        <p className="mt-2 text-[10px] text-muted-foreground">
-          Tap any line item to go to that record.
-        </p>
       </div>
     </div>
   );

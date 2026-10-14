@@ -305,8 +305,7 @@ function PolicyChartEditor({
     <div className="mt-2 space-y-3 rounded-lg border border-dashed border-border/60 p-3">
       {data?.memberBirthYear == null && (
         <p className="rounded-md bg-review/10 p-2 text-[10px] text-review-foreground">
-          This member has no birth year on file, so ages below aren't tied to a real calendar year
-          yet - the chart still works, just treat the numbers as relative years, not confirmed ages.
+          No birth year on file, so ages are relative years, not real ages.
         </p>
       )}
 
