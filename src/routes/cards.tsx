@@ -6,9 +6,10 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppStore } from "@/lib/store";
 import { MemberFilterBar } from "@/components/MemberFilterBar";
+import { SortControl } from "@/components/SortControl";
 import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
-import { sortByStatus } from "@/lib/sort";
+import { useRecordSorter } from "@/hooks/useRecordSorter";
 import { fmtMoney, fmtDate } from "@/lib/format";
 import { HashHighlight } from "@/components/HashHighlight";
 import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
@@ -27,6 +28,7 @@ export const Route = createFileRoute("/cards")({
 
 function CardsPage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
+  const sortCards = useRecordSorter();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("credit_cards", "credit_cards");
   const del = useDeleteMutation("credit_cards", "credit_cards", "credit_card");
@@ -49,12 +51,15 @@ function CardsPage() {
   // Cancelled kept visible below rather than hidden — the user's own real example
   // (a cancelled card whose points moved elsewhere) is a record worth keeping, not
   // deleting, same reasoning already established for other tabs' historical rows.
-  const activeCards = sortByStatus(items.filter((c: any) => c.card_status !== "Cancelled"));
-  const cancelledCards = sortByStatus(items.filter((c: any) => c.card_status === "Cancelled"));
+  const activeCards = sortCards(items.filter((c: any) => c.card_status !== "Cancelled"));
+  const cancelledCards = sortCards(items.filter((c: any) => c.card_status === "Cancelled"));
 
   return (
     <div className="space-y-4 pb-24">
-      <h1 className="text-2xl font-bold tracking-tight">Cards</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold tracking-tight">Cards</h1>
+        <SortControl />
+      </div>
       <MemberFilterBar table="credit_cards" />
       {items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
