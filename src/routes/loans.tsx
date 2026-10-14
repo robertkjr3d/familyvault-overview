@@ -6,9 +6,10 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppStore } from "@/lib/store";
 import { MemberFilterBar } from "@/components/MemberFilterBar";
+import { SortControl } from "@/components/SortControl";
 import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
-import { sortByStatus } from "@/lib/sort";
+import { useRecordSorter } from "@/hooks/useRecordSorter";
 import { fmtMoney, fmtDate, fmtMonth, fmtPct, groupByCurrency, totalWithFx } from "@/lib/format";
 import { useFxRates } from "@/hooks/useFxRates";
 import { ForeignCurrencyTotals } from "@/components/ForeignCurrencyTotals";
@@ -34,6 +35,7 @@ export const Route = createFileRoute("/loans")({
 
 function LoansPage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
+  const sortCards = useRecordSorter();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("loans", "loans");
   const del = useDeleteMutation("loans", "loans", "loan");
@@ -76,10 +78,13 @@ function LoansPage() {
 
   return (
     <div className="space-y-4 pb-24">
-      <h1 className="text-2xl font-bold tracking-tight">Loans</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold tracking-tight">Loans</h1>
+        <SortControl />
+      </div>
       <MemberFilterBar table="loans" tourTarget="member-filter-loans" />
       <div className="space-y-3">
-        {sortByStatus(loans).map((l: any) => (
+        {sortCards(loans).map((l: any) => (
           <LoanRow
             key={l.id}
             l={l}
