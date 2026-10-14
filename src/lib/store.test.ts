@@ -16,6 +16,7 @@ const clean = {
   uiOwnerUserId: null,
   activeHouseholdId: null,
   memberFilter: "all",
+  recordSort: "urgency" as const,
   onboardingSoftDismissed: false,
   activeTour: null,
   tourStep: 0,
@@ -31,6 +32,7 @@ function leaveSomeoneElsesState() {
     uiOwnerUserId: "user-a",
     activeHouseholdId: "household-of-a",
     memberFilter: "member-1",
+    recordSort: "edited" as const,
     onboardingSoftDismissed: true,
     activeTour: "core",
     tourStep: 3,
@@ -55,6 +57,7 @@ describe("claimUiForUser (no account inherits another account's UI state)", () =
     expect(s.uiOwnerUserId).toBe("user-b");
     expect(s.activeHouseholdId).toBeNull();
     expect(s.memberFilter).toBe("all");
+    expect(s.recordSort).toBe("urgency");
     expect(s.onboardingSoftDismissed).toBe(false);
     expect(s.activeTour).toBeNull();
     expect(s.tourStep).toBe(0);
@@ -105,6 +108,7 @@ describe("what is saved to the browser", () => {
       "wizardOpen",
       "coreTourResolved",
       "extrasOfferPending",
+      "recordSort",
     ]) {
       expect(stored).not.toHaveProperty(key);
     }
