@@ -7,9 +7,10 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppStore } from "@/lib/store";
 import { MemberFilterBar } from "@/components/MemberFilterBar";
+import { SortControl } from "@/components/SortControl";
 import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
-import { sortByStatus } from "@/lib/sort";
+import { useRecordSorter } from "@/hooks/useRecordSorter";
 import {
   fmtMoney,
   fmtDate,
@@ -74,6 +75,8 @@ function parseTargetPct(strategy: string | null | undefined): number | null {
 
 function PropertyPage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
+  const recordSort = useAppStore((s) => s.recordSort);
+  const sortCards = useRecordSorter();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("properties", "properties");
   const del = useDeleteMutation("properties", "properties", "property");
@@ -122,11 +125,14 @@ function PropertyPage() {
 
   return (
     <div className="space-y-4 pb-24">
-      <h1 className="text-2xl font-bold tracking-tight">Property</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold tracking-tight">Property</h1>
+        <SortControl />
+      </div>
       <MemberFilterBar table="properties" />
 
       <div className="space-y-3">
-        {sortByStatus(investments).map((p: any) => (
+        {sortCards(investments).map((p: any) => (
           <PropertyRow
             key={p.id}
             p={p}
@@ -146,7 +152,9 @@ function PropertyPage() {
         <details className="rounded-2xl border border-border bg-card p-4">
           <summary className="cursor-pointer text-sm font-bold">My Homes ▾</summary>
           <div className="mt-3 space-y-3">
-            {homes.map((p: any) => (
+            {/* "My Homes" has never been ordered by urgency (database order). That stays as is,
+                so the default view does not change; the date options in Sort do apply here. */}
+            {(recordSort === "urgency" ? homes : sortCards(homes)).map((p: any) => (
               <PropertyRow
                 key={p.id}
                 p={p}
