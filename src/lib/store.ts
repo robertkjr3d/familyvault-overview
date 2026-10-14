@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { RecordSort } from "@/lib/sort";
 
 export type MemberFilter = "all" | string; // "all" or member id
 export type TourId = "core" | "extras";
@@ -7,6 +8,11 @@ export type TourId = "core" | "extras";
 type AppStore = {
   memberFilter: MemberFilter;
   setMemberFilter: (m: MemberFilter) => void;
+  // How the record tabs order their cards (the "Sort" button). Only lasts for
+  // the open tab: it is not saved to the browser (see partialize), so every
+  // visit starts on the normal urgency order.
+  recordSort: RecordSort;
+  setRecordSort: (s: RecordSort) => void;
   activeHouseholdId: string | null;
   setActiveHouseholdId: (id: string | null) => void;
   shareOpen: boolean;
@@ -78,6 +84,8 @@ export const useAppStore = create<AppStore>()(
     (set) => ({
       memberFilter: "all",
       setMemberFilter: (memberFilter) => set({ memberFilter }),
+      recordSort: "urgency",
+      setRecordSort: (recordSort) => set({ recordSort }),
       activeHouseholdId: null,
       setActiveHouseholdId: (activeHouseholdId) => set({ activeHouseholdId }),
       shareOpen: false,
@@ -113,6 +121,7 @@ export const useAppStore = create<AppStore>()(
                 uiOwnerUserId: userId,
                 activeHouseholdId: null,
                 memberFilter: "all",
+                recordSort: "urgency",
                 onboardingSoftDismissed: false,
                 activeTour: null,
                 tourStep: 0,
@@ -138,6 +147,7 @@ export const useAppStore = create<AppStore>()(
           tourStep: _tourStep,
           tourRecordId: _tourRecordId,
           shareOpen: _shareOpen,
+          recordSort: _recordSort,
           ...rest
         } = state;
         return rest;
