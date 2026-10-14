@@ -11,9 +11,10 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppStore } from "@/lib/store";
 import { MemberFilterBar } from "@/components/MemberFilterBar";
+import { SortControl } from "@/components/SortControl";
 import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
-import { sortByStatus } from "@/lib/sort";
+import { useRecordSorter } from "@/hooks/useRecordSorter";
 import { fmtMoney, fmtPct, fmtDate, groupByCurrency, totalWithFx } from "@/lib/format";
 import { ForeignCurrencyTotals } from "@/components/ForeignCurrencyTotals";
 import { FxInfoNote } from "@/components/FxInfoNote";
@@ -118,6 +119,7 @@ function UpdateValueInline({ id, current }: { id: string; current: number | null
 
 function InvestmentsPage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
+  const sortCards = useRecordSorter();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("investments", "investments");
   const del = useDeleteMutation("investments", "investments", "investment");
@@ -166,7 +168,10 @@ function InvestmentsPage() {
 
   return (
     <div className="space-y-4 pb-24">
-      <h1 className="text-2xl font-bold tracking-tight">Investments</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold tracking-tight">Investments</h1>
+        <SortControl />
+      </div>
       <MemberFilterBar table="investments" />
       {items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
@@ -180,7 +185,7 @@ function InvestmentsPage() {
                 {g}
               </h2>
               <div className="space-y-3">
-                {sortByStatus(items.filter((i: any) => i.group_name === g)).map((inv: any) => (
+                {sortCards(items.filter((i: any) => i.group_name === g)).map((inv: any) => (
                   <InvestmentRow
                     key={inv.id}
                     inv={inv}
