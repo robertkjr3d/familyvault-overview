@@ -5,9 +5,10 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppStore } from "@/lib/store";
 import { MemberFilterBar } from "@/components/MemberFilterBar";
+import { SortControl } from "@/components/SortControl";
 import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
-import { sortByStatus } from "@/lib/sort";
+import { useRecordSorter } from "@/hooks/useRecordSorter";
 import { fmtMoney, fmtDate, groupByCurrency, totalWithFx } from "@/lib/format";
 import { FxInfoNote } from "@/components/FxInfoNote";
 import { ForeignCurrencyTotals } from "@/components/ForeignCurrencyTotals";
@@ -30,6 +31,7 @@ export const Route = createFileRoute("/other-assets")({
 
 function OtherAssetsPage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
+  const sortCards = useRecordSorter();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("other_assets", "other_assets");
   const del = useDeleteMutation("other_assets", "other_assets", "other_asset");
@@ -55,7 +57,10 @@ function OtherAssetsPage() {
 
   return (
     <div className="space-y-4 pb-24">
-      <h1 className="text-2xl font-bold tracking-tight">Other Assets</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold tracking-tight">Other Assets</h1>
+        <SortControl />
+      </div>
       <MemberFilterBar table="other_assets" />
       {items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
@@ -69,7 +74,7 @@ function OtherAssetsPage() {
                 {g}
               </h2>
               <div className="space-y-3">
-                {sortByStatus(items.filter((i: any) => i.category === g)).map((asset: any) => (
+                {sortCards(items.filter((i: any) => i.category === g)).map((asset: any) => (
                   <AssetRow
                     key={asset.id}
                     asset={asset}
