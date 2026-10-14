@@ -10,9 +10,10 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAppStore } from "@/lib/store";
 import { MemberFilterBar } from "@/components/MemberFilterBar";
+import { SortControl } from "@/components/SortControl";
 import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
 import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
-import { sortByStatus } from "@/lib/sort";
+import { useRecordSorter } from "@/hooks/useRecordSorter";
 import { fmtMoney, fmtDate, groupByCurrency, totalWithFx } from "@/lib/format";
 import { FxInfoNote } from "@/components/FxInfoNote";
 import { ForeignCurrencyTotals } from "@/components/ForeignCurrencyTotals";
@@ -133,6 +134,7 @@ function UpdateSurrenderValueInline({
 
 function InsurancePage() {
   const memberFilter = useAppStore((s) => s.memberFilter);
+  const sortCards = useRecordSorter();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const status = useStatusMutation("insurance_policies", "insurance");
   const del = useDeleteMutation("insurance_policies", "insurance", "insurance");
@@ -189,7 +191,10 @@ function InsurancePage() {
 
   return (
     <div className="space-y-4 pb-24">
-      <h1 className="text-2xl font-bold tracking-tight">Insurance</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold tracking-tight">Insurance</h1>
+        <SortControl />
+      </div>
       <p className="text-xs text-muted-foreground">
         {items.length} policies · {fmtMoney(totalAnnual)} / year total
         {annualTotals.foreign.length > 0 && <FxInfoNote fx={fxRates} />}
@@ -240,7 +245,7 @@ function InsurancePage() {
             {cat}
           </h2>
           <div className="space-y-3">
-            {sortByStatus(items.filter((i: any) => i.category === cat)).map((p: any) => (
+            {sortCards(items.filter((i: any) => i.category === cat)).map((p: any) => (
               <InsuranceRow
                 key={p.id}
                 p={p}
