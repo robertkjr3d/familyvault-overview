@@ -268,7 +268,7 @@ function InsurancePage() {
 
 function AlertLabel({ text }: { text: string }) {
   return (
-    <span className="flex items-center gap-1">
+    <span className="flex items-center gap-1 whitespace-nowrap">
       {text}
       <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" />
     </span>
