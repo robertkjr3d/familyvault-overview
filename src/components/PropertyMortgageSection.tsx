@@ -6,7 +6,7 @@ import { loanPaymentOf, type LinkedLoan, type MortgageTotals } from "@/lib/prope
 
 function AlertLabel({ text }: { text: string }) {
   return (
-    <span className="flex items-center gap-1">
+    <span className="flex items-center gap-1 whitespace-nowrap">
       {text}
       <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" />
     </span>
@@ -63,7 +63,7 @@ export function PropertyMortgageSection({
                 value={fmtDate(l.reprice_date)}
               />
               <FieldRow
-                label="Mortgage end date"
+                label={<span className="whitespace-nowrap">Mortgage end date</span>}
                 value={
                   l.loan_end_date ? (
                     fmtDate(l.loan_end_date)
