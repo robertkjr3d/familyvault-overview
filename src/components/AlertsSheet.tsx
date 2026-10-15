@@ -8,7 +8,8 @@ import { MemberTag } from "./MemberTag";
 import { fmtDate, fmtMoney } from "@/lib/format";
 import { useAppStore } from "@/lib/store";
 import { flashRecord } from "./HashHighlight";
-import { buildUpcomingItems } from "@/lib/alerts";
+import { buildUpcomingItems, splitDueThisWeek } from "@/lib/alerts";
+import { useToday } from "@/lib/today";
 import type { UpcomingItem } from "@/lib/alerts";
 import {
   useProperties,
@@ -37,7 +38,7 @@ export const SOURCES = [
 const BELL_HORIZON_DAYS = 30;
 
 export function AlertsSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
-  const today = new Date();
+  const { today } = useToday(); // Test Mode aware, same clock as the dashboard
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const setMemberFilter = useAppStore((s) => s.setMemberFilter);
   const gate = open && !!activeHouseholdId;
@@ -123,6 +124,7 @@ export function AlertsSheet({ open, onOpenChange }: { open: boolean; onOpenChang
         ).filter((item) => !dismissedKeys.has(`${item.sourceType}::${item.recordId}::${item.date}`))
       : [];
 
+  const { dueThisWeek, comingUp } = splitDueThisWeek(dueSoon);
   const urgent = allStatus.filter((x) => x.row.status === "urgent");
   const review = allStatus.filter((x) => x.row.status === "review");
 
@@ -136,47 +138,71 @@ export function AlertsSheet({ open, onOpenChange }: { open: boolean; onOpenChang
           {dueSoon.length === 0 && urgent.length === 0 && review.length === 0 && (
             <p className="py-8 text-center text-sm text-muted-foreground">Nothing to action right now</p>
           )}
-          {dueSoon.length > 0 && (
-            <section>
-              <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Due Soon <span className="text-foreground">({dueSoon.length})</span>
-              </h3>
-              <ul className="space-y-2">
-                {dueSoon.map((item, i) => {
-                  const Icon = item.icon;
-                  const isOverdue = item.daysLeft < 0;
-                  const isUrgent = item.daysLeft <= 7;
-                  return (
-                    <li key={i}>
-                      <Link
-                        to={item.href as any}
-                        onClick={() => { onOpenChange(false); setMemberFilter(item.member_id ?? "all"); flashRecord(item.recordId); }}
-                        className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-card p-3 hover:bg-accent/50"
-                      >
-                        <Icon className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-[10px] font-semibold uppercase text-muted-foreground">{item.kind}</span>
-                            <span className="min-w-0 line-clamp-2 break-words text-sm font-semibold">{item.label}</span>
-                            {item.isGiro && <span className="text-sm font-bold">[GIRO]</span>}
-                            <MemberTag memberId={item.member_id} />
-                          </div>
-                          <div className="mt-1 flex items-center gap-2 text-xs">
-                            <span className={`font-bold ${isOverdue ? "text-urgent" : isUrgent ? "text-urgent" : "text-primary"}`}>
-                              {isOverdue ? `${Math.abs(item.daysLeft)}d overdue` : isUrgent ? `${item.daysLeft}d left` : fmtDate(item.date)}
+          {[
+            { title: "Due This Week", list: dueThisWeek },
+            { title: "Coming Up", list: comingUp },
+          ].map(
+            (group) =>
+              group.list.length > 0 && (
+                <section key={group.title}>
+                  <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    {group.title} <span className="text-foreground">({group.list.length})</span>
+                  </h3>
+                  <ul className="space-y-2">
+                    {group.list.map((item, i) => {
+                      const Icon = item.icon;
+                      const isOverdue = item.daysLeft < 0;
+                      const isUrgent = item.daysLeft <= 7;
+                      return (
+                        <li key={i}>
+                          <Link
+                            to={item.href as any}
+                            onClick={() => {
+                              onOpenChange(false);
+                              setMemberFilter(item.member_id ?? "all");
+                              flashRecord(item.recordId);
+                            }}
+                            className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-card p-3 hover:bg-accent/50"
+                          >
+                            <Icon className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-[10px] font-semibold uppercase text-muted-foreground">
+                                  {item.kind}
+                                </span>
+                                <span className="min-w-0 line-clamp-2 break-words text-sm font-semibold">
+                                  {item.label}
+                                </span>
+                                {item.isGiro && <span className="text-sm font-bold">[GIRO]</span>}
+                                <MemberTag memberId={item.member_id} />
+                              </div>
+                              <div className="mt-1 flex items-center gap-2 text-xs">
+                                <span
+                                  className={`font-bold ${isOverdue ? "text-urgent" : isUrgent ? "text-urgent" : "text-primary"}`}
+                                >
+                                  {isOverdue
+                                    ? `${Math.abs(item.daysLeft)}d overdue`
+                                    : isUrgent
+                                      ? `${item.daysLeft}d left`
+                                      : fmtDate(item.date)}
+                                </span>
+                                {item.amount != null && (
+                                  <span className="text-muted-foreground">
+                                    {fmtMoney(item.amount)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary">
+                              View <ChevronRight className="h-3 w-3" />
                             </span>
-                            {item.amount != null && <span className="text-muted-foreground">{fmtMoney(item.amount)}</span>}
-                          </div>
-                        </div>
-                        <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary">
-                          View <ChevronRight className="h-3 w-3" />
-                        </span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              ),
           )}
           <Group title="Urgent" tone="urgent" items={urgent} empty="No urgent items." onNav={() => onOpenChange(false)} />
           <Group title="Review Needed" tone="review" items={review} empty="Nothing to review." onNav={() => onOpenChange(false)} />

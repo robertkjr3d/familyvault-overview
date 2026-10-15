@@ -5,10 +5,12 @@ import { Bell, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useCurrentRole } from "@/lib/useCurrentRole";
+import { useToday } from "@/lib/today";
 import { computeNextReminderDate, recurrenceLabel } from "@/lib/reminderRecurrence";
 
 export function RemindersList({ entityType, entityId }: { entityType: string; entityId: string }) {
   const { canEdit } = useCurrentRole();
+  const { today } = useToday(); // Test Mode aware (not the raw clock)
   const qc = useQueryClient();
 
   const { data: reminders = [] } = useQuery({
@@ -75,14 +77,10 @@ export function RemindersList({ entityType, entityId }: { entityType: string; en
         // Dashboard shows, via alerts.ts's identical computation. One-off
         // reminders are unchanged: raw remind_at, can show Overdue.
         const displayDate = r.recurrence
-          ? (computeNextReminderDate(
-              r.remind_at,
-              r.recurrence,
-              r.recurrence_end_of_month,
-              new Date(),
-            ) ?? r.remind_at)
+          ? (computeNextReminderDate(r.remind_at, r.recurrence, r.recurrence_end_of_month, today) ??
+            r.remind_at)
           : r.remind_at;
-        const isOverdue = !r.recurrence && new Date(r.remind_at) < new Date();
+        const isOverdue = !r.recurrence && new Date(r.remind_at) < today;
         return (
           <div
             key={r.id}

@@ -19,7 +19,7 @@ import { MemberFilterBar, MemberInitialDot } from "@/components/MemberFilterBar"
 import { MemberTag } from "@/components/MemberTag";
 import { StatusBadge } from "@/components/StatusToggle";
 import { useAppStore } from "@/lib/store";
-import { addDays, format, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { buildUpcomingItems, computeNextOccurrence } from "@/lib/alerts";
 import type { UpcomingItem } from "@/lib/alerts";
 import {
@@ -199,13 +199,15 @@ function Dashboard() {
     enabled: !!activeHouseholdId,
     queryFn: async () => {
       if (!activeHouseholdId) return [];
-      const horizonStr = addDays(new Date(), 90).toISOString().slice(0, 10);
+      // No date cutoff here on purpose: the dashboard's "today" can be the Test
+      // Mode date, and a database cutoff would use the real clock instead, so
+      // far-future reminders were never loaded. buildUpcomingItems() applies the
+      // 90-day window using the app's own "today" (same as the bell does).
       const { data } = await (supabase as any)
         .from("reminders")
         .select("*")
         .eq("household_id", activeHouseholdId)
-        .eq("dismissed", false)
-        .lte("remind_at", horizonStr);
+        .eq("dismissed", false);
       return data ?? [];
     },
   });
@@ -1593,7 +1595,11 @@ function CashFlowBars({
   );
 }
 
-function reviewDateInfo(kind: string, row: any): { prefix: string; date: string } | null {
+function reviewDateInfo(
+  kind: string,
+  row: any,
+  today: Date,
+): { prefix: string; date: string } | null {
   // LEGACY: old property field, no longer written (a mortgage is a Loans-tab row). See src/lib/netWorthMath.ts.
   if (kind === "Property" && row.fixed_rate_end)
     return { prefix: "Reprice by", date: fmtMonth(row.fixed_rate_end) };
@@ -1602,7 +1608,7 @@ function reviewDateInfo(kind: string, row: any): { prefix: string; date: string 
   if (kind === "Insurance") {
     // Derived from start_date + frequency, same as everywhere else alerts are computed —
     // not the dead next_due_date field, which no longer gets kept in sync with reality.
-    const nextDue = computeNextOccurrence(row.start_date, row.frequency, row.end_date, new Date());
+    const nextDue = computeNextOccurrence(row.start_date, row.frequency, row.end_date, today);
     if (nextDue) return { prefix: "Renew by", date: fmtMonth(nextDue) };
   }
   return null;
@@ -1956,6 +1962,7 @@ function PrioritySection({
   showDate?: boolean;
 }) {
   const [showAll, setShowAll] = useState(false);
+  const { today } = useToday(); // Test Mode aware
   const setMemberFilter = useAppStore((s) => s.setMemberFilter);
   const visible = showAll ? items : items.slice(0, 8);
   return (
@@ -1970,7 +1977,7 @@ function PrioritySection({
       </div>
       <ul className="space-y-2">
         {visible.map(({ kind, row, href, icon: Icon }, i) => {
-          const dateInfo = showDate ? reviewDateInfo(kind, row) : null;
+          const dateInfo = showDate ? reviewDateInfo(kind, row, today) : null;
           return (
             <li key={i}>
               <Link

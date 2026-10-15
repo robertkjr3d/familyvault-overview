@@ -36,6 +36,8 @@ import {
   useSavingsAccounts,
   useOtherAssets,
   useInventoryItems,
+  useHealthConditions,
+  useCreditCards,
 } from "@/lib/householdRecordQueries";
 
 // Previously polled every 5 seconds, re-fetching all 9 tables continuously for as
@@ -137,7 +139,7 @@ return data;
 },
 });
 
-// 30-day horizon, same source-of-truth as the AlertsSheet ("Due Soon" list) and
+// 30-day horizon, same source-of-truth as the AlertsSheet (its "Due This Week" and "Coming Up" lists) and
 // the dashboard's 90-day view. Any new alert source only needs to be added once,
 // in src/lib/alerts.ts.
 //
@@ -158,6 +160,12 @@ const investmentsQ = useInvestments(selectedHouseholdId, true, ALERT_REFRESH_INT
 const savingsQ = useSavingsAccounts(selectedHouseholdId, true, ALERT_REFRESH_INTERVAL);
 const otherAssetsQ = useOtherAssets(selectedHouseholdId, true, ALERT_REFRESH_INTERVAL);
 const inventoryQ = useInventoryItems(selectedHouseholdId, true, ALERT_REFRESH_INTERVAL);
+// Credit cards (points-expiry alerts) and health records (reminder names/members)
+// feed the same alert list the bell sheet shows, so the badge must include them
+// or its number can be lower than the list. Deliberately NOT part of tablesLoaded:
+// if one of these fails to load, the badge still shows the rest.
+const creditCardsQ = useCreditCards(selectedHouseholdId, true, ALERT_REFRESH_INTERVAL);
+const healthQ = useHealthConditions(selectedHouseholdId, true, ALERT_REFRESH_INTERVAL);
 
 const tablesLoaded = [propertiesQ, loansQ, insuranceQ, investmentsQ, savingsQ, otherAssetsQ, inventoryQ].every(
   (q) => q.data !== undefined
@@ -194,8 +202,10 @@ if (!tablesLoaded || !alertExtras) return 0;
       inventoryItems: inventoryQ.data ?? [],
       reminders: alertExtras.reminders,
       otherAssets: otherAssetsQ.data ?? [],
+      creditCards: creditCardsQ.data ?? [],
+      healthConditions: healthQ.data ?? [],
     },
-    new Date(),
+    today, // the app's "today" (Test Mode aware), never the raw clock
     30,
     {
       mortgage_days: settings?.mortgage_days,
@@ -206,7 +216,7 @@ if (!tablesLoaded || !alertExtras) return 0;
   );
 
   return allItems.filter((item) => !dismissedKeys.has(`${item.sourceType}::${item.recordId}::${item.date}`)).length;
-}, [tablesLoaded, alertExtras, propertiesQ.data, loansQ.data, insuranceQ.data, investmentsQ.data, savingsQ.data, inventoryQ.data, otherAssetsQ.data, settings]);
+}, [tablesLoaded, alertExtras, propertiesQ.data, loansQ.data, insuranceQ.data, investmentsQ.data, savingsQ.data, inventoryQ.data, otherAssetsQ.data, creditCardsQ.data, healthQ.data, settings, today.toDateString()]);
 
 const { data: people, isLoading: peopleLoading } = useQuery({
 queryKey: ["household-people", selectedHouseholdId],
@@ -325,6 +335,7 @@ transferOwnershipMutation.mutate({ email: normalized });
 }
 
 // Real date — always today's actual date, never the simulated test date
+// real-clock-ok: this banner label is meant to show the real date
 const realDateLabel = new Date().toLocaleDateString("en-GB", {
 day: "numeric",
 month: "short",

@@ -35,7 +35,26 @@ export type AlertSourceData = {
   reminders: any[];
   otherAssets?: any[];
   creditCards?: any[];
+  // Only used to name/tag reminders attached to a Health card. Health records
+  // produce no alerts of their own.
+  healthConditions?: any[];
 };
+
+/**
+ * Items due within this many days (or already overdue) are "due this week";
+ * the rest of a view's window is "coming up". Used by the bell's two lists.
+ */
+export const DUE_THIS_WEEK_DAYS = 7;
+
+export function splitDueThisWeek(items: UpcomingItem[]): {
+  dueThisWeek: UpcomingItem[];
+  comingUp: UpcomingItem[];
+} {
+  return {
+    dueThisWeek: items.filter((i) => i.daysLeft <= DUE_THIS_WEEK_DAYS),
+    comingUp: items.filter((i) => i.daysLeft > DUE_THIS_WEEK_DAYS),
+  };
+}
 
 export function reminderHref(entityType: string | null | undefined): string {
   switch (entityType) {
@@ -470,6 +489,7 @@ export function buildUpcomingItems(
     other_asset: data.otherAssets ?? [],
     other_assets: data.otherAssets ?? [],
     credit_card: data.creditCards ?? [],
+    health: data.healthConditions ?? [],
   };
 
   for (const r of data.reminders) {
@@ -487,8 +507,9 @@ export function buildUpcomingItems(
       const href = reminderHref(r.entity_type);
       const recordId = r.entity_id ?? r.id;
 
-      // Resolve the entity this reminder belongs to (may be null for health/other_assets
-      // which are not in AlertSourceData).
+      // Resolve the entity this reminder belongs to, so the item can show the
+      // record's name and member. Every entity type a reminder can attach to
+      // must be in entityLookup above (a test enforces this).
       const list = entityLookup[r.entity_type ?? ""] ?? [];
       const entity = r.entity_id ? list.find((e: any) => e.id === r.entity_id) : null;
       const entityName: string | null = entity
