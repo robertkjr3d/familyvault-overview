@@ -394,17 +394,12 @@ function addDataSheet(wb: any, spec: SheetSpec) {
   header.height = layout.headerHeight;
   spec.columns.forEach((c, i) => {
     const cell = header.getCell(i + 1);
-    const kind = layout.columns[i].kind;
     cell.value = c.header;
     cell.font = { name: FONT_NAME, size: FONT_SIZE, bold: true, color: { argb: "FFFFFFFF" } };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: NAVY } };
     cell.border = BORDER;
-    cell.alignment = {
-      wrapText: true,
-      vertical: "middle",
-      horizontal: kind === "text" ? "left" : kind === "number" ? "right" : "center",
-      indent: kind === "text" || kind === "number" ? 1 : 0,
-    };
+    // Every heading is centred, whatever the column holds, so the header row reads as one tidy band.
+    cell.alignment = { wrapText: true, vertical: "middle", horizontal: "center" };
   });
 
   // Body rows
