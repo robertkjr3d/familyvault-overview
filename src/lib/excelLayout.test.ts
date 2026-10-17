@@ -187,6 +187,13 @@ describe("finished workbook", () => {
     expect(ws.pageSetup.paperSize).toBe(9);
     expect(ws.pageSetup.printTitlesRow).toBe("1:1");
   });
+  it("centres every heading the same way, whatever the column holds", async () => {
+    const { wb } = await build(sheets);
+    const ws = wb.getWorksheet("Savings & CPF")!;
+    const aligns = new Set<string | undefined>();
+    ws.getRow(1).eachCell((cell) => aligns.add(cell.alignment?.horizontal));
+    expect([...aligns]).toEqual(["center"]);
+  });
   it("trims text, leaves blanks truly empty, keeps real numbers, dates and links", async () => {
     const { wb } = await build(sheets);
     const ws = wb.getWorksheet("Savings & CPF")!;
