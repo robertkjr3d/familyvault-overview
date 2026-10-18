@@ -5,7 +5,7 @@ export const Route = createFileRoute("/privacy")({
   head: () => ({ meta: [{ title: "Privacy Policy — FamilyHub SG" }] }),
 });
 
-const LAST_UPDATED = "13 October 2026";
+const LAST_UPDATED = "18 October 2026";
 // Placeholder — replace with a real, monitored inbox. See chat for details.
 const CONTACT_EMAIL = "support@familyhubsg.com";
 
@@ -84,6 +84,12 @@ function PrivacyPage() {
             record anonymized usage sessions so we can find and fix problems. This helps us
             improve FamilyHub SG during its beta — it is not used for advertising, and your data
             is never sold or shared with advertisers.
+          </p>
+          <p>
+            On our public website (familyhubsg.com) we also use PostHog to count visits and see
+            which page, search engine or other website brought a visitor. It stores a small
+            identifier in your browser. We do not record sessions on the website, and this is not
+            used for advertising.
           </p>
           <p>
             We use Sentry to receive technical error reports (for example, that a page failed to
