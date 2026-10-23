@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowUpDown, Check } from "lucide-react";
+import { Check, ListFilter } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAppStore } from "@/lib/store";
 import { RECORD_SORT_LABELS, type RecordSort } from "@/lib/sort";
@@ -37,8 +37,8 @@ export function SortControl() {
               : "border-primary bg-primary/10 text-primary hover:bg-primary/15",
           )}
         >
-          <ArrowUpDown className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>Sort: {label}</span>
+          <ListFilter className="h-3.5 w-3.5" aria-hidden="true" />
+          <span>{label}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" collisionPadding={16} className="w-48 p-1">
