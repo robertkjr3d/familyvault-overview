@@ -5,7 +5,7 @@ export const Route = createFileRoute("/privacy")({
   head: () => ({ meta: [{ title: "Privacy Policy — FamilyHub SG" }] }),
 });
 
-const LAST_UPDATED = "18 October 2026";
+const LAST_UPDATED = "22 October 2026";
 // Placeholder — replace with a real, monitored inbox. See chat for details.
 const CONTACT_EMAIL = "support@familyhubsg.com";
 
@@ -47,8 +47,9 @@ function PrivacyPage() {
         <Section title="How your data is stored and protected">
           <p>
             Your data is stored with Supabase (database, authentication, and file storage) and the
-            app itself is served via Cloudflare. Connections to FamilyHub SG are encrypted in
-            transit (HTTPS).
+            app itself is served via Cloudflare. The main database and your uploaded files are
+            hosted in Singapore. Connections to FamilyHub SG are encrypted in transit (HTTPS), and
+            stored data is encrypted at rest (AES-256) by Supabase.
           </p>
           <p>
             FamilyHub SG is built around households. Each household's data is kept separate from
