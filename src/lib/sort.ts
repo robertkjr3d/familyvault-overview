@@ -4,8 +4,8 @@ export function sortByStatus<T extends { status?: string | null }>(items: T[]): 
 }
 
 /**
- * The "Sort" button on the record tabs. "urgency" is the original red -> orange
- * -> green order (sortByStatus above, unchanged); the other two order cards by
+ * The "Sort" button on the record tabs. "urgency" is red -> orange -> green, then
+ * A to Z by name inside each colour (sortByStatusThenName below); the other two order cards by
  * date, newest first. It only changes the ORDER cards are shown in: nothing is
  * hidden, so search, alert links and the guided tour can still find every card.
  */
@@ -20,6 +20,15 @@ export const RECORD_SORT_LABELS: Record<RecordSort, string> = {
 export type SortableRecord = {
   id?: string | null;
   status?: string | null;
+  // Whichever of these a tab shows as the card's main name (savings: institution,
+  // loans: bank, everything else: name). Only used to keep same-named cards together.
+  institution?: string | null;
+  bank?: string | null;
+  name?: string | null;
+  // Second-level name, so e.g. two StanChart cards also sit in a steady order.
+  account_type?: string | null;
+  purpose?: string | null;
+  provider?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -30,13 +39,39 @@ function ms(value: string | null | undefined): number {
   return Number.isNaN(t) ? 0 : t;
 }
 
+const nameCollator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
+
+function mainName(r: SortableRecord): string {
+  return String(r.institution ?? r.bank ?? r.name ?? "").trim();
+}
+function subName(r: SortableRecord): string {
+  return String(r.account_type ?? r.purpose ?? r.provider ?? "").trim();
+}
+
+/**
+ * Urgency order: red, then orange, then green (same as sortByStatus). Cards with the
+ * SAME colour are then listed A to Z by name, so all StanChart cards sit together
+ * instead of StanChart, UOB, StanChart. A card with no name goes last in its colour.
+ * Anything still tied keeps its original (database) order.
+ */
+export function sortByStatusThenName<T extends SortableRecord>(items: T[]): T[] {
+  return [...items].sort((a, b) => {
+    const byStatus = (order[a.status || "review"] ?? 1) - (order[b.status || "review"] ?? 1);
+    if (byStatus !== 0) return byStatus;
+    const an = mainName(a);
+    const bn = mainName(b);
+    if (!an !== !bn) return an ? -1 : 1;
+    return nameCollator.compare(an, bn) || nameCollator.compare(subName(a), subName(b));
+  });
+}
+
 /**
  * Newest first. Cards with the same time (several records are saved or edited
  * in one go) fall back to newest-created, then to id, so the order is always
  * the same instead of shuffling between refreshes.
  */
 export function sortRecords<T extends SortableRecord>(items: T[], mode: RecordSort): T[] {
-  if (mode === "urgency") return sortByStatus(items);
+  if (mode === "urgency") return sortByStatusThenName(items);
   const key = mode === "edited" ? "updated_at" : "created_at";
   return [...items].sort(
     (a, b) =>
