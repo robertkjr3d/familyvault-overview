@@ -5,7 +5,7 @@ import { useAppStore } from "@/lib/store";
 import { RECORD_SORT_LABELS, type RecordSort } from "@/lib/sort";
 import { cn } from "@/lib/utils";
 
-const OPTIONS: RecordSort[] = ["urgency", "edited", "created"];
+const OPTIONS: RecordSort[] = ["urgency", "name", "edited", "created"];
 
 /**
  * The "Sort" button shown beside each record tab's title (Loans, Insurance,
