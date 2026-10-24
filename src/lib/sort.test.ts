@@ -110,6 +110,18 @@ describe("sortRecords - urgency groups same-named cards together", () => {
   });
 });
 
+describe("sortRecords - name A to Z", () => {
+  it("keeps one bank together whatever the colour", () => {
+    const list = [
+      { id: "sc-red", status: "urgent", institution: "StanChart" },
+      { id: "uob", status: "settled", institution: "UOB" },
+      { id: "sc-green", status: "settled", institution: "StanChart" },
+      { id: "dbs", status: "review", institution: "DBS" },
+    ];
+    expect(sortRecords(list, "name").map((r) => r.id)).toEqual(["dbs", "sc-red", "sc-green", "uob"]);
+  });
+});
+
 describe("sortRecords - dates, newest first", () => {
   it("last edited: most recently edited card first", () => {
     expect(ids(sortRecords(rows, "edited"))).toEqual([
@@ -131,7 +143,7 @@ describe("sortRecords - dates, newest first", () => {
 
   it("gives the same cards back, none hidden or duplicated, and does not change the input", () => {
     const before = ids(rows);
-    for (const mode of ["urgency", "edited", "created"] as const) {
+    for (const mode of ["urgency", "name", "edited", "created"] as const) {
       const out = sortRecords(rows, mode);
       expect(out).toHaveLength(rows.length);
       expect([...ids(out)].sort()).toEqual([...before].sort());
@@ -173,7 +185,8 @@ describe("labels", () => {
   it("never uses the word Updated, which already means 'figure last confirmed' on some cards", () => {
     for (const label of Object.values(RECORD_SORT_LABELS)) expect(label).not.toMatch(/updated/i);
     expect(RECORD_SORT_LABELS).toEqual({
-      urgency: "Urgency",
+      urgency: "Priority",
+      name: "Name A to Z",
       edited: "Last edited",
       created: "Date created",
     });
