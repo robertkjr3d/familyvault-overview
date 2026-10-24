@@ -4,15 +4,17 @@ export function sortByStatus<T extends { status?: string | null }>(items: T[]): 
 }
 
 /**
- * The "Sort" button on the record tabs. "urgency" is red -> orange -> green, then
- * A to Z by name inside each colour (sortByStatusThenName below); the other two order cards by
- * date, newest first. It only changes the ORDER cards are shown in: nothing is
+ * The "Sort" button on the record tabs. "urgency" (shown as "Priority") is red -> orange -> green, then
+ * A to Z by name inside each colour (sortByStatusThenName below); "name" is A to Z by
+ * name only, ignoring colour; the other two order cards by date, newest first. It only changes the ORDER cards are shown in: nothing is
  * hidden, so search, alert links and the guided tour can still find every card.
  */
-export type RecordSort = "urgency" | "edited" | "created";
+// "urgency" is the saved key; it is shown to people as "Priority".
+export type RecordSort = "urgency" | "name" | "edited" | "created";
 
 export const RECORD_SORT_LABELS: Record<RecordSort, string> = {
-  urgency: "Urgency",
+  urgency: "Priority",
+  name: "Name A to Z",
   edited: "Last edited",
   created: "Date created",
 };
@@ -48,6 +50,16 @@ function subName(r: SortableRecord): string {
   return String(r.account_type ?? r.purpose ?? r.provider ?? "").trim();
 }
 
+/** Name A to Z only, colour ignored, so every card of one bank sits together. */
+export function sortByName<T extends SortableRecord>(items: T[]): T[] {
+  return [...items].sort((a, b) => {
+    const an = mainName(a);
+    const bn = mainName(b);
+    if (!an !== !bn) return an ? -1 : 1;
+    return nameCollator.compare(an, bn) || nameCollator.compare(subName(a), subName(b));
+  });
+}
+
 /**
  * Urgency order: red, then orange, then green (same as sortByStatus). Cards with the
  * SAME colour are then listed A to Z by name, so all StanChart cards sit together
@@ -72,6 +84,7 @@ export function sortByStatusThenName<T extends SortableRecord>(items: T[]): T[] 
  */
 export function sortRecords<T extends SortableRecord>(items: T[], mode: RecordSort): T[] {
   if (mode === "urgency") return sortByStatusThenName(items);
+  if (mode === "name") return sortByName(items);
   const key = mode === "edited" ? "updated_at" : "created_at";
   return [...items].sort(
     (a, b) =>
