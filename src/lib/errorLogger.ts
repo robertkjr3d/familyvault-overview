@@ -12,6 +12,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { reportToSentry, stripUrlSecrets } from "@/lib/sentryReport";
+import { isExtensionNoise } from "@/lib/staleTab";
 
 // Browser-side Sentry DSN -- a Cloudflare BUILD variable (VITE_*), so it is
 // baked in at build time. Undefined means Sentry reporting quietly does nothing.
@@ -36,6 +37,9 @@ export async function logError(params: LogParams): Promise<void> {
   try {
     // Invite / sign-in links carry tokens and emails in ?query and #hash --
     // never send those to Sentry or store them in error_logs.
+    // Oct 25 2026: errors thrown by browser extensions (e.g. "Failed to connect
+    // to MetaMask") are not ours and cannot be fixed here; do not report them.
+    if (isExtensionNoise(params.errorMessage, params.errorStack)) return;
     const pageUrl = stripUrlSecrets(params.pageUrl);
     const key = params.errorMessage.slice(0, 200);
     const count = _seen.get(key) ?? 0;

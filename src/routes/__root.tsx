@@ -35,6 +35,7 @@ import { useAppStore } from "@/lib/store";
 import { toast } from "sonner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { setupGlobalErrorHandlers } from "@/lib/errorLogger";
+import { setupStaleTabReload } from "@/lib/staleTab";
 
 // Accounts you personally use to test the app, live or in dev — kept out of
 // PostHog analytics/session-recording entirely so your own daily usage never
@@ -174,6 +175,7 @@ function RootContent() {
 
   useEffect(() => {
     setupGlobalErrorHandlers();
+    setupStaleTabReload();
   }, []);
 
   // Selected household, member filter, tour and onboarding-dismissal are saved

@@ -50,4 +50,14 @@ describe("logError", () => {
     expect(row.user_id).toBe("user-1");
     expect(row.page_url).toBe("https://app.familyhubsg.com/");
   });
+
+  it("does not report browser-extension errors such as MetaMask", async () => {
+    await logError({
+      errorMessage: "Failed to connect to MetaMask",
+      pageUrl: "https://app.familyhubsg.com/",
+      errorType: "unhandled_rejection",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
+  });
 });
