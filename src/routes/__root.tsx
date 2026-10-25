@@ -36,6 +36,7 @@ import { toast } from "sonner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { setupGlobalErrorHandlers } from "@/lib/errorLogger";
 import { setupStaleTabReload } from "@/lib/staleTab";
+import { setupIdleReturnReload } from "@/lib/idleReturn";
 
 // Accounts you personally use to test the app, live or in dev — kept out of
 // PostHog analytics/session-recording entirely so your own daily usage never
@@ -176,6 +177,7 @@ function RootContent() {
   useEffect(() => {
     setupGlobalErrorHandlers();
     setupStaleTabReload();
+    setupIdleReturnReload();
   }, []);
 
   // Selected household, member filter, tour and onboarding-dismissal are saved
@@ -752,12 +754,12 @@ function SignInScreen({ redirectError }: { redirectError: string | null }) {
 
         <div className="p-6">
           <h1 className="text-lg font-semibold tracking-tight">
-            {inviteMode ? "Join your family's household" : "Sign in"}
+            {inviteMode ? "Join your family's household" : "Sign in or create an account"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {inviteMode
               ? "Enter the invited email and the code from your invite email."
-              : "Enter your email and the code we send you — no password needed."}
+              : "New or returning: enter your email, tap “Email me a code” below, then type the 6-digit code here. No password needed."}
           </p>
 
           {redirectError && (
