@@ -125,6 +125,27 @@ A mortgage is a loan in the Loans tab, linked to its property through "Linked pr
 - Own spreadsheets in any other layout are not promised: they need a column-matching step. For early users, a checked SQL script run in the Supabase SQL Editor is the stop-gap.
 - Open decisions: build now or wait for evidence the template is used; template-layout files only for version 1; status given to imported records; whether imported records are visible to linked advisers.
 
+## 7h. Sample-family guest demo — database part LIVE, app part NOT built yet (26–27 Oct 2026)
+Goal: a stranger can look around the app without giving an email. Design: ONE shared household, "Sample family — FamilyHub SG" (fixed id `a750df45-c320-46fd-b2c8-82389878db07`), owned by a placeholder account (`sample-owner@example.com`; nobody can sign in as it). A guest is a Supabase anonymous sign-in who is added to that household as a read-only viewer.
+
+**Live in the database** (tested on a local copy, 56 checks; all confirmed in the 27 Oct `schema.sql`):
+- A guest login gets no profile and no household of its own (`handle_new_auth_user`).
+- `is_guest()` reads the login's `is_anonymous` flag. `is_household_editor()` returns false for guests, so a guest can never write or upload anywhere, even if wrongly given a member or owner role.
+- A guest may add only themselves, as viewer, to the sample family (policy on `household_users`). Extra locks stop a guest changing or deleting households or members. Guests cannot write error logs.
+- Closed at the same time: any logged-in user creating empty households (`households_insert` dropped; the app creates households on the server); `share_household_by_email` (unused; service role only now); `error_logs.user_id` is now `ON DELETE SET NULL` (a logged error no longer blocks Delete Account or guest clean-up).
+- Nightly job `delete-old-guests` (Supabase Cron, 20:30 UTC) deletes guest logins older than 3 days.
+
+**Still to do before switching on "Allow anonymous sign-ins"** (leave it OFF until all of this is deployed):
+1. The sample family data (seed SQL, dates relative to the day it is run) and its 6 photos (`inventory-photos/<id>/items/`).
+2. App: "Explore a sample family" button on the sign-in screen, a banner, Settings hidden for guests.
+3. Guard every server function that sends email or changes data so guests cannot call it (for example `createDemoHousehold`, `sendHouseholdInvite`, `listHouseholdPeople`), plus a test that fails if a new one is missed.
+4. Hide the owner's email from guests (People list, edit history).
+5. After switching on: test that captcha is enforced on guest sign-in, and test the email-change route.
+
+**Kill switch:** turn "Allow anonymous sign-ins" off in Supabase (Authentication → Sign In / Providers), then run `delete from auth.users where is_anonymous is true;`.
+
+**Limits to remember:** guest sign-ins are limited to 30 an hour per IP address (Supabase default; Authentication → Rate Limits). Free plan: 500 MB database (read-only if exceeded; 16 MB used on 26 Oct), 1 GB files.
+
 ## 8. Advisor (FA) dashboard — separate sub-project
 Full detail in a dedicated reference (`advisor-dashboard.md`) — summary: a financial adviser can be given selective, per-category, per-member access to a household's data (insurance, investments, property, loans), with a household-side toggle to hide individual items regardless. Includes adviser notes, a policy-illustration chart tool, and per-member net worth. Built and deployed; still evolving.
 
