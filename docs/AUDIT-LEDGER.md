@@ -1,6 +1,6 @@
 # Audit ledger — read first when reviewing FamilyHub SG
 
-Short on purpose: what is already verified, what is deliberate, what is still open. Update it when something changes. Last updated: 2026-10-17.
+Short on purpose: what is already verified, what is deliberate, what is still open. Update it when something changes. Last updated: 2026-10-27.
 
 **Where the truth lives**
 - Database structure and security: `supabase/schema.sql` (generated from the live database; see `supabase/README.md`).
@@ -11,6 +11,13 @@ Short on purpose: what is already verified, what is deliberate, what is still op
 **Claims that were checked and are FALSE (do not re-report)**
 - "Viewers can write to the database": false. All financial tables allow writes only via `is_household_editor()` (owner/member). (Old migration files misled an earlier audit.)
 - "Storage buckets are public": false. Both buckets are private (`schema.sql`, bucket lines).
+
+**Fixed 2026-10-26** (all live; confirmed in the 27 Oct `schema.sql`)
+- Any logged-in user could create unlimited empty households (`households_insert` allowed everything; each one also created two extra rows). Dropped; the app creates households on the server.
+- `share_household_by_email` let a household owner add any existing user by email with no consent, and revealed whether an email had an account. The app never used it. Now service role only.
+- A user with a logged error could not be deleted (`error_logs.user_id` had no delete rule), which also broke Delete Account. Now `ON DELETE SET NULL`.
+- Guest (anonymous) protections and nightly guest clean-up added for the planned sample-family demo (see architecture doc 7h). Anonymous sign-ins are still OFF; the app part is not built.
+- Sign-in code email confirmed working by the owner (26 Oct).
 
 **Fixed 2026-09-28** (all live; see `schema.sql` and git history)
 - Mortgages entered only on the Property tab were missing from net worth (dashboard, adviser view, Word summary). One shared rule now.
