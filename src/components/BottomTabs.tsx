@@ -13,6 +13,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsGuest } from "@/hooks/useIsGuest";
 
 type Tab = { to: string; label: string; icon: LucideIcon };
 
@@ -37,7 +38,11 @@ const ALL_TABS: Tab[] = [...MOBILE_PRIMARY, ...MOBILE_MORE];
 
 export function BottomTabs() {
   const isMobile = useIsMobile();
+  const isGuest = useIsGuest();
   const [moreOpen, setMoreOpen] = useState(false);
+  // Sample-family guests never see Settings (it holds sign-out, account deletion, invites).
+  const moreTabs = isGuest ? MOBILE_MORE.filter((t) => t.to !== "/settings") : MOBILE_MORE;
+  const allTabs = isGuest ? ALL_TABS.filter((t) => t.to !== "/settings") : ALL_TABS;
 
   if (isMobile) {
     return (
@@ -64,7 +69,7 @@ export function BottomTabs() {
               <DrawerTitle className="text-base">More</DrawerTitle>
             </DrawerHeader>
             <ul className="divide-y divide-border px-4 pb-8">
-              {MOBILE_MORE.map((t) => {
+              {moreTabs.map((t) => {
                 const Icon = t.icon;
                 return (
                   <li key={t.to}>
@@ -88,8 +93,11 @@ export function BottomTabs() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-card/95 backdrop-blur">
-      <ul className="mx-auto grid max-w-3xl grid-cols-11">
-        {ALL_TABS.map((t) => <TabItem key={t.to} t={t} />)}
+      <ul
+        className="mx-auto grid max-w-3xl"
+        style={{ gridTemplateColumns: `repeat(${allTabs.length}, minmax(0, 1fr))` }}
+      >
+        {allTabs.map((t) => <TabItem key={t.to} t={t} />)}
       </ul>
     </nav>
   );

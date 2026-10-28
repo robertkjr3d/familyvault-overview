@@ -30,6 +30,8 @@ import {
   listClientHouseholdsForAdvisor,
 } from "@/lib/advisorAccess";
 import { computeRootViewMode } from "@/lib/rootViewMode";
+import { SampleBanner } from "@/components/SampleBanner";
+import { SAMPLE_HOUSEHOLD_ID, isGuestUser } from "@/lib/guest";
 import { AdvisorHome } from "@/components/AdvisorHome";
 import { useAppStore } from "@/lib/store";
 import { toast } from "sonner";
@@ -173,6 +175,10 @@ function RootContent() {
   // of a privacy policy / terms page. Bypass the auth gate for just these two.
   const isPublicRoute = pathname === "/privacy" || pathname === "/terms";
   const [inviteCheckDone, setInviteCheckDone] = useState(false);
+  // Sample-family guest = anonymous sign-in. Guests skip every invite/adviser check below
+  // (they have no email, and the server refuses them anyway).
+  const isGuest = isGuestUser(session?.user);
+  const [guestJoin, setGuestJoin] = useState<"idle" | "joining" | "done" | "failed">("idle");
 
   useEffect(() => {
     setupGlobalErrorHandlers();
@@ -237,6 +243,11 @@ function RootContent() {
       return;
     }
 
+    if (isGuest) {
+      setInviteCheckDone(true);
+      return;
+    }
+
     let cancelled = false;
     setInviteCheckDone(false);
 
@@ -286,7 +297,7 @@ function RootContent() {
     return () => {
       cancelled = true;
     };
-  }, [session?.user?.id, setActiveHouseholdId, queryClient]);
+  }, [session?.user?.id, isGuest, setActiveHouseholdId, queryClient]);
 
   // Separate and independent from the family-invite effect above on purpose:
   // an advisor accepting a share doesn't join a household or need the
@@ -295,7 +306,7 @@ function RootContent() {
   // incident history in this exact file. See acceptPendingAdvisorInvitesForCurrentUser
   // in advisorAccess.ts for what this actually does.
   useEffect(() => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.id || isGuest) return;
     let cancelled = false;
 
     void acceptPendingAdvisorInvitesForCurrentUser()
@@ -325,7 +336,7 @@ function RootContent() {
     return () => {
       cancelled = true;
     };
-  }, [session?.user?.id, queryClient]);
+  }, [session?.user?.id, isGuest, queryClient]);
 
   const { data: memberships, isLoading: membershipsLoading } = useQuery({
     queryKey: ["household-memberships", session?.user?.id],
@@ -346,8 +357,50 @@ function RootContent() {
   const { data: advisorClientsData, isLoading: advisorClientsLoading } = useQuery({
     queryKey: ["advisor-clients", session?.user?.id],
     enabled: !!session?.user?.id && !isPublicRoute,
-    queryFn: () => listClientHouseholdsForAdvisor(),
+    // Guests are never advisers; do not call the server for them.
+    queryFn: () =>
+      isGuest
+        ? Promise.resolve({ clients: [] } as unknown as Awaited<
+            ReturnType<typeof listClientHouseholdsForAdvisor>
+          >)
+        : listClientHouseholdsForAdvisor(),
   });
+
+  // A new guest has a session but no household yet: put them in the shared sample family as a
+  // VIEWER. The database only allows exactly this row (role viewer, the sample household, own
+  // user id) for guests; see the "guests can join the sample family as viewers" policy.
+  useEffect(() => {
+    if (!isGuest || !session?.user?.id || isPublicRoute) return;
+    if (membershipsLoading || !memberships) return;
+    if (memberships.length > 0 || guestJoin !== "idle") return;
+    setGuestJoin("joining");
+    const userId = session.user.id;
+    void (async () => {
+      const { error } = await supabase
+        .from("household_users" as any)
+        .insert({ household_id: SAMPLE_HOUSEHOLD_ID, user_id: userId, role: "viewer" });
+      // 23505 = already a member (e.g. two tabs at once): fine.
+      if (error && (error as { code?: string }).code !== "23505") {
+        setGuestJoin("failed");
+        return;
+      }
+      try {
+        (window as any).posthog?.capture("sample_family_opened");
+      } catch {
+        // analytics blocked: ignore
+      }
+      await queryClient.invalidateQueries({ queryKey: ["household-memberships"] });
+      setGuestJoin("done");
+    })();
+  }, [
+    isGuest,
+    session?.user?.id,
+    isPublicRoute,
+    membershipsLoading,
+    memberships,
+    guestJoin,
+    queryClient,
+  ]);
 
   if (isPublicRoute) {
     return <Outlet />;
@@ -357,7 +410,11 @@ function RootContent() {
     initialized,
     hasSession: !!session,
     inviteCheckDone,
-    membershipsLoading,
+    // A guest with no household yet is mid-join: show "Loading", never the "no household" screen.
+    membershipsLoading:
+      membershipsLoading ||
+      (isGuest &&
+        (guestJoin === "joining" || (guestJoin === "idle" && (memberships?.length ?? 0) === 0))),
     membershipsCount: memberships ? memberships.length : null,
     advisorClientsLoading,
     advisorClientsCount: advisorClientsData ? advisorClientsData.clients.length : null,
@@ -379,7 +436,7 @@ function RootContent() {
   }
 
   if (viewMode === "no-access") {
-    return <NoHouseholdScreen />;
+    return <NoHouseholdScreen isGuest={isGuest} />;
   }
 
   if (viewMode === "advisor-only") {
@@ -389,6 +446,7 @@ function RootContent() {
   return (
     <ErrorBoundary>
       <div className="min-h-screen pb-36">
+        <SampleBanner />
         <AppHeader />
         <main className="mx-auto max-w-3xl px-4 py-4">
           <Outlet />
@@ -410,7 +468,7 @@ function RootContent() {
   );
 }
 
-function NoHouseholdScreen() {
+function NoHouseholdScreen({ isGuest }: { isGuest: boolean }) {
   const queryClient = useQueryClient();
   const setActiveHouseholdId = useAppStore((s) => s.setActiveHouseholdId);
   const [creating, setCreating] = useState(false);
@@ -440,19 +498,24 @@ function NoHouseholdScreen() {
           <p className="text-lg font-bold tracking-tight text-primary-foreground">FamilyHub SG</p>
         </div>
         <div className="p-6">
-          <h1 className="text-lg font-semibold tracking-tight">No household access</h1>
+          <h1 className="text-lg font-semibold tracking-tight">
+            {isGuest ? "Sample family unavailable" : "No household access"}
+          </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            You're signed in but not part of any household. Ask whoever manages yours for an invite,
-            or start your own.
+            {isGuest
+              ? "We could not open the sample family just now. Please try again in a few minutes."
+              : "You're signed in but not part of any household. Ask whoever manages yours for an invite, or start your own."}
           </p>
-          <Button
-            type="button"
-            onClick={handleCreateOwn}
-            disabled={creating}
-            className="mt-5 w-full"
-          >
-            {creating ? "Creating..." : "Create your own household"}
-          </Button>
+          {!isGuest && (
+            <Button
+              type="button"
+              onClick={handleCreateOwn}
+              disabled={creating}
+              className="mt-5 w-full"
+            >
+              {creating ? "Creating..." : "Create your own household"}
+            </Button>
+          )}
           <Button type="button" variant="outline" onClick={handleSignOut} className="mt-2 w-full">
             Sign out
           </Button>
@@ -594,6 +657,25 @@ function SignInScreen({ redirectError }: { redirectError: string | null }) {
   }, [captchaResetKey]);
   const inviteMode =
     typeof window !== "undefined" && new URLSearchParams(window.location.search).has("invite");
+
+  // "Try a sample family": anonymous sign-in (no email). Uses the same human check (Turnstile)
+  // as every other sign-in route, so a script cannot mass-create guests.
+  const [guestLoading, setGuestLoading] = useState(false);
+  const [guestError, setGuestError] = useState<string | null>(null);
+  async function trySampleFamily() {
+    setGuestLoading(true);
+    setGuestError(null);
+    const { error: guestErr } = await supabase.auth.signInAnonymously({
+      options: { captchaToken: captchaToken ?? undefined },
+    });
+    setGuestLoading(false);
+    // Human-check tokens are single-use.
+    setCaptchaToken(null);
+    setCaptchaResetKey((k) => k + 1);
+    if (guestErr) {
+      setGuestError("We could not open the sample just now. Please try again in a minute.");
+    }
+  }
 
   async function sendMagicLink() {
     setLoading(true);
@@ -882,6 +964,28 @@ function SignInScreen({ redirectError }: { redirectError: string | null }) {
           </div>
 
           {error && <p className="mt-3 text-xs text-urgent">{error}</p>}
+
+          {!inviteMode && (
+            <div className="mt-5 border-t border-border pt-4">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={trySampleFamily}
+                disabled={guestLoading || (!captchaToken && !captchaTimedOut)}
+                className="w-full"
+              >
+                {guestLoading
+                  ? "Opening…"
+                  : !captchaToken && !captchaTimedOut
+                    ? "Preparing…"
+                    : "Look around a sample family"}
+              </Button>
+              <p className="mt-1 text-center text-xs text-muted-foreground">
+                No email needed. Made-up data, view only.
+              </p>
+              {guestError && <p className="mt-2 text-xs text-urgent">{guestError}</p>}
+            </div>
+          )}
 
           <p className="mt-5 text-center text-[11px] text-muted-foreground">
             By continuing, you agree to our{" "}

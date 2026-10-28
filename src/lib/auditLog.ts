@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireRealUser } from "@/lib/requireRealUser";
 import type { Json } from "@/integrations/supabase/types";
 
 // Must match the 6 tables the audit_log trigger is actually attached to
@@ -29,7 +29,7 @@ const auditTrailPayloadSchema = z.object({
 // at all (rather than a plain client query) is that user_profiles is
 // self-only RLS on the client, same reasoning already established there.
 export const getAuditTrailForRecord = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(auditTrailPayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase } = context;

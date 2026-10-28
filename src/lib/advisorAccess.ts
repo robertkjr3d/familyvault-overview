@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireRealUser } from "@/lib/requireRealUser";
 
 // ============================================================
 // Advisor (FA) access lifecycle — send invite, accept on login,
@@ -174,7 +174,7 @@ async function requireMember(supabase: any, householdId: string, userId: string)
 }
 
 export const sendAdvisorInvite = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(sendInvitePayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase, userId, claims } = context;
@@ -261,7 +261,7 @@ export const sendAdvisorInvite = createServerFn({ method: "POST" })
   });
 
 export const cancelPendingAdvisorInvite = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(cancelInvitePayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -289,7 +289,7 @@ export const cancelPendingAdvisorInvite = createServerFn({ method: "POST" })
 // because the link write is an upsert keyed on (household_id, advisor_user_id),
 // and re-marking an already-accepted invite as accepted again is harmless.
 export const acceptPendingAdvisorInvitesForCurrentUser = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .handler(async ({ context }) => {
     const { userId, claims } = context;
     const userEmail = normalizeEmail(String(claims.email ?? ""));
@@ -369,7 +369,7 @@ export const acceptPendingAdvisorInvitesForCurrentUser = createServerFn({ method
   });
 
 export const revokeAdvisorAccess = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(revokePayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -393,7 +393,7 @@ export const revokeAdvisorAccess = createServerFn({ method: "POST" })
   });
 
 export const updateAdvisorPermissions = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(updatePermissionsPayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -438,7 +438,7 @@ export const updateAdvisorPermissions = createServerFn({ method: "POST" })
 // mirrors how the family member list itself is viewable by any member,
 // while inviting/revoking stays owner-only.
 export const listAdvisorsForHousehold = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(listPayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -544,7 +544,7 @@ export const listAdvisorsForHousehold = createServerFn({ method: "POST" })
 // Sep 28 2026 — before that, a mortgage entered only on the Property tab was
 // never subtracted anywhere, for the family or the adviser.
 export const getAdvisorNetworthSummary = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(networthPayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase } = context;
@@ -800,7 +800,7 @@ async function computeAdvisorUpcomingPremiums(
 // looking at member A's page). Unassigned records (member_id null) are
 // included on every member's card, matching the household owner's choice.
 export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(clientRecordsPayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase } = context;
@@ -966,7 +966,7 @@ export const getClientRecordsForAdvisor = createServerFn({ method: "POST" })
 // was revoked or never granted for this member/category, the upsert fails
 // with a real Postgres RLS error instead of silently succeeding.
 export const upsertAdvisorNote = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(upsertNotePayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -1004,7 +1004,7 @@ export const upsertAdvisorNote = createServerFn({ method: "POST" })
 // clears any manual override and reverts the card to the computed
 // default (past end_date = Paid, else Ongoing — computed client-side).
 export const upsertAdvisorRecordStatus = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(upsertStatusPayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -1039,7 +1039,7 @@ export const upsertAdvisorRecordStatus = createServerFn({ method: "POST" })
 // policies above, see the migration's comment on why delete doesn't need
 // the same has_advisor_access gate insert/update do.
 export const deleteAdvisorNote = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(deleteNotePayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase } = context;
@@ -1070,7 +1070,7 @@ export const deleteAdvisorNote = createServerFn({ method: "POST" })
 // has_advisor_access-gated queries above it have already proven this
 // advisor may see this member.
 export const getAdvisorPolicyChart = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(getChartPayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -1181,7 +1181,7 @@ export const getAdvisorPolicyChart = createServerFn({ method: "POST" })
 // Upsert on the (link_id, record_id) unique constraint — one current
 // chart per advisor per record, same shape as advisor_record_notes.
 export const upsertAdvisorPolicyChart = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(upsertChartPayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -1223,7 +1223,7 @@ export const upsertAdvisorPolicyChart = createServerFn({ method: "POST" })
 
 // Ownership-only (no access re-check) — same reasoning as deleteAdvisorNote.
 export const deleteAdvisorPolicyChart = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(deleteChartPayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase } = context;
@@ -1242,7 +1242,7 @@ export const deleteAdvisorPolicyChart = createServerFn({ method: "POST" })
 // currencies are fetched per-category and merged — never assume a chart
 // is an insurance policy.
 export const listAdvisorPolicyCharts = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(listChartsPayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -1317,7 +1317,7 @@ export const listAdvisorPolicyCharts = createServerFn({ method: "POST" })
 // record_id), not (record_id) alone, so a record can legitimately carry
 // more than one advisor's note. The caller groups by recordId as needed.
 export const getAdvisorNotesForHousehold = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(listPayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase } = context;
@@ -1366,7 +1366,7 @@ export const getAdvisorNotesForHousehold = createServerFn({ method: "POST" })
 // Minimal on purpose — the actual dashboard content (alerts, PDF data)
 // is the next piece; this just answers "who am I connected to."
 export const listClientHouseholdsForAdvisor = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .handler(async ({ context }) => {
     const { userId } = context;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

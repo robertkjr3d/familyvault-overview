@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { getAuditTrailForRecord, type AuditedTable } from "@/lib/auditLog";
+import { useIsGuest } from "@/hooks/useIsGuest";
 import { recordConfigs } from "@/lib/recordConfigs";
 import { fmtMoney } from "@/lib/format";
 
@@ -42,12 +43,17 @@ function formatValue(
  * itself, not a re-invented label that could drift out of sync with it.
  */
 export function AuditTrail({ tableName, recordId }: { tableName: AuditedTable; recordId: string }) {
+  // Sample-family guests do not see edit history (it names who edited; the server also refuses guests).
+  const isGuest = useIsGuest();
   const { data, isLoading } = useQuery({
     queryKey: ["audit-trail", tableName, recordId],
+    enabled: !isGuest,
     queryFn: () => getAuditTrailForRecord({ data: { tableName, recordId } }),
   });
 
   const entries = data?.entries ?? [];
+
+  if (isGuest) return null;
 
   if (isLoading) {
     return <p className="text-xs text-muted-foreground">Loading…</p>;

@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { useIsGuest } from "@/hooks/useIsGuest";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
@@ -51,7 +52,14 @@ const ACCENT_PRESETS = [
   { name: "Slate", value: "oklch(0.45 0.04 250)" },
 ];
 
+// Sample-family guests have no Settings page (sign-out, account deletion, invites, exports live here).
 function SettingsPage() {
+  const isGuest = useIsGuest();
+  if (isGuest) return <Navigate to="/" replace />;
+  return <SettingsPageInner />;
+}
+
+function SettingsPageInner() {
   const qc = useQueryClient();
   const { data: members = [] } = useMembers();
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);

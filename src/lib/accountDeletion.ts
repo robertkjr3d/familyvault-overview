@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireRealUser } from "@/lib/requireRealUser";
 
 const deleteAccountPayloadSchema = z.object({
   confirmEmail: z.string().email(),
@@ -93,7 +93,7 @@ async function deleteHouseholdCompletely(supabaseAdmin: any, householdId: string
 }
 
 export const deleteAccount = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(deleteAccountPayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;

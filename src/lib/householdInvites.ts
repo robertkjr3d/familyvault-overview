@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireRealUser } from "@/lib/requireRealUser";
 import { checkRateLimit } from "@/lib/rateLimit";
 
 const invitePayloadSchema = z.object({
@@ -38,7 +38,7 @@ function normalizeEmail(email: string): string {
 }
 
 export const sendHouseholdInvite = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(invitePayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase, userId, claims } = context;
@@ -142,7 +142,7 @@ export const sendHouseholdInvite = createServerFn({ method: "POST" })
   });
 
 export const createOwnHousehold = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .handler(async ({ context }) => {
     const { userId, claims } = context;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -180,7 +180,7 @@ export const createOwnHousehold = createServerFn({ method: "POST" })
   });
 
 export const acceptPendingInvitesForCurrentUser = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .handler(async ({ context }) => {
     const { userId, claims } = context;
     const userEmail = normalizeEmail(String(claims.email ?? ""));
@@ -227,7 +227,7 @@ export const acceptPendingInvitesForCurrentUser = createServerFn({ method: "POST
   });
 
 export const acceptHouseholdInvite = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(acceptPayloadSchema)
   .handler(async ({ data, context }) => {
     const { userId, claims } = context;
@@ -288,7 +288,7 @@ export const acceptHouseholdInvite = createServerFn({ method: "POST" })
   });
 
 export const transferHouseholdOwnership = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(transferOwnershipPayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase } = context;
@@ -303,7 +303,7 @@ export const transferHouseholdOwnership = createServerFn({ method: "POST" })
   });
 
 export const removeHouseholdMember = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(removeMemberPayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -353,7 +353,7 @@ export const removeHouseholdMember = createServerFn({ method: "POST" })
   });
 
 export const cancelHouseholdInvite = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(cancelInvitePayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -390,7 +390,7 @@ export const cancelHouseholdInvite = createServerFn({ method: "POST" })
   });
 
 export const listHouseholdPeople = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .inputValidator(listPeoplePayloadSchema)
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -472,7 +472,7 @@ export const listHouseholdPeople = createServerFn({ method: "POST" })
   });
 
 export const createDemoHousehold = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireRealUser])
   .handler(async ({ context }) => {
     const { userId } = context;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
