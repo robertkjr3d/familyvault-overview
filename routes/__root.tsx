@@ -1,0 +1,1022 @@
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Outlet,
+  createRootRouteWithContext,
+  HeadContent,
+  Scripts,
+  useRouterState,
+  useNavigate,
+  Link,
+} from "@tanstack/react-router";
+import { Toaster } from "sonner";
+import { useEffect, useState, useRef } from "react";
+import type { FormEvent } from "react";
+
+import appCss from "../styles.css?url";
+import { BottomTabs } from "@/components/BottomTabs";
+import { FeedbackTab } from "@/components/FeedbackTab";
+import { GuidedTour } from "@/components/GuidedTour";
+import { TourWelcomeScreen } from "@/components/TourWelcomeScreen";
+import { PostLoginPasskeyPrompt } from "@/components/PostLoginPasskeyPrompt";
+import { AppHeader } from "@/components/AppHeader";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuthSession } from "@/hooks/useAuthSession";
+import { isPasskeySupported } from "@/lib/passkeyPrompt";
+import { acceptPendingInvitesForCurrentUser, createOwnHousehold } from "@/lib/householdInvites";
+import {
+  acceptPendingAdvisorInvitesForCurrentUser,
+  listClientHouseholdsForAdvisor,
+} from "@/lib/advisorAccess";
+import { computeRootViewMode } from "@/lib/rootViewMode";
+import { SampleBanner } from "@/components/SampleBanner";
+import {
+  SAMPLE_HOUSEHOLD_ID,
+  guestJoinPhaseFor,
+  isGuestUser,
+  type GuestJoinPhase,
+} from "@/lib/guest";
+import { AdvisorHome } from "@/components/AdvisorHome";
+import { useAppStore } from "@/lib/store";
+import { toast } from "sonner";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { setupGlobalErrorHandlers } from "@/lib/errorLogger";
+import { setupStaleTabReload } from "@/lib/staleTab";
+import { setupIdleReturnReload } from "@/lib/idleReturn";
+
+// Accounts you personally use to test the app, live or in dev — kept out of
+// PostHog analytics/session-recording entirely so your own daily usage never
+// pollutes real-user data. Add any other emails you test with yourself.
+const INTERNAL_TEST_EMAILS = [
+  "azariahtan.piano@gmail.com",
+  "psalm26.1@gmail.com",
+  "impact01@gmail.com",
+  "aza_tan@yahoo.com.sg",
+  "azatan@umich.edu",
+];
+
+export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  head: () => ({
+    meta: [
+      { charSet: "utf-8" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1" },
+      { title: "FamilyHub SG" },
+      { name: "description", content: "One glance — finance, insurance, health, home." },
+      { name: "theme-color", content: "#fbf8f0" },
+    ],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+    ],
+  }),
+  shellComponent: RootShell,
+  component: RootComponent,
+  notFoundComponent: () => (
+    <div className="flex min-h-screen items-center justify-center p-6 text-center">
+      <div>
+        <h1 className="text-2xl font-bold">Not found</h1>
+        <a href="/" className="mt-2 inline-block text-sm text-primary underline">
+          Go home
+        </a>
+      </div>
+    </div>
+  ),
+  errorComponent: ({ error }) => (
+    <div className="flex min-h-screen items-center justify-center p-6 text-center">
+      <div className="max-w-md">
+        <h1 className="text-xl font-bold">Something went wrong</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{error.message}</p>
+      </div>
+    </div>
+  ),
+});
+
+function RootShell({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <head>
+        <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.uploadQueue.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+              posthog.init('phc_tMSVGTsRAfBvhrK4cbH6wbJ9AKMpGkSJ8Nd967rx7sUC', {
+                api_host: 'https://us.i.posthog.com',
+                defaults: '2026-05-30',
+                session_recording: {
+                  maskAllInputs: true,
+                  maskTextSelector: '*',
+                },
+                // Invite and sign-in links carry tokens and emails in the ?query
+                // and #hash. Strip both from every URL before it leaves the browser.
+                before_send: function (ev) {
+                  function clean(v, d) {
+                    if (typeof v === 'string') {
+                      if (v.indexOf('http://') !== 0 && v.indexOf('https://') !== 0) return v;
+                      var q = v.indexOf('?');
+                      var h = v.indexOf('#');
+                      var cut = q === -1 ? h : (h === -1 ? q : Math.min(q, h));
+                      return cut === -1 ? v : v.slice(0, cut);
+                    }
+                    if (d > 4 || v === null || typeof v !== 'object') return v;
+                    for (var k in v) {
+                      if (k === '$snapshot_data') continue;
+                      v[k] = clean(v[k], d + 1);
+                    }
+                    return v;
+                  }
+                  try {
+                    if (ev) {
+                      clean(ev.properties, 0);
+                      clean(ev.$set, 0);
+                      clean(ev.$set_once, 0);
+                    }
+                  } catch (e) {}
+                  return ev;
+                },
+                loaded: function (ph) {
+                  // No session replay for a page load that arrived with a ?query or
+                  // #hash (invite links, sign-in links): replay records the raw URL.
+                  try {
+                    if (location.search.length > 1 || location.hash.length > 1) {
+                      ph.stopSessionRecording();
+                    }
+                  } catch (e) {}
+                },
+              });
+            `,
+          }}
+        />
+      </head>
+      <body>
+        {children}
+        <Scripts />
+      </body>
+    </html>
+  );
+}
+
+function RootComponent() {
+  const { queryClient } = Route.useRouteContext();
+  return (
+    <QueryClientProvider client={queryClient}>
+      <RootContent />
+    </QueryClientProvider>
+  );
+}
+
+function RootContent() {
+  const { initialized, session, authRedirectError } = useAuthSession();
+  const setActiveHouseholdId = useAppStore((s) => s.setActiveHouseholdId);
+  const claimUiForUser = useAppStore((s) => s.claimUiForUser);
+  const endTour = useAppStore((s) => s.endTour);
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const queryClient = useQueryClient();
+  // Legal pages must be readable before signing in — that's the whole point
+  // of a privacy policy / terms page. Bypass the auth gate for just these two.
+  const isPublicRoute = pathname === "/privacy" || pathname === "/terms";
+  const [inviteCheckDone, setInviteCheckDone] = useState(false);
+  // Sample-family guest = anonymous sign-in. Guests skip every invite/adviser check below
+  // (they have no email, and the server refuses them anyway).
+  const isGuest = isGuestUser(session?.user);
+  // The join state belongs to ONE user id. After "Start your own" the next guest is a different
+  // user, so a leftover "done" from the previous guest must never carry over.
+  const [guestJoinRaw, setGuestJoinRaw] = useState<{
+    userId: string | null;
+    phase: GuestJoinPhase;
+  }>({
+    userId: null,
+    phase: "idle",
+  });
+  const guestJoin = guestJoinPhaseFor(guestJoinRaw, session?.user?.id);
+
+  useEffect(() => {
+    setupGlobalErrorHandlers();
+    setupStaleTabReload();
+    setupIdleReturnReload();
+  }, []);
+
+  // Selected household, member filter, tour and onboarding-dismissal are saved
+  // in the browser. Stamp them with the signed-in user so a different person
+  // signing in on the same browser starts clean instead of inheriting the last
+  // person's state (see claimUiForUser in store.ts). Declared BEFORE the invite
+  // effect below so this reset always happens first.
+  useEffect(() => {
+    if (session?.user?.id) claimUiForUser(session.user.id);
+  }, [session?.user?.id, claimUiForUser]);
+
+  // When someone who WAS signed in becomes signed out (Sign out button,
+  // expired session, deleted account): forget the last person's cached data,
+  // end any running tour, and go back to "/". Without the last step, signing
+  // out from Settings left the address on /settings, so the next email-code or
+  // passkey sign-in landed on Settings (Google always returns to "/").
+  const signedInUserIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const userId = session?.user?.id ?? null;
+    if (userId) {
+      signedInUserIdRef.current = userId;
+      return;
+    }
+    if (!initialized || !signedInUserIdRef.current) return;
+    signedInUserIdRef.current = null;
+    queryClient.clear();
+    endTour();
+    if (!isPublicRoute && pathname !== "/") void navigate({ to: "/", replace: true });
+  }, [session?.user?.id, initialized, isPublicRoute, pathname, queryClient, endTour, navigate]);
+
+  // Keep your own testing sessions out of PostHog entirely — this is the
+  // actual fix for "which replays are mine vs a real user's": nothing about
+  // your account gets recorded or captured at all, rather than trying to
+  // filter it out after the fact in the PostHog dashboard.
+  useEffect(() => {
+    const posthog = (window as any).posthog;
+    if (!posthog || !session?.user?.email) return;
+    try {
+      if (INTERNAL_TEST_EMAILS.includes(session.user.email)) {
+        posthog.opt_out_capturing();
+      } else {
+        posthog.opt_in_capturing();
+      }
+    } catch {
+      // Privacy tools (Brave Shields, Safari's tracking prevention) can
+      // block PostHog's script from ever loading. When that happens,
+      // PostHog's own stub throws internally on these two specific calls
+      // rather than failing silently like capture()/identify() do. A user
+      // actively blocking analytics correctly ending up with no analytics
+      // is fine and expected — it just shouldn't crash the app around it.
+    }
+  }, [session?.user?.email]);
+
+  useEffect(() => {
+    if (!session?.user?.id) {
+      setInviteCheckDone(false);
+      return;
+    }
+
+    if (isGuest) {
+      setInviteCheckDone(true);
+      return;
+    }
+
+    let cancelled = false;
+    setInviteCheckDone(false);
+
+    // Bug fix: this used to only run when the URL had ?invite=<token>,
+    // which meant someone who typed their email + code directly on the
+    // homepage (instead of clicking the emailed link) never got joined to
+    // the household that invited them — the app had no way to know an
+    // invite was involved at all. Checking by the user's own verified
+    // email instead of a URL param fixes this regardless of how they
+    // arrived, and also accepts multiple pending invites if there are any.
+    void acceptPendingInvitesForCurrentUser()
+      .then(async (result) => {
+        if (cancelled) return;
+        if (result?.acceptedHouseholdIds?.length) {
+          setActiveHouseholdId(result.acceptedHouseholdIds[0]);
+          // Wait for the refetch to actually land, not just fire it — an
+          // invalidation alone doesn't mean fresh data has arrived yet, so
+          // marking the check "done" right after invalidating (without
+          // awaiting) would just relocate the same flash to a moment later.
+          await queryClient.invalidateQueries({ queryKey: ["household-memberships"] });
+          toast.success(
+            result.acceptedHouseholdIds.length > 1
+              ? "Invitations accepted."
+              : "Invitation accepted.",
+          );
+        }
+        if (cancelled) return;
+        setInviteCheckDone(true);
+
+        if (typeof window === "undefined") return;
+        const params = new URLSearchParams(window.location.search);
+        if (!params.has("invite") && !params.has("email")) return;
+        params.delete("invite");
+        params.delete("email");
+        const nextQuery = params.toString();
+        const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash}`;
+        window.history.replaceState({}, "", nextUrl);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setInviteCheckDone(true);
+        const message =
+          error instanceof Error ? error.message : "Unable to check for pending invites.";
+        toast.error(message);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id, isGuest, setActiveHouseholdId, queryClient]);
+
+  // Separate and independent from the family-invite effect above on purpose:
+  // an advisor accepting a share doesn't join a household or need the
+  // inviteCheckDone/household-switch gating that effect carefully manages —
+  // merging the two risked disturbing logic already tuned for a real
+  // incident history in this exact file. See acceptPendingAdvisorInvitesForCurrentUser
+  // in advisorAccess.ts for what this actually does.
+  useEffect(() => {
+    if (!session?.user?.id || isGuest) return;
+    let cancelled = false;
+
+    void acceptPendingAdvisorInvitesForCurrentUser()
+      .then(async (result) => {
+        if (cancelled) return;
+        if (result?.acceptedHouseholdIds?.length) {
+          // This was the actual bug: the link was created successfully (this
+          // toast fired), but nothing told react-query the advisor-clients
+          // query was now stale, so rootViewMode kept deciding based on the
+          // old (zero-clients) snapshot forever — stuck on "no household
+          // access" even after a genuinely successful accept.
+          await queryClient.invalidateQueries({ queryKey: ["advisor-clients"] });
+          toast.success(
+            result.acceptedHouseholdIds.length > 1
+              ? "You now have advisor access to multiple households."
+              : "You now have advisor access to a household.",
+          );
+        }
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        const message =
+          error instanceof Error ? error.message : "Unable to check for pending advisor invites.";
+        toast.error(message);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id, isGuest, queryClient]);
+
+  const { data: memberships, isLoading: membershipsLoading } = useQuery({
+    queryKey: ["household-memberships", session?.user?.id],
+    enabled: !!session?.user?.id && !isPublicRoute,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("household_users" as any)
+        .select("household_id, role, households(id, name)")
+        .eq("user_id", session!.user!.id);
+      if (error) throw error;
+      return (data ?? []) as unknown as Array<{ household_id: string }>;
+    },
+  });
+
+  // Only relevant once memberships is known to be empty, but firing it in
+  // parallel (rather than waiting) keeps this simple and costs nothing for
+  // the common family-user case, who just gets an unused empty result.
+  const { data: advisorClientsData, isLoading: advisorClientsLoading } = useQuery({
+    queryKey: ["advisor-clients", session?.user?.id],
+    enabled: !!session?.user?.id && !isPublicRoute,
+    // Guests are never advisers; do not call the server for them.
+    queryFn: () =>
+      isGuest
+        ? Promise.resolve({ clients: [] } as unknown as Awaited<
+            ReturnType<typeof listClientHouseholdsForAdvisor>
+          >)
+        : listClientHouseholdsForAdvisor(),
+  });
+
+  // A new guest has a session but no household yet: put them in the shared sample family as a
+  // VIEWER. The database only allows exactly this row (role viewer, the sample household, own
+  // user id) for guests; see the "guests can join the sample family as viewers" policy.
+  useEffect(() => {
+    if (!isGuest || !session?.user?.id || isPublicRoute) return;
+    if (membershipsLoading || !memberships) return;
+    if (memberships.length > 0 || guestJoin !== "idle") return;
+    const userId = session.user.id;
+    setGuestJoinRaw({ userId, phase: "joining" });
+    void (async () => {
+      const { error } = await supabase
+        .from("household_users" as any)
+        .insert({ household_id: SAMPLE_HOUSEHOLD_ID, user_id: userId, role: "viewer" });
+      // 23505 = already a member (e.g. two tabs at once): fine.
+      if (error && (error as { code?: string }).code !== "23505") {
+        setGuestJoinRaw({ userId, phase: "failed" });
+        return;
+      }
+      try {
+        (window as any).posthog?.capture("sample_family_opened");
+      } catch {
+        // analytics blocked: ignore
+      }
+      await queryClient.invalidateQueries({ queryKey: ["household-memberships"] });
+      setGuestJoinRaw({ userId, phase: "done" });
+    })();
+  }, [
+    isGuest,
+    session?.user?.id,
+    isPublicRoute,
+    membershipsLoading,
+    memberships,
+    guestJoin,
+    queryClient,
+  ]);
+
+  if (isPublicRoute) {
+    return <Outlet />;
+  }
+
+  const viewMode = computeRootViewMode({
+    initialized,
+    hasSession: !!session,
+    inviteCheckDone,
+    // A guest with no household yet is mid-join: show "Loading", never the "no household" screen.
+    membershipsLoading:
+      membershipsLoading ||
+      (isGuest &&
+        (guestJoin === "joining" || (guestJoin === "idle" && (memberships?.length ?? 0) === 0))),
+    membershipsCount: memberships ? memberships.length : null,
+    advisorClientsLoading,
+    advisorClientsCount: advisorClientsData ? advisorClientsData.clients.length : null,
+    wantsAdvisorView:
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("view") === "advisor",
+  });
+
+  if (viewMode === "loading") {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-6 text-sm text-muted-foreground">
+        Loading...
+      </div>
+    );
+  }
+
+  if (viewMode === "sign-in") {
+    return <SignInScreen redirectError={authRedirectError} />;
+  }
+
+  if (viewMode === "no-access") {
+    return <NoHouseholdScreen isGuest={isGuest} />;
+  }
+
+  if (viewMode === "advisor-only") {
+    return <AdvisorHome />;
+  }
+
+  return (
+    <ErrorBoundary>
+      <div className="min-h-screen pb-36">
+        <SampleBanner />
+        <AppHeader />
+        <main className="mx-auto max-w-3xl px-4 py-4">
+          <Outlet />
+        </main>
+        <BottomTabs />
+        <FeedbackTab />
+        <GuidedTour />
+        <TourWelcomeScreen />
+        <PostLoginPasskeyPrompt />
+        <Toaster
+          position="bottom-right"
+          richColors
+          closeButton
+          offset={{ bottom: 80 }}
+          duration={1000}
+        />
+      </div>
+    </ErrorBoundary>
+  );
+}
+
+function NoHouseholdScreen({ isGuest }: { isGuest: boolean }) {
+  const queryClient = useQueryClient();
+  const setActiveHouseholdId = useAppStore((s) => s.setActiveHouseholdId);
+  const [creating, setCreating] = useState(false);
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+  }
+
+  async function handleCreateOwn() {
+    setCreating(true);
+    try {
+      const result = await createOwnHousehold();
+      setActiveHouseholdId(result.householdId);
+      await queryClient.invalidateQueries({ queryKey: ["household-memberships"] });
+      toast.success("Your household is ready.");
+    } catch (err: any) {
+      toast.error(err.message || "Could not create a household.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background p-6">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="bg-primary px-6 py-6">
+          <p className="text-lg font-bold tracking-tight text-primary-foreground">FamilyHub SG</p>
+        </div>
+        <div className="p-6">
+          <h1 className="text-lg font-semibold tracking-tight">
+            {isGuest ? "Sample family unavailable" : "No household access"}
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {isGuest
+              ? "We could not open the sample family just now. Please try again in a few minutes."
+              : "You're signed in but not part of any household. Ask whoever manages yours for an invite, or start your own."}
+          </p>
+          {!isGuest && (
+            <Button
+              type="button"
+              onClick={handleCreateOwn}
+              disabled={creating}
+              className="mt-5 w-full"
+            >
+              {creating ? "Creating..." : "Create your own household"}
+            </Button>
+          )}
+          <Button type="button" variant="outline" onClick={handleSignOut} className="mt-2 w-full">
+            Sign out
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Cloudflare Turnstile site key — safe to be public, it only identifies
+// which site is asking; the secret half of this lives in Supabase's own
+// dashboard (Settings > Authentication > Bot and Abuse Protection), not in
+// this app's code, since Supabase's own auth server verifies the token.
+const TURNSTILE_SITE_KEY = "0x4AAAAAAD-_TZ38lRs8wlpW";
+
+/**
+ * Renders Cloudflare Turnstile's "Managed" widget — mostly invisible; it
+ * resolves on its own in the background for the vast majority of real
+ * people, only showing an actual checkbox to a small minority Cloudflare
+ * is unsure about. Not the old "type these letters" CAPTCHA. Calls
+ * onToken(token) once a token is ready; parent must call reset() to get a
+ * fresh token after each use, since Turnstile tokens are single-use.
+ */
+function TurnstileWidget({
+  onToken,
+  resetKey,
+}: {
+  onToken: (token: string | null) => void;
+  resetKey: number;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const widgetIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    function render() {
+      const w = window as any;
+      if (cancelled || !containerRef.current || !w.turnstile) return;
+      widgetIdRef.current = w.turnstile.render(containerRef.current, {
+        sitekey: TURNSTILE_SITE_KEY,
+        callback: (token: string) => {
+          if (!cancelled) onToken(token);
+        },
+        "expired-callback": () => {
+          if (!cancelled) onToken(null);
+        },
+        "error-callback": () => {
+          if (!cancelled) onToken(null);
+        },
+      });
+    }
+
+    const w = window as any;
+    if (w.turnstile) {
+      render();
+    } else if (!document.querySelector("script[data-turnstile]")) {
+      const script = document.createElement("script");
+      script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+      script.async = true;
+      script.defer = true;
+      script.dataset.turnstile = "true";
+      script.addEventListener("load", render);
+      document.head.appendChild(script);
+    } else {
+      document.querySelector("script[data-turnstile]")?.addEventListener("load", render);
+      // Script tag already exists from a previous mount — poll briefly in
+      // case it finished loading before this effect ran.
+      const interval = setInterval(() => {
+        if ((window as any).turnstile) {
+          clearInterval(interval);
+          render();
+        }
+      }, 100);
+      setTimeout(() => clearInterval(interval), 5000);
+    }
+
+    return () => {
+      cancelled = true;
+      const w2 = window as any;
+      if (widgetIdRef.current && w2.turnstile) {
+        w2.turnstile.remove(widgetIdRef.current);
+        widgetIdRef.current = null;
+      }
+    };
+  }, [resetKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return <div ref={containerRef} />;
+}
+
+// Shared by every auth flow below that needs a redirectTo — deliberately
+// NEVER window.location.href. This app's Supabase client (client.ts) doesn't
+// set flowType, so it defaults to 'implicit' (confirmed in the installed
+// @supabase/auth-js source, GoTrueClient.js) — a successful sign-in returns
+// tokens as a URL HASH FRAGMENT (#access_token=...&refresh_token=...), and
+// that hash is only stripped from the address bar AFTER an async round-trip
+// (_getUser) completes, not instantly. If a user starts a second sign-in
+// before that finishes, window.location.href still contains the OLD,
+// unprocessed "#access_token=..." — and passing that back in as redirectTo
+// made Supabase append its own NEW "#access_token=..." after it, producing
+// a URL with two "#" fragments that supabase-js cannot parse back out. That
+// was the actual cause of "choose Google account → bounces back to sign-in"
+// (confirmed against the library source, not guessed). Always building a
+// clean origin(+invite) URL here, instead of trusting whatever's currently
+// in the address bar, closes the whole class of this bug — not just the
+// one call site it was first noticed on.
+function buildAuthRedirectUrl(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  const inviteToken = new URLSearchParams(window.location.search).get("invite");
+  const url = new URL(window.location.origin);
+  if (inviteToken) url.searchParams.set("invite", inviteToken);
+  return url.toString();
+}
+
+function SignInScreen({ redirectError }: { redirectError: string | null }) {
+  const [email, setEmail] = useState(() => {
+    if (typeof window === "undefined") return "";
+    // Prefill from the invite link when present, so someone who actually
+    // clicked their invite email doesn't have to retype their own address.
+    return new URLSearchParams(window.location.search).get("email") ?? "";
+  });
+  const [loading, setLoading] = useState(false);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaResetKey, setCaptchaResetKey] = useState(0);
+  // Fail open, not closed: if Turnstile's script is ever blocked (network
+  // issue, ad-blocker, a Cloudflare outage) this app must not become
+  // permanently un-sign-in-able for real family members over it. After a
+  // generous wait with no token, let the button become clickable anyway —
+  // worst case Supabase's own captcha check rejects it with a visible,
+  // recoverable error; that's still far better than a silently disabled
+  // button with no explanation, forever.
+  const [captchaTimedOut, setCaptchaTimedOut] = useState(false);
+  useEffect(() => {
+    setCaptchaTimedOut(false);
+    const t = setTimeout(() => setCaptchaTimedOut(true), 8000);
+    return () => clearTimeout(t);
+  }, [captchaResetKey]);
+  const inviteMode =
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).has("invite");
+
+  // "Try a sample family": anonymous sign-in (no email). Uses the same human check (Turnstile)
+  // as every other sign-in route, so a script cannot mass-create guests.
+  const [guestLoading, setGuestLoading] = useState(false);
+  const [guestError, setGuestError] = useState<string | null>(null);
+  async function trySampleFamily() {
+    setGuestLoading(true);
+    setGuestError(null);
+    const { error: guestErr } = await supabase.auth.signInAnonymously({
+      options: { captchaToken: captchaToken ?? undefined },
+    });
+    setGuestLoading(false);
+    // Human-check tokens are single-use.
+    setCaptchaToken(null);
+    setCaptchaResetKey((k) => k + 1);
+    if (guestErr) {
+      setGuestError("We could not open the sample just now. Please try again in a minute.");
+    }
+  }
+
+  async function sendMagicLink() {
+    setLoading(true);
+    setError(null);
+
+    const inviteToken =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("invite")
+        : null;
+    const redirectTo = buildAuthRedirectUrl();
+    const { error: signInError } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: redirectTo,
+        captchaToken: captchaToken ?? undefined,
+        // Bug fix: Supabase's email template data reflects the user's
+        // STORED profile data, not just this one request — confirmed by
+        // a real case where someone who'd been removed from a household,
+        // then requested a completely fresh code with no invite involved,
+        // still got an email saying "invited by" a household they'd left.
+        // Only clear it when this genuinely isn't an invite request —
+        // otherwise a legitimate "resend my invite code" click would lose
+        // its own correct wording.
+        data: inviteToken ? undefined : { invited_household_name: null, invited_by_email: null },
+      },
+    });
+
+    setLoading(false);
+    // Turnstile tokens are single-use — get a fresh one for next time
+    // regardless of whether this attempt succeeded or failed.
+    setCaptchaToken(null);
+    setCaptchaResetKey((k) => k + 1);
+    if (signInError) {
+      setError(signInError.message);
+      return;
+    }
+
+    setSentTo(email);
+  }
+
+  const [code, setCode] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+
+  async function verifyCode(e: FormEvent) {
+    e.preventDefault();
+    setVerifying(true);
+    setVerifyError(null);
+
+    const { error: verifyErr } = await supabase.auth.verifyOtp({
+      email,
+      token: code.trim(),
+      type: "email",
+    });
+
+    setVerifying(false);
+    if (verifyErr) {
+      setVerifyError(verifyErr.message);
+      return;
+    }
+  }
+
+  // Google sign-in — unlike passkeys, this IS offered in inviteMode too: a
+  // brand-new invited person has no passkey yet, but Google works for both
+  // first-time and returning users identically (Supabase creates the auth
+  // user on first OAuth sign-in the same way it does on first OTP sign-in).
+  // Household membership is matched purely by verified email in
+  // acceptPendingInvitesForCurrentUser() (see householdInvites.ts) — that
+  // logic is completely agnostic to which auth method produced the session,
+  // so nothing else in the app needs to change for this to "just work".
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleError, setGoogleError] = useState<string | null>(null);
+
+  async function signInWithGoogle() {
+    setGoogleLoading(true);
+    setGoogleError(null);
+    // See buildAuthRedirectUrl()'s own comment above for exactly why this
+    // can't be window.location.href — that was the actual bug. No
+    // captchaToken here on purpose: signInWithOAuth doesn't accept one —
+    // Google's own sign-in screen is the bot check for this path, Turnstile
+    // is only for the OTP/passkey paths that talk to Supabase directly.
+    const { error: googleErr } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: buildAuthRedirectUrl(),
+      },
+    });
+    if (googleErr) {
+      // Only reached if Supabase rejects the request before ever redirecting
+      // (e.g. Google provider not enabled/misconfigured) — a successful call
+      // navigates the browser away immediately, so there's no "success" path
+      // to handle here.
+      setGoogleLoading(false);
+      setGoogleError(googleErr.message);
+    }
+  }
+
+  // Passkey sign-in — deliberately NOT offered in inviteMode: a brand-new
+  // invited person has no passkey registered yet (registration only happens
+  // from an already-signed-in session, in Settings), so the button would
+  // just fail confusingly for the one group of people who can't use it.
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const [passkeyError, setPasskeyError] = useState<string | null>(null);
+  const passkeySupported = isPasskeySupported();
+
+  async function signInWithPasskey() {
+    setPasskeyLoading(true);
+    setPasskeyError(null);
+    const { error: pkError } = await supabase.auth.signInWithPasskey({
+      options: { captchaToken: captchaToken ?? undefined },
+    });
+    setPasskeyLoading(false);
+    // Same single-use-token reset as the OTP flow above — this was the actual bug:
+    // signInWithPasskey wasn't passing the token at all, so Supabase's captcha check
+    // rejected it even though Turnstile itself had already succeeded client-side.
+    setCaptchaToken(null);
+    setCaptchaResetKey((k) => k + 1);
+    if (pkError) {
+      // The most common "error" here is the person tapping Cancel on their
+      // device's biometric prompt — not a real failure, so don't show a
+      // scary red message for that specific case. Verified against the
+      // installed SDK's actual error shape (WebAuthnError.code), not
+      // guessed — the browser-level "AbortError" DOMException is
+      // translated into this SDK-level code, not surfaced by that name.
+      const isUserCancelled =
+        "code" in pkError && (pkError as { code?: string }).code === "ERROR_CEREMONY_ABORTED";
+      if (!isUserCancelled) setPasskeyError(pkError.message);
+    }
+  }
+
+  // Conditional UI (passkey autofill) — the modern top-tier pattern: instead of only a
+  // separate button, a saved passkey shows up right inside the email field's own autofill
+  // dropdown the moment it's focused, same place saved passwords already appear. This is
+  // Conditional UI (passkey autofill) — the modern top-tier pattern where a saved passkey
+  // shows up right inside the email field's own autofill dropdown, not just via a separate
+  // button. RESEARCHED AND ATTEMPTED, then deliberately NOT shipped: it requires
+  // deserializeCredentialRequestOptions/getCredential/serializeCredentialRequestResponse,
+  // which turned out to exist only inside @supabase/auth-js's compiled internals, not
+  // actually re-exported from the package's public entry point (caught by tsc, not
+  // guessed — see the failed build this produced). The only way to use them would be
+  // importing a deep internal file path that a routine dependency update could silently
+  // break, or hand-rolling the WebAuthn serialization myself — both worse than the
+  // button-only flow already working today. The email field below still gets
+  // autocomplete="email webauthn" for free, priming the browser for whenever Supabase
+  // ships native mediation support in signInWithPasskey() itself (their own maintainer
+  // said this was coming "shortly" as of this session) — pure upside, no downside, so
+  // kept. Revisit the full conditional-UI ceremony once that ships.
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background p-6">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="bg-primary px-6 py-6">
+          <p className="text-lg font-bold tracking-tight text-primary-foreground">FamilyHub SG</p>
+          <p className="mt-1 text-xs text-primary-foreground/70">
+            Your family's financial command centre
+          </p>
+        </div>
+
+        <div className="p-6">
+          {!inviteMode && (
+            <div className="mb-5 rounded-xl border border-border bg-muted/40 p-4">
+              <p className="text-sm font-semibold">Just looking?</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Open a made-up family. Nothing to type, no email needed. View only.
+              </p>
+              <Button
+                type="button"
+                onClick={trySampleFamily}
+                disabled={guestLoading || (!captchaToken && !captchaTimedOut)}
+                className="mt-3 w-full"
+              >
+                {guestLoading
+                  ? "Opening…"
+                  : !captchaToken && !captchaTimedOut
+                    ? "Preparing…"
+                    : "Look around a sample family"}
+              </Button>
+              {guestError && <p className="mt-2 text-xs text-urgent">{guestError}</p>}
+              <p className="mt-4 text-center text-xs text-muted-foreground">
+                Or sign in to your own account below
+              </p>
+            </div>
+          )}
+
+          <h1 className="text-lg font-semibold tracking-tight">
+            {inviteMode ? "Join your family's household" : "Sign in or create an account"}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {inviteMode
+              ? "Enter the invited email and the code from your invite email."
+              : "Type your email in the box below and tap “Email me a code”. Then type the 6-digit code from the email. No password."}
+          </p>
+
+          {redirectError && (
+            <div className="mt-4 rounded-lg border border-urgent/30 bg-urgent/5 p-3 text-sm text-urgent">
+              That link didn't work — it may be an older or already-used one. Please enter your
+              email below and type in the 6-digit code from your email instead.
+            </div>
+          )}
+
+          <div className="mt-5 space-y-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={signInWithGoogle}
+              disabled={googleLoading}
+              className="w-full gap-2"
+            >
+              <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
+                <path
+                  fill="#FFC107"
+                  d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.6-6 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l5.7-5.7C34.6 6 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"
+                />
+                <path
+                  fill="#FF3D00"
+                  d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.8 1.1 8 3l5.7-5.7C34.6 6 29.6 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"
+                />
+                <path
+                  fill="#4CAF50"
+                  d="M24 44c5.5 0 10.5-2.1 14.3-5.6l-6.6-5.6C29.6 34.7 26.9 36 24 36c-5.3 0-9.6-3.4-11.3-8l-6.5 5C9.6 39.6 16.3 44 24 44z"
+                />
+                <path
+                  fill="#1976D2"
+                  d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.2-4.1 5.6l6.6 5.6C41.3 36 44 30.5 44 24c0-1.3-.1-2.7-.4-3.5z"
+                />
+              </svg>
+              {googleLoading ? "Redirecting to Google…" : "Continue with Google"}
+            </Button>
+            {googleError && <p className="text-xs text-urgent">{googleError}</p>}
+
+            {!inviteMode && passkeySupported && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={signInWithPasskey}
+                  disabled={passkeyLoading || (!captchaToken && !captchaTimedOut)}
+                  className="w-full"
+                >
+                  {passkeyLoading
+                    ? "Waiting for your passkey…"
+                    : !captchaToken && !captchaTimedOut
+                      ? "Preparing…"
+                      : "Sign in with a passkey"}
+                </Button>
+                {passkeyError && <p className="text-xs text-urgent">{passkeyError}</p>}
+              </>
+            )}
+
+            <div className="relative py-1 text-center">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-border" />
+              </div>
+              <span className="relative bg-card px-2 text-[11px] text-muted-foreground">or</span>
+            </div>
+
+            <Input
+              type="email"
+              required
+              // "webauthn" appended is the DOM signal that tells the browser to
+              // include saved passkeys in this field's autofill dropdown — required
+              // for conditional UI, confirmed via MDN's own reference example.
+              autoComplete="email webauthn"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+
+            <form onSubmit={verifyCode} className="space-y-3">
+              <Input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="6-digit code"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+              />
+              <Button type="submit" disabled={verifying || !email || !code} className="w-full">
+                {verifying ? "Verifying..." : "Verify code and sign in"}
+              </Button>
+            </form>
+            {verifyError && <p className="text-xs text-urgent">{verifyError}</p>}
+          </div>
+
+          <div className="mt-5 border-t border-border pt-4">
+            <p className="text-xs text-muted-foreground">
+              {inviteMode ? "Code not showing up?" : "Don't have a code yet?"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Enter your email above and we'll email you a code to register.
+            </p>
+            <TurnstileWidget
+              key={captchaResetKey}
+              resetKey={captchaResetKey}
+              onToken={setCaptchaToken}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={sendMagicLink}
+              disabled={loading || !email || (!captchaToken && !captchaTimedOut)}
+              className="mt-2 w-full"
+            >
+              {loading
+                ? "Sending..."
+                : !captchaToken && !captchaTimedOut
+                  ? "Verifying you're human…"
+                  : "Email me a code"}
+            </Button>
+            {sentTo && <p className="mt-2 text-xs text-settled">New code sent to {sentTo}.</p>}
+          </div>
+
+          {error && <p className="mt-3 text-xs text-urgent">{error}</p>}
+
+          <p className="mt-5 text-center text-[11px] text-muted-foreground">
+            By continuing, you agree to our{" "}
+            <Link to="/terms" className="underline">
+              Terms of Service
+            </Link>{" "}
+            and{" "}
+            <Link to="/privacy" className="underline">
+              Privacy Policy
+            </Link>
+            .
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

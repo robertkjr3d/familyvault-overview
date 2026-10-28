@@ -1,0 +1,428 @@
+import { AddRecordFab } from "@/components/AddRecordFab";
+import { Bell } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAppStore } from "@/lib/store";
+import { MemberFilterBar } from "@/components/MemberFilterBar";
+import { SortControl } from "@/components/SortControl";
+import { RecordCard, FieldRow, Section } from "@/components/RecordCard";
+import { useStatusMutation, useDeleteMutation } from "@/lib/mutations";
+import { useRecordSorter } from "@/hooks/useRecordSorter";
+import { fmtMoney, fmtDate, fmtPct, groupByCurrency, totalWithFx } from "@/lib/format";
+import { FxInfoNote } from "@/components/FxInfoNote";
+import { useState } from "react";
+import { useCurrentRole } from "@/lib/useCurrentRole";
+import { differenceInDays, parseISO } from "date-fns";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
+import { isFdLikeAccountType, isCpfAccountType } from "@/lib/options";
+import { ReminderButton } from "@/components/ReminderButton";
+import { RemindersList } from "@/components/RemindersList";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
+import { NotesEditor } from "@/components/NotesEditor";
+import { HistoryLog } from "@/components/HistoryLog";
+import { AuditTrail } from "@/components/AuditTrail";
+import { DocumentsList } from "@/components/DocumentsList";
+import { HashHighlight } from "@/components/HashHighlight";
+import { useEntityCounts } from "@/lib/useEntityCounts";
+import { ForeignCurrencyTotals } from "@/components/ForeignCurrencyTotals";
+import { useFxRates } from "@/hooks/useFxRates";
+import { LastUpdatedLine } from "@/components/LastUpdatedLine";
+
+export const Route = createFileRoute("/savings")({
+  component: SavingsPage,
+  head: () => ({ meta: [{ title: "Savings — FamilyHub SG" }] }),
+});
+
+const GROUP_ORDER = [
+  "Savings Account",
+  "Fixed Deposit (FD)",
+  "T-Bills / Singapore Savings Bonds",
+  "SRS (Supplementary Retirement Scheme)",
+  "CPF-Ordinary Account (OA)",
+  "CPF-Special Account (SA)",
+  "CPF-Medisave Account (MA)",
+  "CPF-Retirement Account (RA)",
+  "Other",
+];
+function groupRank(name: string) {
+  const i = GROUP_ORDER.findIndex((g) => g.toLowerCase() === (name ?? "").toLowerCase());
+  return i === -1 ? 999 : i;
+}
+
+function staleDays(lastUpdated: string | null | undefined) {
+  if (!lastUpdated) return null;
+  try {
+    return differenceInDays(new Date(), parseISO(lastUpdated));
+  } catch {
+    return null;
+  }
+}
+
+function UpdateBalanceInline({ id, current }: { id: string; current: number | null | undefined }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(current?.toString() ?? "");
+  const qc = useQueryClient();
+  const { canEdit } = useCurrentRole();
+
+  async function save() {
+    const num = Number(val.replace(/,/g, ""));
+    if (isNaN(num)) {
+      toast.error("Enter a valid number");
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const { data, error } = await supabase
+      .from("savings_accounts")
+      .update({ balance: num, last_updated: today })
+      .eq("id", id)
+      .select("id")
+      .maybeSingle();
+    if (error) toast.error(error.message);
+    else if (!data) toast.error("Nothing was updated — you may not have permission to edit this.");
+    else {
+      toast.success("Balance updated");
+      qc.invalidateQueries({ queryKey: ["savings"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      setEditing(false);
+    }
+  }
+
+  if (!editing) {
+    return (
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-7 px-2 text-xs"
+        onClick={(e) => {
+          e.stopPropagation();
+          setEditing(true);
+        }}
+      >
+        Update
+      </Button>
+    );
+  }
+  if (!canEdit) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
+      <Input
+        type="text"
+        inputMode="decimal"
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        className="h-7 w-24 text-xs"
+        autoFocus
+      />
+      <Button type="button" size="sm" className="h-7 px-2 text-xs" onClick={save}>
+        Save
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="h-7 px-1.5 text-xs"
+        onClick={() => setEditing(false)}
+      >
+        ✕
+      </Button>
+    </div>
+  );
+}
+
+function SavingsPage() {
+  const memberFilter = useAppStore((s) => s.memberFilter);
+  const sortCards = useRecordSorter();
+  const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
+  const status = useStatusMutation("savings_accounts", "savings");
+  const del = useDeleteMutation("savings_accounts", "savings", "savings");
+  const counts = useEntityCounts("savings", activeHouseholdId);
+  const { data: fxRates } = useFxRates();
+
+  const { data: items = [] } = useQuery({
+    queryKey: ["savings", memberFilter, activeHouseholdId],
+    enabled: !!activeHouseholdId,
+    queryFn: async () => {
+      if (!activeHouseholdId) return [];
+      let q = supabase.from("savings_accounts").select("*").eq("household_id", activeHouseholdId);
+      if (memberFilter !== "all") q = q.eq("member_id", memberFilter);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const groups = Array.from(new Set(items.map((i: any) => i.account_type || "Other"))).sort(
+    (a, b) => groupRank(a) - groupRank(b),
+  );
+  const cpfItems = items.filter((i: any) => isCpfAccountType(i.account_type));
+  const liquidItems = items.filter((i: any) => !isCpfAccountType(i.account_type));
+  const liquidTotals = groupByCurrency(liquidItems, (i: any) => i.balance);
+  const cpfTotals = groupByCurrency(cpfItems, (i: any) => i.balance);
+
+  return (
+    <div className="space-y-4 pb-24">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold tracking-tight">Savings</h1>
+        <SortControl />
+      </div>
+      <MemberFilterBar table="savings_accounts" />
+      {groups.map((g) => (
+        <section key={g}>
+          <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            {g}
+          </h2>
+          <div className="space-y-3">
+            {sortCards(items.filter((i: any) => (i.account_type || "Other") === g)).map(
+              (a: any) => (
+                <SavingsRow
+                  key={a.id}
+                  a={a}
+                  onStatus={(s) => status.mutate({ id: a.id, status: s })}
+                  onDelete={() => del.mutate(a.id)}
+                  reminderCount={counts.reminderCounts[a.id] || 0}
+                  historyCount={counts.historyCounts[a.id] || 0}
+                  auditCount={counts.auditCounts[a.id] || 0}
+                  documentsCount={counts.documentsCounts[a.id] || 0}
+                />
+              ),
+            )}
+          </div>
+        </section>
+      ))}
+      {items.length > 0 && (
+        <div className="space-y-3">
+          {liquidItems.length > 0 && (
+            <div className="rounded-2xl border border-border bg-card p-4 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">
+                  Total liquid savings
+                  {liquidTotals.foreign.length > 0 && <FxInfoNote fx={fxRates} />}
+                </span>
+                <span className="font-bold">{fmtMoney(totalWithFx(liquidTotals, fxRates))}</span>
+              </div>
+              <ForeignCurrencyTotals foreign={liquidTotals.foreign} fx={fxRates} />
+            </div>
+          )}
+          {cpfItems.length > 0 && (
+            <div className="rounded-2xl border border-border bg-card p-4 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">
+                  Total CPF{cpfTotals.foreign.length > 0 && <FxInfoNote fx={fxRates} />}
+                </span>
+                <span className="font-bold">{fmtMoney(totalWithFx(cpfTotals, fxRates))}</span>
+              </div>
+              <ForeignCurrencyTotals foreign={cpfTotals.foreign} fx={fxRates} />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                CPF is shown separately from other savings.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+      <AddRecordFab configKey="savings_accounts" />
+    </div>
+  );
+}
+
+function AlertLabel({ text }: { text: string }) {
+  return (
+    <span className="flex items-center gap-1 whitespace-nowrap">
+      {text}
+      <Bell className="h-3 w-3 fill-yellow-500 text-yellow-500" />
+    </span>
+  );
+}
+
+function SavingsRow({
+  a,
+  onStatus,
+  onDelete,
+  reminderCount,
+  historyCount,
+  auditCount,
+  documentsCount,
+}: {
+  a: any;
+  onStatus: (s: any) => void;
+  onDelete: () => void;
+  reminderCount: number;
+  historyCount: number;
+  auditCount: number;
+  documentsCount: number;
+}) {
+  const edit = useEditRecord("savings_accounts", a);
+  const dup = useDuplicateRecord("savings_accounts", a);
+  const stale = staleDays(a.last_updated);
+  const isStale = stale != null && stale >= 30;
+  const isFD = isFdLikeAccountType(a.account_type);
+  const isCPF = isCpfAccountType(a.account_type);
+
+  const [cardOpen, setCardOpen] = useState(false);
+  const [section, setSection] = useState<
+    "notes" | "reminders" | "history" | "audit" | "documents" | null
+  >(null);
+
+  function openSection(target: "notes" | "reminders" | "history" | "audit" | "documents") {
+    setCardOpen(true);
+    setSection(target);
+    setTimeout(() => {
+      document
+        .getElementById(`${target}-${a.id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
+  }
+
+  return (
+    <HashHighlight id={`record-${a.id}`}>
+      <RecordCard
+        title={`${a.institution} · ${a.account_type ?? ""}`}
+        subtitle={a.joint_member_id ? "Joint account" : undefined}
+        memberId={a.member_id}
+        secondaryMemberId={a.joint_member_id ?? null}
+        status={a.status}
+        onStatusChange={onStatus}
+        action={a.action}
+        onEdit={edit.open}
+        onDelete={onDelete}
+        onDuplicate={dup.open}
+        hasNotes={!!a.notes}
+        updatedAt={a.updated_at}
+        createdAt={a.created_at}
+        open={cardOpen}
+        onOpenChange={setCardOpen}
+        reminderCount={reminderCount}
+        historyCount={historyCount}
+        auditCount={auditCount}
+        documentsCount={documentsCount}
+        onNotesClick={() => openSection("notes")}
+        onReminderClick={() => openSection("reminders")}
+        onHistoryClick={() => openSection("history")}
+        onAuditClick={() => openSection("audit")}
+        onDocumentsClick={() => openSection("documents")}
+        rightMeta={
+          <div className="text-right text-xs">
+            <div className="text-muted-foreground">Balance</div>
+            <div className="font-bold">
+              {fmtMoney(a.balance, a.currency)}{" "}
+              <span className="text-[10px] font-normal text-muted-foreground">(est.)</span>
+            </div>
+            <div className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
+              {isStale && (
+                <span
+                  className="inline-block h-1.5 w-1.5 rounded-full"
+                  style={{ background: "hsl(38 95% 55%)" }}
+                  aria-label="Balance is stale"
+                />
+              )}
+              <LastUpdatedLine date={a.last_updated} />
+            </div>
+            {a.interest_rate != null && (
+              <div className="text-muted-foreground">{fmtPct(a.interest_rate)}</div>
+            )}
+          </div>
+        }
+      >
+        <Section title="Account">
+          <FieldRow label="Balance" value={fmtMoney(a.balance, a.currency)} />
+          <FieldRow label="Interest rate" value={fmtPct(a.interest_rate)} />
+          {isFD && (
+            <FieldRow label={<AlertLabel text="Maturity" />} value={fmtDate(a.maturity_date)} />
+          )}
+          {isCPF && (
+            <>
+              <FieldRow
+                label={<AlertLabel text="Withdrawal eligible" />}
+                value={fmtDate(a.withdrawal_date)}
+              />
+              <FieldRow
+                label="Est. monthly payout"
+                value={fmtMoney(a.estimated_monthly_payout, a.currency)}
+              />
+              <p className="pt-1 text-[11px] text-muted-foreground">
+                Reference only, not used in the Lifetime chart.
+              </p>
+            </>
+          )}
+          <FieldRow label="Last updated" value={fmtDate(a.last_updated)} />
+        </Section>
+
+        <div className="flex items-center justify-between gap-2 rounded-md border border-dashed border-border/60 px-3 py-2">
+          <div className="text-xs">
+            {isStale ? (
+              <span className="font-medium" style={{ color: "hsl(38 95% 35%)" }}>
+                ● Update balance
+              </span>
+            ) : (
+              <span className="text-muted-foreground">Update balance</span>
+            )}
+          </div>
+          <UpdateBalanceInline id={a.id} current={a.balance} />
+        </div>
+
+        <CollapsibleSection
+          id={`notes-${a.id}`}
+          icon={<span>📝</span>}
+          title="Notes"
+          open={section === "notes"}
+          onOpenChange={(o) => setSection(o ? "notes" : null)}
+        >
+          <NotesEditor table="savings_accounts" queryKey="savings" id={a.id} value={a.notes} />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          id={`reminders-${a.id}`}
+          icon={<span>🔔</span>}
+          title="Reminders"
+          open={section === "reminders"}
+          onOpenChange={(o) => setSection(o ? "reminders" : null)}
+        >
+          <RemindersList entityType="savings" entityId={a.id} />
+          <div className="flex justify-end pt-1">
+            <ReminderButton entityType="savings" entityId={a.id} />
+          </div>
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          id={`history-${a.id}`}
+          icon={<span>🔄</span>}
+          title="Add an Update"
+          count={historyCount}
+          open={section === "history"}
+          onOpenChange={(o) => setSection(o ? "history" : null)}
+        >
+          <HistoryLog entityType="savings" entityId={a.id} />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          id={`audit-${a.id}`}
+          icon={<span>🛡️</span>}
+          title="Audit Trail"
+          count={auditCount}
+          open={section === "audit"}
+          onOpenChange={(o) => setSection(o ? "audit" : null)}
+        >
+          <AuditTrail tableName="savings_accounts" recordId={a.id} />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          id={`documents-${a.id}`}
+          icon={<span>📎</span>}
+          title="Documents"
+          count={documentsCount}
+          open={section === "documents"}
+          onOpenChange={(o) => setSection(o ? "documents" : null)}
+        >
+          <DocumentsList entityType="savings" entityId={a.id} />
+        </CollapsibleSection>
+      </RecordCard>
+      {edit.element}
+      {dup.element}
+    </HashHighlight>
+  );
+}
