@@ -31,3 +31,17 @@ export function isGuestUser(
   if (!user) return false; // signed out is not a guest, it is nobody
   return user.is_anonymous === true || user.app_metadata?.provider === "anonymous";
 }
+
+export type GuestJoinPhase = "idle" | "joining" | "done" | "failed";
+
+/**
+ * The "joining the sample family" progress belongs to ONE user id. When a guest taps
+ * "Start your own" and a new guest signs in, the new person must start again from "idle".
+ * (Bug found 28 Oct: the old "done" carried over and showed "Sample family unavailable".)
+ */
+export function guestJoinPhaseFor(
+  saved: { userId: string | null; phase: GuestJoinPhase },
+  currentUserId: string | null | undefined,
+): GuestJoinPhase {
+  return saved.userId === (currentUserId ?? null) ? saved.phase : "idle";
+}

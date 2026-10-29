@@ -42,7 +42,7 @@ function MembersPage() {
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const memberFilter = useAppStore((s) => s.memberFilter);
   const setMemberFilter = useAppStore((s) => s.setMemberFilter);
-  const { role: currentRole } = useCurrentRole();
+  const { role: currentRole, canEdit } = useCurrentRole();
 
   const [newName, setNewName] = useState("");
   const [newShortName, setNewShortName] = useState("");
@@ -230,6 +230,7 @@ function MembersPage() {
         </div>
       ) : (
         <>
+          {canEdit && (
           <section className="space-y-3 rounded-xl border border-border bg-card p-4">
             <h2 className="text-sm font-semibold">Add member</h2>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -292,6 +293,7 @@ function MembersPage() {
               {savingNew ? "Adding..." : "Add member"}
             </Button>
           </section>
+          )}
 
           <section className="space-y-3">
             {members.length > 0 && (
@@ -318,6 +320,7 @@ function MembersPage() {
                       <div className="space-y-1.5">
                         <Label className="text-xs">Name</Label>
                         <Input
+                        disabled={!canEdit}
                           value={draft.name ?? member.name}
                           onChange={(e) =>
                             setEditing((prev) => ({
@@ -330,6 +333,7 @@ function MembersPage() {
                       <div className="space-y-1.5">
                         <Label className="text-xs">Short name</Label>
                         <Input
+                        disabled={!canEdit}
                           value={draft.short_name ?? member.short_name ?? ""}
                           onChange={(e) =>
                             setEditing((prev) => ({
@@ -347,6 +351,7 @@ function MembersPage() {
                           )}
                         </Label>
                         <Input
+                        disabled={!canEdit}
                           type="number"
                           min="1920"
                           max={THIS_YEAR}
@@ -369,6 +374,7 @@ function MembersPage() {
                       <div className="space-y-1.5">
                         <Label className="text-xs">Emoji</Label>
                         <Input
+                        disabled={!canEdit}
                           value={draft.emoji ?? member.emoji}
                           onChange={(e) =>
                             setEditing((prev) => ({
@@ -400,10 +406,12 @@ function MembersPage() {
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
+                      {canEdit && (
                       <Button onClick={() => saveMember(member)} disabled={savingId === member.id}>
                         <Save className="mr-1.5 h-4 w-4" />
                         {savingId === member.id ? "Saving..." : "Save"}
                       </Button>
+                      )}
                       {currentRole === "owner" && (
                         <Button
                           variant="outline"

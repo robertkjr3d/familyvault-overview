@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useCurrentRole } from "@/lib/useCurrentRole";
 import { Info, Bell } from "lucide-react";
 import { AddRecordFab } from "@/components/AddRecordFab";
 import { createFileRoute } from "@tanstack/react-router";
@@ -51,6 +52,7 @@ function UpdateValueInline({ id, current }: { id: string; current: number | null
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(current?.toString() ?? "");
   const qc = useQueryClient();
+  const { canEdit } = useCurrentRole();
 
   async function save() {
     const num = Number(val.replace(/,/g, ""));
@@ -91,6 +93,8 @@ function UpdateValueInline({ id, current }: { id: string; current: number | null
       </Button>
     );
   }
+  if (!canEdit) return null;
+
   return (
     <div className="flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
       <Input

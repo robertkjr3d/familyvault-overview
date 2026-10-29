@@ -297,21 +297,21 @@ function Dashboard() {
     // Settings navigates here) -- the two must not be on screen together.
     if (activeTour) return;
     if (appSettings === undefined || !tablesLoaded) return; // still loading
-    if (!appSettings?.onboarding_dismissed && isEmptyHousehold) {
+    if (canEdit && !appSettings?.onboarding_dismissed && isEmptyHousehold) {
       setOnboardingOpen(true);
     }
-  }, [appSettings, isEmptyHousehold, tablesLoaded, onboardingSoftDismissed, activeTour]);
+  }, [appSettings, isEmptyHousehold, tablesLoaded, onboardingSoftDismissed, activeTour, canEdit]);
 
   // Manual re-open from Settings → About → "Quick Start Guide" (links to /#onboarding),
   // same hash-link pattern HashHighlight already uses elsewhere in this app.
   useEffect(() => {
     const check = () => {
-      if (window.location.hash === "#onboarding") setOnboardingOpen(true);
+      if (window.location.hash === "#onboarding" && canEdit) setOnboardingOpen(true);
     };
     check();
     window.addEventListener("hashchange", check);
     return () => window.removeEventListener("hashchange", check);
-  }, []);
+  }, [canEdit]);
 
   async function dismissOnboardingForever() {
     setOnboardingOpen(false);
@@ -2037,6 +2037,7 @@ function PrioritySection({
 
 function EstatePlanningCard() {
   const { checked, rowByItemId, toggle, saveDetails } = useEstateChecklist();
+  const { canEdit } = useCurrentRole();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [urlDraft, setUrlDraft] = useState("");
@@ -2101,7 +2102,7 @@ function EstatePlanningCard() {
               >
                 <button
                   type="button"
-                  onPointerDown={() => toggle(item.id)}
+                  onPointerDown={() => canEdit && toggle(item.id)}
                   className="flex w-full items-start gap-3 text-left"
                 >
                   <span
@@ -2145,7 +2146,7 @@ function EstatePlanningCard() {
                   </div>
                 )}
 
-                {!isEditing && (
+                {!isEditing && canEdit && (
                   <button
                     type="button"
                     onPointerDown={(e) => {

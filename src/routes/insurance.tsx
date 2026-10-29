@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useCurrentRole } from "@/lib/useCurrentRole";
 import { Bell } from "lucide-react";
 import { AddRecordFab } from "@/components/AddRecordFab";
 import { createFileRoute } from "@tanstack/react-router";
@@ -66,6 +67,7 @@ function UpdateSurrenderValueInline({
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(current?.toString() ?? "");
   const qc = useQueryClient();
+  const { canEdit } = useCurrentRole();
 
   async function save() {
     const num = Number(val.replace(/,/g, ""));
@@ -106,6 +108,8 @@ function UpdateSurrenderValueInline({
       </Button>
     );
   }
+  if (!canEdit) return null;
+
   return (
     <div className="flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
       <Input

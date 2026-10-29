@@ -12,6 +12,7 @@ import { useRecordSorter } from "@/hooks/useRecordSorter";
 import { fmtMoney, fmtDate, fmtPct, groupByCurrency, totalWithFx } from "@/lib/format";
 import { FxInfoNote } from "@/components/FxInfoNote";
 import { useState } from "react";
+import { useCurrentRole } from "@/lib/useCurrentRole";
 import { differenceInDays, parseISO } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +66,7 @@ function UpdateBalanceInline({ id, current }: { id: string; current: number | nu
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(current?.toString() ?? "");
   const qc = useQueryClient();
+  const { canEdit } = useCurrentRole();
 
   async function save() {
     const num = Number(val.replace(/,/g, ""));
@@ -105,6 +107,8 @@ function UpdateBalanceInline({ id, current }: { id: string; current: number | nu
       </Button>
     );
   }
+  if (!canEdit) return null;
+
   return (
     <div className="flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
       <Input

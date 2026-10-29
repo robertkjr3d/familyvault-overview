@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useCurrentRole } from "@/lib/useCurrentRole";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Trash2 } from "lucide-react";
@@ -12,6 +13,7 @@ export function HistoryLog({ entityType, entityId }: { entityType: string; entit
   const [adding, setAdding] = useState(false);
   const [note, setNote] = useState("");
 
+  const { canEdit } = useCurrentRole();
   const { data: entries = [] } = useQuery({
     queryKey: ["history", entityType, entityId],
     queryFn: async () => {
@@ -54,29 +56,50 @@ export function HistoryLog({ entityType, entityId }: { entityType: string; entit
       )}
       <ul className="space-y-1.5">
         {entries.map((e: any) => (
-          <li key={e.id} className="group flex items-start justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-sm">
+          <li
+            key={e.id}
+            className="group flex items-start justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-sm"
+          >
             <div className="flex-1">
               <span className="font-semibold text-primary">
                 {format(new Date(e.created_at), "dd MMM yyyy")}
               </span>{" "}
               — {e.note}
             </div>
-            <button
-              onClick={() => del(e.id)}
-              className="cursor-pointer rounded p-1 text-urgent opacity-0 transition hover:bg-urgent/10 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
-              aria-label="Delete update"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            {canEdit && (
+              <button
+                onClick={() => del(e.id)}
+                className="cursor-pointer rounded p-1 text-urgent opacity-0 transition hover:bg-urgent/10 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
+                aria-label="Delete update"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
           </li>
         ))}
       </ul>
-      {adding ? (
+      {!canEdit ? null : adding ? (
         <div className="space-y-2">
-          <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="What happened?" />
+          <Textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            placeholder="What happened?"
+          />
           <div className="flex gap-2">
-            <Button size="sm" onClick={addEntry}>Save</Button>
-            <Button size="sm" variant="outline" onClick={() => { setAdding(false); setNote(""); }}>Cancel</Button>
+            <Button size="sm" onClick={addEntry}>
+              Save
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setAdding(false);
+                setNote("");
+              }}
+            >
+              Cancel
+            </Button>
           </div>
         </div>
       ) : (

@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useCurrentRole } from "@/lib/useCurrentRole";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -11,6 +12,7 @@ const YEAR_OPTIONS = Array.from({ length: 10 }, (_, i) => `Year ${i + 1}`);
 
 export function RateSchedule({ loanId }: { loanId: string }) {
   const qc = useQueryClient();
+  const { canEdit } = useCurrentRole();
   const { data: rows = [] } = useQuery({
     queryKey: ["rate_schedule", loanId],
     queryFn: async () => {
@@ -58,13 +60,21 @@ export function RateSchedule({ loanId }: { loanId: string }) {
       </div>
       <div className="space-y-1.5">
         {rows.map((r: any) => (
-          <div key={r.id} className="grid grid-cols-[1fr_80px_110px_28px] items-center gap-1.5 text-sm">
+          <div
+            key={r.id}
+            className="grid grid-cols-[1fr_80px_110px_28px] items-center gap-1.5 text-sm"
+          >
             <NativeSelect
               value={r.year_label}
               onChange={(e) => update(r.id, { year_label: e.target.value })}
               className="h-8"
+              disabled={!canEdit}
             >
-              {YEAR_OPTIONS.map((y) => <option key={y} value={y}>{y}</option>)}
+              {YEAR_OPTIONS.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
             </NativeSelect>
             <Input
               type="number"
@@ -73,26 +83,38 @@ export function RateSchedule({ loanId }: { loanId: string }) {
               onBlur={(e) => update(r.id, { rate: e.target.value ? Number(e.target.value) : null })}
               className="h-8"
               placeholder="0.00"
+              disabled={!canEdit}
             />
             <NativeSelect
               value={r.rate_type ?? "Fixed"}
               onChange={(e) => update(r.id, { rate_type: e.target.value })}
               className="h-8"
+              disabled={!canEdit}
             >
-              {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              {TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
             </NativeSelect>
-            <button onClick={() => del(r.id)} className="text-urgent" aria-label="Delete row">
-              <Trash2 className="h-4 w-4" />
-            </button>
+            {canEdit ? (
+              <button onClick={() => del(r.id)} className="text-urgent" aria-label="Delete row">
+                <Trash2 className="h-4 w-4" />
+              </button>
+            ) : (
+              <span />
+            )}
           </div>
         ))}
         {rows.length === 0 && (
           <p className="text-xs text-muted-foreground">No rate schedule yet.</p>
         )}
       </div>
-      <Button size="sm" variant="outline" onClick={addRow}>
-        <Plus className="mr-1 h-3.5 w-3.5" /> Add Year
-      </Button>
+      {canEdit && (
+        <Button size="sm" variant="outline" onClick={addRow}>
+          <Plus className="mr-1 h-3.5 w-3.5" /> Add Year
+        </Button>
+      )}
     </div>
   );
 }

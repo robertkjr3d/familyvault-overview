@@ -31,7 +31,12 @@ import {
 } from "@/lib/advisorAccess";
 import { computeRootViewMode } from "@/lib/rootViewMode";
 import { SampleBanner } from "@/components/SampleBanner";
-import { SAMPLE_HOUSEHOLD_ID, isGuestUser } from "@/lib/guest";
+import {
+  SAMPLE_HOUSEHOLD_ID,
+  guestJoinPhaseFor,
+  isGuestUser,
+  type GuestJoinPhase,
+} from "@/lib/guest";
 import { AdvisorHome } from "@/components/AdvisorHome";
 import { useAppStore } from "@/lib/store";
 import { toast } from "sonner";
@@ -178,7 +183,16 @@ function RootContent() {
   // Sample-family guest = anonymous sign-in. Guests skip every invite/adviser check below
   // (they have no email, and the server refuses them anyway).
   const isGuest = isGuestUser(session?.user);
-  const [guestJoin, setGuestJoin] = useState<"idle" | "joining" | "done" | "failed">("idle");
+  // The join state belongs to ONE user id. After "Start your own" the next guest is a different
+  // user, so a leftover "done" from the previous guest must never carry over.
+  const [guestJoinRaw, setGuestJoinRaw] = useState<{
+    userId: string | null;
+    phase: GuestJoinPhase;
+  }>({
+    userId: null,
+    phase: "idle",
+  });
+  const guestJoin = guestJoinPhaseFor(guestJoinRaw, session?.user?.id);
 
   useEffect(() => {
     setupGlobalErrorHandlers();
@@ -373,15 +387,15 @@ function RootContent() {
     if (!isGuest || !session?.user?.id || isPublicRoute) return;
     if (membershipsLoading || !memberships) return;
     if (memberships.length > 0 || guestJoin !== "idle") return;
-    setGuestJoin("joining");
     const userId = session.user.id;
+    setGuestJoinRaw({ userId, phase: "joining" });
     void (async () => {
       const { error } = await supabase
         .from("household_users" as any)
         .insert({ household_id: SAMPLE_HOUSEHOLD_ID, user_id: userId, role: "viewer" });
       // 23505 = already a member (e.g. two tabs at once): fine.
       if (error && (error as { code?: string }).code !== "23505") {
-        setGuestJoin("failed");
+        setGuestJoinRaw({ userId, phase: "failed" });
         return;
       }
       try {
@@ -390,7 +404,7 @@ function RootContent() {
         // analytics blocked: ignore
       }
       await queryClient.invalidateQueries({ queryKey: ["household-memberships"] });
-      setGuestJoin("done");
+      setGuestJoinRaw({ userId, phase: "done" });
     })();
   }, [
     isGuest,
@@ -835,13 +849,38 @@ function SignInScreen({ redirectError }: { redirectError: string | null }) {
         </div>
 
         <div className="p-6">
+          {!inviteMode && (
+            <div className="mb-5 rounded-xl border border-border bg-muted/40 p-4">
+              <p className="text-sm font-semibold">Just looking?</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Open a made-up family. Nothing to type, no email needed. View only.
+              </p>
+              <Button
+                type="button"
+                onClick={trySampleFamily}
+                disabled={guestLoading || (!captchaToken && !captchaTimedOut)}
+                className="mt-3 w-full"
+              >
+                {guestLoading
+                  ? "Opening…"
+                  : !captchaToken && !captchaTimedOut
+                    ? "Preparing…"
+                    : "Look around a sample family"}
+              </Button>
+              {guestError && <p className="mt-2 text-xs text-urgent">{guestError}</p>}
+              <p className="mt-4 text-center text-xs text-muted-foreground">
+                Or sign in to your own account below
+              </p>
+            </div>
+          )}
+
           <h1 className="text-lg font-semibold tracking-tight">
             {inviteMode ? "Join your family's household" : "Sign in or create an account"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {inviteMode
               ? "Enter the invited email and the code from your invite email."
-              : "New or returning: enter your email, tap “Email me a code” below, then type the 6-digit code here. No password needed."}
+              : "Type your email in the box below and tap “Email me a code”. Then type the 6-digit code from the email. No password."}
           </p>
 
           {redirectError && (
@@ -964,28 +1003,6 @@ function SignInScreen({ redirectError }: { redirectError: string | null }) {
           </div>
 
           {error && <p className="mt-3 text-xs text-urgent">{error}</p>}
-
-          {!inviteMode && (
-            <div className="mt-5 border-t border-border pt-4">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={trySampleFamily}
-                disabled={guestLoading || (!captchaToken && !captchaTimedOut)}
-                className="w-full"
-              >
-                {guestLoading
-                  ? "Opening…"
-                  : !captchaToken && !captchaTimedOut
-                    ? "Preparing…"
-                    : "Look around a sample family"}
-              </Button>
-              <p className="mt-1 text-center text-xs text-muted-foreground">
-                No email needed. Made-up data, view only.
-              </p>
-              {guestError && <p className="mt-2 text-xs text-urgent">{guestError}</p>}
-            </div>
-          )}
 
           <p className="mt-5 text-center text-[11px] text-muted-foreground">
             By continuing, you agree to our{" "}
