@@ -1,8 +1,9 @@
--- REFERENCE ONLY: a description of the live database, not a script to run.
+-- FamilyHub SG REBUILD COPY (31 Oct 2026). Use ONLY on an empty spare project (familyhub-drill) or a real rebuild.
+-- Built from supabase/schema.sql: statements reordered so functions come before tables, plus the missing audit_log sequence.
+-- Does NOT create: storage buckets vault-docs and inventory-photos, the delete-old-guests cron job, Auth settings, Cloudflare variables.
 SET check_function_bodies = false;
-SET search_path = public, extensions;
 
--- Schema snapshot generated 2026-10-27T05:30:11Z | database postgres | PostgreSQL 17.6
+SET search_path = public, extensions;
 
 CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA pg_catalog;
 
@@ -19,6 +20,704 @@ CREATE TYPE public.entity_type AS ENUM ('property', 'loan', 'insurance', 'invest
 CREATE TYPE public.property_purpose AS ENUM ('own_home', 'rental_yield', 'capital_growth', 'mixed');
 
 CREATE TYPE public.record_status AS ENUM ('urgent', 'review', 'settled');
+
+CREATE OR REPLACE FUNCTION public.backup_storage_manifest(p_household text DEFAULT NULL::text)
+ RETURNS TABLE(bucket_id text, name text, size bigint)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  SELECT o.bucket_id::text, o.name::text, COALESCE((o.metadata->>'size')::bigint, 0)
+  FROM storage.objects o
+  WHERE o.bucket_id IN ('vault-docs', 'inventory-photos')
+    AND o.metadata IS NOT NULL
+    AND o.name NOT LIKE '%/.emptyFolderPlaceholder'
+    AND (p_household IS NULL OR split_part(o.name, '/', 1) = p_household)
+  ORDER BY o.bucket_id, o.name
+$function$;
+
+CREATE OR REPLACE FUNCTION public.backup_storage_summary()
+ RETURNS TABLE(household text, files bigint, bytes bigint, digest text)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  SELECT split_part(o.name, '/', 1),
+         count(*),
+         COALESCE(sum((o.metadata->>'size')::bigint), 0)::bigint,
+         md5(string_agg(o.bucket_id || '/' || o.name || ':' || COALESCE(o.metadata->>'size', '0'),
+                        E'\\n' ORDER BY o.bucket_id, o.name))
+  FROM storage.objects o
+  WHERE o.bucket_id IN ('vault-docs', 'inventory-photos')
+    AND o.metadata IS NOT NULL
+    AND o.name NOT LIKE '%/.emptyFolderPlaceholder'
+  GROUP BY 1
+  ORDER BY 1
+$function$;
+
+CREATE OR REPLACE FUNCTION public.cascade_reminders_for_entity()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_entity_type text;
+BEGIN
+  v_entity_type := TG_ARGV[0];
+
+  DELETE FROM public.reminders r
+  WHERE r.entity_type = v_entity_type
+    AND r.entity_id = OLD.id
+    AND r.household_id = OLD.household_id;
+
+  RETURN OLD;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.cleanup_orphaned_household()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  remaining int;
+begin
+  select count(*) into remaining from household_users where household_id = old.household_id;
+  if remaining = 0 then
+    delete from app_settings where household_id = old.household_id;
+    delete from gobag_items where household_id = old.household_id;
+    delete from health_conditions where household_id = old.household_id;
+    delete from inventory_folders where household_id = old.household_id;
+    delete from inventory_items where household_id = old.household_id;
+    delete from insurance_policies where household_id = old.household_id;
+    delete from investments where household_id = old.household_id;
+    delete from loan_rate_schedule where household_id = old.household_id;
+    delete from loans where household_id = old.household_id;
+    delete from members where household_id = old.household_id;
+    delete from properties where household_id = old.household_id;
+    delete from property_rate_schedule where household_id = old.household_id;
+    delete from record_documents where household_id = old.household_id;
+    delete from record_history where household_id = old.household_id;
+    delete from reminders where household_id = old.household_id;
+    delete from savings_accounts where household_id = old.household_id;
+    delete from households where id = old.household_id;
+  end if;
+  return old;
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.current_household_id()
+ RETURNS uuid
+ LANGUAGE sql
+ STABLE
+AS $function$
+  SELECT COALESCE(
+    NULLIF(auth.jwt() ->> 'household_id', '')::uuid,
+    (
+      SELECT hu.household_id
+      FROM public.household_users hu
+      WHERE hu.user_id = auth.uid()
+      ORDER BY hu.created_at ASC
+      LIMIT 1
+    )
+  );
+$function$;
+
+CREATE OR REPLACE FUNCTION public.current_user_household_ids()
+ RETURNS SETOF uuid
+ LANGUAGE sql
+ STABLE
+AS $function$
+  SELECT hu.household_id
+  FROM public.household_users hu
+  WHERE hu.user_id = auth.uid();
+$function$;
+
+CREATE OR REPLACE FUNCTION public.default_household_id()
+ RETURNS uuid
+ LANGUAGE sql
+ STABLE
+AS $function$
+  SELECT hu.household_id FROM public.household_users hu
+  WHERE hu.user_id = auth.uid() LIMIT 1;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.enforce_household_storage_quota()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_household_id uuid;
+  v_tier text;
+  v_used bigint;
+  v_incoming bigint;
+  v_cap bigint := 10485760; -- 10 * 1024 * 1024 — matches the 10MB limit already shown in the app
+begin
+  if NEW.bucket_id not in ('vault-docs', 'inventory-photos') then
+    return NEW;
+  end if;
+
+  v_household_id := split_part(NEW.name, '/', 1)::uuid;
+  v_incoming := coalesce((NEW.metadata->>'size')::bigint, 0);
+
+  select storage_tier, storage_bytes_used into v_tier, v_used
+  from households where id = v_household_id;
+
+  if v_tier = 'premium' then
+    return NEW;
+  end if;
+
+  if coalesce(v_used, 0) + v_incoming > v_cap then
+    raise exception 'storage_quota_exceeded: household % is at its free storage limit', v_household_id;
+  end if;
+
+  return NEW;
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.ensure_household_app_settings()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  INSERT INTO public.app_settings (household_id, family_name)
+  VALUES (NEW.id, COALESCE(NULLIF(trim(NEW.name), ''), 'Our Family'))
+  ON CONFLICT (household_id) DO NOTHING;
+
+  RETURN NEW;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.ensure_household_default_member()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.members m
+    WHERE m.household_id = NEW.id
+  ) THEN
+    INSERT INTO public.members (
+      household_id,
+      name,
+      short_name,
+      color,
+      sort_order,
+      emoji
+    )
+    VALUES (
+      NEW.id,
+      'Default Member',
+      'ME',
+      'hsl(221 83% 53%)',
+      0,
+      '👤'
+    );
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.handle_new_auth_user()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_household_id uuid;
+  v_household_name text;
+  v_invite record;
+BEGIN
+  IF NEW.is_anonymous IS TRUE THEN
+    RETURN NEW;
+  END IF;
+
+  INSERT INTO public.user_profiles (user_id, email)
+  VALUES (NEW.id, NEW.email)
+  ON CONFLICT (user_id) DO NOTHING;
+
+  SELECT * INTO v_invite
+  FROM public.household_invites
+  WHERE lower(invited_email) = lower(NEW.email)
+    AND accepted_at IS NULL
+    AND cancelled_at IS NULL
+    AND expires_at > now()
+  ORDER BY created_at ASC
+  LIMIT 1;
+
+  IF v_invite.id IS NOT NULL THEN
+    INSERT INTO public.household_users (household_id, user_id, role, invited_by)
+    VALUES (v_invite.household_id, NEW.id, v_invite.role, v_invite.invited_by_user_id)
+    ON CONFLICT (household_id, user_id) DO NOTHING;
+
+    UPDATE public.household_invites
+    SET accepted_at = now(), accepted_by_user_id = NEW.id
+    WHERE id = v_invite.id;
+
+    RETURN NEW;
+  END IF;
+
+  v_household_name := COALESCE(
+    NULLIF(trim(NEW.raw_user_meta_data ->> 'full_name'), ''),
+    NULLIF(trim(NEW.raw_user_meta_data ->> 'name'), ''),
+    CONCAT(split_part(COALESCE(NEW.email, 'user'), '@', 1), '''s Household')
+  );
+  INSERT INTO public.households (name)
+  VALUES (v_household_name)
+  RETURNING id INTO v_household_id;
+  INSERT INTO public.household_users (household_id, user_id, role)
+  VALUES (v_household_id, NEW.id, 'owner')
+  ON CONFLICT (household_id, user_id) DO NOTHING;
+  RETURN NEW;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.has_advisor_access(target_household_id uuid, category text)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+AS $function$
+  SELECT EXISTS (
+    SELECT 1 FROM advisor_household_links l
+    WHERE l.household_id = target_household_id
+      AND l.advisor_user_id = auth.uid()
+      AND l.status = 'active'
+      AND l.consent_renewed_at > (now() - interval '365 days')
+      AND (
+        (category = 'insurance' AND l.can_view_insurance)
+        OR (category = 'investments' AND l.can_view_investments)
+        OR (category = 'networth_summary' AND l.can_view_networth_summary)
+      )
+  );
+$function$;
+
+CREATE OR REPLACE FUNCTION public.has_advisor_access(target_household_id uuid, target_member_id uuid, category text)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+AS $function$
+  select exists (
+    select 1 from public.advisor_household_links l
+    where l.household_id = target_household_id
+      and l.advisor_user_id = auth.uid()
+      and l.status = 'active'
+      and l.consent_renewed_at > (now() - interval '365 days')
+      and (
+        (category = 'insurance' and l.can_view_insurance)
+        or (category = 'investments' and l.can_view_investments)
+        or (category = 'networth_summary' and l.can_view_networth_summary)
+        or (category = 'property' and l.can_view_property)
+        or (category = 'loans' and l.can_view_loans)
+      )
+      and exists (
+        select 1 from public.advisor_link_members alm
+        where alm.link_id = l.id
+          and (target_member_id is null or alm.member_id = target_member_id)
+      )
+  );
+$function$;
+
+CREATE OR REPLACE FUNCTION public.increment_household_storage(p_household_id uuid, p_delta bigint)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if not is_household_member(p_household_id) then
+    raise exception 'not a member of this household';
+  end if;
+
+  update households
+  set storage_bytes_used = (
+    select coalesce(sum((o.metadata->>'size')::bigint), 0)
+    from storage.objects o
+    where o.bucket_id in ('vault-docs', 'inventory-photos')
+      and o.name like p_household_id::text || '/%'
+  )
+  where id = p_household_id;
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.is_guest()
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+AS $function$
+  SELECT coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false);
+$function$;
+
+CREATE OR REPLACE FUNCTION public.is_household_editor(target_household_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+AS $function$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.household_users hu
+    WHERE hu.household_id = target_household_id
+      AND hu.user_id = auth.uid()
+      AND hu.role IN ('owner', 'member')
+  )
+  AND NOT (SELECT public.is_guest());
+$function$;
+
+CREATE OR REPLACE FUNCTION public.is_household_member(target_household_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+AS $function$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.household_users hu
+    WHERE hu.household_id = target_household_id
+      AND hu.user_id = auth.uid()
+  );
+$function$;
+
+CREATE OR REPLACE FUNCTION public.log_financial_audit()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_household_id uuid;
+  v_row jsonb;
+  v_old jsonb;
+  v_new jsonb;
+  v_changed_fields text[];
+  v_key text;
+begin
+  v_old := case when TG_OP in ('UPDATE', 'DELETE') then to_jsonb(OLD) else null end;
+  v_new := case when TG_OP in ('UPDATE', 'INSERT') then to_jsonb(NEW) else null end;
+  v_row := coalesce(v_new, v_old);
+
+  -- household_id lives directly on some of these tables (investments, savings_accounts,
+  -- loans, other_assets) but NOT on insurance_policies or properties (member_id only,
+  -- verified against the actual schema, not assumed) — derive it via member_id there instead.
+  if v_row ? 'household_id' then
+    v_household_id := (v_row ->> 'household_id')::uuid;
+  elsif v_row ? 'member_id' and (v_row ->> 'member_id') is not null then
+    select household_id into v_household_id from members where id = (v_row ->> 'member_id')::uuid;
+  end if;
+
+  if TG_OP = 'UPDATE' then
+    select array_agg(k) into v_changed_fields
+    from jsonb_each(v_new) as n(k, val)
+    where n.val is distinct from (v_old -> n.k)
+      and n.k not in ('updated_at'); -- pure timestamp bumps aren't a meaningful "edit"
+    if v_changed_fields is null then
+      return NEW; -- nothing meaningful changed — don't log a no-op
+    end if;
+  end if;
+
+  insert into audit_log (household_id, table_name, record_id, action, changed_by, changed_fields, old_data, new_data)
+  values (
+    v_household_id,
+    TG_TABLE_NAME,
+    (v_row ->> 'id')::uuid,
+    TG_OP,
+    auth.uid(),
+    v_changed_fields,
+    v_old,
+    v_new
+  );
+
+  return coalesce(NEW, OLD);
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.set_credit_cards_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.share_household_by_email(p_household_id uuid, p_email text, p_role text DEFAULT 'member'::text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'auth'
+AS $function$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_target_user_id uuid;
+  v_email text := lower(trim(COALESCE(p_email, '')));
+  v_role text := lower(trim(COALESCE(p_role, 'member')));
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated.';
+  END IF;
+
+  IF p_household_id IS NULL THEN
+    RAISE EXCEPTION 'Household is required.';
+  END IF;
+
+  IF v_email = '' THEN
+    RAISE EXCEPTION 'Email is required.';
+  END IF;
+
+  IF v_role NOT IN ('member', 'viewer') THEN
+    RAISE EXCEPTION 'Role must be member or viewer.';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.household_users hu
+    WHERE hu.household_id = p_household_id
+      AND hu.user_id = v_actor
+      AND hu.role = 'owner'
+  ) THEN
+    RAISE EXCEPTION 'Only household owners can share access.';
+  END IF;
+
+  SELECT u.id
+  INTO v_target_user_id
+  FROM auth.users u
+  WHERE lower(u.email) = v_email
+  LIMIT 1;
+
+  IF v_target_user_id IS NULL THEN
+    RAISE EXCEPTION 'No account found for that email yet. Ask them to sign in first, then share again.';
+  END IF;
+
+  INSERT INTO public.household_users (household_id, user_id, role, invited_by)
+  VALUES (p_household_id, v_target_user_id, v_role, v_actor)
+  ON CONFLICT (household_id, user_id)
+  DO UPDATE SET
+    role = EXCLUDED.role,
+    invited_by = EXCLUDED.invited_by;
+
+  RETURN v_target_user_id;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.sync_lrs_household_id()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NEW.household_id IS NULL THEN
+    SELECT l.household_id INTO NEW.household_id
+    FROM public.loans l
+    WHERE l.id = NEW.loan_id;
+  END IF;
+
+  IF NEW.household_id IS NULL THEN
+    NEW.household_id := public.default_household_id();
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.sync_prs_household_id()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NEW.household_id IS NULL THEN
+    SELECT p.household_id INTO NEW.household_id
+    FROM public.properties p
+    WHERE p.id = NEW.property_id;
+  END IF;
+
+  IF NEW.household_id IS NULL THEN
+    NEW.household_id := public.default_household_id();
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.transfer_household_ownership_by_email(p_household_id uuid, p_email text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'auth'
+AS $function$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_target_user_id uuid;
+  v_email text := lower(trim(COALESCE(p_email, '')));
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated.';
+  END IF;
+
+  IF p_household_id IS NULL THEN
+    RAISE EXCEPTION 'Household is required.';
+  END IF;
+
+  IF v_email = '' THEN
+    RAISE EXCEPTION 'Email is required.';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.household_users hu
+    WHERE hu.household_id = p_household_id
+      AND hu.user_id = v_actor
+      AND hu.role = 'owner'
+  ) THEN
+    RAISE EXCEPTION 'Only household owners can transfer ownership.';
+  END IF;
+
+  SELECT u.id
+  INTO v_target_user_id
+  FROM auth.users u
+  WHERE lower(u.email) = v_email
+  LIMIT 1;
+
+  IF v_target_user_id IS NULL THEN
+    RAISE EXCEPTION 'No account found for that email.';
+  END IF;
+
+  IF v_target_user_id = v_actor THEN
+    RAISE EXCEPTION 'You are already the owner.';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.household_users hu
+    WHERE hu.household_id = p_household_id
+      AND hu.user_id = v_target_user_id
+  ) THEN
+    RAISE EXCEPTION 'Target user must already be a member of this household.';
+  END IF;
+
+  -- Enforce a single owner after transfer.
+  UPDATE public.household_users
+  SET role = 'member'
+  WHERE household_id = p_household_id
+    AND role = 'owner';
+
+  UPDATE public.household_users
+  SET role = 'owner'
+  WHERE household_id = p_household_id
+    AND user_id = v_target_user_id;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.validate_reminder_target()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_exists boolean := false;
+BEGIN
+  IF NEW.entity_type IS NULL OR NEW.entity_id IS NULL THEN
+    RAISE EXCEPTION 'reminders.entity_type and reminders.entity_id are required';
+  END IF;
+
+  IF NEW.household_id IS NULL THEN
+    RAISE EXCEPTION 'reminders.household_id is required for entity integrity checks';
+  END IF;
+
+  IF NEW.entity_type = 'property' THEN
+    SELECT EXISTS (
+      SELECT 1 FROM public.properties p
+      WHERE p.id = NEW.entity_id
+        AND p.household_id = NEW.household_id
+    ) INTO v_exists;
+
+  ELSIF NEW.entity_type = 'loan' THEN
+    SELECT EXISTS (
+      SELECT 1 FROM public.loans l
+      WHERE l.id = NEW.entity_id
+        AND l.household_id = NEW.household_id
+    ) INTO v_exists;
+
+  ELSIF NEW.entity_type = 'insurance' THEN
+    SELECT EXISTS (
+      SELECT 1 FROM public.insurance_policies i
+      WHERE i.id = NEW.entity_id
+        AND i.household_id = NEW.household_id
+    ) INTO v_exists;
+
+  ELSIF NEW.entity_type = 'investment' THEN
+    SELECT EXISTS (
+      SELECT 1 FROM public.investments i
+      WHERE i.id = NEW.entity_id
+        AND i.household_id = NEW.household_id
+    ) INTO v_exists;
+
+  ELSIF NEW.entity_type = 'savings' THEN
+    SELECT EXISTS (
+      SELECT 1 FROM public.savings_accounts s
+      WHERE s.id = NEW.entity_id
+        AND s.household_id = NEW.household_id
+    ) INTO v_exists;
+
+  ELSIF NEW.entity_type = 'health' THEN
+    SELECT EXISTS (
+      SELECT 1 FROM public.health_conditions h
+      WHERE h.id = NEW.entity_id
+        AND h.household_id = NEW.household_id
+    ) INTO v_exists;
+
+  ELSIF NEW.entity_type = 'inventory' THEN
+    SELECT EXISTS (
+      SELECT 1 FROM public.inventory_items ii
+      WHERE ii.id = NEW.entity_id
+        AND ii.household_id = NEW.household_id
+    ) INTO v_exists;
+
+  ELSIF NEW.entity_type = 'other_asset' THEN
+    IF to_regclass('public.other_assets') IS NULL THEN
+      RAISE EXCEPTION 'entity_type other_asset is not available: public.other_assets does not exist';
+    END IF;
+
+    EXECUTE
+      'SELECT EXISTS (
+         SELECT 1 FROM public.other_assets oa
+         WHERE oa.id = $1
+           AND oa.household_id = $2
+       )'
+    INTO v_exists
+    USING NEW.entity_id, NEW.household_id;
+
+  ELSE
+    RAISE EXCEPTION 'Unsupported reminders.entity_type: %', NEW.entity_type;
+  END IF;
+
+  IF NOT v_exists THEN
+    RAISE EXCEPTION
+      'Invalid reminder target: type=% id=% household_id=%',
+      NEW.entity_type,
+      NEW.entity_id,
+      NEW.household_id;
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;
+
+CREATE SEQUENCE IF NOT EXISTS public.audit_log_id_seq;
 
 CREATE TABLE public.advisor_household_links (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -124,6 +823,8 @@ CREATE TABLE public.audit_log (
   new_data jsonb,
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
+
+ALTER SEQUENCE public.audit_log_id_seq OWNED BY public.audit_log.id;
 
 CREATE TABLE public.credit_cards (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -664,6 +1365,110 @@ ALTER TABLE ONLY public.household_invites ADD CONSTRAINT household_invites_token
 
 ALTER TABLE ONLY public.households ADD CONSTRAINT households_slug_key UNIQUE (slug);
 
+CREATE INDEX advisor_invites_email_idx ON public.advisor_invites USING btree (invited_email);
+
+CREATE INDEX advisor_invites_household_id_idx ON public.advisor_invites USING btree (household_id);
+
+CREATE INDEX advisor_links_advisor_user_id_idx ON public.advisor_household_links USING btree (advisor_user_id);
+
+CREATE INDEX advisor_links_household_id_idx ON public.advisor_household_links USING btree (household_id);
+
+CREATE INDEX advisor_policy_charts_link_idx ON public.advisor_policy_charts USING btree (link_id);
+
+CREATE INDEX advisor_policy_charts_record_idx ON public.advisor_policy_charts USING btree (record_id);
+
+CREATE INDEX app_settings_household_id_idx ON public.app_settings USING btree (household_id);
+
+CREATE INDEX audit_log_household_id_idx ON public.audit_log USING btree (household_id, created_at DESC);
+
+CREATE INDEX audit_log_record_id_idx ON public.audit_log USING btree (table_name, record_id);
+
+CREATE INDEX deleted_records_batch_idx ON public.deleted_records USING btree (household_id, batch_id);
+
+CREATE INDEX deleted_records_household_id_idx ON public.deleted_records USING btree (household_id);
+
+CREATE INDEX error_logs_created_at_idx ON public.error_logs USING btree (created_at DESC);
+
+CREATE INDEX gobag_items_household_id_idx ON public.gobag_items USING btree (household_id);
+
+CREATE INDEX health_conditions_household_id_idx ON public.health_conditions USING btree (household_id);
+
+CREATE INDEX health_member_idx ON public.health_conditions USING btree (member_id);
+
+CREATE INDEX health_status_idx ON public.health_conditions USING btree (status);
+
+CREATE INDEX household_invites_household_id_idx ON public.household_invites USING btree (household_id);
+
+CREATE INDEX household_invites_invited_email_idx ON public.household_invites USING btree (lower(invited_email));
+
+CREATE INDEX household_invites_pending_idx ON public.household_invites USING btree (token) WHERE ((accepted_at IS NULL) AND (cancelled_at IS NULL));
+
+CREATE INDEX household_users_user_id_idx ON public.household_users USING btree (user_id);
+
+CREATE INDEX idx_dismissed_dashboard_not_deleted ON public.dismissed_dashboard_items USING btree (household_id, permanently_deleted) WHERE (permanently_deleted = false);
+
+CREATE INDEX insurance_member_idx ON public.insurance_policies USING btree (member_id);
+
+CREATE INDEX insurance_policies_household_id_idx ON public.insurance_policies USING btree (household_id);
+
+CREATE INDEX insurance_status_idx ON public.insurance_policies USING btree (status);
+
+CREATE INDEX inventory_folders_household_id_idx ON public.inventory_folders USING btree (household_id);
+
+CREATE INDEX inventory_items_household_id_idx ON public.inventory_items USING btree (household_id);
+
+CREATE INDEX investments_household_id_idx ON public.investments USING btree (household_id);
+
+CREATE INDEX investments_member_idx ON public.investments USING btree (member_id);
+
+CREATE INDEX investments_status_idx ON public.investments USING btree (status);
+
+CREATE INDEX loan_rate_schedule_household_id_idx ON public.loan_rate_schedule USING btree (household_id);
+
+CREATE INDEX loans_household_id_idx ON public.loans USING btree (household_id);
+
+CREATE INDEX loans_member_idx ON public.loans USING btree (member_id);
+
+CREATE INDEX loans_status_idx ON public.loans USING btree (status);
+
+CREATE INDEX members_household_id_idx ON public.members USING btree (household_id);
+
+CREATE INDEX other_assets_household_id_idx ON public.other_assets USING btree (household_id);
+
+CREATE INDEX other_assets_member_id_idx ON public.other_assets USING btree (member_id);
+
+CREATE INDEX other_assets_member_idx ON public.other_assets USING btree (member_id);
+
+CREATE INDEX other_assets_status_idx ON public.other_assets USING btree (status);
+
+CREATE INDEX properties_household_id_idx ON public.properties USING btree (household_id);
+
+CREATE INDEX properties_member_idx ON public.properties USING btree (member_id);
+
+CREATE INDEX properties_status_idx ON public.properties USING btree (status);
+
+CREATE INDEX property_rate_schedule_household_id_idx ON public.property_rate_schedule USING btree (household_id);
+
+CREATE INDEX record_documents_entity_idx ON public.record_documents USING btree (entity_type, entity_id);
+
+CREATE INDEX record_documents_household_id_idx ON public.record_documents USING btree (household_id);
+
+CREATE INDEX record_history_entity_idx ON public.record_history USING btree (entity_type, entity_id);
+
+CREATE INDEX record_history_household_id_idx ON public.record_history USING btree (household_id);
+
+CREATE INDEX reminders_entity_idx ON public.reminders USING btree (entity_type, entity_id);
+
+CREATE INDEX reminders_household_id_idx ON public.reminders USING btree (household_id);
+
+CREATE INDEX reminders_remind_at_idx ON public.reminders USING btree (remind_at);
+
+CREATE INDEX savings_accounts_household_id_idx ON public.savings_accounts USING btree (household_id);
+
+CREATE INDEX savings_member_idx ON public.savings_accounts USING btree (member_id);
+
+CREATE INDEX savings_status_idx ON public.savings_accounts USING btree (status);
+
 ALTER TABLE ONLY public.advisor_household_links ADD CONSTRAINT advisor_household_links_status_check CHECK ((status = ANY (ARRAY['active'::text, 'revoked'::text])));
 
 ALTER TABLE ONLY public.advisor_policy_charts ADD CONSTRAINT advisor_policy_charts_record_category_check CHECK ((record_category = ANY (ARRAY['insurance'::text, 'investments'::text])));
@@ -812,970 +1617,75 @@ ALTER TABLE ONLY public.travel_checklist_items ADD CONSTRAINT travel_checklist_i
 
 ALTER TABLE ONLY public.user_profiles ADD CONSTRAINT user_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 
-CREATE INDEX advisor_invites_email_idx ON public.advisor_invites USING btree (invited_email);
+ALTER TABLE public.advisor_household_links ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX advisor_invites_household_id_idx ON public.advisor_invites USING btree (household_id);
+ALTER TABLE public.advisor_invites ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX advisor_links_advisor_user_id_idx ON public.advisor_household_links USING btree (advisor_user_id);
+ALTER TABLE public.advisor_link_members ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX advisor_links_household_id_idx ON public.advisor_household_links USING btree (household_id);
+ALTER TABLE public.advisor_policy_charts ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX advisor_policy_charts_link_idx ON public.advisor_policy_charts USING btree (link_id);
+ALTER TABLE public.advisor_record_notes ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX advisor_policy_charts_record_idx ON public.advisor_policy_charts USING btree (record_id);
+ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX app_settings_household_id_idx ON public.app_settings USING btree (household_id);
+ALTER TABLE public.audit_log ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX audit_log_household_id_idx ON public.audit_log USING btree (household_id, created_at DESC);
+ALTER TABLE public.credit_cards ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX audit_log_record_id_idx ON public.audit_log USING btree (table_name, record_id);
+ALTER TABLE public.deleted_records ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX deleted_records_batch_idx ON public.deleted_records USING btree (household_id, batch_id);
+ALTER TABLE public.dismissed_dashboard_items ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX deleted_records_household_id_idx ON public.deleted_records USING btree (household_id);
+ALTER TABLE public.error_logs ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX error_logs_created_at_idx ON public.error_logs USING btree (created_at DESC);
+ALTER TABLE public.estate_checklist ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX gobag_items_household_id_idx ON public.gobag_items USING btree (household_id);
+ALTER TABLE public.fx_rates ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX health_conditions_household_id_idx ON public.health_conditions USING btree (household_id);
+ALTER TABLE public.gobag_items ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX health_member_idx ON public.health_conditions USING btree (member_id);
+ALTER TABLE public.health_conditions ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX health_status_idx ON public.health_conditions USING btree (status);
+ALTER TABLE public.household_invites ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX household_invites_household_id_idx ON public.household_invites USING btree (household_id);
+ALTER TABLE public.household_users ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX household_invites_invited_email_idx ON public.household_invites USING btree (lower(invited_email));
+ALTER TABLE public.households ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX household_invites_pending_idx ON public.household_invites USING btree (token) WHERE ((accepted_at IS NULL) AND (cancelled_at IS NULL));
+ALTER TABLE public.insurance_policies ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX household_users_user_id_idx ON public.household_users USING btree (user_id);
+ALTER TABLE public.inventory_folders ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX idx_dismissed_dashboard_not_deleted ON public.dismissed_dashboard_items USING btree (household_id, permanently_deleted) WHERE (permanently_deleted = false);
+ALTER TABLE public.inventory_items ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX insurance_member_idx ON public.insurance_policies USING btree (member_id);
+ALTER TABLE public.investments ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX insurance_policies_household_id_idx ON public.insurance_policies USING btree (household_id);
+ALTER TABLE public.loan_rate_schedule ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX insurance_status_idx ON public.insurance_policies USING btree (status);
+ALTER TABLE public.loans ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX inventory_folders_household_id_idx ON public.inventory_folders USING btree (household_id);
+ALTER TABLE public.members ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX inventory_items_household_id_idx ON public.inventory_items USING btree (household_id);
+ALTER TABLE public.other_assets ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX investments_household_id_idx ON public.investments USING btree (household_id);
+ALTER TABLE public.planned_cashflow_events ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX investments_member_idx ON public.investments USING btree (member_id);
+ALTER TABLE public.properties ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX investments_status_idx ON public.investments USING btree (status);
+ALTER TABLE public.property_rate_schedule ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX loan_rate_schedule_household_id_idx ON public.loan_rate_schedule USING btree (household_id);
+ALTER TABLE public.record_documents ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX loans_household_id_idx ON public.loans USING btree (household_id);
+ALTER TABLE public.record_history ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX loans_member_idx ON public.loans USING btree (member_id);
+ALTER TABLE public.reminders ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX loans_status_idx ON public.loans USING btree (status);
+ALTER TABLE public.savings_accounts ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX members_household_id_idx ON public.members USING btree (household_id);
+ALTER TABLE public.travel_checklist_items ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX other_assets_household_id_idx ON public.other_assets USING btree (household_id);
-
-CREATE INDEX other_assets_member_id_idx ON public.other_assets USING btree (member_id);
-
-CREATE INDEX other_assets_member_idx ON public.other_assets USING btree (member_id);
-
-CREATE INDEX other_assets_status_idx ON public.other_assets USING btree (status);
-
-CREATE INDEX properties_household_id_idx ON public.properties USING btree (household_id);
-
-CREATE INDEX properties_member_idx ON public.properties USING btree (member_id);
-
-CREATE INDEX properties_status_idx ON public.properties USING btree (status);
-
-CREATE INDEX property_rate_schedule_household_id_idx ON public.property_rate_schedule USING btree (household_id);
-
-CREATE INDEX record_documents_entity_idx ON public.record_documents USING btree (entity_type, entity_id);
-
-CREATE INDEX record_documents_household_id_idx ON public.record_documents USING btree (household_id);
-
-CREATE INDEX record_history_entity_idx ON public.record_history USING btree (entity_type, entity_id);
-
-CREATE INDEX record_history_household_id_idx ON public.record_history USING btree (household_id);
-
-CREATE INDEX reminders_entity_idx ON public.reminders USING btree (entity_type, entity_id);
-
-CREATE INDEX reminders_household_id_idx ON public.reminders USING btree (household_id);
-
-CREATE INDEX reminders_remind_at_idx ON public.reminders USING btree (remind_at);
-
-CREATE INDEX savings_accounts_household_id_idx ON public.savings_accounts USING btree (household_id);
-
-CREATE INDEX savings_member_idx ON public.savings_accounts USING btree (member_id);
-
-CREATE INDEX savings_status_idx ON public.savings_accounts USING btree (status);
-
-CREATE OR REPLACE FUNCTION public.backup_storage_manifest(p_household text DEFAULT NULL::text)
- RETURNS TABLE(bucket_id text, name text, size bigint)
- LANGUAGE sql
- STABLE SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-  SELECT o.bucket_id::text, o.name::text, COALESCE((o.metadata->>'size')::bigint, 0)
-  FROM storage.objects o
-  WHERE o.bucket_id IN ('vault-docs', 'inventory-photos')
-    AND o.metadata IS NOT NULL
-    AND o.name NOT LIKE '%/.emptyFolderPlaceholder'
-    AND (p_household IS NULL OR split_part(o.name, '/', 1) = p_household)
-  ORDER BY o.bucket_id, o.name
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.backup_storage_summary()
- RETURNS TABLE(household text, files bigint, bytes bigint, digest text)
- LANGUAGE sql
- STABLE SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-  SELECT split_part(o.name, '/', 1),
-         count(*),
-         COALESCE(sum((o.metadata->>'size')::bigint), 0)::bigint,
-         md5(string_agg(o.bucket_id || '/' || o.name || ':' || COALESCE(o.metadata->>'size', '0'),
-                        E'\\n' ORDER BY o.bucket_id, o.name))
-  FROM storage.objects o
-  WHERE o.bucket_id IN ('vault-docs', 'inventory-photos')
-    AND o.metadata IS NOT NULL
-    AND o.name NOT LIKE '%/.emptyFolderPlaceholder'
-  GROUP BY 1
-  ORDER BY 1
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.cascade_reminders_for_entity()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
-DECLARE
-  v_entity_type text;
-BEGIN
-  v_entity_type := TG_ARGV[0];
-
-  DELETE FROM public.reminders r
-  WHERE r.entity_type = v_entity_type
-    AND r.entity_id = OLD.id
-    AND r.household_id = OLD.household_id;
-
-  RETURN OLD;
-END;
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.cleanup_orphaned_household()
- RETURNS trigger
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-declare
-  remaining int;
-begin
-  select count(*) into remaining from household_users where household_id = old.household_id;
-  if remaining = 0 then
-    delete from app_settings where household_id = old.household_id;
-    delete from gobag_items where household_id = old.household_id;
-    delete from health_conditions where household_id = old.household_id;
-    delete from inventory_folders where household_id = old.household_id;
-    delete from inventory_items where household_id = old.household_id;
-    delete from insurance_policies where household_id = old.household_id;
-    delete from investments where household_id = old.household_id;
-    delete from loan_rate_schedule where household_id = old.household_id;
-    delete from loans where household_id = old.household_id;
-    delete from members where household_id = old.household_id;
-    delete from properties where household_id = old.household_id;
-    delete from property_rate_schedule where household_id = old.household_id;
-    delete from record_documents where household_id = old.household_id;
-    delete from record_history where household_id = old.household_id;
-    delete from reminders where household_id = old.household_id;
-    delete from savings_accounts where household_id = old.household_id;
-    delete from households where id = old.household_id;
-  end if;
-  return old;
-end;
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.current_household_id()
- RETURNS uuid
- LANGUAGE sql
- STABLE
-AS $function$
-  SELECT COALESCE(
-    NULLIF(auth.jwt() ->> 'household_id', '')::uuid,
-    (
-      SELECT hu.household_id
-      FROM public.household_users hu
-      WHERE hu.user_id = auth.uid()
-      ORDER BY hu.created_at ASC
-      LIMIT 1
-    )
-  );
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.current_user_household_ids()
- RETURNS SETOF uuid
- LANGUAGE sql
- STABLE
-AS $function$
-  SELECT hu.household_id
-  FROM public.household_users hu
-  WHERE hu.user_id = auth.uid();
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.default_household_id()
- RETURNS uuid
- LANGUAGE sql
- STABLE
-AS $function$
-  SELECT hu.household_id FROM public.household_users hu
-  WHERE hu.user_id = auth.uid() LIMIT 1;
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.enforce_household_storage_quota()
- RETURNS trigger
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-declare
-  v_household_id uuid;
-  v_tier text;
-  v_used bigint;
-  v_incoming bigint;
-  v_cap bigint := 10485760; -- 10 * 1024 * 1024 — matches the 10MB limit already shown in the app
-begin
-  if NEW.bucket_id not in ('vault-docs', 'inventory-photos') then
-    return NEW;
-  end if;
-
-  v_household_id := split_part(NEW.name, '/', 1)::uuid;
-  v_incoming := coalesce((NEW.metadata->>'size')::bigint, 0);
-
-  select storage_tier, storage_bytes_used into v_tier, v_used
-  from households where id = v_household_id;
-
-  if v_tier = 'premium' then
-    return NEW;
-  end if;
-
-  if coalesce(v_used, 0) + v_incoming > v_cap then
-    raise exception 'storage_quota_exceeded: household % is at its free storage limit', v_household_id;
-  end if;
-
-  return NEW;
-end;
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.ensure_household_app_settings()
- RETURNS trigger
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-BEGIN
-  INSERT INTO public.app_settings (household_id, family_name)
-  VALUES (NEW.id, COALESCE(NULLIF(trim(NEW.name), ''), 'Our Family'))
-  ON CONFLICT (household_id) DO NOTHING;
-
-  RETURN NEW;
-END;
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.ensure_household_default_member()
- RETURNS trigger
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM public.members m
-    WHERE m.household_id = NEW.id
-  ) THEN
-    INSERT INTO public.members (
-      household_id,
-      name,
-      short_name,
-      color,
-      sort_order,
-      emoji
-    )
-    VALUES (
-      NEW.id,
-      'Default Member',
-      'ME',
-      'hsl(221 83% 53%)',
-      0,
-      '👤'
-    );
-  END IF;
-
-  RETURN NEW;
-END;
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.handle_new_auth_user()
- RETURNS trigger
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-DECLARE
-  v_household_id uuid;
-  v_household_name text;
-  v_invite record;
-BEGIN
-  IF NEW.is_anonymous IS TRUE THEN
-    RETURN NEW;
-  END IF;
-
-  INSERT INTO public.user_profiles (user_id, email)
-  VALUES (NEW.id, NEW.email)
-  ON CONFLICT (user_id) DO NOTHING;
-
-  SELECT * INTO v_invite
-  FROM public.household_invites
-  WHERE lower(invited_email) = lower(NEW.email)
-    AND accepted_at IS NULL
-    AND cancelled_at IS NULL
-    AND expires_at > now()
-  ORDER BY created_at ASC
-  LIMIT 1;
-
-  IF v_invite.id IS NOT NULL THEN
-    INSERT INTO public.household_users (household_id, user_id, role, invited_by)
-    VALUES (v_invite.household_id, NEW.id, v_invite.role, v_invite.invited_by_user_id)
-    ON CONFLICT (household_id, user_id) DO NOTHING;
-
-    UPDATE public.household_invites
-    SET accepted_at = now(), accepted_by_user_id = NEW.id
-    WHERE id = v_invite.id;
-
-    RETURN NEW;
-  END IF;
-
-  v_household_name := COALESCE(
-    NULLIF(trim(NEW.raw_user_meta_data ->> 'full_name'), ''),
-    NULLIF(trim(NEW.raw_user_meta_data ->> 'name'), ''),
-    CONCAT(split_part(COALESCE(NEW.email, 'user'), '@', 1), '''s Household')
-  );
-  INSERT INTO public.households (name)
-  VALUES (v_household_name)
-  RETURNING id INTO v_household_id;
-  INSERT INTO public.household_users (household_id, user_id, role)
-  VALUES (v_household_id, NEW.id, 'owner')
-  ON CONFLICT (household_id, user_id) DO NOTHING;
-  RETURN NEW;
-END;
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.has_advisor_access(target_household_id uuid, category text)
- RETURNS boolean
- LANGUAGE sql
- STABLE
-AS $function$
-  SELECT EXISTS (
-    SELECT 1 FROM advisor_household_links l
-    WHERE l.household_id = target_household_id
-      AND l.advisor_user_id = auth.uid()
-      AND l.status = 'active'
-      AND l.consent_renewed_at > (now() - interval '365 days')
-      AND (
-        (category = 'insurance' AND l.can_view_insurance)
-        OR (category = 'investments' AND l.can_view_investments)
-        OR (category = 'networth_summary' AND l.can_view_networth_summary)
-      )
-  );
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.has_advisor_access(target_household_id uuid, target_member_id uuid, category text)
- RETURNS boolean
- LANGUAGE sql
- STABLE
-AS $function$
-  select exists (
-    select 1 from public.advisor_household_links l
-    where l.household_id = target_household_id
-      and l.advisor_user_id = auth.uid()
-      and l.status = 'active'
-      and l.consent_renewed_at > (now() - interval '365 days')
-      and (
-        (category = 'insurance' and l.can_view_insurance)
-        or (category = 'investments' and l.can_view_investments)
-        or (category = 'networth_summary' and l.can_view_networth_summary)
-        or (category = 'property' and l.can_view_property)
-        or (category = 'loans' and l.can_view_loans)
-      )
-      and exists (
-        select 1 from public.advisor_link_members alm
-        where alm.link_id = l.id
-          and (target_member_id is null or alm.member_id = target_member_id)
-      )
-  );
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.increment_household_storage(p_household_id uuid, p_delta bigint)
- RETURNS void
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-begin
-  if not is_household_member(p_household_id) then
-    raise exception 'not a member of this household';
-  end if;
-
-  update households
-  set storage_bytes_used = (
-    select coalesce(sum((o.metadata->>'size')::bigint), 0)
-    from storage.objects o
-    where o.bucket_id in ('vault-docs', 'inventory-photos')
-      and o.name like p_household_id::text || '/%'
-  )
-  where id = p_household_id;
-end;
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.is_guest()
- RETURNS boolean
- LANGUAGE sql
- STABLE
-AS $function$
-  SELECT coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false);
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.is_household_editor(target_household_id uuid)
- RETURNS boolean
- LANGUAGE sql
- STABLE
-AS $function$
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.household_users hu
-    WHERE hu.household_id = target_household_id
-      AND hu.user_id = auth.uid()
-      AND hu.role IN ('owner', 'member')
-  )
-  AND NOT (SELECT public.is_guest());
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.is_household_member(target_household_id uuid)
- RETURNS boolean
- LANGUAGE sql
- STABLE
-AS $function$
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.household_users hu
-    WHERE hu.household_id = target_household_id
-      AND hu.user_id = auth.uid()
-  );
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.log_financial_audit()
- RETURNS trigger
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-declare
-  v_household_id uuid;
-  v_row jsonb;
-  v_old jsonb;
-  v_new jsonb;
-  v_changed_fields text[];
-  v_key text;
-begin
-  v_old := case when TG_OP in ('UPDATE', 'DELETE') then to_jsonb(OLD) else null end;
-  v_new := case when TG_OP in ('UPDATE', 'INSERT') then to_jsonb(NEW) else null end;
-  v_row := coalesce(v_new, v_old);
-
-  -- household_id lives directly on some of these tables (investments, savings_accounts,
-  -- loans, other_assets) but NOT on insurance_policies or properties (member_id only,
-  -- verified against the actual schema, not assumed) — derive it via member_id there instead.
-  if v_row ? 'household_id' then
-    v_household_id := (v_row ->> 'household_id')::uuid;
-  elsif v_row ? 'member_id' and (v_row ->> 'member_id') is not null then
-    select household_id into v_household_id from members where id = (v_row ->> 'member_id')::uuid;
-  end if;
-
-  if TG_OP = 'UPDATE' then
-    select array_agg(k) into v_changed_fields
-    from jsonb_each(v_new) as n(k, val)
-    where n.val is distinct from (v_old -> n.k)
-      and n.k not in ('updated_at'); -- pure timestamp bumps aren't a meaningful "edit"
-    if v_changed_fields is null then
-      return NEW; -- nothing meaningful changed — don't log a no-op
-    end if;
-  end if;
-
-  insert into audit_log (household_id, table_name, record_id, action, changed_by, changed_fields, old_data, new_data)
-  values (
-    v_household_id,
-    TG_TABLE_NAME,
-    (v_row ->> 'id')::uuid,
-    TG_OP,
-    auth.uid(),
-    v_changed_fields,
-    v_old,
-    v_new
-  );
-
-  return coalesce(NEW, OLD);
-end;
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.set_credit_cards_updated_at()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.set_updated_at()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.share_household_by_email(p_household_id uuid, p_email text, p_role text DEFAULT 'member'::text)
- RETURNS uuid
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public', 'auth'
-AS $function$
-DECLARE
-  v_actor uuid := auth.uid();
-  v_target_user_id uuid;
-  v_email text := lower(trim(COALESCE(p_email, '')));
-  v_role text := lower(trim(COALESCE(p_role, 'member')));
-BEGIN
-  IF v_actor IS NULL THEN
-    RAISE EXCEPTION 'Not authenticated.';
-  END IF;
-
-  IF p_household_id IS NULL THEN
-    RAISE EXCEPTION 'Household is required.';
-  END IF;
-
-  IF v_email = '' THEN
-    RAISE EXCEPTION 'Email is required.';
-  END IF;
-
-  IF v_role NOT IN ('member', 'viewer') THEN
-    RAISE EXCEPTION 'Role must be member or viewer.';
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1
-    FROM public.household_users hu
-    WHERE hu.household_id = p_household_id
-      AND hu.user_id = v_actor
-      AND hu.role = 'owner'
-  ) THEN
-    RAISE EXCEPTION 'Only household owners can share access.';
-  END IF;
-
-  SELECT u.id
-  INTO v_target_user_id
-  FROM auth.users u
-  WHERE lower(u.email) = v_email
-  LIMIT 1;
-
-  IF v_target_user_id IS NULL THEN
-    RAISE EXCEPTION 'No account found for that email yet. Ask them to sign in first, then share again.';
-  END IF;
-
-  INSERT INTO public.household_users (household_id, user_id, role, invited_by)
-  VALUES (p_household_id, v_target_user_id, v_role, v_actor)
-  ON CONFLICT (household_id, user_id)
-  DO UPDATE SET
-    role = EXCLUDED.role,
-    invited_by = EXCLUDED.invited_by;
-
-  RETURN v_target_user_id;
-END;
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.sync_lrs_household_id()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
-BEGIN
-  IF NEW.household_id IS NULL THEN
-    SELECT l.household_id INTO NEW.household_id
-    FROM public.loans l
-    WHERE l.id = NEW.loan_id;
-  END IF;
-
-  IF NEW.household_id IS NULL THEN
-    NEW.household_id := public.default_household_id();
-  END IF;
-
-  RETURN NEW;
-END;
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.sync_prs_household_id()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
-BEGIN
-  IF NEW.household_id IS NULL THEN
-    SELECT p.household_id INTO NEW.household_id
-    FROM public.properties p
-    WHERE p.id = NEW.property_id;
-  END IF;
-
-  IF NEW.household_id IS NULL THEN
-    NEW.household_id := public.default_household_id();
-  END IF;
-
-  RETURN NEW;
-END;
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.transfer_household_ownership_by_email(p_household_id uuid, p_email text)
- RETURNS void
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public', 'auth'
-AS $function$
-DECLARE
-  v_actor uuid := auth.uid();
-  v_target_user_id uuid;
-  v_email text := lower(trim(COALESCE(p_email, '')));
-BEGIN
-  IF v_actor IS NULL THEN
-    RAISE EXCEPTION 'Not authenticated.';
-  END IF;
-
-  IF p_household_id IS NULL THEN
-    RAISE EXCEPTION 'Household is required.';
-  END IF;
-
-  IF v_email = '' THEN
-    RAISE EXCEPTION 'Email is required.';
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1
-    FROM public.household_users hu
-    WHERE hu.household_id = p_household_id
-      AND hu.user_id = v_actor
-      AND hu.role = 'owner'
-  ) THEN
-    RAISE EXCEPTION 'Only household owners can transfer ownership.';
-  END IF;
-
-  SELECT u.id
-  INTO v_target_user_id
-  FROM auth.users u
-  WHERE lower(u.email) = v_email
-  LIMIT 1;
-
-  IF v_target_user_id IS NULL THEN
-    RAISE EXCEPTION 'No account found for that email.';
-  END IF;
-
-  IF v_target_user_id = v_actor THEN
-    RAISE EXCEPTION 'You are already the owner.';
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1
-    FROM public.household_users hu
-    WHERE hu.household_id = p_household_id
-      AND hu.user_id = v_target_user_id
-  ) THEN
-    RAISE EXCEPTION 'Target user must already be a member of this household.';
-  END IF;
-
-  -- Enforce a single owner after transfer.
-  UPDATE public.household_users
-  SET role = 'member'
-  WHERE household_id = p_household_id
-    AND role = 'owner';
-
-  UPDATE public.household_users
-  SET role = 'owner'
-  WHERE household_id = p_household_id
-    AND user_id = v_target_user_id;
-END;
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.validate_reminder_target()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
-DECLARE
-  v_exists boolean := false;
-BEGIN
-  IF NEW.entity_type IS NULL OR NEW.entity_id IS NULL THEN
-    RAISE EXCEPTION 'reminders.entity_type and reminders.entity_id are required';
-  END IF;
-
-  IF NEW.household_id IS NULL THEN
-    RAISE EXCEPTION 'reminders.household_id is required for entity integrity checks';
-  END IF;
-
-  IF NEW.entity_type = 'property' THEN
-    SELECT EXISTS (
-      SELECT 1 FROM public.properties p
-      WHERE p.id = NEW.entity_id
-        AND p.household_id = NEW.household_id
-    ) INTO v_exists;
-
-  ELSIF NEW.entity_type = 'loan' THEN
-    SELECT EXISTS (
-      SELECT 1 FROM public.loans l
-      WHERE l.id = NEW.entity_id
-        AND l.household_id = NEW.household_id
-    ) INTO v_exists;
-
-  ELSIF NEW.entity_type = 'insurance' THEN
-    SELECT EXISTS (
-      SELECT 1 FROM public.insurance_policies i
-      WHERE i.id = NEW.entity_id
-        AND i.household_id = NEW.household_id
-    ) INTO v_exists;
-
-  ELSIF NEW.entity_type = 'investment' THEN
-    SELECT EXISTS (
-      SELECT 1 FROM public.investments i
-      WHERE i.id = NEW.entity_id
-        AND i.household_id = NEW.household_id
-    ) INTO v_exists;
-
-  ELSIF NEW.entity_type = 'savings' THEN
-    SELECT EXISTS (
-      SELECT 1 FROM public.savings_accounts s
-      WHERE s.id = NEW.entity_id
-        AND s.household_id = NEW.household_id
-    ) INTO v_exists;
-
-  ELSIF NEW.entity_type = 'health' THEN
-    SELECT EXISTS (
-      SELECT 1 FROM public.health_conditions h
-      WHERE h.id = NEW.entity_id
-        AND h.household_id = NEW.household_id
-    ) INTO v_exists;
-
-  ELSIF NEW.entity_type = 'inventory' THEN
-    SELECT EXISTS (
-      SELECT 1 FROM public.inventory_items ii
-      WHERE ii.id = NEW.entity_id
-        AND ii.household_id = NEW.household_id
-    ) INTO v_exists;
-
-  ELSIF NEW.entity_type = 'other_asset' THEN
-    IF to_regclass('public.other_assets') IS NULL THEN
-      RAISE EXCEPTION 'entity_type other_asset is not available: public.other_assets does not exist';
-    END IF;
-
-    EXECUTE
-      'SELECT EXISTS (
-         SELECT 1 FROM public.other_assets oa
-         WHERE oa.id = $1
-           AND oa.household_id = $2
-       )'
-    INTO v_exists
-    USING NEW.entity_id, NEW.household_id;
-
-  ELSE
-    RAISE EXCEPTION 'Unsupported reminders.entity_type: %', NEW.entity_type;
-  END IF;
-
-  IF NOT v_exists THEN
-    RAISE EXCEPTION
-      'Invalid reminder target: type=% id=% household_id=%',
-      NEW.entity_type,
-      NEW.entity_id,
-      NEW.household_id;
-  END IF;
-
-  RETURN NEW;
-END;
-$function$
-;
-
-REVOKE ALL ON FUNCTION public.backup_storage_manifest(p_household text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.backup_storage_manifest(p_household text) TO service_role;
-
-REVOKE ALL ON FUNCTION public.backup_storage_summary() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.backup_storage_summary() TO service_role;
-
-REVOKE ALL ON FUNCTION public.cascade_reminders_for_entity() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.cascade_reminders_for_entity() TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.cascade_reminders_for_entity() TO anon;
-GRANT EXECUTE ON FUNCTION public.cascade_reminders_for_entity() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.cascade_reminders_for_entity() TO service_role;
-
-REVOKE ALL ON FUNCTION public.cleanup_orphaned_household() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.cleanup_orphaned_household() TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.cleanup_orphaned_household() TO anon;
-GRANT EXECUTE ON FUNCTION public.cleanup_orphaned_household() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.cleanup_orphaned_household() TO service_role;
-
-REVOKE ALL ON FUNCTION public.current_household_id() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.current_household_id() TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.current_household_id() TO anon;
-GRANT EXECUTE ON FUNCTION public.current_household_id() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.current_household_id() TO service_role;
-
-REVOKE ALL ON FUNCTION public.current_user_household_ids() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.current_user_household_ids() TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.current_user_household_ids() TO anon;
-GRANT EXECUTE ON FUNCTION public.current_user_household_ids() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.current_user_household_ids() TO service_role;
-
-REVOKE ALL ON FUNCTION public.default_household_id() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.default_household_id() TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.default_household_id() TO anon;
-GRANT EXECUTE ON FUNCTION public.default_household_id() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.default_household_id() TO service_role;
-
-REVOKE ALL ON FUNCTION public.enforce_household_storage_quota() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.enforce_household_storage_quota() TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.enforce_household_storage_quota() TO anon;
-GRANT EXECUTE ON FUNCTION public.enforce_household_storage_quota() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.enforce_household_storage_quota() TO service_role;
-
-REVOKE ALL ON FUNCTION public.ensure_household_app_settings() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.ensure_household_app_settings() TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.ensure_household_app_settings() TO anon;
-GRANT EXECUTE ON FUNCTION public.ensure_household_app_settings() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.ensure_household_app_settings() TO service_role;
-
-REVOKE ALL ON FUNCTION public.ensure_household_default_member() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.ensure_household_default_member() TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.ensure_household_default_member() TO anon;
-GRANT EXECUTE ON FUNCTION public.ensure_household_default_member() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.ensure_household_default_member() TO service_role;
-
-REVOKE ALL ON FUNCTION public.handle_new_auth_user() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.handle_new_auth_user() TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.handle_new_auth_user() TO anon;
-GRANT EXECUTE ON FUNCTION public.handle_new_auth_user() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.handle_new_auth_user() TO service_role;
-
-REVOKE ALL ON FUNCTION public.has_advisor_access(target_household_id uuid, category text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.has_advisor_access(target_household_id uuid, category text) TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.has_advisor_access(target_household_id uuid, category text) TO anon;
-GRANT EXECUTE ON FUNCTION public.has_advisor_access(target_household_id uuid, category text) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.has_advisor_access(target_household_id uuid, category text) TO service_role;
-
-REVOKE ALL ON FUNCTION public.has_advisor_access(target_household_id uuid, target_member_id uuid, category text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.has_advisor_access(target_household_id uuid, target_member_id uuid, category text) TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.has_advisor_access(target_household_id uuid, target_member_id uuid, category text) TO anon;
-GRANT EXECUTE ON FUNCTION public.has_advisor_access(target_household_id uuid, target_member_id uuid, category text) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.has_advisor_access(target_household_id uuid, target_member_id uuid, category text) TO service_role;
-
-REVOKE ALL ON FUNCTION public.increment_household_storage(p_household_id uuid, p_delta bigint) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.increment_household_storage(p_household_id uuid, p_delta bigint) TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.increment_household_storage(p_household_id uuid, p_delta bigint) TO anon;
-GRANT EXECUTE ON FUNCTION public.increment_household_storage(p_household_id uuid, p_delta bigint) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.increment_household_storage(p_household_id uuid, p_delta bigint) TO service_role;
-
-REVOKE ALL ON FUNCTION public.is_guest() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.is_guest() TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.is_guest() TO anon;
-GRANT EXECUTE ON FUNCTION public.is_guest() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.is_guest() TO service_role;
-
-REVOKE ALL ON FUNCTION public.is_household_editor(target_household_id uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.is_household_editor(target_household_id uuid) TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.is_household_editor(target_household_id uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.is_household_editor(target_household_id uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.is_household_editor(target_household_id uuid) TO service_role;
-
-REVOKE ALL ON FUNCTION public.is_household_member(target_household_id uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.is_household_member(target_household_id uuid) TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.is_household_member(target_household_id uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.is_household_member(target_household_id uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.is_household_member(target_household_id uuid) TO service_role;
-
-REVOKE ALL ON FUNCTION public.log_financial_audit() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.log_financial_audit() TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.log_financial_audit() TO anon;
-GRANT EXECUTE ON FUNCTION public.log_financial_audit() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.log_financial_audit() TO service_role;
-
-REVOKE ALL ON FUNCTION public.set_credit_cards_updated_at() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.set_credit_cards_updated_at() TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.set_credit_cards_updated_at() TO anon;
-GRANT EXECUTE ON FUNCTION public.set_credit_cards_updated_at() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.set_credit_cards_updated_at() TO service_role;
-
-REVOKE ALL ON FUNCTION public.set_updated_at() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.set_updated_at() TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.set_updated_at() TO anon;
-GRANT EXECUTE ON FUNCTION public.set_updated_at() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.set_updated_at() TO service_role;
-
-REVOKE ALL ON FUNCTION public.share_household_by_email(p_household_id uuid, p_email text, p_role text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.share_household_by_email(p_household_id uuid, p_email text, p_role text) TO service_role;
-
-REVOKE ALL ON FUNCTION public.sync_lrs_household_id() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.sync_lrs_household_id() TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.sync_lrs_household_id() TO anon;
-GRANT EXECUTE ON FUNCTION public.sync_lrs_household_id() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.sync_lrs_household_id() TO service_role;
-
-REVOKE ALL ON FUNCTION public.sync_prs_household_id() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.sync_prs_household_id() TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.sync_prs_household_id() TO anon;
-GRANT EXECUTE ON FUNCTION public.sync_prs_household_id() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.sync_prs_household_id() TO service_role;
-
-REVOKE ALL ON FUNCTION public.transfer_household_ownership_by_email(p_household_id uuid, p_email text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.transfer_household_ownership_by_email(p_household_id uuid, p_email text) TO anon;
-GRANT EXECUTE ON FUNCTION public.transfer_household_ownership_by_email(p_household_id uuid, p_email text) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.transfer_household_ownership_by_email(p_household_id uuid, p_email text) TO service_role;
-
-REVOKE ALL ON FUNCTION public.validate_reminder_target() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.validate_reminder_target() TO PUBLIC;
-GRANT EXECUTE ON FUNCTION public.validate_reminder_target() TO anon;
-GRANT EXECUTE ON FUNCTION public.validate_reminder_target() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.validate_reminder_target() TO service_role;
+ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 
 CREATE OR REPLACE VIEW public.advisor_client_summary_view AS
  SELECT h.id AS household_id,
@@ -1936,77 +1846,65 @@ UNION ALL
            FROM loans
           WHERE loans.property_id = properties.id));
 
-ALTER TABLE public.advisor_household_links ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER on_auth_user_created_household_bootstrap AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION handle_new_auth_user();
 
-ALTER TABLE public.advisor_invites ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER trg_credit_cards_updated_at BEFORE UPDATE ON public.credit_cards FOR EACH ROW EXECUTE FUNCTION set_credit_cards_updated_at();
 
-ALTER TABLE public.advisor_link_members ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER trg_cascade_reminders_health AFTER DELETE ON public.health_conditions FOR EACH ROW EXECUTE FUNCTION cascade_reminders_for_entity('health');
 
-ALTER TABLE public.advisor_policy_charts ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER trg_health_conditions_updated_at BEFORE UPDATE ON public.health_conditions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-ALTER TABLE public.advisor_record_notes ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER trg_cleanup_orphaned_household AFTER DELETE ON public.household_users FOR EACH ROW EXECUTE FUNCTION cleanup_orphaned_household();
 
-ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER on_household_created_app_settings AFTER INSERT ON public.households FOR EACH ROW EXECUTE FUNCTION ensure_household_app_settings();
 
-ALTER TABLE public.audit_log ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER on_household_created_default_member AFTER INSERT ON public.households FOR EACH ROW EXECUTE FUNCTION ensure_household_default_member();
 
-ALTER TABLE public.credit_cards ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER audit_insurance_policies AFTER INSERT OR DELETE OR UPDATE ON public.insurance_policies FOR EACH ROW EXECUTE FUNCTION log_financial_audit();
 
-ALTER TABLE public.deleted_records ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER trg_cascade_reminders_insurance AFTER DELETE ON public.insurance_policies FOR EACH ROW EXECUTE FUNCTION cascade_reminders_for_entity('insurance');
 
-ALTER TABLE public.dismissed_dashboard_items ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER trg_insurance_policies_updated_at BEFORE UPDATE ON public.insurance_policies FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-ALTER TABLE public.error_logs ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER trg_cascade_reminders_inventory AFTER DELETE ON public.inventory_items FOR EACH ROW EXECUTE FUNCTION cascade_reminders_for_entity('inventory');
 
-ALTER TABLE public.estate_checklist ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER audit_investments AFTER INSERT OR DELETE OR UPDATE ON public.investments FOR EACH ROW EXECUTE FUNCTION log_financial_audit();
 
-ALTER TABLE public.fx_rates ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER trg_cascade_reminders_investment AFTER DELETE ON public.investments FOR EACH ROW EXECUTE FUNCTION cascade_reminders_for_entity('investment');
 
-ALTER TABLE public.gobag_items ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER trg_investments_updated_at BEFORE UPDATE ON public.investments FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-ALTER TABLE public.health_conditions ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER trg_sync_lrs_household_id BEFORE INSERT OR UPDATE ON public.loan_rate_schedule FOR EACH ROW EXECUTE FUNCTION sync_lrs_household_id();
 
-ALTER TABLE public.household_invites ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER audit_loans AFTER INSERT OR DELETE OR UPDATE ON public.loans FOR EACH ROW EXECUTE FUNCTION log_financial_audit();
 
-ALTER TABLE public.household_users ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER trg_cascade_reminders_loan AFTER DELETE ON public.loans FOR EACH ROW EXECUTE FUNCTION cascade_reminders_for_entity('loan');
 
-ALTER TABLE public.households ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER trg_loans_updated_at BEFORE UPDATE ON public.loans FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-ALTER TABLE public.insurance_policies ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER audit_other_assets AFTER INSERT OR DELETE OR UPDATE ON public.other_assets FOR EACH ROW EXECUTE FUNCTION log_financial_audit();
 
-ALTER TABLE public.inventory_folders ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER trg_cascade_reminders_other_asset AFTER DELETE ON public.other_assets FOR EACH ROW EXECUTE FUNCTION cascade_reminders_for_entity('other_asset');
 
-ALTER TABLE public.inventory_items ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER trg_cascade_reminders_other_assets AFTER DELETE ON public.other_assets FOR EACH ROW EXECUTE FUNCTION cascade_reminders_for_entity('other_asset');
 
-ALTER TABLE public.investments ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER trg_other_assets_updated_at BEFORE UPDATE ON public.other_assets FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-ALTER TABLE public.loan_rate_schedule ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER audit_properties AFTER INSERT OR DELETE OR UPDATE ON public.properties FOR EACH ROW EXECUTE FUNCTION log_financial_audit();
 
-ALTER TABLE public.loans ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER trg_cascade_reminders_property AFTER DELETE ON public.properties FOR EACH ROW EXECUTE FUNCTION cascade_reminders_for_entity('property');
 
-ALTER TABLE public.members ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER trg_properties_updated_at BEFORE UPDATE ON public.properties FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-ALTER TABLE public.other_assets ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER trg_sync_prs_household_id BEFORE INSERT OR UPDATE ON public.property_rate_schedule FOR EACH ROW EXECUTE FUNCTION sync_prs_household_id();
 
-ALTER TABLE public.planned_cashflow_events ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER trg_validate_reminder_target BEFORE INSERT OR UPDATE OF entity_type, entity_id, household_id ON public.reminders FOR EACH ROW EXECUTE FUNCTION validate_reminder_target();
 
-ALTER TABLE public.properties ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER audit_savings_accounts AFTER INSERT OR DELETE OR UPDATE ON public.savings_accounts FOR EACH ROW EXECUTE FUNCTION log_financial_audit();
 
-ALTER TABLE public.property_rate_schedule ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER trg_cascade_reminders_savings AFTER DELETE ON public.savings_accounts FOR EACH ROW EXECUTE FUNCTION cascade_reminders_for_entity('savings');
 
-ALTER TABLE public.record_documents ENABLE ROW LEVEL SECURITY;
-
-ALTER TABLE public.record_history ENABLE ROW LEVEL SECURITY;
-
-ALTER TABLE public.reminders ENABLE ROW LEVEL SECURITY;
-
-ALTER TABLE public.savings_accounts ENABLE ROW LEVEL SECURITY;
-
-ALTER TABLE public.travel_checklist_items ENABLE ROW LEVEL SECURITY;
-
-ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
-
--- Tables with row level security DISABLED: (none)
+CREATE TRIGGER trg_savings_accounts_updated_at BEFORE UPDATE ON public.savings_accounts FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE POLICY advisor_links_select ON public.advisor_household_links AS PERMISSIVE FOR SELECT TO public
   USING ((is_household_member(household_id) OR (advisor_user_id = auth.uid())));
@@ -2459,65 +2357,235 @@ CASE
     ELSE false
 END));
 
-CREATE TRIGGER on_auth_user_created_household_bootstrap AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION handle_new_auth_user();
+REVOKE ALL ON FUNCTION public.backup_storage_manifest(p_household text) FROM PUBLIC;
 
-CREATE TRIGGER trg_credit_cards_updated_at BEFORE UPDATE ON public.credit_cards FOR EACH ROW EXECUTE FUNCTION set_credit_cards_updated_at();
+GRANT EXECUTE ON FUNCTION public.backup_storage_manifest(p_household text) TO service_role;
 
-CREATE TRIGGER trg_cascade_reminders_health AFTER DELETE ON public.health_conditions FOR EACH ROW EXECUTE FUNCTION cascade_reminders_for_entity('health');
+REVOKE ALL ON FUNCTION public.backup_storage_summary() FROM PUBLIC;
 
-CREATE TRIGGER trg_health_conditions_updated_at BEFORE UPDATE ON public.health_conditions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+GRANT EXECUTE ON FUNCTION public.backup_storage_summary() TO service_role;
 
-CREATE TRIGGER trg_cleanup_orphaned_household AFTER DELETE ON public.household_users FOR EACH ROW EXECUTE FUNCTION cleanup_orphaned_household();
+REVOKE ALL ON FUNCTION public.cascade_reminders_for_entity() FROM PUBLIC;
 
-CREATE TRIGGER on_household_created_app_settings AFTER INSERT ON public.households FOR EACH ROW EXECUTE FUNCTION ensure_household_app_settings();
+GRANT EXECUTE ON FUNCTION public.cascade_reminders_for_entity() TO PUBLIC;
 
-CREATE TRIGGER on_household_created_default_member AFTER INSERT ON public.households FOR EACH ROW EXECUTE FUNCTION ensure_household_default_member();
+GRANT EXECUTE ON FUNCTION public.cascade_reminders_for_entity() TO anon;
 
-CREATE TRIGGER audit_insurance_policies AFTER INSERT OR DELETE OR UPDATE ON public.insurance_policies FOR EACH ROW EXECUTE FUNCTION log_financial_audit();
+GRANT EXECUTE ON FUNCTION public.cascade_reminders_for_entity() TO authenticated;
 
-CREATE TRIGGER trg_cascade_reminders_insurance AFTER DELETE ON public.insurance_policies FOR EACH ROW EXECUTE FUNCTION cascade_reminders_for_entity('insurance');
+GRANT EXECUTE ON FUNCTION public.cascade_reminders_for_entity() TO service_role;
 
-CREATE TRIGGER trg_insurance_policies_updated_at BEFORE UPDATE ON public.insurance_policies FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+REVOKE ALL ON FUNCTION public.cleanup_orphaned_household() FROM PUBLIC;
 
-CREATE TRIGGER trg_cascade_reminders_inventory AFTER DELETE ON public.inventory_items FOR EACH ROW EXECUTE FUNCTION cascade_reminders_for_entity('inventory');
+GRANT EXECUTE ON FUNCTION public.cleanup_orphaned_household() TO PUBLIC;
 
-CREATE TRIGGER audit_investments AFTER INSERT OR DELETE OR UPDATE ON public.investments FOR EACH ROW EXECUTE FUNCTION log_financial_audit();
+GRANT EXECUTE ON FUNCTION public.cleanup_orphaned_household() TO anon;
 
-CREATE TRIGGER trg_cascade_reminders_investment AFTER DELETE ON public.investments FOR EACH ROW EXECUTE FUNCTION cascade_reminders_for_entity('investment');
+GRANT EXECUTE ON FUNCTION public.cleanup_orphaned_household() TO authenticated;
 
-CREATE TRIGGER trg_investments_updated_at BEFORE UPDATE ON public.investments FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+GRANT EXECUTE ON FUNCTION public.cleanup_orphaned_household() TO service_role;
 
-CREATE TRIGGER trg_sync_lrs_household_id BEFORE INSERT OR UPDATE ON public.loan_rate_schedule FOR EACH ROW EXECUTE FUNCTION sync_lrs_household_id();
+REVOKE ALL ON FUNCTION public.current_household_id() FROM PUBLIC;
 
-CREATE TRIGGER audit_loans AFTER INSERT OR DELETE OR UPDATE ON public.loans FOR EACH ROW EXECUTE FUNCTION log_financial_audit();
+GRANT EXECUTE ON FUNCTION public.current_household_id() TO PUBLIC;
 
-CREATE TRIGGER trg_cascade_reminders_loan AFTER DELETE ON public.loans FOR EACH ROW EXECUTE FUNCTION cascade_reminders_for_entity('loan');
+GRANT EXECUTE ON FUNCTION public.current_household_id() TO anon;
 
-CREATE TRIGGER trg_loans_updated_at BEFORE UPDATE ON public.loans FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+GRANT EXECUTE ON FUNCTION public.current_household_id() TO authenticated;
 
-CREATE TRIGGER audit_other_assets AFTER INSERT OR DELETE OR UPDATE ON public.other_assets FOR EACH ROW EXECUTE FUNCTION log_financial_audit();
+GRANT EXECUTE ON FUNCTION public.current_household_id() TO service_role;
 
-CREATE TRIGGER trg_cascade_reminders_other_asset AFTER DELETE ON public.other_assets FOR EACH ROW EXECUTE FUNCTION cascade_reminders_for_entity('other_asset');
+REVOKE ALL ON FUNCTION public.current_user_household_ids() FROM PUBLIC;
 
-CREATE TRIGGER trg_cascade_reminders_other_assets AFTER DELETE ON public.other_assets FOR EACH ROW EXECUTE FUNCTION cascade_reminders_for_entity('other_asset');
+GRANT EXECUTE ON FUNCTION public.current_user_household_ids() TO PUBLIC;
 
-CREATE TRIGGER trg_other_assets_updated_at BEFORE UPDATE ON public.other_assets FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+GRANT EXECUTE ON FUNCTION public.current_user_household_ids() TO anon;
 
-CREATE TRIGGER audit_properties AFTER INSERT OR DELETE OR UPDATE ON public.properties FOR EACH ROW EXECUTE FUNCTION log_financial_audit();
+GRANT EXECUTE ON FUNCTION public.current_user_household_ids() TO authenticated;
 
-CREATE TRIGGER trg_cascade_reminders_property AFTER DELETE ON public.properties FOR EACH ROW EXECUTE FUNCTION cascade_reminders_for_entity('property');
+GRANT EXECUTE ON FUNCTION public.current_user_household_ids() TO service_role;
 
-CREATE TRIGGER trg_properties_updated_at BEFORE UPDATE ON public.properties FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+REVOKE ALL ON FUNCTION public.default_household_id() FROM PUBLIC;
 
-CREATE TRIGGER trg_sync_prs_household_id BEFORE INSERT OR UPDATE ON public.property_rate_schedule FOR EACH ROW EXECUTE FUNCTION sync_prs_household_id();
+GRANT EXECUTE ON FUNCTION public.default_household_id() TO PUBLIC;
 
-CREATE TRIGGER trg_validate_reminder_target BEFORE INSERT OR UPDATE OF entity_type, entity_id, household_id ON public.reminders FOR EACH ROW EXECUTE FUNCTION validate_reminder_target();
+GRANT EXECUTE ON FUNCTION public.default_household_id() TO anon;
 
-CREATE TRIGGER audit_savings_accounts AFTER INSERT OR DELETE OR UPDATE ON public.savings_accounts FOR EACH ROW EXECUTE FUNCTION log_financial_audit();
+GRANT EXECUTE ON FUNCTION public.default_household_id() TO authenticated;
 
-CREATE TRIGGER trg_cascade_reminders_savings AFTER DELETE ON public.savings_accounts FOR EACH ROW EXECUTE FUNCTION cascade_reminders_for_entity('savings');
+GRANT EXECUTE ON FUNCTION public.default_household_id() TO service_role;
 
-CREATE TRIGGER trg_savings_accounts_updated_at BEFORE UPDATE ON public.savings_accounts FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+REVOKE ALL ON FUNCTION public.enforce_household_storage_quota() FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.enforce_household_storage_quota() TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.enforce_household_storage_quota() TO anon;
+
+GRANT EXECUTE ON FUNCTION public.enforce_household_storage_quota() TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.enforce_household_storage_quota() TO service_role;
+
+REVOKE ALL ON FUNCTION public.ensure_household_app_settings() FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.ensure_household_app_settings() TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.ensure_household_app_settings() TO anon;
+
+GRANT EXECUTE ON FUNCTION public.ensure_household_app_settings() TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.ensure_household_app_settings() TO service_role;
+
+REVOKE ALL ON FUNCTION public.ensure_household_default_member() FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.ensure_household_default_member() TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.ensure_household_default_member() TO anon;
+
+GRANT EXECUTE ON FUNCTION public.ensure_household_default_member() TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.ensure_household_default_member() TO service_role;
+
+REVOKE ALL ON FUNCTION public.handle_new_auth_user() FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.handle_new_auth_user() TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.handle_new_auth_user() TO anon;
+
+GRANT EXECUTE ON FUNCTION public.handle_new_auth_user() TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.handle_new_auth_user() TO service_role;
+
+REVOKE ALL ON FUNCTION public.has_advisor_access(target_household_id uuid, category text) FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.has_advisor_access(target_household_id uuid, category text) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.has_advisor_access(target_household_id uuid, category text) TO anon;
+
+GRANT EXECUTE ON FUNCTION public.has_advisor_access(target_household_id uuid, category text) TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.has_advisor_access(target_household_id uuid, category text) TO service_role;
+
+REVOKE ALL ON FUNCTION public.has_advisor_access(target_household_id uuid, target_member_id uuid, category text) FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.has_advisor_access(target_household_id uuid, target_member_id uuid, category text) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.has_advisor_access(target_household_id uuid, target_member_id uuid, category text) TO anon;
+
+GRANT EXECUTE ON FUNCTION public.has_advisor_access(target_household_id uuid, target_member_id uuid, category text) TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.has_advisor_access(target_household_id uuid, target_member_id uuid, category text) TO service_role;
+
+REVOKE ALL ON FUNCTION public.increment_household_storage(p_household_id uuid, p_delta bigint) FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.increment_household_storage(p_household_id uuid, p_delta bigint) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.increment_household_storage(p_household_id uuid, p_delta bigint) TO anon;
+
+GRANT EXECUTE ON FUNCTION public.increment_household_storage(p_household_id uuid, p_delta bigint) TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.increment_household_storage(p_household_id uuid, p_delta bigint) TO service_role;
+
+REVOKE ALL ON FUNCTION public.is_guest() FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.is_guest() TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.is_guest() TO anon;
+
+GRANT EXECUTE ON FUNCTION public.is_guest() TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.is_guest() TO service_role;
+
+REVOKE ALL ON FUNCTION public.is_household_editor(target_household_id uuid) FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.is_household_editor(target_household_id uuid) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.is_household_editor(target_household_id uuid) TO anon;
+
+GRANT EXECUTE ON FUNCTION public.is_household_editor(target_household_id uuid) TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.is_household_editor(target_household_id uuid) TO service_role;
+
+REVOKE ALL ON FUNCTION public.is_household_member(target_household_id uuid) FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.is_household_member(target_household_id uuid) TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.is_household_member(target_household_id uuid) TO anon;
+
+GRANT EXECUTE ON FUNCTION public.is_household_member(target_household_id uuid) TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.is_household_member(target_household_id uuid) TO service_role;
+
+REVOKE ALL ON FUNCTION public.log_financial_audit() FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.log_financial_audit() TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.log_financial_audit() TO anon;
+
+GRANT EXECUTE ON FUNCTION public.log_financial_audit() TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.log_financial_audit() TO service_role;
+
+REVOKE ALL ON FUNCTION public.set_credit_cards_updated_at() FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.set_credit_cards_updated_at() TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.set_credit_cards_updated_at() TO anon;
+
+GRANT EXECUTE ON FUNCTION public.set_credit_cards_updated_at() TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.set_credit_cards_updated_at() TO service_role;
+
+REVOKE ALL ON FUNCTION public.set_updated_at() FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.set_updated_at() TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.set_updated_at() TO anon;
+
+GRANT EXECUTE ON FUNCTION public.set_updated_at() TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.set_updated_at() TO service_role;
+
+REVOKE ALL ON FUNCTION public.share_household_by_email(p_household_id uuid, p_email text, p_role text) FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.share_household_by_email(p_household_id uuid, p_email text, p_role text) TO service_role;
+
+REVOKE ALL ON FUNCTION public.sync_lrs_household_id() FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.sync_lrs_household_id() TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.sync_lrs_household_id() TO anon;
+
+GRANT EXECUTE ON FUNCTION public.sync_lrs_household_id() TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.sync_lrs_household_id() TO service_role;
+
+REVOKE ALL ON FUNCTION public.sync_prs_household_id() FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.sync_prs_household_id() TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.sync_prs_household_id() TO anon;
+
+GRANT EXECUTE ON FUNCTION public.sync_prs_household_id() TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.sync_prs_household_id() TO service_role;
+
+REVOKE ALL ON FUNCTION public.transfer_household_ownership_by_email(p_household_id uuid, p_email text) FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.transfer_household_ownership_by_email(p_household_id uuid, p_email text) TO anon;
+
+GRANT EXECUTE ON FUNCTION public.transfer_household_ownership_by_email(p_household_id uuid, p_email text) TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.transfer_household_ownership_by_email(p_household_id uuid, p_email text) TO service_role;
+
+REVOKE ALL ON FUNCTION public.validate_reminder_target() FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.validate_reminder_target() TO PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.validate_reminder_target() TO anon;
+
+GRANT EXECUTE ON FUNCTION public.validate_reminder_target() TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.validate_reminder_target() TO service_role;
 
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.advisor_client_summary_view TO anon;
 
@@ -2740,7 +2808,3 @@ GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.user_profiles TO authenticated;
 
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.user_profiles TO service_role;
-
--- BUCKET inventory-photos: public=f, file_size_limit=5242880, allowed_mime_types={image/jpeg,image/png,image/webp}
-
--- BUCKET vault-docs: public=f, file_size_limit=10485760, allowed_mime_types={image/jpeg,image/png,image/webp,application/pdf}
