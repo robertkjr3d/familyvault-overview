@@ -2,7 +2,7 @@
 SET check_function_bodies = false;
 SET search_path = public, extensions;
 
--- Schema snapshot generated 2026-10-27T05:30:11Z \| database postgres \| PostgreSQL 17.6
+-- Schema snapshot generated 2026-10-27T05:30:11Z | database postgres | PostgreSQL 17.6
 
 CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA pg_catalog;
 
@@ -941,7 +941,7 @@ AS $function$
   SELECT split_part(o.name, '/', 1),
          count(*),
          COALESCE(sum((o.metadata->>'size')::bigint), 0)::bigint,
-         md5(string_agg(o.bucket_id \|\| '/' \|\| o.name \|\| ':' \|\| COALESCE(o.metadata->>'size', '0'),
+         md5(string_agg(o.bucket_id || '/' || o.name || ':' || COALESCE(o.metadata->>'size', '0'),
                         E'\\n' ORDER BY o.bucket_id, o.name))
   FROM storage.objects o
   WHERE o.bucket_id IN ('vault-docs', 'inventory-photos')
@@ -1250,7 +1250,7 @@ begin
     select coalesce(sum((o.metadata->>'size')::bigint), 0)
     from storage.objects o
     where o.bucket_id in ('vault-docs', 'inventory-photos')
-      and o.name like p_household_id::text \|\| '/%'
+      and o.name like p_household_id::text || '/%'
   )
   where id = p_household_id;
 end;
@@ -1850,7 +1850,7 @@ UNION ALL
     h.name AS household_name,
     'loans'::text AS category,
     l.id AS record_id,
-    (COALESCE(NULLIF(l.purpose, ''::text), 'Loan'::text) \|\| ' · '::text) \|\| l.bank AS record_name,
+    (COALESCE(NULLIF(l.purpose, ''::text), 'Loan'::text) || ' · '::text) || l.bank AS record_name,
     COALESCE(NULLIF(l.purpose, ''::text), 'Other'::text) AS insurance_category,
     NULL::numeric AS premium,
     NULL::text AS frequency,
