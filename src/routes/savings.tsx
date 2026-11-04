@@ -379,6 +379,7 @@ function SavingsRow({
           id={`reminders-${a.id}`}
           icon={<span>🔔</span>}
           title="Reminders"
+          count={reminderCount}
           open={section === "reminders"}
           onOpenChange={(o) => setSection(o ? "reminders" : null)}
         >

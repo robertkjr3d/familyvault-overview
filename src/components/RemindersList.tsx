@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useCurrentRole } from "@/lib/useCurrentRole";
 import { useToday } from "@/lib/today";
 import { computeNextReminderDate, recurrenceLabel } from "@/lib/reminderRecurrence";
+import { ReminderEditButton } from "@/components/ReminderEditButton";
 
 export function RemindersList({ entityType, entityId }: { entityType: string; entityId: string }) {
   const { canEdit } = useCurrentRole();
@@ -103,6 +104,9 @@ export function RemindersList({ entityType, entityId }: { entityType: string; en
                   : ""}
               </p>
             </div>
+            {canEdit && (
+              <ReminderEditButton reminder={r} entityType={entityType} entityId={entityId} />
+            )}
             {canEdit && (
               <Button
                 size="sm"

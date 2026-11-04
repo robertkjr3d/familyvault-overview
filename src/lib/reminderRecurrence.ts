@@ -108,3 +108,47 @@ export function computeNextReminderDate(
 
   return null; // one-off, or unrecognised recurrence value
 }
+
+/** Calendar date (YYYY-MM-DD, local) of a stored reminder moment — the exact inverse of how
+ * ReminderButton saves it (`new Date(`${date}T12:00:00`)`), so the edit form shows the same
+ * day the user originally picked. Returns "" if the value is missing or invalid. */
+export function reminderDateInputValue(remindAt: string | null | undefined): string {
+  if (!remindAt) return "";
+  const d = new Date(remindAt);
+  return isNaN(d.getTime()) ? "" : formatDateOnly(d);
+}
+
+export type ReminderEditForm = {
+  what: string;
+  date: string; // YYYY-MM-DD
+  recurrence: string; // "" = one-off
+  endOfMonth: boolean;
+};
+
+/**
+ * Builds the database patch for editing a reminder. Only the four user-editable columns can
+ * ever appear in it (never entity_type / entity_id / household_id / dismissed). `remind_at` is
+ * included ONLY if the user actually picked a different date, so a text-only edit never
+ * rewrites the stored moment. Returns null when nothing changed.
+ */
+export function buildReminderEditPatch(
+  original: {
+    what: string | null;
+    remind_at: string | null;
+    recurrence: string | null;
+    recurrence_end_of_month: boolean | null;
+  },
+  form: ReminderEditForm,
+): Record<string, unknown> | null {
+  const patch: Record<string, unknown> = {};
+  const what = form.what.trim();
+  if (what !== (original.what ?? "")) patch.what = what;
+  if (form.date && form.date !== reminderDateInputValue(original.remind_at)) {
+    patch.remind_at = new Date(`${form.date}T12:00:00`).toISOString();
+  }
+  const recurrence = form.recurrence || null;
+  if (recurrence !== (original.recurrence ?? null)) patch.recurrence = recurrence;
+  const endOfMonth = form.recurrence === "monthly" ? form.endOfMonth : false;
+  if (endOfMonth !== !!original.recurrence_end_of_month) patch.recurrence_end_of_month = endOfMonth;
+  return Object.keys(patch).length ? patch : null;
+}

@@ -204,6 +204,7 @@ function CardRow({
           id={`reminders-${card.id}`}
           icon={<span>🔔</span>}
           title="Reminders"
+          count={reminderCount}
           open={section === "reminders"}
           onOpenChange={(o) => setSection(o ? "reminders" : null)}
         >
