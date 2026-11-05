@@ -15,6 +15,7 @@ import { StatusToggle, type Status } from "./StatusToggle";
 import { MemberTag } from "./MemberTag";
 import { cn } from "@/lib/utils";
 import { useCurrentRole } from "@/lib/useCurrentRole";
+import { isHighlightingInside } from "@/lib/cardClickGuard";
 
 type Props = {
   title: string;
@@ -317,8 +318,31 @@ export function RecordCard({
         )}
       </div>
 
-      <button
-        onClick={() => setOpen((v) => !v)}
+      {/* Header toggle. A <div role="button"> instead of a real <button> (changed 5 Nov 2026):
+          text inside a <button> cannot be highlighted by dragging, and the click that ends a drag
+          opened/closed the card. A div keeps the same look, tap and keyboard (Enter/Space) behaviour,
+          lets the Action/Details text be highlighted (select-text on that paragraph below), and the
+          click handler ignores the click that ends a highlight. Other header text (title, chips) can
+          now be highlighted too; select-none was deliberately NOT put on this div because an
+          ancestor with user-select:none can block highlighting of its children on some Safari
+          versions. */}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onClick={(e) => {
+          if (isHighlightingInside(window.getSelection(), e.currentTarget)) return;
+          setOpen((v) => !v);
+        }}
+        onKeyDown={(e) => {
+          // Only when the header itself has focus; Enter/Space on the inner links/buttons must
+          // keep doing their own thing and not also toggle the card.
+          if (e.target !== e.currentTarget) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen((v) => !v);
+          }
+        }}
         className="flex w-full cursor-pointer items-stretch gap-0 text-left"
       >
         {/* Left column — text content. Sep 6 2026 v4: splitting badges onto their
@@ -429,7 +453,7 @@ export function RecordCard({
                computed there; "…" is a real button appended right after it in normal
                text flow, so it always sits directly after the last visible word,
                never floating off with a gap when the last line happens to be short. */
-            <p ref={actionRef} className="text-sm text-foreground/90">
+            <p ref={actionRef} className="cursor-text select-text text-sm text-foreground/90">
               <span className="font-medium text-primary">{actionLabel}:</span>{" "}
               {actionOverflows && !actionExpanded ? truncatedAction : action}
               {actionOverflows && !actionExpanded && (
@@ -490,7 +514,7 @@ export function RecordCard({
             {rightMeta}
           </div>
         )}
-      </button>
+      </div>
 
       <div
         onClick={() => setOpen((v) => !v)}
