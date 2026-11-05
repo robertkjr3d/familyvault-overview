@@ -1,4 +1,5 @@
 import { AddRecordFab } from "@/components/AddRecordFab";
+import { noteCount } from "@/lib/notesHtml";
 import { Bell } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -291,7 +292,7 @@ function SavingsRow({
         onEdit={edit.open}
         onDelete={onDelete}
         onDuplicate={dup.open}
-        hasNotes={!!a.notes}
+        hasNotes={noteCount(a.notes) > 0}
         updatedAt={a.updated_at}
         createdAt={a.created_at}
         open={cardOpen}
@@ -369,6 +370,7 @@ function SavingsRow({
           id={`notes-${a.id}`}
           icon={<span>📝</span>}
           title="Notes"
+          count={noteCount(a.notes)}
           open={section === "notes"}
           onOpenChange={(o) => setSection(o ? "notes" : null)}
         >

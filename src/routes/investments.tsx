@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { noteCount } from "@/lib/notesHtml";
 import { useCurrentRole } from "@/lib/useCurrentRole";
 import { Info, Bell } from "lucide-react";
 import { AddRecordFab } from "@/components/AddRecordFab";
@@ -322,7 +323,7 @@ function InvestmentRow({
         onEdit={edit.open}
         onDuplicate={dup.open}
         onDelete={onDelete}
-        hasNotes={!!inv.notes}
+        hasNotes={noteCount(inv.notes) > 0}
         hasAdvisorNote={advisorNotes.length > 0}
         updatedAt={inv.updated_at}
         createdAt={inv.created_at}
@@ -435,6 +436,7 @@ function InvestmentRow({
           id={`notes-${inv.id}`}
           icon={<span>📝</span>}
           title="Notes"
+          count={noteCount(inv.notes)}
           open={section === "notes"}
           onOpenChange={(o) => setSection(o ? "notes" : null)}
         >

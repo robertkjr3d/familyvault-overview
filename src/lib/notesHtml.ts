@@ -48,3 +48,10 @@ export function htmlToPlainText(html: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+/** 1 if a saved note has visible text, else 0. Used for the number on a card's Notes header.
+ * Looks at the text, not just whether the column is non-null, so a note that was emptied but
+ * left behind blank markup (e.g. "<br>") does not show a misleading "1". */
+export function noteCount(notes: string | null | undefined): number {
+  return htmlToPlainText(notes ?? "") ? 1 : 0;
+}

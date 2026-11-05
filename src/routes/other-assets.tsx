@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { noteCount } from "@/lib/notesHtml";
 import { AddRecordFab } from "@/components/AddRecordFab";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -157,7 +158,7 @@ function AssetRow({
         onEdit={edit.open}
         onDuplicate={dup.open}
         onDelete={onDelete}
-        hasNotes={!!asset.notes}
+        hasNotes={noteCount(asset.notes) > 0}
         updatedAt={asset.updated_at}
         createdAt={asset.created_at}
         open={cardOpen}
@@ -200,6 +201,7 @@ function AssetRow({
           id={`notes-${asset.id}`}
           icon={<span>📝</span>}
           title="Notes"
+          count={noteCount(asset.notes)}
           open={section === "notes"}
           onOpenChange={(o) => setSection(o ? "notes" : null)}
         >

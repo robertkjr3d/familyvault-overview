@@ -37,3 +37,15 @@ describe("htmlToPlainText (no document)", () => {
     expect(htmlToPlainText("a&nbsp;b")).toBe("a b");
   });
 });
+
+import { noteCount } from "./notesHtml";
+describe("noteCount", () => {
+  it("is 0 for empty / blank-markup notes", () => {
+    for (const v of [null, undefined, "", "   ", "<br>", "<div><br></div>", "<p>&nbsp;</p>"])
+      expect(noteCount(v)).toBe(0);
+  });
+  it("is 1 for notes with visible text (html or legacy plain text)", () => {
+    for (const v of ["<p>Call agent</p>", "plain legacy note", "<ul><li>a</li></ul>", "<b>x</b>"])
+      expect(noteCount(v)).toBe(1);
+  });
+});

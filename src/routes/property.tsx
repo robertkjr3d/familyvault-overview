@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { noteCount } from "@/lib/notesHtml";
 import { HistoryLog } from "@/components/HistoryLog";
 import { AuditTrail } from "@/components/AuditTrail";
 import { AddRecordFab } from "@/components/AddRecordFab";
@@ -271,7 +272,7 @@ function PropertyRow({
         onEdit={edit.open}
         onDuplicate={dup.open}
         onDelete={onDelete}
-        hasNotes={!!p.notes}
+        hasNotes={noteCount(p.notes) > 0}
         updatedAt={p.updated_at}
         createdAt={p.created_at}
         open={cardOpen}
@@ -372,6 +373,7 @@ function PropertyRow({
           id={`notes-${p.id}`}
           icon={<span>📝</span>}
           title="Notes"
+          count={noteCount(p.notes)}
           open={section === "notes"}
           onOpenChange={(o) => setSection(o ? "notes" : null)}
         >

@@ -1,4 +1,5 @@
 import { AddRecordFab } from "@/components/AddRecordFab";
+import { noteCount } from "@/lib/notesHtml";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -130,7 +131,7 @@ function HealthRow({
         onStatusChange={onStatus}
         onEdit={edit.open}
         onDelete={onDelete}
-        hasNotes={!!c.notes}
+        hasNotes={noteCount(c.notes) > 0}
         updatedAt={c.updated_at}
         createdAt={c.created_at}
         chipGroups={[
@@ -140,7 +141,7 @@ function HealthRow({
         action={c.details}
         actionLabel="Details"
       >
-        <CollapsibleSection icon={<span>📝</span>} title="Notes">
+        <CollapsibleSection icon={<span>📝</span>} title="Notes" count={noteCount(c.notes)}>
           <NotesEditor table="health_conditions" queryKey="health" id={c.id} value={c.notes} />
         </CollapsibleSection>
         <CollapsibleSection icon={<span>🔄</span>} title="Add an Update">

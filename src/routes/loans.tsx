@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { noteCount } from "@/lib/notesHtml";
 import { AddRecordFab } from "@/components/AddRecordFab";
 import { Bell } from "lucide-react";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -202,7 +203,7 @@ function LoanRow({
         onEdit={edit.open}
         onDuplicate={dup.open}
         onDelete={onDelete}
-        hasNotes={!!l.notes}
+        hasNotes={noteCount(l.notes) > 0}
         updatedAt={l.updated_at}
         createdAt={l.created_at}
         open={cardOpen}
@@ -295,6 +296,7 @@ function LoanRow({
           id={`notes-${l.id}`}
           icon={<span>📝</span>}
           title="Notes"
+          count={noteCount(l.notes)}
           open={section === "notes"}
           onOpenChange={(o) => setSection(o ? "notes" : null)}
         >

@@ -1,4 +1,5 @@
 import { Bell } from "lucide-react";
+import { noteCount } from "@/lib/notesHtml";
 import { useState } from "react";
 import { AddRecordFab } from "@/components/AddRecordFab";
 import { createFileRoute } from "@tanstack/react-router";
@@ -155,7 +156,7 @@ function CardRow({
         onEdit={edit.open}
         onDuplicate={dup.open}
         onDelete={onDelete}
-        hasNotes={!!card.notes}
+        hasNotes={noteCount(card.notes) > 0}
         updatedAt={card.updated_at}
         createdAt={card.created_at}
         open={cardOpen}
@@ -189,6 +190,7 @@ function CardRow({
           id={`notes-${card.id}`}
           icon={<span>📝</span>}
           title="Notes"
+          count={noteCount(card.notes)}
           open={section === "notes"}
           onOpenChange={(o) => setSection(o ? "notes" : null)}
         >
