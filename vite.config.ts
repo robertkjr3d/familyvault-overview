@@ -13,6 +13,11 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
+    build: {
+      // Cloudflare's build machine can run out of open files (EMFILE) while reading icon files.
+      // This caps how many files the bundler opens at once. Build-only; no effect on the running app.
+      rollupOptions: { maxParallelFileOps: 50 },
+    },
     server: {
       host: "0.0.0.0",
       port: 5000,
