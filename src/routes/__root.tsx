@@ -24,6 +24,13 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { isPasskeySupported } from "@/lib/passkeyPrompt";
+import {
+  passkeyNotice,
+  reportSignInIssue,
+  sampleFamilyMessage,
+  sendCodeMessage,
+  type Notice,
+} from "@/lib/signInErrors";
 import { acceptPendingInvitesForCurrentUser, createOwnHousehold } from "@/lib/householdInvites";
 import {
   acceptPendingAdvisorInvitesForCurrentUser,
@@ -571,6 +578,9 @@ function TurnstileWidget({
       if (cancelled || !containerRef.current || !w.turnstile) return;
       widgetIdRef.current = w.turnstile.render(containerRef.current, {
         sitekey: TURNSTILE_SITE_KEY,
+        // Cloudflare's own "cleanest" mode: the box (e.g. the permanent "Success!" badge) is only
+        // shown if the person actually has to do something. The token flow is identical.
+        appearance: "interaction-only",
         callback: (token: string) => {
           if (!cancelled) onToken(token);
         },
@@ -687,7 +697,11 @@ function SignInScreen({ redirectError }: { redirectError: string | null }) {
     setCaptchaToken(null);
     setCaptchaResetKey((k) => k + 1);
     if (guestErr) {
-      setGuestError("We could not open the sample just now. Please try again in a minute.");
+      setGuestError(sampleFamilyMessage(guestErr));
+      reportSignInIssue("sample_family", guestErr, {
+        hadCaptchaToken: !!captchaToken,
+        captchaTimedOut,
+      });
     }
   }
 
@@ -723,7 +737,11 @@ function SignInScreen({ redirectError }: { redirectError: string | null }) {
     setCaptchaToken(null);
     setCaptchaResetKey((k) => k + 1);
     if (signInError) {
-      setError(signInError.message);
+      setError(sendCodeMessage(signInError));
+      reportSignInIssue("email_code", signInError, {
+        hadCaptchaToken: !!captchaToken,
+        captchaTimedOut,
+      });
       return;
     }
 
@@ -792,15 +810,23 @@ function SignInScreen({ redirectError }: { redirectError: string | null }) {
   // from an already-signed-in session, in Settings), so the button would
   // just fail confusingly for the one group of people who can't use it.
   const [passkeyLoading, setPasskeyLoading] = useState(false);
-  const [passkeyError, setPasskeyError] = useState<string | null>(null);
+  const [passkeyError, setPasskeyError] = useState<Notice | null>(null);
   const passkeySupported = isPasskeySupported();
 
   async function signInWithPasskey() {
     setPasskeyLoading(true);
     setPasskeyError(null);
-    const { error: pkError } = await supabase.auth.signInWithPasskey({
-      options: { captchaToken: captchaToken ?? undefined },
-    });
+    let pkError: Parameters<typeof passkeyNotice>[0] = null;
+    try {
+      const result = await supabase.auth.signInWithPasskey({
+        options: { captchaToken: captchaToken ?? undefined },
+      });
+      pkError = result.error;
+    } catch (thrown) {
+      // The SDK rethrows anything that is not one of its own error types. Without this the
+      // button would stay on "Waiting for your passkey…" forever.
+      pkError = thrown as Parameters<typeof passkeyNotice>[0];
+    }
     setPasskeyLoading(false);
     // Same single-use-token reset as the OTP flow above — this was the actual bug:
     // signInWithPasskey wasn't passing the token at all, so Supabase's captcha check
@@ -808,15 +834,17 @@ function SignInScreen({ redirectError }: { redirectError: string | null }) {
     setCaptchaToken(null);
     setCaptchaResetKey((k) => k + 1);
     if (pkError) {
-      // The most common "error" here is the person tapping Cancel on their
-      // device's biometric prompt — not a real failure, so don't show a
-      // scary red message for that specific case. Verified against the
-      // installed SDK's actual error shape (WebAuthnError.code), not
-      // guessed — the browser-level "AbortError" DOMException is
-      // translated into this SDK-level code, not surfaced by that name.
-      const isUserCancelled =
-        "code" in pkError && (pkError as { code?: string }).code === "ERROR_CEREMONY_ABORTED";
-      if (!isUserCancelled) setPasskeyError(pkError.message);
+      // See passkeyNotice() for the mapping. Cancelling the prompt and "no passkey on this
+      // device" both arrive from the browser as NotAllowedError (verified against the installed
+      // SDK), so they get a calm grey hint instead of the browser's red technical sentence.
+      const notice = passkeyNotice(pkError);
+      if (notice) {
+        setPasskeyError(notice);
+        reportSignInIssue("passkey", pkError, {
+          hadCaptchaToken: !!captchaToken,
+          captchaTimedOut,
+        });
+      }
     }
   }
 
@@ -838,6 +866,126 @@ function SignInScreen({ redirectError }: { redirectError: string | null }) {
   // said this was coming "shortly" as of this session) — pure upside, no downside, so
   // kept. Revisit the full conditional-UI ceremony once that ships.
 
+  // ── Pieces of the screen, shared by the two layouts below ──────────────────────────────
+  // The human check (Turnstile) is rendered exactly ONCE, in one of the two layouts.
+  const humanCheckPending = !captchaToken && !captchaTimedOut;
+  const sendDisabled = loading || !email || humanCheckPending;
+  const sendLabel = loading
+    ? "Sending..."
+    : humanCheckPending
+      ? "Verifying you're human…"
+      : "Email me a code";
+
+  const googleButton = (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={signInWithGoogle}
+        disabled={googleLoading}
+        className="w-full gap-2"
+      >
+        <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
+          <path
+            fill="#FFC107"
+            d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.6-6 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l5.7-5.7C34.6 6 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"
+          />
+          <path
+            fill="#FF3D00"
+            d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.8 1.1 8 3l5.7-5.7C34.6 6 29.6 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"
+          />
+          <path
+            fill="#4CAF50"
+            d="M24 44c5.5 0 10.5-2.1 14.3-5.6l-6.6-5.6C29.6 34.7 26.9 36 24 36c-5.3 0-9.6-3.4-11.3-8l-6.5 5C9.6 39.6 16.3 44 24 44z"
+          />
+          <path
+            fill="#1976D2"
+            d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.2-4.1 5.6l6.6 5.6C41.3 36 44 30.5 44 24c0-1.3-.1-2.7-.4-3.5z"
+          />
+        </svg>
+        {googleLoading ? "Redirecting to Google…" : "Continue with Google"}
+      </Button>
+      {googleError && (
+        <p role="alert" className="text-xs text-urgent">
+          {googleError}
+        </p>
+      )}
+    </>
+  );
+
+  const orDivider = (
+    <div className="relative py-1 text-center">
+      <div className="absolute inset-0 flex items-center">
+        <div className="w-full border-t border-border" />
+      </div>
+      <span className="relative bg-card px-2 text-[11px] text-muted-foreground">or</span>
+    </div>
+  );
+
+  const emailInput = (
+    <Input
+      type="email"
+      required
+      aria-label="Email address"
+      // "webauthn" appended is the DOM signal that tells the browser to
+      // include saved passkeys in this field's autofill dropdown — required
+      // for conditional UI, confirmed via MDN's own reference example.
+      autoComplete="email webauthn"
+      placeholder="you@example.com"
+      value={email}
+      onChange={(e) => setEmail(e.target.value)}
+    />
+  );
+
+  const humanCheck = (
+    <TurnstileWidget key={captchaResetKey} resetKey={captchaResetKey} onToken={setCaptchaToken} />
+  );
+
+  // Code box + verify button. In a normal sign-in the Verify button is the quiet one until a code
+  // has been sent or typed; in an invite it stays the main button (the person already has a code).
+  const codeForm = (
+    <>
+      <form onSubmit={verifyCode} className="space-y-3">
+        <Input
+          type="text"
+          inputMode="numeric"
+          aria-label="6-digit code"
+          autoComplete="one-time-code"
+          placeholder="6-digit code"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+        />
+        <Button
+          type="submit"
+          variant={inviteMode || sentTo || code ? "default" : "outline"}
+          disabled={verifying || !email || !code}
+          className="w-full"
+        >
+          {verifying ? "Verifying..." : "Verify code and sign in"}
+        </Button>
+      </form>
+      {verifyError && (
+        <p role="alert" className="text-xs text-urgent">
+          {verifyError}
+        </p>
+      )}
+    </>
+  );
+
+  const termsLine = (
+    <p className="mt-5 text-center text-[11px] text-muted-foreground">
+      By continuing, you agree to our{" "}
+      <Link to="/terms" className="underline">
+        Terms of Service
+      </Link>{" "}
+      and{" "}
+      <Link to="/privacy" className="underline">
+        Privacy Policy
+      </Link>
+      .
+    </p>
+  );
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-6">
       <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
@@ -849,38 +997,13 @@ function SignInScreen({ redirectError }: { redirectError: string | null }) {
         </div>
 
         <div className="p-6">
-          {!inviteMode && (
-            <div className="mb-5 rounded-xl border border-border bg-muted/40 p-4">
-              <p className="text-sm font-semibold">Just looking?</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Open a made-up family. Nothing to type, no email needed. View only.
-              </p>
-              <Button
-                type="button"
-                onClick={trySampleFamily}
-                disabled={guestLoading || (!captchaToken && !captchaTimedOut)}
-                className="mt-3 w-full"
-              >
-                {guestLoading
-                  ? "Opening…"
-                  : !captchaToken && !captchaTimedOut
-                    ? "Preparing…"
-                    : "Look around a sample family"}
-              </Button>
-              {guestError && <p className="mt-2 text-xs text-urgent">{guestError}</p>}
-              <p className="mt-4 text-center text-xs text-muted-foreground">
-                Or sign in to your own account below
-              </p>
-            </div>
-          )}
-
           <h1 className="text-lg font-semibold tracking-tight">
             {inviteMode ? "Join your family's household" : "Sign in or create an account"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {inviteMode
               ? "Enter the invited email and the code from your invite email."
-              : "Type your email in the box below and tap “Email me a code”. Then type the 6-digit code from the email. No password."}
+              : "Enter your email and tap “Email me a code”, then type the 6-digit code we send you. No password."}
           </p>
 
           {redirectError && (
@@ -890,131 +1013,138 @@ function SignInScreen({ redirectError }: { redirectError: string | null }) {
             </div>
           )}
 
-          <div className="mt-5 space-y-3">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={signInWithGoogle}
-              disabled={googleLoading}
-              className="w-full gap-2"
-            >
-              <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
-                <path
-                  fill="#FFC107"
-                  d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.6-6 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l5.7-5.7C34.6 6 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"
-                />
-                <path
-                  fill="#FF3D00"
-                  d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.8 1.1 8 3l5.7-5.7C34.6 6 29.6 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"
-                />
-                <path
-                  fill="#4CAF50"
-                  d="M24 44c5.5 0 10.5-2.1 14.3-5.6l-6.6-5.6C29.6 34.7 26.9 36 24 36c-5.3 0-9.6-3.4-11.3-8l-6.5 5C9.6 39.6 16.3 44 24 44z"
-                />
-                <path
-                  fill="#1976D2"
-                  d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.2-4.1 5.6l6.6 5.6C41.3 36 44 30.5 44 24c0-1.3-.1-2.7-.4-3.5z"
-                />
-              </svg>
-              {googleLoading ? "Redirecting to Google…" : "Continue with Google"}
-            </Button>
-            {googleError && <p className="text-xs text-urgent">{googleError}</p>}
+          {inviteMode ? (
+            <>
+              {/* INVITE LAYOUT — deliberately unchanged from before the Nov 2026 redesign: an invited
+                  person already has a code in their invite email, so the code box comes first and
+                  "Email me a code" is the secondary "Code not showing up?" option. No passkey, no
+                  sample family here. */}
+              <div className="mt-5 space-y-3">
+                {googleButton}
+                {orDivider}
+                {emailInput}
+                {codeForm}
+              </div>
 
-            {!inviteMode && passkeySupported && (
-              <>
+              <div className="mt-5 border-t border-border pt-4">
+                <p className="text-xs text-muted-foreground">Code not showing up?</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Enter your email above and we'll email you a code to register.
+                </p>
+                {humanCheck}
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={signInWithPasskey}
-                  disabled={passkeyLoading || (!captchaToken && !captchaTimedOut)}
-                  className="w-full"
+                  onClick={sendMagicLink}
+                  disabled={sendDisabled}
+                  className="mt-2 w-full"
                 >
-                  {passkeyLoading
-                    ? "Waiting for your passkey…"
-                    : !captchaToken && !captchaTimedOut
-                      ? "Preparing…"
-                      : "Sign in with a passkey"}
+                  {sendLabel}
                 </Button>
-                {passkeyError && <p className="text-xs text-urgent">{passkeyError}</p>}
-              </>
-            )}
-
-            <div className="relative py-1 text-center">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-border" />
+                {sentTo && <p className="mt-2 text-xs text-settled">New code sent to {sentTo}.</p>}
               </div>
-              <span className="relative bg-card px-2 text-[11px] text-muted-foreground">or</span>
-            </div>
 
-            <Input
-              type="email"
-              required
-              // "webauthn" appended is the DOM signal that tells the browser to
-              // include saved passkeys in this field's autofill dropdown — required
-              // for conditional UI, confirmed via MDN's own reference example.
-              autoComplete="email webauthn"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
+              {error && (
+                <p role="alert" className="mt-3 text-xs text-urgent">
+                  {error}
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              {/* NORMAL LAYOUT — one path, top to bottom: Google, or email → "Email me a code" →
+                  type the code. Passkey is a quiet link; the sample family is a quiet block at the
+                  bottom (the website tells visitors to look for "Look around a sample family"). */}
+              <div className="mt-5 space-y-3">
+                {googleButton}
+                {orDivider}
 
-            <form onSubmit={verifyCode} className="space-y-3">
-              <Input
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                placeholder="6-digit code"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-              />
-              <Button type="submit" disabled={verifying || !email || !code} className="w-full">
-                {verifying ? "Verifying..." : "Verify code and sign in"}
-              </Button>
-            </form>
-            {verifyError && <p className="text-xs text-urgent">{verifyError}</p>}
-          </div>
+                <form
+                  noValidate
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (sendDisabled) return;
+                    void sendMagicLink();
+                  }}
+                  className="space-y-3"
+                >
+                  {emailInput}
+                  {humanCheck}
+                  <Button
+                    type="submit"
+                    variant={sentTo || code ? "outline" : "default"}
+                    disabled={sendDisabled}
+                    className="w-full"
+                  >
+                    {sendLabel}
+                  </Button>
+                  {sentTo && <p className="text-xs text-settled">New code sent to {sentTo}.</p>}
+                  {error && (
+                    <p role="alert" className="text-xs text-urgent">
+                      {error}
+                    </p>
+                  )}
+                </form>
 
-          <div className="mt-5 border-t border-border pt-4">
-            <p className="text-xs text-muted-foreground">
-              {inviteMode ? "Code not showing up?" : "Don't have a code yet?"}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Enter your email above and we'll email you a code to register.
-            </p>
-            <TurnstileWidget
-              key={captchaResetKey}
-              resetKey={captchaResetKey}
-              onToken={setCaptchaToken}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              onClick={sendMagicLink}
-              disabled={loading || !email || (!captchaToken && !captchaTimedOut)}
-              className="mt-2 w-full"
-            >
-              {loading
-                ? "Sending..."
-                : !captchaToken && !captchaTimedOut
-                  ? "Verifying you're human…"
-                  : "Email me a code"}
-            </Button>
-            {sentTo && <p className="mt-2 text-xs text-settled">New code sent to {sentTo}.</p>}
-          </div>
+                {codeForm}
 
-          {error && <p className="mt-3 text-xs text-urgent">{error}</p>}
+                {passkeySupported && (
+                  <div className="text-center">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={signInWithPasskey}
+                      disabled={passkeyLoading || humanCheckPending}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      {passkeyLoading
+                        ? "Waiting for your passkey…"
+                        : humanCheckPending
+                          ? "Preparing…"
+                          : "Sign in with a passkey"}
+                    </Button>
+                    {passkeyError && (
+                      <p
+                        role="alert"
+                        className={`mt-1 text-xs ${
+                          passkeyError.tone === "error" ? "text-urgent" : "text-muted-foreground"
+                        }`}
+                      >
+                        {passkeyError.text}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
 
-          <p className="mt-5 text-center text-[11px] text-muted-foreground">
-            By continuing, you agree to our{" "}
-            <Link to="/terms" className="underline">
-              Terms of Service
-            </Link>{" "}
-            and{" "}
-            <Link to="/privacy" className="underline">
-              Privacy Policy
-            </Link>
-            .
-          </p>
+              <div className="mt-5 border-t border-border pt-4 text-center">
+                <p className="text-xs text-muted-foreground">
+                  Just looking? Open a made-up family. Nothing to type, no email needed. View only.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={trySampleFamily}
+                  disabled={guestLoading || humanCheckPending}
+                  className="mt-3 w-full"
+                >
+                  {guestLoading
+                    ? "Opening…"
+                    : humanCheckPending
+                      ? "Preparing…"
+                      : "Look around a sample family"}
+                </Button>
+                {guestError && (
+                  <p role="alert" className="mt-2 text-xs text-urgent">
+                    {guestError}
+                  </p>
+                )}
+              </div>
+            </>
+          )}
+
+          {termsLine}
         </div>
       </div>
     </div>
