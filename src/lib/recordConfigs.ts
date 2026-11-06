@@ -206,7 +206,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
         label: "Hide from advisers",
         type: "boolean",
         placeholder:
-          "Keep this property out of any adviser's view, even if you've shared this member and category",
+          "Keep this property out of an adviser's lists. It still counts in net worth totals if you share the summary.",
         default: false,
         section: "🔒 Sharing",
       },
@@ -267,7 +267,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
         label: "Hide from advisers",
         type: "boolean",
         placeholder:
-          "Keep this loan out of any adviser's view, even if you've shared this member and category",
+          "Keep this loan out of an adviser's lists. It still counts in net worth totals if you share the summary.",
         default: false,
       },
     ],
@@ -438,7 +438,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
         label: "Hide from advisers",
         type: "boolean",
         placeholder:
-          "Keep this policy out of any adviser's view, even if you've shared this member and category",
+          "Keep this policy out of an adviser's lists. It still counts in net worth totals if you share the summary.",
         default: false,
         section: "🔒 Sharing",
       },
@@ -571,7 +571,7 @@ export const recordConfigs: Record<string, RecordConfig> = {
         label: "Hide from advisers",
         type: "boolean",
         placeholder:
-          "Keep this holding out of any adviser's view, even if you've shared this member and category",
+          "Keep this holding out of an adviser's lists. It still counts in net worth totals if you share the summary.",
         default: false,
       },
     ],
