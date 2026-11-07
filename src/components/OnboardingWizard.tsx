@@ -71,7 +71,7 @@ export function OnboardingWizard({
           <StepCard
             icon={Shield}
             title="Add an insurance policy"
-            blurb="We'll automatically remind you before it renews — no spreadsheet, no forgetting."
+            blurb="It shows on your dashboard before it renews. No spreadsheet needed."
             done={hasInsurance}
             expanded={expanded === "insurance"}
             onToggle={() => setExpanded((e) => (e === "insurance" ? null : "insurance"))}
@@ -273,7 +273,7 @@ function QuickAddInsurance({ onSaved }: { onSaved: () => void }) {
         start_date: renewalDate || null,
       });
       if (error) throw error;
-      toast.success("Policy added — you'll be alerted before it renews");
+      toast.success("Policy added — it will show on your dashboard before it renews");
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["insurance"] });
       qc.invalidateQueries({ queryKey: ["alert-count"] });

@@ -14,8 +14,9 @@ const OPTIONS: RecordSort[] = ["urgency", "name", "edited", "created"];
  *
  * The button is exactly 32px tall, the same as the page title's line height
  * (text-2xl), so putting it in the title row does not move anything below it.
- * It shows the current choice, and is tinted when it is not the default so
- * nobody wonders why their cards are in a different order.
+ * It is a small icon while the default order is in use. When another order is
+ * chosen it becomes a tinted pill that names the choice, so nobody wonders why
+ * their cards are in a different order.
  */
 export function SortControl() {
   const recordSort = useAppStore((s) => s.recordSort);
@@ -30,15 +31,16 @@ export function SortControl() {
         <button
           type="button"
           aria-label={`Sort cards. Currently sorted by ${label}`}
+          title="Sort cards"
           className={cn(
-            "inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-xs font-medium transition",
+            "inline-flex h-8 shrink-0 cursor-pointer items-center justify-center whitespace-nowrap rounded-full border text-xs font-medium transition",
             isDefault
-              ? "border-border bg-card text-foreground hover:bg-accent"
-              : "border-primary bg-primary/10 text-primary hover:bg-primary/15",
+              ? "w-8 border-border bg-card text-foreground hover:bg-accent"
+              : "gap-1.5 border-primary bg-primary/10 px-3 text-primary hover:bg-primary/15",
           )}
         >
           <ListFilter className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>{label}</span>
+          {!isDefault && <span>{label}</span>}
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" collisionPadding={16} className="w-48 p-1">
