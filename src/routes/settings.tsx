@@ -857,7 +857,7 @@ function SettingsPageInner() {
             new Paragraph({
               children: [
                 new TextRun({
-                  text: "Sum assured is the policy's payout/coverage amount and is not included in the Net Worth total above. Surrender value — the cash value if the policy were cancelled today — is what counts toward Net Worth, consistent with the dashboard.",
+                  text: "Sum assured is the policy's payout/coverage amount and is not included in the Net Worth total above. Surrender value — the cash value if the policy were cancelled today — is what counts toward Net Worth, consistent with the Home dashboard.",
                   italics: true,
                   color: "999999",
                   size: 16,
@@ -1395,7 +1395,7 @@ function SettingsPageInner() {
       <section className="rounded-2xl border border-border bg-card p-4">
         <h2 className="mb-3 text-sm font-bold">Alerts & Reminders</h2>
         <p className="mb-3 text-xs text-muted-foreground">
-          Days before a date to start showing it on the dashboard and bell.
+          Days before a date to start showing it on the Home dashboard and bell.
         </p>
         {[
           {
@@ -1965,7 +1965,7 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
     await qc.invalidateQueries({ queryKey: ["dismissed-dashboard", householdId] });
     await qc.invalidateQueries({ queryKey: ["alert-count", householdId] });
     await qc.invalidateQueries({ queryKey: ["alert-count-extras", householdId] }); // alert-count no longer exists as a query - this is the key that actually needs invalidating now
-    toast.success("Restored to dashboard.");
+    toast.success("Restored to the Home dashboard.");
   }
 
   async function permanentlyDeleteItem(item: any) {
@@ -2030,7 +2030,7 @@ function DismissedHistory({ householdId }: { householdId: string | null }) {
     if (!householdId) return;
     if (
       !confirm(
-        "Clear all completed items? This cannot be undone and nothing will return to the dashboard.",
+        "Clear all completed items? This cannot be undone and nothing will return to the Home dashboard.",
       )
     )
       return;

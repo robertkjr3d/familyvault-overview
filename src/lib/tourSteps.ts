@@ -425,7 +425,7 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
     id: "reminder-save",
     target: "reminder-save",
     title: "Save the reminder",
-    body: "That's it — it'll show up on your dashboard when it's due.",
+    body: "That's it — it'll show up on your Home dashboard when it's due.",
     placement: "top",
     advanceOnClick: true, // real submit button
     advanceWhenGone: true, // a real network save: wait for the Sheet to close, don't just assume it did
@@ -433,7 +433,7 @@ export const EXTRAS_TOUR_STEPS: TourStep[] = [
   {
     id: "nav-home",
     target: "nav-home",
-    title: "Back to your dashboard",
+    title: "Back to your Home dashboard",
     body: "Tap Home to see everything in one place.",
     placement: "top",
     advanceOnClick: true, // nav tap, instant

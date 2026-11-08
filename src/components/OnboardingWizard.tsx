@@ -71,7 +71,7 @@ export function OnboardingWizard({
           <StepCard
             icon={Shield}
             title="Add an insurance policy"
-            blurb="It shows on your dashboard before it renews. No spreadsheet needed."
+            blurb="It shows on your Home dashboard before it renews. No spreadsheet needed."
             done={hasInsurance}
             expanded={expanded === "insurance"}
             onToggle={() => setExpanded((e) => (e === "insurance" ? null : "insurance"))}
@@ -273,7 +273,7 @@ function QuickAddInsurance({ onSaved }: { onSaved: () => void }) {
         start_date: renewalDate || null,
       });
       if (error) throw error;
-      toast.success("Policy added — it will show on your dashboard before it renews");
+      toast.success("Policy added — it will show on your Home dashboard before it renews");
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["insurance"] });
       qc.invalidateQueries({ queryKey: ["alert-count"] });
@@ -322,7 +322,7 @@ function QuickAddInsurance({ onSaved }: { onSaved: () => void }) {
         </div>
       </div>
       <p className="rounded-lg bg-accent/50 px-2.5 py-2 text-[11px] text-accent-foreground">
-        💡 We'll alert you 90 days before this renews.
+        💡 It will show on your Home dashboard 90 days before this renews.
       </p>
       <Button className="w-full" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save policy"}</Button>
     </div>
