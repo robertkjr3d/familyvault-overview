@@ -95,7 +95,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     <div className="flex min-h-screen items-center justify-center p-6 text-center">
       <div className="max-w-md">
         <h1 className="text-xl font-bold">Something went wrong</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{error.message}</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {error instanceof Error ? error.message : String(error)}
+        </p>
       </div>
     </div>
   ),
