@@ -5,7 +5,7 @@ export const Route = createFileRoute("/privacy")({
   head: () => ({ meta: [{ title: "Privacy Policy — FamilyHub SG" }] }),
 });
 
-const LAST_UPDATED = "22 October 2026";
+const LAST_UPDATED = "10 November 2026";
 // Placeholder — replace with a real, monitored inbox. See chat for details.
 const CONTACT_EMAIL = "support@familyhubsg.com";
 
@@ -140,6 +140,14 @@ function PrivacyPage() {
             keeping your own extra copy of your files somewhere else, especially
             important documents; the full backup in Settings → Data makes this
             easy.
+          </p>
+          <p className="mt-3">
+            We don't keep a household's data forever. If nobody in a household
+            has signed in or used FamilyHub SG for 24 months, we will email the
+            household's owner at least twice, the last time at least 30 days
+            before we delete the household and its files. To keep your
+            household, just sign in. Backup copies are erased about 30 days
+            after that, as described above.
           </p>
         </Section>
 
