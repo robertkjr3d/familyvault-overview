@@ -1,6 +1,6 @@
 -- FamilyHub SG REBUILD COPY (31 Oct 2026). Use ONLY on an empty spare project (familyhub-drill) or a real rebuild.
 -- Built from supabase/schema.sql: statements reordered so functions come before tables, plus the missing audit_log sequence.
--- Does NOT create: storage buckets vault-docs and inventory-photos, the delete-old-guests cron job, Auth settings, Cloudflare variables.
+-- Does NOT create: storage buckets vault-docs and inventory-photos, the cron jobs (delete-old-guests, refresh-sample-family, purge-orphan-audit-log, purge-old-error-logs), Auth settings, Cloudflare variables.
 SET check_function_bodies = false;
 
 SET search_path = public, extensions;
@@ -1586,6 +1586,8 @@ ALTER TABLE ONLY public.other_assets ADD CONSTRAINT other_assets_action_member_i
 ALTER TABLE ONLY public.other_assets ADD CONSTRAINT other_assets_household_id_fkey FOREIGN KEY (household_id) REFERENCES households(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.other_assets ADD CONSTRAINT other_assets_member_id_fkey FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.planned_cashflow_events ADD CONSTRAINT planned_cashflow_events_household_id_fkey FOREIGN KEY (household_id) REFERENCES households(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.properties ADD CONSTRAINT properties_action_member_id_fkey FOREIGN KEY (action_member_id) REFERENCES members(id) ON DELETE SET NULL;
 
