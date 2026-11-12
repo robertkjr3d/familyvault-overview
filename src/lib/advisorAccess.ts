@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireRealUser } from "@/lib/requireRealUser";
+import { assertInviteCapacity, makeInviteCounter } from "@/lib/inviteLimits";
 
 // ============================================================
 // Advisor (FA) access lifecycle — send invite, accept on login,
@@ -211,6 +212,9 @@ export const sendAdvisorInvite = createServerFn({ method: "POST" })
     redirectUrl.searchParams.set("email", invitedEmail);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Daily and hourly caps on invitation emails (see inviteLimits.ts); adviser invites had no limit.
+    await assertInviteCapacity(makeInviteCounter(supabaseAdmin), data.householdId);
 
     // Dedup: cancel any existing PENDING (unaccepted, uncancelled) invite to
     // this email for this household before inserting a fresh one — mirrors

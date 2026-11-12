@@ -3,6 +3,8 @@ import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireRealUser } from "@/lib/requireRealUser";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { assertInviteCapacity, makeInviteCounter } from "@/lib/inviteLimits";
+import { findMemberByEmail } from "@/lib/memberLookup";
 
 const invitePayloadSchema = z.object({
   householdId: z.string().uuid(),
@@ -96,6 +98,9 @@ export const sendHouseholdInvite = createServerFn({ method: "POST" })
     redirectUrl.searchParams.set("email", invitedEmail);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Daily and hourly caps on invitation emails (see inviteLimits.ts).
+    await assertInviteCapacity(makeInviteCounter(supabaseAdmin), data.householdId);
 
     // Prevent duplicate pending invites: if this email already has an
     // unaccepted, uncancelled, unexpired invite to this household, cancel
@@ -321,32 +326,35 @@ export const removeHouseholdMember = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-    if (listError) throw listError;
-
-    const targetUser = listData.users.find(
-      (u) => normalizeEmail(u.email ?? "") === normalizeEmail(data.email),
-    );
-    if (!targetUser) throw new Error("No account found for that email.");
-    if (targetUser.id === userId) throw new Error("You cannot remove yourself.");
-
-    const { data: targetMembership, error: membershipError } = await supabaseAdmin
+    // Look only at THIS household's members (not every account in the project), so this keeps
+    // working however many users the app has and reveals nothing about outsiders (memberLookup.ts).
+    const { data: memberRows, error: membersError } = await supabaseAdmin
       .from("household_users" as any)
-      .select("role")
-      .eq("household_id", data.householdId)
-      .eq("user_id", targetUser.id)
-      .maybeSingle();
+      .select("user_id, role")
+      .eq("household_id", data.householdId);
+    if (membersError) throw membersError;
+    const members = (memberRows ?? []) as unknown as Array<{ user_id: string; role: string }>;
 
-    if (membershipError) throw membershipError;
-    if (!targetMembership) throw new Error("That person is not a member of this household.");
-    if ((targetMembership as any).role === "owner")
+    const targetId = await findMemberByEmail(
+      members.map((m) => m.user_id),
+      data.email,
+      async (memberId) => {
+        const { data: found, error: lookupError } =
+          await supabaseAdmin.auth.admin.getUserById(memberId);
+        if (lookupError) throw lookupError;
+        return found.user?.email ?? null;
+      },
+    );
+    if (!targetId) throw new Error("That person is not a member of this household.");
+    if (targetId === userId) throw new Error("You cannot remove yourself.");
+    if (members.find((m) => m.user_id === targetId)?.role === "owner")
       throw new Error("Cannot remove another owner. Transfer ownership first.");
 
     const { error: deleteError } = await supabaseAdmin
       .from("household_users" as any)
       .delete()
       .eq("household_id", data.householdId)
-      .eq("user_id", targetUser.id);
+      .eq("user_id", targetId);
 
     if (deleteError) throw deleteError;
     return { ok: true };
