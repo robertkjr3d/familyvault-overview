@@ -153,7 +153,7 @@ declare
   v_tier text;
   v_used bigint;
   v_incoming bigint;
-  v_cap bigint := 10485760; -- 10 * 1024 * 1024 — matches the 10MB limit already shown in the app
+  v_cap bigint := 10485760; -- 10 * 1024 * 1024, the free limit shown in the app
 begin
   if NEW.bucket_id not in ('vault-docs', 'inventory-photos') then
     return NEW;
@@ -162,14 +162,22 @@ begin
   v_household_id := split_part(NEW.name, '/', 1)::uuid;
   v_incoming := coalesce((NEW.metadata->>'size')::bigint, 0);
 
-  select storage_tier, storage_bytes_used into v_tier, v_used
+  select storage_tier into v_tier
   from households where id = v_household_id;
 
   if v_tier = 'premium' then
     return NEW;
   end if;
 
-  if coalesce(v_used, 0) + v_incoming > v_cap then
+  -- Count the files that really exist. The old version read households.storage_bytes_used,
+  -- a counter that only the browser app refreshes, so anyone uploading straight to the
+  -- storage API (skipping the app) was never counted.
+  select coalesce(sum((o.metadata->>'size')::bigint), 0) into v_used
+  from storage.objects o
+  where o.bucket_id in ('vault-docs', 'inventory-photos')
+    and o.name like v_household_id::text || '/%';
+
+  if v_used + v_incoming > v_cap or v_used >= v_cap then
     raise exception 'storage_quota_exceeded: household % is at its free storage limit', v_household_id;
   end if;
 
@@ -2811,3 +2819,8 @@ GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.user_profiles TO authenticated;
 
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.user_profiles TO service_role;
+
+-- Storage quota trigger (added 14 Nov 2026). The live database has it on Supabase's own table storage.objects,
+-- but a dump of the public schema does not include triggers on that table, so a rebuilt project needs this line.
+-- The function enforce_household_storage_quota() above must exist first (it does: it is created earlier in this file).
+CREATE TRIGGER enforce_storage_quota_before_insert BEFORE INSERT ON storage.objects FOR EACH ROW EXECUTE FUNCTION public.enforce_household_storage_quota();
