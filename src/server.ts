@@ -8,6 +8,7 @@ import { runDailyBackup } from "./lib/backupCron";
 import { runFileBackup, type R2BucketForFiles } from "./lib/fileBackupCron";
 import { reportToSentry, stripUrlSecrets } from "./lib/sentryReport";
 import { jobsForCron } from "./lib/scheduledJobs";
+import { runDbSizeCheck } from "./lib/dbSizeCheckCron";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -126,6 +127,10 @@ export default {
       // Oct 5 2026 — separate Healthchecks check for the hourly photo/document
       // backup (see fileBackupCron.ts). Same rule: unset = pings skipped.
       HEALTHCHECKS_FILES_PING_URL?: string;
+      // Nov 16 2026 — separate Healthchecks check for the nightly database-size alarm (see
+      // dbSizeCheckCron.ts). Unset = no email alert. DB_SIZE_ALERT_MB (optional) = alert level in MB.
+      HEALTHCHECKS_DBSIZE_PING_URL?: string;
+      DB_SIZE_ALERT_MB?: string;
     },
     ctx: { waitUntil: (promise: Promise<unknown>) => void },
   ) {
@@ -135,6 +140,7 @@ export default {
     // outside requests on Cloudflare's free plan (Sep 28 2026 fix — it was
     // failing with "Too many subrequests" when sharing one with the others).
     const jobs = jobsForCron(event?.cron);
+    if (jobs.includes("dbsize")) ctx.waitUntil(runDbSizeCheck(env));
     if (jobs.includes("fx")) ctx.waitUntil(runFxRateFetch(env));
     if (jobs.includes("trash")) ctx.waitUntil(runTrashCleanup(env));
     if (jobs.includes("backup")) ctx.waitUntil(runDailyBackup(env));
