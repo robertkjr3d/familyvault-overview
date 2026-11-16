@@ -1,4 +1,4 @@
--- FamilyHub SG REBUILD COPY (31 Oct 2026). Use ONLY on an empty spare project (familyhub-drill) or a real rebuild.
+-- FamilyHub SG REBUILD COPY (31 Oct 2026; 16 Nov 2026: adds the error-log limiter and the database-size reader). Use ONLY on an empty spare project (familyhub-drill) or a real rebuild.
 -- Built from supabase/schema.sql: statements reordered so functions come before tables, plus the missing audit_log sequence.
 -- Does NOT create: storage buckets vault-docs and inventory-photos, the cron jobs (delete-old-guests, refresh-sample-family, purge-orphan-audit-log, purge-old-error-logs), Auth settings, Cloudflare variables.
 SET check_function_bodies = false;
@@ -184,6 +184,63 @@ begin
   return NEW;
 end;
 $function$;
+
+-- Added 16 Nov 2026 (F10 + F12). Error-log limiter: shortens oversized text and caps rows per account / hour / day.
+-- SECURITY DEFINER is required: signed-in users cannot read error_logs, so a normal trigger would count 0 rows and never limit.
+create or replace function public.limit_error_log_writes()
+ returns trigger
+ language plpgsql
+ security definer
+ set search_path to 'public'
+as $function$
+declare
+  v_recent integer;
+begin
+  -- Same limits the app already applies; this only stops someone bypassing the app.
+  new.error_type     := left(new.error_type, 100);
+  new.error_message  := left(new.error_message, 2000);
+  new.error_stack    := left(new.error_stack, 5000);
+  new.page_url       := left(new.page_url, 500);
+  new.component_name := left(new.component_name, 200);
+  if new.metadata is not null and pg_column_size(new.metadata) > 4096 then
+    new.metadata := jsonb_build_object('shortened', true);
+  end if;
+
+  -- Needs owner rights (security definer): signed-in users have no right to read this table,
+  -- so without it the counts below would always be 0 and nothing would ever be limited.
+  select count(*) into v_recent from (
+    select 1 from public.error_logs
+    where user_id = new.user_id and created_at > now() - interval '1 hour' limit 60) s;
+  if v_recent >= 60 then return null; end if;
+
+  select count(*) into v_recent from (
+    select 1 from public.error_logs
+    where created_at > now() - interval '1 hour' limit 300) s;
+  if v_recent >= 300 then return null; end if;
+
+  select count(*) into v_recent from (
+    select 1 from public.error_logs
+    where created_at > now() - interval '1 day' limit 2000) s;
+  if v_recent >= 2000 then return null; end if;
+
+  return new;
+end;
+$function$;
+
+revoke all on function public.limit_error_log_writes() from public, anon, authenticated;
+
+-- Added 16 Nov 2026 (F12). Lets the nightly Cloudflare job read the database size; only the server key may call it.
+create or replace function public.get_database_size_mb()
+ returns numeric
+ language sql
+ stable
+ set search_path to ''
+as $function$
+  select round(pg_catalog.pg_database_size(pg_catalog.current_database()) / 1048576.0, 1)
+$function$;
+
+revoke all on function public.get_database_size_mb() from public, anon, authenticated;
+grant execute on function public.get_database_size_mb() to service_role;
 
 CREATE OR REPLACE FUNCTION public.ensure_household_app_settings()
  RETURNS trigger
@@ -1396,6 +1453,7 @@ CREATE INDEX deleted_records_batch_idx ON public.deleted_records USING btree (ho
 CREATE INDEX deleted_records_household_id_idx ON public.deleted_records USING btree (household_id);
 
 CREATE INDEX error_logs_created_at_idx ON public.error_logs USING btree (created_at DESC);
+CREATE INDEX error_logs_user_created_idx ON public.error_logs USING btree (user_id, created_at DESC);
 
 CREATE INDEX gobag_items_household_id_idx ON public.gobag_items USING btree (household_id);
 
@@ -2824,3 +2882,6 @@ GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON
 -- but a dump of the public schema does not include triggers on that table, so a rebuilt project needs this line.
 -- The function enforce_household_storage_quota() above must exist first (it does: it is created earlier in this file).
 CREATE TRIGGER enforce_storage_quota_before_insert BEFORE INSERT ON storage.objects FOR EACH ROW EXECUTE FUNCTION public.enforce_household_storage_quota();
+
+-- Added 16 Nov 2026 (F10): error-log limiter (function above).
+CREATE TRIGGER limit_error_log_writes_before_insert BEFORE INSERT ON public.error_logs FOR EACH ROW EXECUTE FUNCTION public.limit_error_log_writes();
