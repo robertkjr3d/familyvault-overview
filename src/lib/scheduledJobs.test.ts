@@ -5,10 +5,15 @@ describe("jobsForCron", () => {
   it("gives the backup its own invocation (its own 50-request budget)", () => {
     expect(jobsForCron(BACKUP_CRON)).toEqual(["backup"]);
   });
-  it("runs the two small jobs together on the housekeeping trigger, never the backup", () => {
+  it("runs the small jobs together on the housekeeping trigger, never the backup", () => {
     const jobs = jobsForCron(HOUSEKEEPING_CRON);
-    expect(jobs).toEqual(["fx", "trash"]);
+    expect(jobs).toEqual(["dbsize", "fx", "trash"]);
     expect(jobs).not.toContain("backup");
+  });
+  it("keeps the database-size alarm off every other trigger and out of the run-everything fallback", () => {
+    expect(jobsForCron(BACKUP_CRON)).not.toContain("dbsize");
+    expect(jobsForCron(FILE_BACKUP_CRON)).not.toContain("dbsize");
+    expect(jobsForCron("5 5 * * *")).not.toContain("dbsize");
   });
   it("falls back to running everything for an unknown or missing cron string", () => {
     for (const c of ["5 5 * * *", "", undefined, null]) {
