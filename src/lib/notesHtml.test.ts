@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { toEditorHtml, sanitizeHtml, htmlToPlainText } from "./notesHtml";
 

@@ -1,21 +1,15 @@
-// Database-size alarm (16 Nov 2026, finding F12).
+// Database-size alarm (added 16 Nov 2026).
 //
-// WHY THIS EXISTS: the free Supabase database is 500 MB. Nothing in the app limits how many rows or how
-// much text one account can write, and six financial tables copy every change into the Audit Trail.
-// A buggy loop or a hostile account could fill the database; the app would then stop working.
-// This job is the early warning: once a night it asks the database how big it is and tells
-// Healthchecks.io. Above the alert level (default 300 MB) Healthchecks emails the owner.
-//
-// It DETECTS, it does not prevent (the error-log limiter in the database prevents the cheapest
-// route; see supabase/schema.sql, function limit_error_log_writes).
+// The free Supabase database is 500 MB. Once a night this job asks the database how big it is and
+// tells Healthchecks.io. At or above the alert level (default 300 MB) Healthchecks emails the owner.
 //
 // Runs on the housekeeping trigger (10 20 * * *), first in line. It needs only 2 outside requests
 // (one to the database, one ping) out of the 50 a free-plan invocation gets.
 //
-// Needs, in Cloudflare (Variables and Secrets):
+// Needs, in Cloudflare (Variables and Secrets, Runtime):
 //   HEALTHCHECKS_DBSIZE_PING_URL   the ping URL of a SEPARATE Healthchecks check (unset = no email alert,
 //                                  the warning then only appears in the Worker logs)
-//   DB_SIZE_ALERT_MB               optional, alert level in MB (default 300). Setting it to 1 is the test.
+//   DB_SIZE_ALERT_MB               optional, alert level in MB (default 300)
 import { createClient } from "@supabase/supabase-js";
 
 export const DEFAULT_ALERT_MB = 300;
