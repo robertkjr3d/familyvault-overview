@@ -185,8 +185,8 @@ begin
 end;
 $function$;
 
--- Added 16 Nov 2026 (F10 + F12). Error-log limiter: shortens oversized text and caps rows per account / hour / day.
--- SECURITY DEFINER is required: signed-in users cannot read error_logs, so a normal trigger would count 0 rows and never limit.
+-- Added 16 Nov 2026. Error-log limiter: shortens oversized text and caps rows per account / hour / day.
+-- SECURITY DEFINER lets the function count rows that signed-in users cannot read.
 create or replace function public.limit_error_log_writes()
  returns trigger
  language plpgsql
@@ -229,7 +229,7 @@ $function$;
 
 revoke all on function public.limit_error_log_writes() from public, anon, authenticated;
 
--- Added 16 Nov 2026 (F12). Lets the nightly Cloudflare job read the database size; only the server key may call it.
+-- Added 16 Nov 2026. Lets the nightly Cloudflare job read the database size; only the server key may call it.
 create or replace function public.get_database_size_mb()
  returns numeric
  language sql
@@ -2883,5 +2883,5 @@ GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON
 -- The function enforce_household_storage_quota() above must exist first (it does: it is created earlier in this file).
 CREATE TRIGGER enforce_storage_quota_before_insert BEFORE INSERT ON storage.objects FOR EACH ROW EXECUTE FUNCTION public.enforce_household_storage_quota();
 
--- Added 16 Nov 2026 (F10): error-log limiter (function above).
+-- Added 16 Nov 2026: error-log limiter (function above).
 CREATE TRIGGER limit_error_log_writes_before_insert BEFORE INSERT ON public.error_logs FOR EACH ROW EXECUTE FUNCTION public.limit_error_log_writes();
