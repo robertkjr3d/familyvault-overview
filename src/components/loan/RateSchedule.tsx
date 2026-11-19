@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAppStore } from "@/lib/store";
 
 const TYPES = ["Fixed", "SORA+", "COF+", "Other"];
 const YEAR_OPTIONS = Array.from({ length: 10 }, (_, i) => `Year ${i + 1}`);
@@ -28,7 +29,10 @@ export function RateSchedule({ loanId }: { loanId: string }) {
 
   async function addRow() {
     const nextYear = rows.length + 1;
+    const householdId = useAppStore.getState().activeHouseholdId;
+    if (!householdId) return toast.error("Select a household first.");
     const { error } = await supabase.from("loan_rate_schedule").insert({
+      household_id: householdId,
       loan_id: loanId,
       year_label: `Year ${nextYear}`,
       rate: null,
