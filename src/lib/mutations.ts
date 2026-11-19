@@ -153,6 +153,7 @@ export async function restoreTrashRow(item: {
     .from(item.table_name as any)
     .insert(item.record_data as any);
   if (insertError) return insertError.message;
+  // Each saved reminder row already carries its own household_id (it is a snapshot of the original row).
   const reminders = Array.isArray(item.related_reminders) ? item.related_reminders : [];
   if (reminders.length > 0) {
     const { error: reminderError } = await supabase.from("reminders").insert(reminders as any);
