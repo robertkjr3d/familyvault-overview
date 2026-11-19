@@ -41,7 +41,13 @@ export function ReminderButton({ entityType, entityId }: { entityType: string; e
     // recurrence/recurrence_end_of_month columns yet (added Sep 26 2026, see
     // reminderRecurrence.ts). Same pattern used elsewhere in this app for columns
     // added after the last type regeneration.
+    const householdId = useAppStore.getState().activeHouseholdId;
+    if (!householdId) {
+      setSaving(false);
+      return toast.error("Select a household first.");
+    }
     const { error } = await supabase.from("reminders").insert({
+      household_id: householdId,
       entity_type: entityType,
       entity_id: entityId,
       what,

@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Plus, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { useAppStore } from "@/lib/store";
 
 export function HistoryLog({ entityType, entityId }: { entityType: string; entityId: string }) {
   const qc = useQueryClient();
@@ -14,6 +15,7 @@ export function HistoryLog({ entityType, entityId }: { entityType: string; entit
   const [note, setNote] = useState("");
 
   const { canEdit } = useCurrentRole();
+  const activeHouseholdId = useAppStore((st) => st.activeHouseholdId);
   const { data: entries = [] } = useQuery({
     queryKey: ["history", entityType, entityId],
     queryFn: async () => {
@@ -30,7 +32,9 @@ export function HistoryLog({ entityType, entityId }: { entityType: string; entit
 
   async function addEntry() {
     if (!note.trim()) return;
+    if (!activeHouseholdId) return toast.error("Select a household first.");
     const { error } = await supabase.from("record_history").insert({
+      household_id: activeHouseholdId,
       entity_type: entityType as any,
       entity_id: entityId,
       note: note.trim(),

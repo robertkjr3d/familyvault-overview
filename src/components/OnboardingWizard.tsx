@@ -103,7 +103,9 @@ export function OnboardingWizard({
             </span>
             <span className="flex-1">
               <span className="block text-sm font-semibold">See your Lifetime Chart</span>
-              <span className="block text-xs text-muted-foreground">Your net worth projected forward, year by year.</span>
+              <span className="block text-xs text-muted-foreground">
+                Your net worth projected forward, year by year.
+              </span>
             </span>
             <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
           </button>
@@ -117,7 +119,9 @@ export function OnboardingWizard({
           >
             Don't show this again — I'll explore on my own
           </button>
-          <p className="mt-1 text-[10px] text-muted-foreground">You can always bring this back from Settings → About.</p>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            You can always bring this back from Settings → About.
+          </p>
         </div>
       </SheetContent>
     </Sheet>
@@ -142,7 +146,9 @@ function StepCard({
   children: ReactNode;
 }) {
   return (
-    <div className={`rounded-xl border p-3 transition-colors ${done ? "border-settled-border bg-settled-tint" : "border-border bg-card"}`}>
+    <div
+      className={`rounded-xl border p-3 transition-colors ${done ? "border-settled-border bg-settled-tint" : "border-border bg-card"}`}
+    >
       <button type="button" onClick={onToggle} className="flex w-full items-center gap-3 text-left">
         <span
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
@@ -153,9 +159,13 @@ function StepCard({
         </span>
         <span className="flex-1">
           <span className="block text-sm font-semibold">{title}</span>
-          <span className="block text-xs text-muted-foreground">{done ? "Done — tap to add another" : blurb}</span>
+          <span className="block text-xs text-muted-foreground">
+            {done ? "Done — tap to add another" : blurb}
+          </span>
         </span>
-        <ChevronRight className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`} />
+        <ChevronRight
+          className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`}
+        />
       </button>
       {expanded && <div className="mt-3 border-t border-border/60 pt-3">{children}</div>}
     </div>
@@ -174,8 +184,14 @@ function QuickAddProperty({ onSaved }: { onSaved: () => void }) {
   const [saving, setSaving] = useState(false);
 
   async function save() {
-    if (!name.trim()) { toast.error('Give it a name, e.g. "Our home"'); return; }
-    if (!activeHouseholdId) { toast.error("Select a household first."); return; }
+    if (!name.trim()) {
+      toast.error('Give it a name, e.g. "Our home"');
+      return;
+    }
+    if (!activeHouseholdId) {
+      toast.error("Select a household first.");
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -185,7 +201,11 @@ function QuickAddProperty({ onSaved }: { onSaved: () => void }) {
         monthly_rent: monthlyRent ? Number(monthlyRent) : null,
         action_note: noteText.trim() || null,
       };
-      const { data, error } = await supabase.from("properties").insert(payload).select("id").single();
+      const { data, error } = await supabase
+        .from("properties")
+        .insert(payload)
+        .select("id")
+        .single();
       if (error) throw error;
 
       if (noteText.trim() && noteDate) {
@@ -230,12 +250,18 @@ function QuickAddProperty({ onSaved }: { onSaved: () => void }) {
       </div>
       <div className="space-y-1.5">
         <Label className="text-xs">Note or reminder (optional)</Label>
-        <Input value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="e.g. Renew lease" />
+        <Input
+          value={noteText}
+          onChange={(e) => setNoteText(e.target.value)}
+          placeholder="e.g. Renew lease"
+        />
         {noteText.trim() && (
           <DateInput value={noteDate} onChange={setNoteDate} className="mt-1" showClear={false} />
         )}
       </div>
-      <Button className="w-full" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save home"}</Button>
+      <Button className="w-full" onClick={save} disabled={saving}>
+        {saving ? "Saving…" : "Save home"}
+      </Button>
     </div>
   );
 }
@@ -256,9 +282,18 @@ function QuickAddInsurance({ onSaved }: { onSaved: () => void }) {
   const [saving, setSaving] = useState(false);
 
   async function save() {
-    if (!name.trim()) { toast.error("Give the policy a name"); return; }
-    if (!category) { toast.error("Pick a category"); return; }
-    if (!activeHouseholdId) { toast.error("Select a household first."); return; }
+    if (!name.trim()) {
+      toast.error("Give the policy a name");
+      return;
+    }
+    if (!category) {
+      toast.error("Pick a category");
+      return;
+    }
+    if (!activeHouseholdId) {
+      toast.error("Select a household first.");
+      return;
+    }
     setSaving(true);
     try {
       // start_date doubles as "next renewal" here — computeNextOccurrence
@@ -290,7 +325,11 @@ function QuickAddInsurance({ onSaved }: { onSaved: () => void }) {
     <div className="space-y-3">
       <div className="space-y-1.5">
         <Label className="text-xs">Policy name</Label>
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. NTUC Life Insurance" />
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. NTUC Life Insurance"
+        />
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1.5">
@@ -298,7 +337,9 @@ function QuickAddInsurance({ onSaved }: { onSaved: () => void }) {
           <NativeSelect value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="">Select…</option>
             {INSURANCE_CATEGORIES.map((c) => (
-              <option key={c} value={c}>{c}</option>
+              <option key={c} value={c}>
+                {c}
+              </option>
             ))}
           </NativeSelect>
         </div>
@@ -311,9 +352,13 @@ function QuickAddInsurance({ onSaved }: { onSaved: () => void }) {
         <div className="space-y-1.5">
           <Label className="text-xs">How often?</Label>
           <NativeSelect value={frequency} onChange={(e) => setFrequency(e.target.value)}>
-            {INSURANCE_FREQ.filter((f) => typeof f !== "string" && f.value !== "one-off").map((f: any) => (
-              <option key={f.value} value={f.value}>{f.label}</option>
-            ))}
+            {INSURANCE_FREQ.filter((f) => typeof f !== "string" && f.value !== "one-off").map(
+              (f: any) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ),
+            )}
           </NativeSelect>
         </div>
         <div className="space-y-1.5">
@@ -324,7 +369,9 @@ function QuickAddInsurance({ onSaved }: { onSaved: () => void }) {
       <p className="rounded-lg bg-accent/50 px-2.5 py-2 text-[11px] text-accent-foreground">
         💡 It will show on your Home dashboard 90 days before this renews.
       </p>
-      <Button className="w-full" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save policy"}</Button>
+      <Button className="w-full" onClick={save} disabled={saving}>
+        {saving ? "Saving…" : "Save policy"}
+      </Button>
     </div>
   );
 }
@@ -354,8 +401,14 @@ function QuickAddInventoryItem({ onSaved }: { onSaved: () => void }) {
   }
 
   async function save() {
-    if (!name.trim()) { toast.error("Give the item a name"); return; }
-    if (!activeHouseholdId) { toast.error("Select a household first."); return; }
+    if (!name.trim()) {
+      toast.error("Give the item a name");
+      return;
+    }
+    if (!activeHouseholdId) {
+      toast.error("Select a household first.");
+      return;
+    }
     setSaving(true);
     try {
       // inventory_items needs a folder_id — reuse the household's first
@@ -392,16 +445,23 @@ function QuickAddInventoryItem({ onSaved }: { onSaved: () => void }) {
         // Supabase error.
         const recheck = validateInventoryPhoto(compressed);
         if (!recheck.ok) throw new Error(recheck.message);
-        const quota = checkHouseholdQuota({ tier: storageTier, bytesUsed: storageBytesUsed, incomingFileBytes: compressed.size });
+        const quota = checkHouseholdQuota({
+          tier: storageTier,
+          bytesUsed: storageBytesUsed,
+          incomingFileBytes: compressed.size,
+        });
         if (!quota.ok) throw new Error(quota.message);
         const path = `${activeHouseholdId}/items/${Date.now()}-${compressed.name}`;
-        const { error: upErr } = await supabase.storage.from("inventory-photos").upload(path, compressed);
+        const { error: upErr } = await supabase.storage
+          .from("inventory-photos")
+          .upload(path, compressed);
         if (upErr) throw upErr;
         photo_url = path;
         photo_size_bytes = compressed.size;
       }
 
       const { error } = await supabase.from("inventory_items").insert({
+        household_id: activeHouseholdId,
         folder_id: folderId,
         name: name.trim(),
         photo_url,
@@ -433,7 +493,11 @@ function QuickAddInventoryItem({ onSaved }: { onSaved: () => void }) {
     <div className="space-y-3">
       <div className="space-y-1.5">
         <Label className="text-xs">What is it?</Label>
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Living room TV" />
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Living room TV"
+        />
       </div>
       <div>
         <Label className="text-xs">Photo (optional, but this is the fun part)</Label>
@@ -446,7 +510,11 @@ function QuickAddInventoryItem({ onSaved }: { onSaved: () => void }) {
               <img src={preview} alt="" className="w-full h-auto object-contain max-h-40" />
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); pickPhoto(null); if (fileRef.current) fileRef.current.value = ""; }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  pickPhoto(null);
+                  if (fileRef.current) fileRef.current.value = "";
+                }}
                 className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white"
                 aria-label="Remove photo"
               >
@@ -468,7 +536,9 @@ function QuickAddInventoryItem({ onSaved }: { onSaved: () => void }) {
           onChange={(e) => pickPhoto(e.target.files?.[0] ?? null)}
         />
       </div>
-      <Button className="w-full" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save item"}</Button>
+      <Button className="w-full" onClick={save} disabled={saving}>
+        {saving ? "Saving…" : "Save item"}
+      </Button>
     </div>
   );
 }

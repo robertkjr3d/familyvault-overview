@@ -87,6 +87,7 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
       const { error: upErr } = await supabase.storage.from("vault-docs").upload(path, file);
       if (upErr) throw upErr;
       const { error: insErr } = await supabase.from("record_documents").insert({
+        household_id: activeHouseholdId,
         entity_type: entityType as any,
         entity_id: entityId,
         path,
@@ -118,9 +119,14 @@ export function DocumentsList({ entityType, entityId }: { entityType: string; en
     }
     let url = linkUrl.trim();
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    if (!activeHouseholdId) {
+      toast.error("Select a household first.");
+      return;
+    }
     setSavingLink(true);
     try {
       const { error } = await supabase.from("record_documents").insert({
+        household_id: activeHouseholdId,
         entity_type: entityType as any,
         entity_id: entityId,
         path: url,
