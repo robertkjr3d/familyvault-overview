@@ -2885,3 +2885,13 @@ CREATE TRIGGER enforce_storage_quota_before_insert BEFORE INSERT ON storage.obje
 
 -- Added 16 Nov 2026: error-log limiter (function above).
 CREATE TRIGGER limit_error_log_writes_before_insert BEFORE INSERT ON public.error_logs FOR EACH ROW EXECUTE FUNCTION public.limit_error_log_writes();
+
+-- Added 18 Nov 2026: logged-out visitors cannot run these four functions through the public API (signed-in users and the server keep access).
+REVOKE ALL ON FUNCTION public.increment_household_storage(uuid, bigint) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.increment_household_storage(uuid, bigint) TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.transfer_household_ownership_by_email(uuid, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.transfer_household_ownership_by_email(uuid, text) TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.current_household_id() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.current_household_id() TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.current_user_household_ids() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.current_user_household_ids() TO authenticated, service_role;
