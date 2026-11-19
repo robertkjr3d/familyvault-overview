@@ -2462,6 +2462,7 @@ function AddItemForm({ folderId, onDone }: { folderId: string; onDone: () => voi
         photo_size_bytes = compressed.size;
       }
       const { error } = await supabase.from("inventory_items").insert({
+        household_id: activeHouseholdId,
         folder_id: folderId,
         name: name.trim(),
         category: category.trim() || null,
