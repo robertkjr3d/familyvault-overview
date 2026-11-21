@@ -43,15 +43,6 @@ export const Route = createFileRoute("/settings")({
 // FEEDBACK_FORM_URL now lives in src/lib/feedback.ts (imported above) so
 // it's shared with the new persistent FeedbackTab — both stay in sync.
 
-const ACCENT_PRESETS = [
-  { name: "Gold", value: "oklch(0.72 0.13 80)" },
-  { name: "Teal", value: "oklch(0.62 0.10 195)" },
-  { name: "Coral", value: "oklch(0.68 0.18 35)" },
-  { name: "Sage", value: "oklch(0.65 0.10 150)" },
-  { name: "Plum", value: "oklch(0.55 0.15 320)" },
-  { name: "Slate", value: "oklch(0.45 0.04 250)" },
-];
-
 // Sample-family guests have no Settings page (sign-out, account deletion, invites, exports live here).
 function SettingsPage() {
   const isGuest = useIsGuest();
@@ -147,11 +138,6 @@ function SettingsPageInner() {
       ? "dark"
       : "light",
   );
-  const [accent, setAccent] = useState<string>(
-    () =>
-      (typeof window !== "undefined" && localStorage.getItem("fv:accent")) ||
-      ACCENT_PRESETS[0].value,
-  );
   const [mortgageDays, setMortgageDays] = useState<string>("90");
   const [insuranceDays, setInsuranceDays] = useState<string>("60");
   const [fdDays, setFdDays] = useState<string>("30");
@@ -207,12 +193,6 @@ function SettingsPageInner() {
     if (typeof document === "undefined") return;
     document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    document.documentElement.style.setProperty("--aza", accent);
-    localStorage.setItem("fv:accent", accent);
-  }, [accent]);
 
   const save = useMutation({
     mutationFn: async (patch: any) => {
@@ -1373,21 +1353,6 @@ function SettingsPageInner() {
               className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all duration-200 ${theme === "dark" ? "left-5" : "left-0.5"}`}
             />
           </button>
-        </div>
-        <div className="mt-4">
-          <div className="mb-2 text-xs font-medium text-muted-foreground">Accent colour</div>
-          <div className="flex flex-wrap gap-2">
-            {ACCENT_PRESETS.map((c) => (
-              <button
-                key={c.name}
-                onClick={() => setAccent(c.value)}
-                title={c.name}
-                className={`h-8 w-8 rounded-full border-2 transition ${accent === c.value ? "border-foreground" : "border-transparent"}`}
-                style={{ background: c.value }}
-                aria-label={c.name}
-              />
-            ))}
-          </div>
         </div>
       </section>
 
