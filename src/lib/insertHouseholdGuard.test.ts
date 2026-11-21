@@ -29,12 +29,15 @@ describe("inserts into household tables name their household", () => {
   });
 
   const files = walk("src").filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\.(ts|tsx)$/.test(f));
-  it("every insert includes household_id", () => {
+  it("every insert and upsert includes household_id", () => {
     const offenders: string[] = [];
     for (const f of files) {
       const text = readFileSync(f, "utf8");
       for (const table of defaultTables) {
-        const re = new RegExp(`from\\(\\s*["']${table}["']\\s*\\)\\s*\\.insert\\(`, "g");
+        const re = new RegExp(
+          `from\\(\\s*["']${table}["'](?:\\s+as\\s+any)?\\s*\\)\\s*\\.(?:insert|upsert)\\(`,
+          "g",
+        );
         for (const m of text.matchAll(re)) {
           const start = Math.max(0, (m.index ?? 0) - 600);
           const window = text.slice(start, (m.index ?? 0) + 900);
