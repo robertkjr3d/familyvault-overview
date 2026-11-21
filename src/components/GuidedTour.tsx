@@ -14,6 +14,7 @@ import {
   type TourStep,
 } from "@/lib/tourSteps";
 import { watchLayout } from "@/lib/layoutWatch";
+import { confirmExitTour } from "@/lib/confirmExitTour";
 import { toast } from "sonner";
 
 // Matches this app's own --radius-xl (styles.css) — NOT Tailwind's default
@@ -519,7 +520,12 @@ export function GuidedTour() {
       },
       onCloseClick: () => {
         const idx = driverObj.getActiveIndex() ?? 0;
-        finish(idx < tourSteps.length - 1);
+        const skipping = idx < tourSteps.length - 1;
+        // Nov 22 2026 (owner request, after a tester exited by accident): ask
+        // before skipping. Not asked on the last step, where X just closes a
+        // finished tour. Cancel leaves the tour exactly as it is.
+        if (skipping && !confirmExitTour()) return;
+        finish(skipping);
         driverObj.destroy();
       },
       onDestroyed: () => {

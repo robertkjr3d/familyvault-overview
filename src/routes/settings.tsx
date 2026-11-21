@@ -1023,14 +1023,14 @@ function SettingsPageInner() {
         return;
       }
     }
-    const { error: huErr } = await supabase
-      .from("household_users" as any)
-      .delete()
-      .eq("household_id", demoId);
-    if (huErr) {
-      toast.error(huErr.message);
-      return;
-    }
+    // Nov 22 2026: the household is deleted WHILE you are still its owner, and
+    // its membership rows go with it (household_users has ON DELETE CASCADE).
+    // This used to remove your membership first: the database's clean-up
+    // trigger (trg_cleanup_orphaned_household) then deleted the empty household
+    // by itself, so the delete below found nothing and showed a false "Nothing
+    // was deleted" error even though everything was gone. Deleting the household
+    // itself while you can still see it keeps the "nothing was deleted" check
+    // meaningful: it can now only mean a real permission problem.
     const { data, error: hErr } = await supabase
       .from("households" as any)
       .delete()
