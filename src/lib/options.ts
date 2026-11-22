@@ -103,3 +103,20 @@ export function freqLabel(f: string | null | undefined) {
   const key = f.toLowerCase();
   return FREQ_LABEL[key] ?? capitalize(f);
 }
+
+// Reads as a standalone word ("Yearly") for rows such as "Premium frequency".
+// freqLabel() above stays as it is: it reads as a unit after a slash
+// ("$500/year") and is used that way elsewhere.
+const FREQ_WORD: Record<string, string> = {
+  annual: "Yearly",
+  "semi-annual": "Half-yearly",
+  quarterly: "Quarterly",
+  monthly: "Monthly",
+  "one-off": "One-off",
+};
+
+export function freqWord(f: string | null | undefined) {
+  if (!f) return "";
+  const key = f.toLowerCase();
+  return FREQ_WORD[key] ?? capitalize(f);
+}

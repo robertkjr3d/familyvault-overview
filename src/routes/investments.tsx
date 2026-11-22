@@ -20,7 +20,7 @@ import { useRecordSorter } from "@/hooks/useRecordSorter";
 import { fmtMoney, fmtPct, fmtDate, groupByCurrency, totalWithFx } from "@/lib/format";
 import { ForeignCurrencyTotals } from "@/components/ForeignCurrencyTotals";
 import { FxInfoNote } from "@/components/FxInfoNote";
-import { freqLabel } from "@/lib/options";
+import { freqWord } from "@/lib/options";
 import { HashHighlight } from "@/components/HashHighlight";
 import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
@@ -381,7 +381,13 @@ function InvestmentRow({
           <FieldRow label="Amount invested" value={fmtMoney(inv.cost_basis, inv.currency)} />
           <FieldRow
             label="Current value (est.)"
-            value={fmtMoney(inv.current_value, inv.currency)}
+            value={
+              // Green normally; red only when it is worth less than was put in,
+              // so the colour never tells a loss-maker it is doing fine.
+              <span className={gain < 0 ? "text-urgent" : "text-settled"}>
+                {fmtMoney(inv.current_value, inv.currency)}
+              </span>
+            }
           />
           <FieldRow label="Value as of" value={fmtDate(inv.last_updated)} />
           <FieldRow
@@ -395,13 +401,18 @@ function InvestmentRow({
           />
           {isILPOrEndowment && inv.coverage && <FieldRow label="Coverage" value={inv.coverage} />}
           {isILPOrEndowment && inv.premium_amount && (
-            <FieldRow label="Premium amount" value={fmtMoney(inv.premium_amount, inv.currency)} />
+            <FieldRow
+              label="Premium amount"
+              value={
+                <span className="text-urgent">{fmtMoney(inv.premium_amount, inv.currency)}</span>
+              }
+            />
           )}
           {isILPOrEndowment && inv.premium_start_date && (
             <FieldRow label="Premium start" value={fmtDate(inv.premium_start_date)} />
           )}
           {isILPOrEndowment && inv.premium_frequency && (
-            <FieldRow label="Premium frequency" value={freqLabel(inv.premium_frequency)} />
+            <FieldRow label="Premium frequency" value={freqWord(inv.premium_frequency)} />
           )}
           {isILPOrEndowment && inv.premium_end_date && (
             <FieldRow
@@ -419,7 +430,7 @@ function InvestmentRow({
             <FieldRow label="Payout start" value={fmtDate(inv.payout_start_date)} />
           )}
           {isILPOrEndowment && inv.payout_frequency && (
-            <FieldRow label="Payout frequency" value={freqLabel(inv.payout_frequency)} />
+            <FieldRow label="Payout frequency" value={freqWord(inv.payout_frequency)} />
           )}
           {isILPOrEndowment && inv.payout_end_date && (
             <FieldRow label="Payout end" value={fmtDate(inv.payout_end_date)} />

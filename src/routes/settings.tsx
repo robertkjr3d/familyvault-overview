@@ -1497,7 +1497,7 @@ function SettingsPageInner() {
           on this line or in this file is touched. */}
       {currentRole !== "viewer" && (
         <section className="rounded-2xl border border-border bg-card p-4">
-          <h2 className="mb-3 text-sm font-bold">Take the Tour</h2>
+          <h2 className="mb-3 text-sm font-bold">Guided Tour</h2>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => useAppStore.getState().startTour("core")}
