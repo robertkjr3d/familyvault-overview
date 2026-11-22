@@ -31,3 +31,27 @@ describe("deleteDemoHousehold order", () => {
     expect(body).toContain("Nothing was deleted");
   });
 });
+
+// Demo Household and the tour (22 Nov 2026): the tour adds a real record, so it
+// must not be offered or startable inside the Demo Household.
+describe("tour is kept out of the Demo Household", () => {
+  const invites = readFileSync(resolve(__dirname, "../lib/householdInvites.ts"), "utf8");
+  const demoStart = invites.indexOf('.insert({ name: "Demo Household — FamilyHub SG" })');
+
+  it("marks the demo membership as tour-seen when it is created", () => {
+    expect(demoStart).toBeGreaterThan(0);
+    const insert = invites
+      .slice(demoStart)
+      .match(/\.from\("household_users" as any\)\s*\.insert\(\{[\s\S]*?\}\);/);
+    expect(insert).not.toBeNull();
+    expect(insert![0]).toContain("has_seen_tour: true");
+  });
+
+  it("disables both tour buttons in Settings while the Demo Household is active", () => {
+    expect(src).toContain(
+      'const isDemoHouseholdActive = householdName === "Demo Household — FamilyHub SG"',
+    );
+    expect(src).toMatch(/disabled=\{isDemoHouseholdActive\}/);
+    expect(src).toMatch(/disabled=\{!hasLoanForTour \|\| isDemoHouseholdActive\}/);
+  });
+});

@@ -56,6 +56,7 @@ function SettingsPageInner() {
   const activeHouseholdId = useAppStore((s) => s.activeHouseholdId);
   const setShareOpen = useAppStore((s) => s.setShareOpen);
   const { role: currentRole, householdName } = useCurrentRole();
+  const isDemoHouseholdActive = householdName === "Demo Household — FamilyHub SG";
   const { user } = useAuthSession();
   // Bug fix (Aug 28, 2026): the extras tour ("More Tips & Tricks") walks
   // through an EXISTING loan record (status toggle, duplicate, reminders —
@@ -1500,13 +1501,14 @@ function SettingsPageInner() {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => useAppStore.getState().startTour("core")}
-              className="rounded-lg border border-border px-3 py-2 text-sm font-semibold"
+              disabled={isDemoHouseholdActive}
+              className="rounded-lg border border-border px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
             >
               Take the Tour
             </button>
             <button
               onClick={() => useAppStore.getState().startTour("extras")}
-              disabled={!hasLoanForTour}
+              disabled={!hasLoanForTour || isDemoHouseholdActive}
               title={
                 hasLoanForTour
                   ? undefined
@@ -1517,10 +1519,17 @@ function SettingsPageInner() {
               More Tips & Tricks
             </button>
           </div>
-          {!hasLoanForTour && (
+          {isDemoHouseholdActive ? (
             <p className="mt-2 text-xs text-muted-foreground">
-              Add a loan first to see these tips.
+              The tour adds a real record, so it runs in your own household, not
+              the Demo Household. Switch back to your household to take it.
             </p>
+          ) : (
+            !hasLoanForTour && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Add a loan first to see these tips.
+              </p>
+            )
           )}
         </section>
       )}

@@ -544,9 +544,15 @@ export const createDemoHousehold = createServerFn({ method: "POST" })
     if (hhErr) throw new Error(`Could not create household: ${hhErr.message}`);
     const hhId = (hh as any).id as string;
 
-    const { error: huErr } = await supabaseAdmin
-      .from("household_users" as any)
-      .insert({ household_id: hhId, user_id: userId, role: "owner" });
+    const { error: huErr } = await supabaseAdmin.from("household_users" as any).insert({
+      household_id: hhId,
+      user_id: userId,
+      role: "owner",
+      // The tour must not be offered inside the Demo Household (it adds a
+      // real record there). has_seen_tour is per membership row and
+      // defaults to false, which made the welcome pop-up appear after a reload.
+      has_seen_tour: true,
+    });
     if (huErr) throw new Error(`Could not add owner: ${huErr.message}`);
 
     const { data: member, error: mErr } = await supabaseAdmin
