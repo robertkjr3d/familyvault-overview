@@ -21,6 +21,7 @@ import { fmtMoney, fmtPct, fmtDate, groupByCurrency, totalWithFx } from "@/lib/f
 import { ForeignCurrencyTotals } from "@/components/ForeignCurrencyTotals";
 import { FxInfoNote } from "@/components/FxInfoNote";
 import { freqWord } from "@/lib/options";
+import { effectiveInvested } from "@/lib/premiumsPaid";
 import { HashHighlight } from "@/components/HashHighlight";
 import { useEditRecord, useDuplicateRecord } from "@/components/EditRecordButton";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
@@ -162,11 +163,17 @@ function InvestmentsPage() {
   }
 
   const groups = Array.from(new Set(items.map((i: any) => i.group_name)));
-  const costTotals = groupByCurrency(items, (i: any) => i.cost_basis);
+  // "Amount invested" for each investment: the typed figure (Manual, the default)
+  // or the premiums-paid estimate when that policy is set to Estimated. For
+  // Manual this returns cost_basis exactly as stored, so nothing changes there.
+  const today = new Date();
+  const investedOf = (i: (typeof items)[number]) => effectiveInvested(i, today).amount;
+  const anyEstimated = items.some((i) => effectiveInvested(i, today).mode === "estimated");
+  const costTotals = groupByCurrency(items, investedOf);
   const valueTotals = groupByCurrency(items, (i: any) => i.current_value);
   const gainTotals = groupByCurrency(
     items,
-    (i: any) => (Number(i.current_value) || 0) - (Number(i.cost_basis) || 0),
+    (i: any) => (Number(i.current_value) || 0) - (Number(investedOf(i)) || 0),
   );
   const totalCost = totalWithFx(costTotals, fxRates);
   const totalValue = totalWithFx(valueTotals, fxRates);
@@ -210,6 +217,11 @@ function InvestmentsPage() {
             <div className="flex justify-between">
               <span>
                 Total invested{costTotals.foreign.length > 0 && <FxInfoNote fx={fxRates} />}
+                {anyEstimated && (
+                  <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                    (includes estimates)
+                  </span>
+                )}
               </span>
               <span className="font-bold">{fmtMoney(totalCost)}</span>
             </div>
@@ -222,7 +234,14 @@ function InvestmentsPage() {
             </div>
             <ForeignCurrencyTotals foreign={valueTotals.foreign} fx={fxRates} />
             <div className="mt-2 flex justify-between">
-              <span>Gain / Loss{gainTotals.foreign.length > 0 && <FxInfoNote fx={fxRates} />}</span>
+              <span>
+                Gain / Loss{gainTotals.foreign.length > 0 && <FxInfoNote fx={fxRates} />}
+                {anyEstimated && (
+                  <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                    (includes estimates)
+                  </span>
+                )}
+              </span>
               <span
                 className={`font-bold ${totalValue - totalCost >= 0 ? "text-settled" : "text-urgent"}`}
               >
@@ -259,7 +278,8 @@ function InvestmentRow({
 }) {
   const edit = useEditRecord("investments", inv);
   const dup = useDuplicateRecord("investments", inv);
-  const gain = (inv.current_value || 0) - (inv.cost_basis || 0);
+  const invested = effectiveInvested(inv);
+  const gain = (inv.current_value || 0) - (invested.amount || 0);
   // Uses a dedicated last_updated field (stamped only when the value itself is
   // changed via Update, or edited on the form) rather than the system updated_at
   // timestamp — updated_at resets on ANY edit (e.g. tweaking the strategy notes),
@@ -345,6 +365,9 @@ function InvestmentRow({
             <div className="font-bold">{fmtMoney(inv.current_value, inv.currency)}</div>
             <div className={gain >= 0 ? "text-settled" : "text-urgent"}>
               {fmtMoney(gain, inv.currency)}
+              {invested.mode === "estimated" && (
+                <span className="ml-1 text-[10px] font-normal text-muted-foreground">est.</span>
+              )}
             </div>
             <div className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
               {isStale && (
@@ -378,7 +401,48 @@ function InvestmentRow({
           <UpdateValueInline id={inv.id} current={inv.current_value} />
         </div>
         <Section title="Holding">
-          <FieldRow label="Amount invested" value={fmtMoney(inv.cost_basis, inv.currency)} />
+          {invested.mode === "estimated" ? (
+            <>
+              <FieldRow
+                label="Estimated premiums paid"
+                value={
+                  <span>
+                    {fmtMoney(invested.amount, inv.currency)}
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">
+                      ({invested.payments} {invested.payments === 1 ? "payment" : "payments"})
+                    </span>
+                  </span>
+                }
+              />
+              <p className="px-1 pb-1 text-[11px] leading-snug text-muted-foreground">
+                Estimate only. It assumes every scheduled payment from the start date to today
+                succeeded. It does not include premium increases or decreases, premium holidays,
+                missed payments, top-ups, recurring single premiums or withdrawals. The gain below
+                uses this estimate. To use your own figure, edit this policy and choose Manual.
+              </p>
+              {inv.cost_basis != null && (
+                <FieldRow
+                  label="Amount invested you typed (not used)"
+                  value={
+                    <span className="text-muted-foreground">
+                      {fmtMoney(inv.cost_basis, inv.currency)}
+                    </span>
+                  }
+                />
+              )}
+            </>
+          ) : (
+            <>
+              <FieldRow label="Amount invested" value={fmtMoney(inv.cost_basis, inv.currency)} />
+              {invested.mode === "fallback" && (
+                <p className="px-1 pb-1 text-[11px] leading-snug text-muted-foreground">
+                  Estimated tracking is on, but it needs a premium amount, a start date and a
+                  recurring frequency (monthly, quarterly, semi-annual or annual). Until then the
+                  figure you typed is used.
+                </p>
+              )}
+            </>
+          )}
           <FieldRow
             label="Current value (est.)"
             value={

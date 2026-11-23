@@ -516,6 +516,20 @@ export const recordConfigs: Record<string, RecordConfig> = {
           v.group_name === "ILP (Investment-Linked Policy)" || v.group_name === "Endowment",
       },
       {
+        // Needs the invested_tracking column (add-invested-tracking-column.sql).
+        // Blank is treated as Manual. Calculation: src/lib/premiumsPaid.ts.
+        key: "invested_tracking",
+        label: "Amount invested: manual or estimated",
+        type: "select",
+        options: [
+          { value: "manual", label: "Manual (the amount I typed above)" },
+          { value: "estimated", label: "Estimated from premiums" },
+        ],
+        default: "manual",
+        showIf: (v) =>
+          v.group_name === "ILP (Investment-Linked Policy)" || v.group_name === "Endowment",
+      },
+      {
         key: "coverage",
         label: "Coverage",
         type: "text",

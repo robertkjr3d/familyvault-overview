@@ -1165,6 +1165,7 @@ export type Database = {
           name: string
           group_name: string | null
           cost_basis: number | null
+          invested_tracking: string | null
           current_value: number | null
           projected_return_pct: number | null
           strategy: string | null
@@ -1197,6 +1198,7 @@ export type Database = {
           name: string
           group_name?: string | null
           cost_basis?: number | null
+          invested_tracking?: string | null
           current_value?: number | null
           projected_return_pct?: number | null
           strategy?: string | null
@@ -1229,6 +1231,7 @@ export type Database = {
           name?: string
           group_name?: string | null
           cost_basis?: number | null
+          invested_tracking?: string | null
           current_value?: number | null
           projected_return_pct?: number | null
           strategy?: string | null
