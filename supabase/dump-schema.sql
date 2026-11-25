@@ -106,10 +106,10 @@ select E'-- REFERENCE ONLY: a description of the live database, not a script to 
                 case when p.with_check is not null then E'\n  WITH CHECK (' || p.with_check || ')' else '' end)
   from pg_policies p where p.schemaname in ('public', 'storage')
 
-  union all -- triggers on app tables and on auth.users (new-signup trigger lives there)
+  union all -- triggers on app tables, on auth.users (new-signup trigger) and on storage.objects (storage quota trigger)
   select '100_' || t.tgrelid::regclass::text || '_' || t.tgname, pg_get_triggerdef(t.oid) || ';'
   from pg_trigger t join pg_class c on c.oid = t.tgrelid
-  where not t.tgisinternal and (c.relnamespace = 'public'::regnamespace or t.tgrelid = 'auth.users'::regclass)
+  where not t.tgisinternal and (c.relnamespace = 'public'::regnamespace or t.tgrelid in ('auth.users'::regclass, 'storage.objects'::regclass))
 
   union all -- table/view privileges per role (anon, authenticated, service_role, PUBLIC)
   select '110_' || c.relname || '_' || case when x.grantee = 0 then 'PUBLIC' else x.grantee::regrole::text end,
@@ -119,6 +119,14 @@ select E'-- REFERENCE ONLY: a description of the live database, not a script to 
   where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'p', 'v')
     and (x.grantee = 0 or x.grantee::regrole::text in ('anon', 'authenticated', 'service_role'))
   group by c.relname, x.grantee
+
+  union all -- column-level privileges (for example: owners may update only the name column of households)
+  select '115_' || c.relname || '_' || a.attname || '_' || x.grantee::regrole::text,
+         format('GRANT %s (%I) ON TABLE public.%I TO %s;', x.privilege_type, a.attname, c.relname, x.grantee::regrole::text)
+  from pg_class c join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped and a.attacl is not null,
+       lateral aclexplode(a.attacl) x
+  where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'p')
+    and x.grantee::regrole::text in ('anon', 'authenticated', 'service_role')
 
   union all -- file storage buckets
   select '120_bucket_' || b.id,

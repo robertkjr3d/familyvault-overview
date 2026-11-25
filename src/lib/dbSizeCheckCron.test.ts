@@ -151,8 +151,12 @@ describe("wiring with the database", () => {
     expect(schema.toLowerCase()).toContain(
       "create or replace function public.get_database_size_mb()",
     );
+    // The live dump lists: revoke from PUBLIC, grant to service_role only (so anon and authenticated have no access).
     expect(schema.toLowerCase()).toContain(
-      "revoke all on function public.get_database_size_mb() from public, anon, authenticated;",
+      "revoke all on function public.get_database_size_mb() from public;",
+    );
+    expect(schema.toLowerCase()).not.toMatch(
+      /grant execute on function public\.get_database_size_mb\(\) to (anon|authenticated|public)/,
     );
     expect(schema.toLowerCase()).toContain(
       "grant execute on function public.get_database_size_mb() to service_role;",
